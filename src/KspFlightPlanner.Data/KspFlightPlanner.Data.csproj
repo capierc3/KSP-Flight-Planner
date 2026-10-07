@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Seed\bodies.json" />
+    <EmbeddedResource Include="Seed\dvmap.json" />
     <InternalsVisibleTo Include="KspFlightPlanner.Tests" />
   </ItemGroup>
 

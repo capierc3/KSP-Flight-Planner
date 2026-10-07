@@ -10,6 +10,10 @@ internal static class Format
     public static string Speed(double metresPerSecond) =>
         metresPerSecond.ToString("N2", CultureInfo.CurrentCulture) + " m/s";
 
+    /// <summary>Whole m/s, for map-based budgets where decimals are noise.</summary>
+    public static string Speed0(double metresPerSecond) =>
+        metresPerSecond.ToString("N0", CultureInfo.CurrentCulture) + " m/s";
+
     public static string Duration(double seconds)
     {
         var hours = Math.Floor(seconds / 3600);

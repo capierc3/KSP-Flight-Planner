@@ -1,5 +1,11 @@
 namespace KspFlightPlanner.Core;
 
+/// <summary>The two burns of a Hohmann transfer: Δv₁ leaves the start orbit, Δv₂ circularizes at the target.</summary>
+public readonly record struct HohmannTransfer(double Dv1, double Dv2, double TransferTimeS)
+{
+    public double Total => Dv1 + Dv2;
+}
+
 /// <summary>
 /// Two-body orbital mechanics helpers. Distances are metres measured from the body's
 /// centre (radii) unless the parameter name says altitude; times are seconds.
@@ -26,6 +32,27 @@ public static class OrbitMath
     /// <summary>Vis-viva: v = √(μ(2/r − 1/a))</summary>
     public static double VisViva(double mu, double radius, double semiMajorAxis) =>
         Math.Sqrt(mu * (2 / radius - 1 / semiMajorAxis));
+
+    /// <summary>
+    /// Hohmann transfer between circular, coplanar orbits of radius r1 and r2 (either direction).
+    /// Δv₁ = |√(μ/r₁)·(√(2r₂/(r₁+r₂)) − 1)|, Δv₂ = |√(μ/r₂)·(1 − √(2r₁/(r₁+r₂)))|, t = π√(a³/μ).
+    /// See docs/MATH.md §4.
+    /// </summary>
+    public static HohmannTransfer Hohmann(double mu, double r1, double r2)
+    {
+        var sum = r1 + r2;
+        var dv1 = Math.Abs(Math.Sqrt(mu / r1) * (Math.Sqrt(2 * r2 / sum) - 1));
+        var dv2 = Math.Abs(Math.Sqrt(mu / r2) * (1 - Math.Sqrt(2 * r1 / sum)));
+        var a = sum / 2;
+        return new HohmannTransfer(dv1, dv2, Math.PI * Math.Sqrt(a * a * a / mu));
+    }
+
+    /// <summary>
+    /// Δv to go from a circular orbit of radius r to a hyperbolic escape with excess speed v∞ (or the reverse,
+    /// capturing into that orbit): √(v∞² + 2μ/r) − √(μ/r). See docs/MATH.md §7.
+    /// </summary>
+    public static double HyperbolicBurnDv(double mu, double orbitRadius, double vInf) =>
+        Math.Sqrt(vInf * vInf + 2 * mu / orbitRadius) - Math.Sqrt(mu / orbitRadius);
 
     /// <summary>e = (rₐ − rₚ) / (rₐ + rₚ)</summary>
     public static double Eccentricity(double periapsisRadius, double apoapsisRadius) =>

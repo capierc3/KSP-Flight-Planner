@@ -65,6 +65,51 @@ internal static class Migrations
             UNIQUE (system_id, name)
         );
 
+        -- Community delta-v map as a tree rooted at Kerbin's surface; each node stores the edge to its parent.
+        CREATE TABLE dv_map_nodes (
+            id               INTEGER PRIMARY KEY,
+            system_id        INTEGER NOT NULL REFERENCES star_systems(id) ON DELETE CASCADE,
+            key              TEXT    NOT NULL,
+            parent_id        INTEGER REFERENCES dv_map_nodes(id),
+            body_id          INTEGER REFERENCES celestial_bodies(id),
+            body_name        TEXT    NOT NULL,
+            kind             TEXT    NOT NULL,   -- Surface / LowOrbit / Intercept / Elliptical / Synchronous
+            label            TEXT    NOT NULL,
+            dv_from_parent   REAL    NOT NULL DEFAULT 0,
+            plane_change_dv  REAL    NOT NULL DEFAULT 0,  -- worst case, on the edge to the parent
+            aerobrake_down   INTEGER NOT NULL DEFAULT 0,  -- parent -> node
+            aerobrake_up     INTEGER NOT NULL DEFAULT 0,  -- node -> parent
+            jet_possible     INTEGER NOT NULL DEFAULT 0,
+            flight_time      TEXT,
+            altitude_m       REAL,               -- low / synchronous orbits
+            sort_order       INTEGER NOT NULL,
+            UNIQUE (system_id, key)
+        );
+
+        -- User edits to map values (e.g. Mun landing 580 -> 700). Keyed by node key so they survive reseeding.
+        CREATE TABLE dv_map_overrides (
+            node_key         TEXT    PRIMARY KEY,
+            dv_from_parent   REAL    NOT NULL,
+            updated_utc      TEXT    NOT NULL
+        );
+
+        -- User-defined places: circular orbits such as a space station at 150 km.
+        CREATE TABLE custom_locations (
+            id               INTEGER PRIMARY KEY,
+            name             TEXT    NOT NULL,
+            body_name        TEXT    NOT NULL,
+            altitude_m       REAL    NOT NULL,
+            note             TEXT,
+            created_utc      TEXT    NOT NULL
+        );
+
+        CREATE TABLE saved_missions (
+            id               INTEGER PRIMARY KEY,
+            name             TEXT    NOT NULL,
+            definition_json  TEXT    NOT NULL,   -- MissionDefinition (stops as node keys, phases, leg choices)
+            created_utc      TEXT    NOT NULL
+        );
+
         CREATE TABLE saved_constellations (
             id                 INTEGER PRIMARY KEY,
             name               TEXT    NOT NULL,

@@ -102,6 +102,40 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Broken_database_with_current_fingerprint_is_rebuilt()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var bad = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+            {
+                bad.Open();
+                using var cmd = bad.CreateCommand();
+                cmd.CommandText = """
+                    CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                    CREATE TABLE star_systems (id INTEGER PRIMARY KEY, name TEXT, sort_order INTEGER, is_builtin INTEGER);
+                    INSERT INTO star_systems VALUES (1, 'KSP Stock', 0, 1);
+                    INSERT INTO app_meta VALUES ('fingerprint', $fp);
+                    PRAGMA user_version = 1;
+                    """;
+                cmd.Parameters.AddWithValue("$fp", Migrations.Fingerprint + BodySeeder.Fingerprint + DvMapSeeder.Fingerprint);
+                cmd.ExecuteNonQuery();
+            }
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+            var db = new PlannerDatabase(path);
+            db.Initialize();
+
+            Assert.NotNull(new DvMapRepository(db).GetMap());
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Saves_and_deletes_constellations()
     {
         var bodies = new BodyRepository(_db);

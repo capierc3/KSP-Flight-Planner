@@ -44,21 +44,39 @@ public sealed class PlannerDatabase
     /// delete it and rebuild from scratch (no user data needs preserving yet).
     /// Set to false once releases must keep user data; use appended migrations from then on.
     /// </summary>
-    public const bool ResetOnSchemaChange = true;
+    public static readonly bool ResetOnSchemaChange = true;
 
     public void Initialize()
     {
-        var fingerprint = Migrations.Fingerprint + BodySeeder.Fingerprint;
+        var fingerprint = Migrations.Fingerprint + BodySeeder.Fingerprint + DvMapSeeder.Fingerprint;
         if (ResetOnSchemaChange && File.Exists(DatabasePath) && ReadFingerprint() != fingerprint)
-        {
-            SqliteConnection.ClearAllPools();
-            File.Delete(DatabasePath);
-        }
+            DeleteDatabase();
 
+        try
+        {
+            Build(fingerprint);
+        }
+        catch (SqliteException) when (ResetOnSchemaChange)
+        {
+            // Pre-release safety net: an unexpected/partial database is rebuilt rather than blocking startup.
+            DeleteDatabase();
+            Build(fingerprint);
+        }
+    }
+
+    private void Build(string fingerprint)
+    {
         using var connection = Open();
         Migrations.Apply(connection);
         BodySeeder.SeedIfEmpty(connection);
+        DvMapSeeder.SeedIfEmpty(connection);
         WriteFingerprint(connection, fingerprint);
+    }
+
+    private void DeleteDatabase()
+    {
+        SqliteConnection.ClearAllPools();
+        File.Delete(DatabasePath);
     }
 
     private string? ReadFingerprint()

@@ -1,0 +1,78 @@
+{
+  "source": "Kerbal Space Program Δv Map 1.0.4 by /u/swashlebucky (based on Kowgan's map; CC BY-NC-SA 4.0). Vacuum Δv in m/s; dv is the cost of the edge to the parent node in either direction; aeroDown/aeroUp = aerobraking possible when travelling away from / back toward Kerbin's surface.",
+  "system": "KSP Stock",
+  "nodes": [
+    { "key": "kerbin.surface", "body": "Kerbin", "kind": "Surface", "label": "Surface" },
+    { "key": "kerbin.lo", "parent": "kerbin.surface", "body": "Kerbin", "kind": "LowOrbit", "label": "Low orbit (80 km)", "altitudeKm": 80, "dv": 3400, "aeroUp": true },
+    { "key": "kerbin.keo", "parent": "kerbin.lo", "body": "Kerbin", "kind": "Synchronous", "label": "Keostationary orbit (2,868 km)", "altitudeKm": 2868, "dv": 1115, "aeroUp": true },
+
+    { "key": "mun.intercept", "parent": "kerbin.lo", "body": "Mun", "kind": "Intercept", "label": "Intercept", "dv": 860, "aeroUp": true, "flightTime": "8 hours" },
+    { "key": "mun.lo", "parent": "mun.intercept", "body": "Mun", "kind": "LowOrbit", "label": "Low orbit (14 km)", "altitudeKm": 14, "dv": 310 },
+    { "key": "mun.surface", "parent": "mun.lo", "body": "Mun", "kind": "Surface", "label": "Surface", "dv": 580 },
+
+    { "key": "minmus.intercept", "parent": "kerbin.lo", "body": "Minmus", "kind": "Intercept", "label": "Intercept", "dv": 930, "plane": 340, "aeroUp": true, "flightTime": "56 hours" },
+    { "key": "minmus.lo", "parent": "minmus.intercept", "body": "Minmus", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 160 },
+    { "key": "minmus.surface", "parent": "minmus.lo", "body": "Minmus", "kind": "Surface", "label": "Surface", "dv": 180 },
+
+    { "key": "kerbin.soi", "parent": "kerbin.lo", "body": "Kerbin", "kind": "Elliptical", "label": "Elliptical orbit to SOI edge", "dv": 950, "aeroUp": true },
+
+    { "key": "kerbol.intercept", "parent": "kerbin.soi", "body": "Kerbol", "kind": "Intercept", "label": "Intercept", "dv": 6000, "aeroUp": true },
+    { "key": "kerbol.lo", "parent": "kerbol.intercept", "body": "Kerbol", "kind": "LowOrbit", "label": "Low orbit (610 km)", "altitudeKm": 610, "dv": 13700, "aeroDown": true },
+    { "key": "kerbol.surface", "parent": "kerbol.lo", "body": "Kerbol", "kind": "Surface", "label": "Surface", "dv": 67000, "aeroDown": true },
+
+    { "key": "moho.intercept", "parent": "kerbin.soi", "body": "Moho", "kind": "Intercept", "label": "Intercept", "dv": 760, "plane": 2520, "aeroUp": true, "flightTime": "100 days" },
+    { "key": "moho.lo", "parent": "moho.intercept", "body": "Moho", "kind": "LowOrbit", "label": "Low orbit (50 km)", "altitudeKm": 50, "dv": 2410 },
+    { "key": "moho.surface", "parent": "moho.lo", "body": "Moho", "kind": "Surface", "label": "Surface", "dv": 870 },
+
+    { "key": "eve.intercept", "parent": "kerbin.soi", "body": "Eve", "kind": "Intercept", "label": "Intercept", "dv": 90, "plane": 430, "aeroUp": true, "flightTime": "168 days" },
+    { "key": "eve.elliptical", "parent": "eve.intercept", "body": "Eve", "kind": "Elliptical", "label": "Elliptical orbit (85 Mm × 100 km)", "dv": 80, "aeroDown": true },
+    { "key": "eve.lo", "parent": "eve.elliptical", "body": "Eve", "kind": "LowOrbit", "label": "Low orbit (100 km)", "altitudeKm": 100, "dv": 1330, "aeroDown": true },
+    { "key": "eve.surface", "parent": "eve.lo", "body": "Eve", "kind": "Surface", "label": "Surface", "dv": 10000, "aeroDown": true },
+
+    { "key": "gilly.intercept", "parent": "eve.elliptical", "body": "Gilly", "kind": "Intercept", "label": "Intercept", "dv": 60 },
+    { "key": "gilly.lo", "parent": "gilly.intercept", "body": "Gilly", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 410 },
+    { "key": "gilly.surface", "parent": "gilly.lo", "body": "Gilly", "kind": "Surface", "label": "Surface", "dv": 30 },
+
+    { "key": "duna.intercept", "parent": "kerbin.soi", "body": "Duna", "kind": "Intercept", "label": "Intercept", "dv": 130, "plane": 10, "aeroUp": true, "flightTime": "300 days" },
+    { "key": "duna.elliptical", "parent": "duna.intercept", "body": "Duna", "kind": "Elliptical", "label": "Elliptical orbit (48 Mm × 60 km)", "dv": 250, "aeroDown": true },
+    { "key": "duna.lo", "parent": "duna.elliptical", "body": "Duna", "kind": "LowOrbit", "label": "Low orbit (60 km)", "altitudeKm": 60, "dv": 360, "aeroDown": true },
+    { "key": "duna.surface", "parent": "duna.lo", "body": "Duna", "kind": "Surface", "label": "Surface", "dv": 1450, "aeroDown": true },
+
+    { "key": "ike.intercept", "parent": "duna.elliptical", "body": "Ike", "kind": "Intercept", "label": "Intercept", "dv": 30 },
+    { "key": "ike.lo", "parent": "ike.intercept", "body": "Ike", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 180 },
+    { "key": "ike.surface", "parent": "ike.lo", "body": "Ike", "kind": "Surface", "label": "Surface", "dv": 390 },
+
+    { "key": "dres.intercept", "parent": "kerbin.soi", "body": "Dres", "kind": "Intercept", "label": "Intercept", "dv": 610, "plane": 1010, "aeroUp": true, "flightTime": "1 year 171 days" },
+    { "key": "dres.lo", "parent": "dres.intercept", "body": "Dres", "kind": "LowOrbit", "label": "Low orbit (12 km)", "altitudeKm": 12, "dv": 1290 },
+    { "key": "dres.surface", "parent": "dres.lo", "body": "Dres", "kind": "Surface", "label": "Surface", "dv": 430 },
+
+    { "key": "jool.intercept", "parent": "kerbin.soi", "body": "Jool", "kind": "Intercept", "label": "Intercept", "dv": 980, "plane": 270, "aeroUp": true, "flightTime": "2 years 367 days" },
+    { "key": "jool.elliptical", "parent": "jool.intercept", "body": "Jool", "kind": "Elliptical", "label": "Elliptical orbit (268 Mm × 210 km)", "dv": 160, "aeroDown": true },
+    { "key": "jool.lo", "parent": "jool.elliptical", "body": "Jool", "kind": "LowOrbit", "label": "Low orbit (210 km)", "altitudeKm": 210, "dv": 2810, "aeroDown": true },
+    { "key": "jool.surface", "parent": "jool.lo", "body": "Jool", "kind": "Surface", "label": "Surface", "dv": 14000, "aeroDown": true },
+
+    { "key": "laythe.intercept", "parent": "jool.elliptical", "body": "Laythe", "kind": "Intercept", "label": "Intercept", "dv": 930 },
+    { "key": "laythe.lo", "parent": "laythe.intercept", "body": "Laythe", "kind": "LowOrbit", "label": "Low orbit (60 km)", "altitudeKm": 60, "dv": 1070, "aeroDown": true },
+    { "key": "laythe.surface", "parent": "laythe.lo", "body": "Laythe", "kind": "Surface", "label": "Surface", "dv": 2900, "aeroDown": true, "jet": true },
+
+    { "key": "vall.intercept", "parent": "jool.elliptical", "body": "Vall", "kind": "Intercept", "label": "Intercept", "dv": 620 },
+    { "key": "vall.lo", "parent": "vall.intercept", "body": "Vall", "kind": "LowOrbit", "label": "Low orbit (15 km)", "altitudeKm": 15, "dv": 910 },
+    { "key": "vall.surface", "parent": "vall.lo", "body": "Vall", "kind": "Surface", "label": "Surface", "dv": 860 },
+
+    { "key": "tylo.intercept", "parent": "jool.elliptical", "body": "Tylo", "kind": "Intercept", "label": "Intercept", "dv": 400 },
+    { "key": "tylo.lo", "parent": "tylo.intercept", "body": "Tylo", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 1100 },
+    { "key": "tylo.surface", "parent": "tylo.lo", "body": "Tylo", "kind": "Surface", "label": "Surface", "dv": 2270 },
+
+    { "key": "bop.intercept", "parent": "jool.elliptical", "body": "Bop", "kind": "Intercept", "label": "Intercept", "dv": 220, "plane": 2440 },
+    { "key": "bop.lo", "parent": "bop.intercept", "body": "Bop", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 900 },
+    { "key": "bop.surface", "parent": "bop.lo", "body": "Bop", "kind": "Surface", "label": "Surface", "dv": 220 },
+
+    { "key": "pol.intercept", "parent": "jool.elliptical", "body": "Pol", "kind": "Intercept", "label": "Intercept", "dv": 160, "plane": 700 },
+    { "key": "pol.lo", "parent": "pol.intercept", "body": "Pol", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 820 },
+    { "key": "pol.surface", "parent": "pol.lo", "body": "Pol", "kind": "Surface", "label": "Surface", "dv": 130 },
+
+    { "key": "eeloo.intercept", "parent": "kerbin.soi", "body": "Eeloo", "kind": "Intercept", "label": "Intercept", "dv": 1140, "plane": 1330, "aeroUp": true, "flightTime": "4 years 178 days" },
+    { "key": "eeloo.lo", "parent": "eeloo.intercept", "body": "Eeloo", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 1370 },
+    { "key": "eeloo.surface", "parent": "eeloo.lo", "body": "Eeloo", "kind": "Surface", "label": "Surface", "dv": 620 }
+  ]
+}

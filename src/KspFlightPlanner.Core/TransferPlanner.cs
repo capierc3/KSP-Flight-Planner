@@ -197,7 +197,7 @@ public static class TransferPlanner
 
     /// <summary>Δv to leave a circular parking orbit with hyperbolic excess speed <paramref name="vInf"/>.</summary>
     public static double HyperbolicBurnDv(double mu, double orbitRadius, double vInf) =>
-        Math.Sqrt(vInf * vInf + 2 * mu / orbitRadius) - Math.Sqrt(mu / orbitRadius);
+        OrbitMath.HyperbolicBurnDv(mu, orbitRadius, vInf);
 
     private static double EjectionDv(TransferRequest req, double vInf) =>
         HyperbolicBurnDv(req.Origin.Mu, req.Origin.EquatorialRadiusM + req.ParkingAltitudeM, vInf);

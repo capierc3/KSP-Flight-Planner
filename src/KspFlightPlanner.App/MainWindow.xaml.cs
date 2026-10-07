@@ -3,7 +3,10 @@ using KspFlightPlanner.App.ViewModels;
 
 namespace KspFlightPlanner.App;
 
-public sealed record MainViewModel(TransferPlannerViewModel Transfer, ResonantOrbitViewModel Resonant);
+public sealed record MainViewModel(
+    MissionBuilderViewModel Mission,
+    TransferPlannerViewModel Transfer,
+    ResonantOrbitViewModel Resonant);
 
 public partial class MainWindow : Window
 {
