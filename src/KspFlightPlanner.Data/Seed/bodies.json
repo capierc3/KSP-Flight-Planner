@@ -1,0 +1,1245 @@
+{
+  "source": "https://meyerweb.com/eric/ksp/resonant-orbits/systems.js (Eric Meyer, MIT License)",
+  "systems": [
+    {
+      "name": "KSP Stock",
+      "bodies": [
+        {
+          "name": "Kerbol",
+          "color": "#FE9",
+          "massKg": 1.7565459e+28,
+          "equatorialRadiusM": 261600000,
+          "rotationPeriodS": 432000,
+          "atmosphereHeightM": 600000,
+          "soiRadiusM": 1000000000000000,
+          "isDefault": false
+        },
+        {
+          "name": "Moho",
+          "color": "#80736B",
+          "massKg": 2.52633139930162e+21,
+          "equatorialRadiusM": 250000,
+          "rotationPeriodS": 1210000,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 9646663.02332811,
+          "isDefault": false
+        },
+        {
+          "name": "Eve",
+          "color": "#897695",
+          "massKg": 1.2243980038014e+23,
+          "equatorialRadiusM": 700000,
+          "rotationPeriodS": 80500,
+          "atmosphereHeightM": 90000,
+          "soiRadiusM": 85109364.7382441,
+          "isDefault": false
+        },
+        {
+          "name": "Gilly",
+          "color": "#867D78",
+          "massKg": 124203632781093000,
+          "equatorialRadiusM": 13000,
+          "rotationPeriodS": 28255,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 126123.271704568,
+          "isDefault": false
+        },
+        {
+          "name": "Kerbin",
+          "color": "#495B66",
+          "massKg": 5.29151583439215e+22,
+          "equatorialRadiusM": 600000,
+          "rotationPeriodS": 21549.4251830898,
+          "atmosphereHeightM": 70000,
+          "soiRadiusM": 84159286.4796305,
+          "isDefault": true
+        },
+        {
+          "name": "Mun",
+          "color": "#888",
+          "massKg": 975990661196460000000,
+          "equatorialRadiusM": 200000,
+          "rotationPeriodS": 138984.376574476,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2429559.11656475,
+          "isDefault": false
+        },
+        {
+          "name": "Minmus",
+          "color": "#9BB4A5",
+          "massKg": 26457579566209500000,
+          "equatorialRadiusM": 60000,
+          "rotationPeriodS": 40400,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2247428.3879023,
+          "isDefault": false
+        },
+        {
+          "name": "Duna",
+          "color": "#905646",
+          "massKg": 4.51542702477492e+21,
+          "equatorialRadiusM": 320000,
+          "rotationPeriodS": 65517.859375,
+          "atmosphereHeightM": 50000,
+          "soiRadiusM": 47921949.369738,
+          "isDefault": false
+        },
+        {
+          "name": "Ike",
+          "color": "#888",
+          "massKg": 278216152235874000000,
+          "equatorialRadiusM": 130000,
+          "rotationPeriodS": 65517.8621348081,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1049598.93931162,
+          "isDefault": false
+        },
+        {
+          "name": "Dres",
+          "color": "#878482",
+          "massKg": 321909365785247000000,
+          "equatorialRadiusM": 138000,
+          "rotationPeriodS": 34800,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 32832839.5767762,
+          "isDefault": false
+        },
+        {
+          "name": "Jool",
+          "color": "#708D4B",
+          "massKg": 4.23321273059351e+24,
+          "equatorialRadiusM": 6000000,
+          "rotationPeriodS": 36000,
+          "atmosphereHeightM": 200000,
+          "soiRadiusM": 2455985185.42347,
+          "isDefault": false
+        },
+        {
+          "name": "Laythe",
+          "color": "#5C6068",
+          "massKg": 2.93973106291216e+22,
+          "equatorialRadiusM": 500000,
+          "rotationPeriodS": 52980.8790593796,
+          "atmosphereHeightM": 50000,
+          "soiRadiusM": 3723645.81113302,
+          "isDefault": false
+        },
+        {
+          "name": "Vall",
+          "color": "#879192",
+          "massKg": 3.10876554482042e+21,
+          "equatorialRadiusM": 300000,
+          "rotationPeriodS": 105962.088893924,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2406401.44479404,
+          "isDefault": false
+        },
+        {
+          "name": "Tylo",
+          "color": "#9B9894",
+          "massKg": 4.23321273059351e+22,
+          "equatorialRadiusM": 600000,
+          "rotationPeriodS": 211926.35802123,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 10856518.3683586,
+          "isDefault": false
+        },
+        {
+          "name": "Bop",
+          "color": "#655D57",
+          "massKg": 37261089834327800000,
+          "equatorialRadiusM": 65000,
+          "rotationPeriodS": 544507.428516654,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1221060.86284253,
+          "isDefault": false
+        },
+        {
+          "name": "Pol",
+          "color": "#938C7E",
+          "massKg": 10813506580682300000,
+          "equatorialRadiusM": 44000,
+          "rotationPeriodS": 901902.623531173,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1042138.89230178,
+          "isDefault": false
+        },
+        {
+          "name": "Eeloo",
+          "color": "#959B9B",
+          "massKg": 1.1149224e+21,
+          "equatorialRadiusM": 210000,
+          "rotationPeriodS": 19460,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 119082941.6,
+          "isDefault": false
+        }
+      ]
+    },
+    {
+      "name": "Outer Planets Mod",
+      "bodies": [
+        {
+          "name": "Kerbol",
+          "color": "#FE9",
+          "massKg": 1.7565459e+28,
+          "equatorialRadiusM": 261600000,
+          "rotationPeriodS": 432000,
+          "atmosphereHeightM": 600000,
+          "soiRadiusM": 1000000000000000,
+          "isDefault": false
+        },
+        {
+          "name": "Moho",
+          "color": "#80736B",
+          "massKg": 2.52633139930162e+21,
+          "equatorialRadiusM": 250000,
+          "rotationPeriodS": 1210000,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 9646663.02332811,
+          "isDefault": false
+        },
+        {
+          "name": "Eve",
+          "color": "#897695",
+          "massKg": 1.2243980038014e+23,
+          "equatorialRadiusM": 700000,
+          "rotationPeriodS": 80500,
+          "atmosphereHeightM": 90000,
+          "soiRadiusM": 85109364.7382441,
+          "isDefault": false
+        },
+        {
+          "name": "Gilly",
+          "color": "#867D78",
+          "massKg": 124203632781093000,
+          "equatorialRadiusM": 13000,
+          "rotationPeriodS": 28255,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 126123.271704568,
+          "isDefault": false
+        },
+        {
+          "name": "Kerbin",
+          "color": "#495B66",
+          "massKg": 5.29151583439215e+22,
+          "equatorialRadiusM": 600000,
+          "rotationPeriodS": 21549.4251830898,
+          "atmosphereHeightM": 70000,
+          "soiRadiusM": 84159286.4796305,
+          "isDefault": true
+        },
+        {
+          "name": "Mun",
+          "color": "#888",
+          "massKg": 975990661196460000000,
+          "equatorialRadiusM": 200000,
+          "rotationPeriodS": 138984.376574476,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2429559.11656475,
+          "isDefault": false
+        },
+        {
+          "name": "Minmus",
+          "color": "#9BB4A5",
+          "massKg": 26457579566209500000,
+          "equatorialRadiusM": 60000,
+          "rotationPeriodS": 40400,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2247428.3879023,
+          "isDefault": false
+        },
+        {
+          "name": "Duna",
+          "color": "#905646",
+          "massKg": 4.51542702477492e+21,
+          "equatorialRadiusM": 320000,
+          "rotationPeriodS": 65517.859375,
+          "atmosphereHeightM": 50000,
+          "soiRadiusM": 47921949.369738,
+          "isDefault": false
+        },
+        {
+          "name": "Ike",
+          "color": "#888",
+          "massKg": 278216152235874000000,
+          "equatorialRadiusM": 130000,
+          "rotationPeriodS": 65517.8621348081,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1049598.93931162,
+          "isDefault": false
+        },
+        {
+          "name": "Dres",
+          "color": "#878482",
+          "massKg": 321909365785247000000,
+          "equatorialRadiusM": 138000,
+          "rotationPeriodS": 34800,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 32832839.5767762,
+          "isDefault": false
+        },
+        {
+          "name": "Jool",
+          "color": "#708D4B",
+          "massKg": 4.23321273059351e+24,
+          "equatorialRadiusM": 6000000,
+          "rotationPeriodS": 36000,
+          "atmosphereHeightM": 200000,
+          "soiRadiusM": 2455985185.42347,
+          "isDefault": false
+        },
+        {
+          "name": "Laythe",
+          "color": "#5C6068",
+          "massKg": 2.93973106291216e+22,
+          "equatorialRadiusM": 500000,
+          "rotationPeriodS": 52980.8790593796,
+          "atmosphereHeightM": 50000,
+          "soiRadiusM": 3723645.81113302,
+          "isDefault": false
+        },
+        {
+          "name": "Vall",
+          "color": "#879192",
+          "massKg": 3.10876554482042e+21,
+          "equatorialRadiusM": 300000,
+          "rotationPeriodS": 105962.088893924,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2406401.44479404,
+          "isDefault": false
+        },
+        {
+          "name": "Tylo",
+          "color": "#9B9894",
+          "massKg": 4.23321273059351e+22,
+          "equatorialRadiusM": 600000,
+          "rotationPeriodS": 211926.35802123,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 10856518.3683586,
+          "isDefault": false
+        },
+        {
+          "name": "Bop",
+          "color": "#655D57",
+          "massKg": 37261089834327800000,
+          "equatorialRadiusM": 65000,
+          "rotationPeriodS": 544507.428516654,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1221060.86284253,
+          "isDefault": false
+        },
+        {
+          "name": "Pol",
+          "color": "#938C7E",
+          "massKg": 10813506580682300000,
+          "equatorialRadiusM": 44000,
+          "rotationPeriodS": 901902.623531173,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1042138.89230178,
+          "isDefault": false
+        },
+        {
+          "name": "Sarnus",
+          "color": "#888",
+          "massKg": 1.22997779398809e+24,
+          "equatorialRadiusM": 5300000,
+          "rotationPeriodS": 28500,
+          "atmosphereHeightM": 580000,
+          "soiRadiusM": 2740126708.15753,
+          "isDefault": false
+        },
+        {
+          "name": "Hale",
+          "color": "#888",
+          "massKg": 12166330340661200,
+          "equatorialRadiusM": 6000,
+          "rotationPeriodS": 23555.3138379232,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 41000,
+          "isDefault": false
+        },
+        {
+          "name": "Ovok",
+          "color": "#888",
+          "massKg": 198657954354758000,
+          "equatorialRadiusM": 26000,
+          "rotationPeriodS": 29440.1470076036,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 94000,
+          "isDefault": false
+        },
+        {
+          "name": "Eeloo",
+          "color": "#888",
+          "massKg": 1.11492242417007e+21,
+          "equatorialRadiusM": 210000,
+          "rotationPeriodS": 57914.7837330607,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1159066.15680512,
+          "isDefault": false
+        },
+        {
+          "name": "Slate",
+          "color": "#D1B7A1",
+          "massKg": 2.96498760110757e+22,
+          "equatorialRadiusM": 540000,
+          "rotationPeriodS": 192771.154552164,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 9598158.64601184,
+          "isDefault": false
+        },
+        {
+          "name": "Tekto",
+          "color": "#888",
+          "massKg": 2.88340853582816e+21,
+          "equatorialRadiusM": 280000,
+          "rotationPeriodS": 666154.482822571,
+          "atmosphereHeightM": 95000,
+          "soiRadiusM": 8637005.19544461,
+          "isDefault": false
+        },
+        {
+          "name": "Urlum",
+          "color": "#CBDFE6",
+          "massKg": 1.7896959235771e+23,
+          "equatorialRadiusM": 2177000,
+          "rotationPeriodS": 41000,
+          "atmosphereHeightM": 325000,
+          "soiRadiusM": 2562260673.07757,
+          "isDefault": false
+        },
+        {
+          "name": "Polta",
+          "color": "#8DAB9E",
+          "massKg": 1.3512267368686e+21,
+          "equatorialRadiusM": 220000,
+          "rotationPeriodS": 73017.1106367597,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1661114.85305207,
+          "isDefault": false
+        },
+        {
+          "name": "Priax",
+          "color": "#6D6A64",
+          "massKg": 50691279849807000000,
+          "equatorialRadiusM": 74000,
+          "rotationPeriodS": 73017.1106367597,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 446767.601978615,
+          "isDefault": false
+        },
+        {
+          "name": "Wal",
+          "color": "#84724C",
+          "massKg": 7.44276727953516e+21,
+          "equatorialRadiusM": 370000,
+          "rotationPeriodS": 1009410.78951369,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 18933504.6847765,
+          "isDefault": false
+        },
+        {
+          "name": "Tal",
+          "color": "#7D7361",
+          "massKg": 3200273850478270000,
+          "equatorialRadiusM": 22000,
+          "rotationPeriodS": 48874.4834835978,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 139966.651259813,
+          "isDefault": false
+        },
+        {
+          "name": "Neidon",
+          "color": "#B697FD",
+          "massKg": 2.1228216518685e+23,
+          "equatorialRadiusM": 2145000,
+          "rotationPeriodS": 40250,
+          "atmosphereHeightM": 260000,
+          "soiRadiusM": 4415723830.49107,
+          "isDefault": false
+        },
+        {
+          "name": "Thatmo",
+          "color": "#D5D6DA",
+          "massKg": 2.78836304732338e+21,
+          "equatorialRadiusM": 286000,
+          "rotationPeriodS": 306442.674516556,
+          "atmosphereHeightM": 35000,
+          "soiRadiusM": 5709379.08853188,
+          "isDefault": false
+        },
+        {
+          "name": "Nissee",
+          "color": "#D7CDBE",
+          "massKg": 5950922449236450000,
+          "equatorialRadiusM": 30000,
+          "rotationPeriodS": 27924.8723,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 7366476.63525513,
+          "isDefault": false
+        },
+        {
+          "name": "Plock",
+          "color": "#B59676",
+          "massKg": 776809612833529000000,
+          "equatorialRadiusM": 189000,
+          "rotationPeriodS": 106309.606989054,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 612762335.918708,
+          "isDefault": false
+        },
+        {
+          "name": "Karen",
+          "color": "#8F7D74",
+          "massKg": 70149057267027800000,
+          "equatorialRadiusM": 85050,
+          "rotationPeriodS": 106327.763381606,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 939354.324277521,
+          "isDefault": false
+        }
+      ]
+    },
+    {
+      "name": "Real Solar System",
+      "bodies": [
+        {
+          "name": "Sun",
+          "color": "#FCD440",
+          "massKg": 1.988e+30,
+          "equatorialRadiusM": 696392000,
+          "rotationPeriodS": 432000,
+          "atmosphereHeightM": 600000,
+          "soiRadiusM": 1000000000000000000,
+          "isDefault": false
+        },
+        {
+          "name": "Mercury",
+          "color": "#52515A",
+          "massKg": 3.3022e+23,
+          "equatorialRadiusM": 2439700,
+          "rotationPeriodS": 5067031.68,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 112424173.3,
+          "isDefault": false
+        },
+        {
+          "name": "Venus",
+          "color": "#B36229",
+          "massKg": 4.86747e+24,
+          "equatorialRadiusM": 6049000,
+          "rotationPeriodS": -20996797.02,
+          "atmosphereHeightM": 145000,
+          "soiRadiusM": 616281980.7,
+          "isDefault": false
+        },
+        {
+          "name": "Earth",
+          "color": "#004763",
+          "massKg": 5.97237e+24,
+          "equatorialRadiusM": 6371000,
+          "rotationPeriodS": 86164.0989,
+          "atmosphereHeightM": 140000,
+          "soiRadiusM": 924650434.7,
+          "isDefault": true
+        },
+        {
+          "name": "Moon",
+          "color": "#E1E1E1",
+          "massKg": 7.34767e+22,
+          "equatorialRadiusM": 1737100,
+          "rotationPeriodS": 2356558.618,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 66173072.96,
+          "isDefault": false
+        },
+        {
+          "name": "Mars",
+          "color": "#A16331",
+          "massKg": 6.41711e+23,
+          "equatorialRadiusM": 3375800,
+          "rotationPeriodS": 88642.6848,
+          "atmosphereHeightM": 125000,
+          "soiRadiusM": 577254493.5,
+          "isDefault": false
+        },
+        {
+          "name": "Phobos",
+          "color": "#8F7463",
+          "massKg": 10720000000000000,
+          "equatorialRadiusM": 7250,
+          "rotationPeriodS": 27575.06417,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 47250,
+          "isDefault": false
+        },
+        {
+          "name": "Deimos",
+          "color": "#765F50",
+          "massKg": 1480000000000000,
+          "equatorialRadiusM": 5456,
+          "rotationPeriodS": 109082.8775,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 45456,
+          "isDefault": false
+        },
+        {
+          "name": "Jupiter",
+          "color": "#BF9766",
+          "massKg": 1.89819e+27,
+          "equatorialRadiusM": 70941833.42,
+          "rotationPeriodS": 35730,
+          "atmosphereHeightM": 1550000,
+          "soiRadiusM": 48196239907,
+          "isDefault": false
+        },
+        {
+          "name": "Io",
+          "color": "#958065",
+          "massKg": 8.9319e+22,
+          "equatorialRadiusM": 1811300,
+          "rotationPeriodS": 153039.6428,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 7841031.532,
+          "isDefault": false
+        },
+        {
+          "name": "Europa",
+          "color": "#685743",
+          "massKg": 4.7998e+22,
+          "equatorialRadiusM": 1550800,
+          "rotationPeriodS": 307002.3723,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 9728374.712,
+          "isDefault": false
+        },
+        {
+          "name": "Ganymede",
+          "color": "#A5A15D",
+          "massKg": 1.4819e+23,
+          "equatorialRadiusM": 2624100,
+          "rotationPeriodS": 618553.2791,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 24361825.13,
+          "isDefault": false
+        },
+        {
+          "name": "Callisto",
+          "color": "#C6C7AD",
+          "massKg": 1.07594e+23,
+          "equatorialRadiusM": 2409300,
+          "rotationPeriodS": 1443315.918,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 37706560.89,
+          "isDefault": false
+        },
+        {
+          "name": "Saturn",
+          "color": "#EAD8B5",
+          "massKg": 5.68336e+26,
+          "equatorialRadiusM": 59216476.99,
+          "rotationPeriodS": 38052,
+          "atmosphereHeightM": 2000000,
+          "soiRadiusM": 54475373438,
+          "isDefault": false
+        },
+        {
+          "name": "Mimas",
+          "color": "#E1E1E1",
+          "massKg": 37493000000000000000,
+          "equatorialRadiusM": 198200,
+          "rotationPeriodS": 81843.87407,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 396400,
+          "isDefault": false
+        },
+        {
+          "name": "Enceladus",
+          "color": "#E1E1E1",
+          "massKg": 108022000000000000000,
+          "equatorialRadiusM": 252100,
+          "rotationPeriodS": 118762.9628,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 504200,
+          "isDefault": false
+        },
+        {
+          "name": "Tethys",
+          "color": "#E1E1E1",
+          "massKg": 617449000000000000000,
+          "equatorialRadiusM": 531100,
+          "rotationPeriodS": 163440.0316,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1213895.698,
+          "isDefault": false
+        },
+        {
+          "name": "Dione",
+          "color": "#E1E1E1",
+          "massKg": 1.09545e+21,
+          "equatorialRadiusM": 561400,
+          "rotationPeriodS": 236765.9216,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1954724.558,
+          "isDefault": false
+        },
+        {
+          "name": "Rhea",
+          "color": "#E1E1E1",
+          "massKg": 2.30652e+21,
+          "equatorialRadiusM": 763800,
+          "rotationPeriodS": 390536.924,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 3675585.654,
+          "isDefault": false
+        },
+        {
+          "name": "Titan",
+          "color": "#B38040",
+          "massKg": 1.34522e+23,
+          "equatorialRadiusM": 2573300,
+          "rotationPeriodS": 1377912.606,
+          "atmosphereHeightM": 600000,
+          "soiRadiusM": 43324648.46,
+          "isDefault": false
+        },
+        {
+          "name": "Iapetus",
+          "color": "#E1E1E1",
+          "massKg": 1.805e+21,
+          "equatorialRadiusM": 734500,
+          "rotationPeriodS": 6853119.643,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 22501874.86,
+          "isDefault": false
+        },
+        {
+          "name": "Uranus",
+          "color": "#6194C7",
+          "massKg": 8.68125e+25,
+          "equatorialRadiusM": 24893873.43,
+          "rotationPeriodS": 62063.712,
+          "atmosphereHeightM": 1400000,
+          "soiRadiusM": 51692538810,
+          "isDefault": false
+        },
+        {
+          "name": "Neptune",
+          "color": "#315591",
+          "massKg": 1.02434e+26,
+          "equatorialRadiusM": 24223903.01,
+          "rotationPeriodS": 58000.32,
+          "atmosphereHeightM": 1250000,
+          "soiRadiusM": 86643720667,
+          "isDefault": false
+        },
+        {
+          "name": "Triton",
+          "color": "#E1E1E1",
+          "massKg": 2.13947e+22,
+          "equatorialRadiusM": 1353400,
+          "rotationPeriodS": -507728.9877,
+          "atmosphereHeightM": 110000,
+          "soiRadiusM": 11964329.55,
+          "isDefault": false
+        },
+        {
+          "name": "Pluto",
+          "color": "#AD9179",
+          "massKg": 1.305e+22,
+          "equatorialRadiusM": 1187000,
+          "rotationPeriodS": 552731.9654,
+          "atmosphereHeightM": 110000,
+          "soiRadiusM": 3116527989,
+          "isDefault": false
+        },
+        {
+          "name": "Charon",
+          "color": "#E1E1E1",
+          "massKg": 1.52e+21,
+          "equatorialRadiusM": 603500,
+          "rotationPeriodS": 552731.9654,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 8292108.138,
+          "isDefault": false
+        }
+      ]
+    },
+    {
+      "name": "Galileo’s Planet Pack",
+      "bodies": [
+        {
+          "name": "Ciro",
+          "color": "#FF9",
+          "massKg": 1.90233924e+28,
+          "equatorialRadiusM": 70980000,
+          "rotationPeriodS": 540000,
+          "atmosphereHeightM": 1600000,
+          "soiRadiusM": 1000000000000000,
+          "isDefault": false
+        },
+        {
+          "name": "Icarus",
+          "color": "#696559",
+          "massKg": 601851317340000000000,
+          "equatorialRadiusM": 160000,
+          "rotationPeriodS": 766931.0655,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 3491161.222,
+          "isDefault": false
+        },
+        {
+          "name": "Thalia",
+          "color": "#5E2E1B",
+          "massKg": 3.2134981226e+21,
+          "equatorialRadiusM": 270000,
+          "rotationPeriodS": 72000,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 13645687.92,
+          "isDefault": false
+        },
+        {
+          "name": "Eta",
+          "color": "#807B73",
+          "massKg": 26448544219000000000,
+          "equatorialRadiusM": 60000,
+          "rotationPeriodS": 515362.4882,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1656715.488,
+          "isDefault": false
+        },
+        {
+          "name": "Niven",
+          "color": "#7E6247",
+          "massKg": 1.1754908542e+22,
+          "equatorialRadiusM": 400000,
+          "rotationPeriodS": 43200,
+          "atmosphereHeightM": 65000,
+          "soiRadiusM": 34386218.42,
+          "isDefault": false
+        },
+        {
+          "name": "Gael",
+          "color": "#527D7D",
+          "massKg": 5.2897088438e+22,
+          "equatorialRadiusM": 600000,
+          "rotationPeriodS": 21549.41452,
+          "atmosphereHeightM": 70000,
+          "soiRadiusM": 83667623.55,
+          "isDefault": true
+        },
+        {
+          "name": "Iota",
+          "color": "#9EA09E",
+          "massKg": 124895903260000000000,
+          "equatorialRadiusM": 100000,
+          "rotationPeriodS": 495456.2682,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2491177.09,
+          "isDefault": false
+        },
+        {
+          "name": "Ceti",
+          "color": "#5D5655",
+          "massKg": 446319183690000000000,
+          "equatorialRadiusM": 150000,
+          "rotationPeriodS": 1363993.543,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 8144195.754,
+          "isDefault": false
+        },
+        {
+          "name": "Tellumo",
+          "color": "#4D6D88",
+          "massKg": 2.7917907787e+23,
+          "equatorialRadiusM": 1000000,
+          "rotationPeriodS": 57600,
+          "atmosphereHeightM": 45000,
+          "soiRadiusM": 260440071.5,
+          "isDefault": false
+        },
+        {
+          "name": "Lili",
+          "color": "#48443E",
+          "massKg": 43199288891000000,
+          "equatorialRadiusM": 7000,
+          "rotationPeriodS": 2554.684189,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 40000,
+          "isDefault": false
+        },
+        {
+          "name": "Gratian",
+          "color": "#906042",
+          "massKg": 3.3336185942e+22,
+          "equatorialRadiusM": 550000,
+          "rotationPeriodS": 139245.7813,
+          "atmosphereHeightM": 50000,
+          "soiRadiusM": 194786348.7,
+          "isDefault": false
+        },
+        {
+          "name": "Geminus",
+          "color": "#46413C",
+          "massKg": 1.7100453201e+21,
+          "equatorialRadiusM": 230000,
+          "rotationPeriodS": 139245.7813,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 3139597.025,
+          "isDefault": false
+        },
+        {
+          "name": "Otho",
+          "color": "#AD8151",
+          "massKg": 1.6559727408e+24,
+          "equatorialRadiusM": 3500000,
+          "rotationPeriodS": 50400,
+          "atmosphereHeightM": 600000,
+          "soiRadiusM": 1701552278,
+          "isDefault": false
+        },
+        {
+          "name": "Augustus",
+          "color": "#CC9770",
+          "massKg": 6.2998962966e+21,
+          "equatorialRadiusM": 350000,
+          "rotationPeriodS": 53456.75179,
+          "atmosphereHeightM": 60000,
+          "soiRadiusM": 2153486.147,
+          "isDefault": false
+        },
+        {
+          "name": "Hephaestus",
+          "color": "#5C4E3D",
+          "massKg": 183670445960000000000,
+          "equatorialRadiusM": 125000,
+          "rotationPeriodS": 108188.8589,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 837807.8343,
+          "isDefault": false
+        },
+        {
+          "name": "Jannah",
+          "color": "#473C2D",
+          "massKg": 105298266670000000000,
+          "equatorialRadiusM": 105000,
+          "rotationPeriodS": 313204.2218,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1362261.78,
+          "isDefault": false
+        },
+        {
+          "name": "Gauss",
+          "color": "#70807F",
+          "massKg": 9.4590279672e+23,
+          "equatorialRadiusM": 2500000,
+          "rotationPeriodS": 61200,
+          "atmosphereHeightM": 400000,
+          "soiRadiusM": 2652003276,
+          "isDefault": false
+        },
+        {
+          "name": "Loki",
+          "color": "#4D4842",
+          "massKg": 476073795940000000000,
+          "equatorialRadiusM": 180000,
+          "rotationPeriodS": 62924.31582,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 886957.5516,
+          "isDefault": false
+        },
+        {
+          "name": "Catullus",
+          "color": "#907E7E",
+          "massKg": 1.9042951838e+23,
+          "equatorialRadiusM": 1200000,
+          "rotationPeriodS": 340308.8105,
+          "atmosphereHeightM": 280000,
+          "soiRadiusM": 30021332.15,
+          "isDefault": false
+        },
+        {
+          "name": "Tarsiss",
+          "color": "#645A52",
+          "massKg": 2.5578680987e+21,
+          "equatorialRadiusM": 320000,
+          "rotationPeriodS": 25902.63259,
+          "atmosphereHeightM": 130000,
+          "soiRadiusM": 1070061.653,
+          "isDefault": false
+        },
+        {
+          "name": "Nero",
+          "color": "#9E715D",
+          "massKg": 3.5632066517e+24,
+          "equatorialRadiusM": 5000000,
+          "rotationPeriodS": 39600,
+          "atmosphereHeightM": 560000,
+          "soiRadiusM": 8835394858,
+          "isDefault": false
+        },
+        {
+          "name": "Hadrian",
+          "color": "#595D60",
+          "massKg": 2.3803689797e+21,
+          "equatorialRadiusM": 300000,
+          "rotationPeriodS": 66949.22302,
+          "atmosphereHeightM": 80000,
+          "soiRadiusM": 1610803.495,
+          "isDefault": false
+        },
+        {
+          "name": "Narisse",
+          "color": "#4D3F38",
+          "massKg": 47607379594000000000,
+          "equatorialRadiusM": 90000,
+          "rotationPeriodS": 135495.7007,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 538982.3508,
+          "isDefault": false
+        },
+        {
+          "name": "Muse",
+          "color": "#737063",
+          "massKg": 198657954350000000000,
+          "equatorialRadiusM": 130000,
+          "rotationPeriodS": 291540.329,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1590728.15,
+          "isDefault": false
+        },
+        {
+          "name": "Minona",
+          "color": "#6C625C",
+          "massKg": 126953012250000000000,
+          "equatorialRadiusM": 120000,
+          "rotationPeriodS": 639093.3695,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2244163.881,
+          "isDefault": false
+        },
+        {
+          "name": "Agrippina",
+          "color": "#4E5047",
+          "massKg": 11020226758000000000,
+          "equatorialRadiusM": 50000,
+          "rotationPeriodS": 28800,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 5002991.847,
+          "isDefault": false
+        },
+        {
+          "name": "Julia",
+          "color": "#736D5D",
+          "massKg": 1983640816400000000,
+          "equatorialRadiusM": 30000,
+          "rotationPeriodS": 36000,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 5118022.32,
+          "isDefault": false
+        },
+        {
+          "name": "Hox",
+          "color": "#6F6B69",
+          "massKg": 1.2856931217e+21,
+          "equatorialRadiusM": 250000,
+          "rotationPeriodS": 64800,
+          "atmosphereHeightM": 40000,
+          "soiRadiusM": 567558458,
+          "isDefault": false
+        },
+        {
+          "name": "Argo",
+          "color": "#606069",
+          "massKg": 32913743917000000000,
+          "equatorialRadiusM": 80000,
+          "rotationPeriodS": 947939.2886,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 2885399.812,
+          "isDefault": false
+        },
+        {
+          "name": "Leto",
+          "color": "#67686B",
+          "massKg": 777587200030000000000,
+          "equatorialRadiusM": 210000,
+          "rotationPeriodS": 21600,
+          "atmosphereHeightM": 35000,
+          "soiRadiusM": 600295990.2,
+          "isDefault": false
+        },
+        {
+          "name": "Grannus",
+          "color": "#FF3300",
+          "massKg": 9.5494442933e+27,
+          "equatorialRadiusM": 30170000,
+          "rotationPeriodS": 1296000,
+          "atmosphereHeightM": 400000,
+          "soiRadiusM": 500000000000,
+          "isDefault": false
+        },
+        {
+          "name": "Sarnus",
+          "color": "#E59F88",
+          "massKg": 1.229977794e+24,
+          "equatorialRadiusM": 5300000,
+          "rotationPeriodS": 28500,
+          "atmosphereHeightM": 580000,
+          "soiRadiusM": 3496577901,
+          "isDefault": false
+        },
+        {
+          "name": "Hale",
+          "color": "#C4B3AF",
+          "massKg": 12166330341000000,
+          "equatorialRadiusM": 6000,
+          "rotationPeriodS": 23555.31384,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 41000,
+          "isDefault": false
+        },
+        {
+          "name": "Ovok",
+          "color": "#CECCCA",
+          "massKg": 198657954350000000,
+          "equatorialRadiusM": 26000,
+          "rotationPeriodS": 29440.14701,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 94000,
+          "isDefault": false
+        },
+        {
+          "name": "Eeloo",
+          "color": "#8F9394",
+          "massKg": 1.1149224242e+21,
+          "equatorialRadiusM": 210000,
+          "rotationPeriodS": 57914.78373,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1159066.157,
+          "isDefault": false
+        },
+        {
+          "name": "Slate",
+          "color": "#D1B7A1",
+          "massKg": 2.9649876011e+22,
+          "equatorialRadiusM": 540000,
+          "rotationPeriodS": 192771.1546,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 9598158.646,
+          "isDefault": false
+        },
+        {
+          "name": "Tekto",
+          "color": "#888",
+          "massKg": 2.8834085358e+21,
+          "equatorialRadiusM": 280000,
+          "rotationPeriodS": 666154.4828,
+          "atmosphereHeightM": 95000,
+          "soiRadiusM": 8637005.195,
+          "isDefault": false
+        },
+        {
+          "name": "Urlum",
+          "color": "#CBDFE6",
+          "massKg": 1.7896959236e+23,
+          "equatorialRadiusM": 2177000,
+          "rotationPeriodS": 41000,
+          "atmosphereHeightM": 325000,
+          "soiRadiusM": 2517599239,
+          "isDefault": false
+        },
+        {
+          "name": "Polta",
+          "color": "#8DAB9E",
+          "massKg": 1.3512267369e+21,
+          "equatorialRadiusM": 220000,
+          "rotationPeriodS": 73017.11064,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 1661114.853,
+          "isDefault": false
+        },
+        {
+          "name": "Priax",
+          "color": "#6D6A64",
+          "massKg": 50691279850000000000,
+          "equatorialRadiusM": 74000,
+          "rotationPeriodS": 73017.11064,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 446767.602,
+          "isDefault": false
+        },
+        {
+          "name": "Wal",
+          "color": "#84724C",
+          "massKg": 7.4427672795e+21,
+          "equatorialRadiusM": 370000,
+          "rotationPeriodS": 1009410.79,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 18933504.68,
+          "isDefault": false
+        },
+        {
+          "name": "Tal",
+          "color": "#7D7361",
+          "massKg": 3200273850500000000,
+          "equatorialRadiusM": 22000,
+          "rotationPeriodS": 48874.48348,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 139966.6513,
+          "isDefault": false
+        },
+        {
+          "name": "Neidon",
+          "color": "#B697FD",
+          "massKg": 2.1228216519e+23,
+          "equatorialRadiusM": 2145000,
+          "rotationPeriodS": 40250,
+          "atmosphereHeightM": 260000,
+          "soiRadiusM": 3944323312,
+          "isDefault": false
+        },
+        {
+          "name": "Thatmo",
+          "color": "#D5D6DA",
+          "massKg": 2.7883630473e+21,
+          "equatorialRadiusM": 286000,
+          "rotationPeriodS": 306442.6745,
+          "atmosphereHeightM": 35000,
+          "soiRadiusM": 5709379.089,
+          "isDefault": false
+        },
+        {
+          "name": "Nissee",
+          "color": "#D7CDBE",
+          "massKg": 5950922449200000000,
+          "equatorialRadiusM": 30000,
+          "rotationPeriodS": 27924.8723,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 7366476.635,
+          "isDefault": false
+        },
+        {
+          "name": "Plock",
+          "color": "#B59676",
+          "massKg": 776809612830000000000,
+          "equatorialRadiusM": 189000,
+          "rotationPeriodS": 106309.607,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 586443111.1,
+          "isDefault": false
+        },
+        {
+          "name": "Karen",
+          "color": "#8F7D74",
+          "massKg": 70149057267000000000,
+          "equatorialRadiusM": 85050,
+          "rotationPeriodS": 106327.7634,
+          "atmosphereHeightM": 0,
+          "soiRadiusM": 939354.3243,
+          "isDefault": false
+        }
+      ]
+    }
+  ]
+}
