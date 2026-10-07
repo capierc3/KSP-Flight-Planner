@@ -15,5 +15,8 @@
         <TabItem Header="Resonant orbits">
             <views:ResonantOrbitView DataContext="{Binding Resonant}" />
         </TabItem>
+        <TabItem Header="Math guide">
+            <views:GuideView />
+        </TabItem>
     </TabControl>
 </Window>
