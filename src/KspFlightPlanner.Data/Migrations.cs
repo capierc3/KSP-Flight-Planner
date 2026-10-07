@@ -4,7 +4,8 @@ namespace KspFlightPlanner.Data;
 
 /// <summary>
 /// Ordered schema scripts. Index i upgrades the database from user_version i to i+1.
-/// Never edit a shipped script — append a new one.
+/// Pre-release: v1 may still be edited freely (delete your local database to rebuild).
+/// Once user data must be preserved, freeze shipped scripts and only append new ones.
 /// </summary>
 internal static class Migrations
 {
@@ -12,6 +13,11 @@ internal static class Migrations
     [
         // v1: constant body data + first user table
         """
+        CREATE TABLE app_meta (
+            key    TEXT PRIMARY KEY,
+            value  TEXT NOT NULL
+        );
+
         CREATE TABLE star_systems (
             id          INTEGER PRIMARY KEY,
             name        TEXT    NOT NULL UNIQUE,
@@ -20,19 +26,42 @@ internal static class Migrations
         );
 
         CREATE TABLE celestial_bodies (
-            id                   INTEGER PRIMARY KEY,
-            system_id            INTEGER NOT NULL REFERENCES star_systems(id) ON DELETE CASCADE,
-            name                 TEXT    NOT NULL,
-            mass_kg              REAL    NOT NULL,
-            mu                   REAL    NOT NULL,   -- gravitational parameter GM, m^3/s^2
-            equatorial_radius_m  REAL    NOT NULL,
-            rotation_period_s    REAL    NOT NULL,   -- sidereal; negative = retrograde
-            atmosphere_height_m  REAL    NOT NULL,   -- 0 = no atmosphere
-            soi_radius_m         REAL    NOT NULL,   -- from body centre
-            color                TEXT    NOT NULL,
-            is_default           INTEGER NOT NULL DEFAULT 0,
-            sort_order           INTEGER NOT NULL,
-            is_builtin           INTEGER NOT NULL DEFAULT 0,
+            id                       INTEGER PRIMARY KEY,
+            system_id                INTEGER NOT NULL REFERENCES star_systems(id) ON DELETE CASCADE,
+            parent_id                INTEGER REFERENCES celestial_bodies(id),
+            name                     TEXT    NOT NULL,
+            body_class               TEXT,              -- Star / Planet / Dwarf planet / Moon
+            color                    TEXT    NOT NULL,
+            is_default               INTEGER NOT NULL DEFAULT 0,
+            sort_order               INTEGER NOT NULL,
+            is_builtin               INTEGER NOT NULL DEFAULT 0,
+
+            -- physical
+            mass_kg                  REAL    NOT NULL,
+            mu                       REAL    NOT NULL,  -- gravitational parameter GM, m^3/s^2
+            equatorial_radius_m      REAL    NOT NULL,
+            rotation_period_s        REAL    NOT NULL,  -- sidereal; negative = retrograde
+            soi_radius_m             REAL    NOT NULL,  -- from body centre
+            highest_elevation_m      REAL,
+            surface_to_orbit_dv      REAL,              -- approximate, community delta-v map
+
+            -- orbit around parent (NULL for the star / unknown)
+            sma_m                    REAL,
+            eccentricity             REAL,
+            inclination_deg          REAL,
+            lan_deg                  REAL,              -- longitude of ascending node
+            arg_periapsis_deg        REAL,
+            mean_anomaly_epoch_rad   REAL,
+            epoch_s                  REAL,
+
+            -- atmosphere (atmosphere_height_m NULL = no atmosphere)
+            atmosphere_height_m      REAL,
+            sea_level_pressure_atm   REAL,
+            scale_height_m           REAL,
+            min_temp_c               REAL,
+            max_temp_c               REAL,
+            has_oxygen               INTEGER,
+
             UNIQUE (system_id, name)
         );
 
@@ -51,6 +80,9 @@ internal static class Migrations
     ];
 
     public static int LatestVersion => Scripts.Length;
+
+    /// <summary>Hash of all schema scripts; changes whenever the schema text changes.</summary>
+    public static string Fingerprint { get; } = Hashing.Sha256(string.Join("\n", Scripts));
 
     public static void Apply(SqliteConnection connection)
     {

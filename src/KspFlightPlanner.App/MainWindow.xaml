@@ -1,151 +1,16 @@
 <Window x:Class="KspFlightPlanner.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls"
-        Title="KSP Flight Planner — Resonant Orbits"
-        Width="1180" Height="780" MinWidth="900" MinHeight="620"
+        xmlns:views="clr-namespace:KspFlightPlanner.App.Views"
+        Title="KSP Flight Planner"
+        Width="1280" Height="820" MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen">
-
-    <Window.Resources>
-        <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,14,0,6" />
-        </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="Opacity" Value="0.75" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,4,12,4" />
-        </Style>
-        <Style x:Key="Value" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="HorizontalAlignment" Value="Right" />
-            <Setter Property="Margin" Value="0,4,0,4" />
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="360" />
-            <ColumnDefinition Width="16" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <!-- Inputs and results -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="Parameters" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
-
-                <TextBlock Text="System" Style="{StaticResource Label}" />
-                <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
-
-                <TextBlock Text="Celestial body" Style="{StaticResource Label}" />
-                <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding SelectedBody}" />
-
-                <TextBlock Text="Number of satellites" Style="{StaticResource Label}" />
-                <TextBox Text="{Binding SatelliteCount, UpdateSourceTrigger=PropertyChanged}" />
-
-                <TextBlock Text="Orbital altitude (m)" Style="{StaticResource Label}" />
-                <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" />
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <Button Content="Use synchronous" Command="{Binding UseSynchronousAltitudeCommand}" Margin="0,0,8,0" />
-                    <Button Content="Use min. line-of-sight" Command="{Binding UseMinimumLineOfSightCommand}" />
-                </StackPanel>
-
-                <CheckBox Content="Dive orbit (release at apoapsis)" IsChecked="{Binding PreferDiveOrbit}" Margin="0,10,0,0" />
-                <CheckBox Content="Occlusion modifiers (0.75 atm / 0.9 vacuum)" IsChecked="{Binding UseOcclusion}" Margin="0,4,0,0" />
-                <CheckBox Content="Show line-of-sight links" IsChecked="{Binding ShowLineOfSight}" Margin="0,4,0,0" />
-
-                <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,8,0,0" />
-
-                <TextBlock Text="Carrier orbit" Style="{StaticResource SectionHeader}" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Target orbit period" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SatellitePeriodText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="1" Text="Type" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding OrbitTypeText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="2" Text="Carrier period" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CarrierPeriodText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="3" Text="Apoapsis" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CarrierApoapsisText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="4" Text="Periapsis" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding CarrierPeriapsisText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="5" Text="Injection Δv" Style="{StaticResource Label}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding InjectionDeltaVText}" Style="{StaticResource Value}" FontWeight="SemiBold" />
-                </Grid>
-
-                <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,6,0,0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat='⚠ {0}'}" Foreground="#FFA726" TextWrapping="Wrap" Margin="0,2" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <TextBlock Text="Body data" Style="{StaticResource SectionHeader}" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Equatorial radius" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding BodyRadiusText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="1" Text="μ (GM)" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding BodyMuText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="2" Text="Atmosphere" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BodyAtmosphereText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="3" Text="Sidereal day" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding BodyRotationText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="4" Text="Synchronous orbit" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SynchronousAltitudeText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="5" Text="Min. line-of-sight" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding MinimumLineOfSightText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="6" Text="Sphere of influence" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SoiAltitudeText}" Style="{StaticResource Value}" />
-                </Grid>
-
-                <TextBlock Text="Saved plans" Style="{StaticResource SectionHeader}" />
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Save" Command="{Binding SavePlanCommand}" Margin="8,0,0,0" />
-                    <TextBox Text="{Binding PlanName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Plan name" />
-                </DockPanel>
-                <ListBox ItemsSource="{Binding SavedPlans}" SelectedItem="{Binding SelectedPlan}" Height="140" Margin="0,8,0,0">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel>
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                <TextBlock Opacity="0.7" FontSize="11">
-                                    <Run Text="{Binding BodyName, Mode=OneWay}" /> · <Run Text="{Binding SatelliteCount, Mode=OneWay}" /> sats · <Run Text="{Binding AltitudeM, Mode=OneWay, StringFormat=N0}" /> m
-                                </TextBlock>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <Button Content="Load" Command="{Binding LoadPlanCommand}" Margin="0,0,8,0" />
-                    <Button Content="Delete" Command="{Binding DeletePlanCommand}" />
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- Diagram -->
-        <Border Grid.Column="2" CornerRadius="8" ClipToBounds="True">
-            <controls:OrbitDiagram Body="{Binding SelectedBody}"
-                                   Result="{Binding Result}"
-                                   SatelliteCount="{Binding SatelliteCount}"
-                                   MinimumLineOfSightAltitude="{Binding MinimumLineOfSightAltitude}"
-                                   ShowLineOfSight="{Binding ShowLineOfSight}" />
-        </Border>
-    </Grid>
+    <TabControl Margin="8,4,8,8">
+        <TabItem Header="Transfer planner">
+            <views:TransferPlannerView DataContext="{Binding Transfer}" />
+        </TabItem>
+        <TabItem Header="Resonant orbits">
+            <views:ResonantOrbitView DataContext="{Binding Resonant}" />
+        </TabItem>
+    </TabControl>
 </Window>

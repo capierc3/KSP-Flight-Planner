@@ -1,0 +1,6 @@
+<Project>
+  <!-- No debug symbols in Release builds, so publish/ contains only the exe. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+</Project>

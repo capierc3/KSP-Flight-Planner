@@ -13,7 +13,7 @@ public class ResonantOrbitCalculatorTests
         Mu = 5.29151583439215E+22 * OrbitMath.G,
         EquatorialRadiusM = 600000,
         RotationPeriodS = 21549.4251830898,
-        AtmosphereHeightM = 70000,
+        Atmosphere = new Atmosphere(HeightM: 70000),
         SoiRadiusM = 84159286.4796305,
     };
 

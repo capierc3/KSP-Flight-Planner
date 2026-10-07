@@ -6,7 +6,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public sealed class MainViewModel : ObservableObject
+public sealed class ResonantOrbitViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
     private readonly ConstellationRepository _plans;
@@ -23,7 +23,7 @@ public sealed class MainViewModel : ObservableObject
     private string _planName = "";
     private SavedConstellation? _selectedPlan;
 
-    public MainViewModel(BodyRepository bodies, ConstellationRepository plans)
+    public ResonantOrbitViewModel(BodyRepository bodies, ConstellationRepository plans)
     {
         _bodies = bodies;
         _plans = plans;

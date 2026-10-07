@@ -13,7 +13,10 @@ public partial class App : Application
             var database = new PlannerDatabase(PlannerDatabase.DefaultPath());
             database.Initialize();
 
-            var viewModel = new MainViewModel(new BodyRepository(database), new ConstellationRepository(database));
+            var bodies = new BodyRepository(database);
+            var viewModel = new MainViewModel(
+                new TransferPlannerViewModel(bodies),
+                new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)));
             new MainWindow(viewModel).Show();
         }
         catch (Exception ex)
