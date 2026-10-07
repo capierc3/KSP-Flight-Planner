@@ -2,36 +2,27 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Core;
 
-public sealed record BudgetLine(string Stage, double? DeltaV, string? Note = null);
+public sealed record BudgetLine(string Stage, double? DeltaV, string? Note = null, bool IsHeader = false);
 
-/// <summary>One-way mission Δv: launch, transfer, capture and landing.</summary>
+/// <summary>Mission Δv: launch, transfer, capture and landing, optionally followed by the trip home.</summary>
 public static class MissionBudget
 {
-    public static IReadOnlyList<BudgetLine> Build(TransferRequest request, TransferWindow window, bool includeLanding)
+    /// <param name="returnLeg">Return request and window, or null for a one-way trip.</param>
+    public static IReadOnlyList<BudgetLine> Build(
+        TransferRequest outbound, TransferWindow outboundWindow, bool includeLanding,
+        (TransferRequest Request, TransferWindow Window)? returnLeg = null)
     {
-        var origin = request.Origin;
-        var dest = request.Destination;
-        var lines = new List<BudgetLine>
-        {
-            new($"Launch: {origin.Name} surface → {request.ParkingAltitudeM / 1000:0} km orbit", origin.SurfaceToLowOrbitDv,
-                origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate; depends on your ascent"),
-            new($"Transfer ejection burn", window.EjectionDv,
-                Math.Abs(window.Ejection.InclinationDeg) > 0.5
-                    ? $"Escape direction is {window.Ejection.InclinationDeg:0.0}° out of {origin.Name}'s orbital plane"
-                    : null),
-            new("Mid-course correction (allowance)", Math.Round(window.TotalDv * 0.02 + 20), "Rule-of-thumb margin for plane/timing fixes"),
-        };
+        var origin = outbound.Origin;
+        var dest = outbound.Destination;
+        var landing = includeLanding && outbound.Arrival != ArrivalMode.Flyby;
+        var lines = new List<BudgetLine>();
 
-        lines.Add(request.Arrival switch
-        {
-            ArrivalMode.Circularize => new BudgetLine($"Capture into {request.ArrivalAltitudeM / 1000:0} km {dest.Name} orbit", window.CaptureDv),
-            ArrivalMode.Aerobrake => new BudgetLine($"Capture at {dest.Name} by aerobraking", 0,
-                dest.HasAtmosphere ? "Set periapsis inside the atmosphere; small correction burns not included"
-                                   : $"{dest.Name} has no atmosphere — aerobraking is not possible"),
-            _ => new BudgetLine($"Flyby of {dest.Name}", 0, "No capture"),
-        });
+        if (returnLeg is not null) lines.Add(new BudgetLine($"Outbound: {origin.Name} → {dest.Name}", null, IsHeader: true));
+        lines.Add(new($"Launch: {origin.Name} surface → {outbound.ParkingAltitudeM / 1000:0} km orbit", origin.SurfaceToLowOrbitDv,
+            origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate; depends on your ascent"));
+        AddTransfer(lines, outbound, outboundWindow, "Transfer ejection burn");
 
-        if (includeLanding && request.Arrival != ArrivalMode.Flyby)
+        if (landing)
         {
             lines.Add(new BudgetLine($"Landing on {dest.Name}", dest.SurfaceToLowOrbitDv,
                 dest.SurfaceToLowOrbitDv is null ? "No estimate for this body"
@@ -39,8 +30,47 @@ public static class MissionBudget
                 : "≈ ascent Δv (no atmosphere)"));
         }
 
+        if (returnLeg is { } ret)
+        {
+            lines.Add(new BudgetLine($"Return: {dest.Name} → {origin.Name}", null, IsHeader: true));
+            if (landing)
+            {
+                lines.Add(new BudgetLine($"Launch: {dest.Name} surface → {ret.Request.ParkingAltitudeM / 1000:0} km orbit",
+                    dest.SurfaceToLowOrbitDv,
+                    dest.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate"));
+            }
+            AddTransfer(lines, ret.Request, ret.Window, "Return ejection burn");
+        }
+
         return lines;
     }
+
+    private static void AddTransfer(List<BudgetLine> lines, TransferRequest request, TransferWindow window, string ejectionLabel)
+    {
+        var origin = request.Origin;
+        var dest = request.Destination;
+
+        lines.Add(new(ejectionLabel, window.EjectionDv,
+            Math.Abs(window.Ejection.InclinationDeg) > 0.5
+                ? $"Escape direction is {window.Ejection.InclinationDeg:0.0}° out of {origin.Name}'s orbital plane"
+                : null));
+        lines.Add(new("Mid-course correction (allowance)", Math.Round(window.TotalDv * 0.02 + 20),
+            "Rule-of-thumb margin for plane/timing fixes"));
+
+        lines.Add(request.Arrival switch
+        {
+            ArrivalMode.Circularize => new BudgetLine($"Capture into {request.ArrivalAltitudeM / 1000:0} km {dest.Name} orbit", window.CaptureDv),
+            ArrivalMode.Aerobrake => new BudgetLine($"Capture at {dest.Name} by aerobraking", 0,
+                dest.HasAtmosphere
+                    ? $"Atmosphere entry at ≈ {EntrySpeed(dest, window.ArrivalVInf):N0} m/s; heat shield recommended"
+                    : $"{dest.Name} has no atmosphere — aerobraking is not possible"),
+            _ => new BudgetLine($"Flyby of {dest.Name}", 0, "No capture"),
+        });
+    }
+
+    /// <summary>Speed when reaching the top of the atmosphere on a hyperbolic approach: √(v∞² + 2μ/r).</summary>
+    public static double EntrySpeed(CelestialBody body, double vInf) =>
+        Math.Sqrt(vInf * vInf + 2 * body.Mu / (body.EquatorialRadiusM + body.AtmosphereHeightM));
 
     public static double Total(IEnumerable<BudgetLine> lines) => lines.Sum(l => l.DeltaV ?? 0);
 }

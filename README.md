@@ -3,7 +3,7 @@
 Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
-  ejection/capture Δv, ejection burn angle, ideal Hohmann reference, and a one-way mission Δv budget.
+  ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
 
 ## Layout

@@ -19,7 +19,15 @@ public sealed record TransferRequest(
     double ParkingAltitudeM,
     double ArrivalAltitudeM,
     double EarliestDepartureUt,
-    ArrivalMode Arrival = ArrivalMode.Circularize);
+    ArrivalMode Arrival = ArrivalMode.Circularize)
+{
+    /// <summary>
+    /// The return leg: depart from this trip's destination orbit no earlier than
+    /// <paramref name="earliestDepartureUt"/> and arrive back at the origin's parking orbit.
+    /// </summary>
+    public TransferRequest Reverse(double earliestDepartureUt, ArrivalMode arrival) =>
+        new(Destination, Origin, Parent, ArrivalAltitudeM, ParkingAltitudeM, earliestDepartureUt, arrival);
+}
 
 /// <summary>Where to perform the ejection burn, relative to the origin body's prograde/retrograde direction.</summary>
 public sealed record EjectionBurn(double AngleDeg, string Reference, double InclinationDeg)

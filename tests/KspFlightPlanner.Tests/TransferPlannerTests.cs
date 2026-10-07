@@ -101,6 +101,45 @@ public sealed class TransferPlannerTests : IDisposable
     }
 
     [Fact]
+    public void Reverse_swaps_bodies_and_altitudes()
+    {
+        var back = KerbinToDuna().Reverse(1234, ArrivalMode.Aerobrake);
+
+        Assert.Equal("Duna", back.Origin.Name);
+        Assert.Equal("Kerbin", back.Destination.Name);
+        Assert.Equal(60_000, back.ParkingAltitudeM);
+        Assert.Equal(80_000, back.ArrivalAltitudeM);
+        Assert.Equal(1234, back.EarliestDepartureUt);
+        Assert.Equal(ArrivalMode.Aerobrake, back.Arrival);
+    }
+
+    [Fact]
+    public void Duna_round_trip_returns_after_arrival()
+    {
+        var outbound = KerbinToDuna();
+        var there = TransferPlanner.Plan(outbound).BestWindow;
+        var returnRequest = outbound.Reverse(there.ArrivalUt, ArrivalMode.Aerobrake);
+        var back = TransferPlanner.Plan(returnRequest).BestWindow;
+        var cal = GameCalendar.Kerbin;
+
+        _output.WriteLine($"Arrive Duna {cal.FormatDate(there.ArrivalUt)}");
+        _output.WriteLine($"Leave Duna {cal.FormatDate(back.DepartureUt)} (stay {cal.FormatDuration(back.DepartureUt - there.ArrivalUt)}), " +
+                          $"home {cal.FormatDate(back.ArrivalUt)}");
+        _output.WriteLine($"Phase {back.PhaseAngleDeg:0.0}°  eject {back.EjectionDv:0} m/s ({back.Ejection})  v∞ home {back.ArrivalVInf:0} m/s");
+
+        Assert.True(back.DepartureUt >= there.ArrivalUt);
+        Assert.InRange(back.EjectionDv, 550, 800);  // Hohmann from 60 km Duna orbit ≈ 616 m/s
+        Assert.Equal(0, back.CaptureDv);             // aerobraking at Kerbin
+        Assert.True(back.PhaseAngleDeg < 0);          // Kerbin is behind Duna for an inward transfer
+        Assert.Equal("retrograde", back.Ejection.Reference);
+
+        var budget = MissionBudget.Build(outbound, there, includeLanding: true, (returnRequest, back));
+        Assert.Contains(budget, l => l.Stage == "Launch: Duna surface → 60 km orbit" && l.DeltaV == 1450);
+        Assert.Contains(budget, l => l.Stage == "Return ejection burn");
+        Assert.Contains(budget, l => l.Stage.StartsWith("Capture at Kerbin by aerobraking") && l.Note!.Contains("Atmosphere entry"));
+    }
+
+    [Fact]
     public void Rejects_bodies_with_different_parents()
     {
         var req = KerbinToDuna() with { Destination = _stock["Mun"] };

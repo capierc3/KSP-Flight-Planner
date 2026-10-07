@@ -8,6 +8,22 @@ namespace KspFlightPlanner.App.ViewModels;
 
 public sealed record Fact(string Label, string Value);
 
+/// <summary>Formatted details of one transfer leg (outbound or return).</summary>
+public sealed record LegSummary(
+    string Title,
+    string Departure,
+    string WaitLabel,
+    string Wait,
+    string Arrival,
+    string FlightTime,
+    string PhaseAngle,
+    string EjectionPoint,
+    string EjectionInclination,
+    string EjectionDv,
+    string CaptureLabel,
+    string CaptureDv,
+    string TransferDv);
+
 public sealed class TransferPlannerViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
@@ -24,18 +40,30 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private ArrivalMode _arrivalMode = ArrivalMode.Circularize;
     private bool _includeLanding = true;
 
-    private bool _isBusy;
+    private bool _planReturn = true;
+    private int _minimumStayDays;
+    private ArrivalMode _returnArrivalMode = ArrivalMode.Aerobrake;
+    private bool _showReturnPlot;
+
+    private int _busyCount;
     private string? _errorText;
     private int _version;
+    private int _returnVersion;
+    private bool _suspendRecalculate;
+
     private TransferRequest? _request;
     private TransferPlan? _plan;
     private TransferWindow? _selectedWindow;
-    private bool _suspendRecalculate;
+
+    private TransferRequest? _returnRequest;
+    private TransferPlan? _returnPlan;
+    private TransferWindow? _returnWindow;
 
     public TransferPlannerViewModel(BodyRepository bodies)
     {
         _bodies = bodies;
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
+        ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
 
         // Only systems with orbital data can plan transfers.
         foreach (var system in bodies.GetSystems())
@@ -50,8 +78,10 @@ public sealed class TransferPlannerViewModel : ObservableObject
     public ObservableCollection<Fact> OriginFacts { get; } = [];
     public ObservableCollection<Fact> DestinationFacts { get; } = [];
     public IReadOnlyList<ArrivalMode> ArrivalModes { get; } = Enum.GetValues<ArrivalMode>();
+    public IReadOnlyList<ArrivalMode> ReturnArrivalModes { get; } = [ArrivalMode.Aerobrake, ArrivalMode.Circularize];
 
     public RelayCommand ResetToBestCommand { get; }
+    public RelayCommand ResetReturnToBestCommand { get; }
 
     // ---------------- Inputs ----------------
 
@@ -81,6 +111,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
             {
                 foreach (var b in Siblings(value)) Destinations.Add(b);
                 ParkingAltitudeText = Km(value.DefaultParkingAltitudeM);
+                ReturnArrivalMode = value.HasAtmosphere ? ArrivalMode.Aerobrake : ArrivalMode.Circularize;
             }
             SelectedDestination = Destinations.FirstOrDefault(b => b.Name == "Duna") ?? Destinations.FirstOrDefault();
             FillFacts(OriginFacts, value);
@@ -101,6 +132,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
                 if (_arrivalMode == ArrivalMode.Aerobrake && !value.HasAtmosphere) SelectedArrivalMode = ArrivalMode.Circularize;
             }
             FillFacts(DestinationFacts, value);
+            OnPropertyChanged(nameof(StayLabel));
             Recalculate();
         }
     }
@@ -140,16 +172,55 @@ public sealed class TransferPlannerViewModel : ObservableObject
     public bool IncludeLanding
     {
         get => _includeLanding;
-        set { if (SetProperty(ref _includeLanding, value)) RefreshWindowOutputs(); }
+        set { if (SetProperty(ref _includeLanding, value)) RefreshBudget(); }
+    }
+
+    public bool PlanReturn
+    {
+        get => _planReturn;
+        set
+        {
+            if (!SetProperty(ref _planReturn, value)) return;
+            if (!value) ShowReturnPlot = false;
+            RecalculateReturn();
+        }
+    }
+
+    /// <summary>Minimum time to spend at the destination before heading home, in days.</summary>
+    public int MinimumStayDays
+    {
+        get => _minimumStayDays;
+        set { if (SetProperty(ref _minimumStayDays, Math.Max(0, value))) RecalculateReturn(); }
+    }
+
+    public string StayLabel => $"Minimum stay at {SelectedDestination?.Name ?? "destination"} (days)";
+
+    public ArrivalMode ReturnArrivalMode
+    {
+        get => _returnArrivalMode;
+        set { if (SetProperty(ref _returnArrivalMode, value)) RecalculateReturn(); }
+    }
+
+    public bool ShowReturnPlot
+    {
+        get => _showReturnPlot;
+        set
+        {
+            if (!SetProperty(ref _showReturnPlot, value)) return;
+            OnPropertyChanged(nameof(ShowOutboundPlot));
+            RefreshPlotOutputs();
+        }
+    }
+
+    public bool ShowOutboundPlot
+    {
+        get => !_showReturnPlot;
+        set => ShowReturnPlot = !value;
     }
 
     // ---------------- State ----------------
 
-    public bool IsBusy
-    {
-        get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
-    }
+    public bool IsBusy => _busyCount > 0;
 
     public string? ErrorText
     {
@@ -157,57 +228,77 @@ public sealed class TransferPlannerViewModel : ObservableObject
         private set => SetProperty(ref _errorText, value);
     }
 
-    public TransferPlan? Plan
-    {
-        get => _plan;
-        private set => SetProperty(ref _plan, value);
-    }
-
     public TransferWindow? SelectedWindow
     {
         get => _selectedWindow;
         private set
         {
-            if (SetProperty(ref _selectedWindow, value)) RefreshWindowOutputs();
+            if (!SetProperty(ref _selectedWindow, value)) return;
+            Outbound = value is null ? null : Summarize(_request!, value, IsCustomSelection ? "Selected outbound transfer" : "Best launch window",
+                "Wait from earliest", value.DepartureUt - _request!.EarliestDepartureUt);
+            OnPropertyChanged(nameof(IsCustomSelection));
+            RefreshPlotOutputs();
+            RefreshBudget();
+            RecalculateReturn();
         }
     }
 
-    public bool IsCustomSelection => _plan is not null && _selectedWindow is not null && !ReferenceEquals(_plan.BestWindow, _selectedWindow);
+    public TransferWindow? ReturnWindow
+    {
+        get => _returnWindow;
+        private set
+        {
+            if (!SetProperty(ref _returnWindow, value)) return;
+            Return = value is null || _selectedWindow is null ? null : Summarize(_returnRequest!, value,
+                IsCustomReturnSelection ? "Selected return transfer" : "Best return window",
+                $"Time at {_returnRequest!.Origin.Name}", value.DepartureUt - _selectedWindow.ArrivalUt);
+            OnPropertyChanged(nameof(IsCustomReturnSelection));
+            RefreshPlotOutputs();
+            RefreshBudget();
+        }
+    }
 
-    /// <summary>Called when the user clicks a point on the porkchop plot.</summary>
+    public LegSummary? Outbound { get; private set { field = value; OnPropertyChanged(); } }
+    public LegSummary? Return { get; private set { field = value; OnPropertyChanged(); } }
+
+    public bool IsCustomSelection => _plan is not null && _selectedWindow is not null && _plan.BestWindow != _selectedWindow;
+    public bool IsCustomReturnSelection => _returnPlan is not null && _returnWindow is not null && _returnPlan.BestWindow != _returnWindow;
+
+    /// <summary>Called when the user clicks a point on the porkchop plot currently shown.</summary>
     public void SelectPoint(double departureUt, double flightTimeS)
     {
-        if (_request is null) return;
-        if (TransferPlanner.Evaluate(_request, departureUt, flightTimeS) is { } window) SelectedWindow = window;
+        if (ShowReturnPlot)
+        {
+            if (_returnRequest is not null && TransferPlanner.Evaluate(_returnRequest, departureUt, flightTimeS) is { } w)
+                ReturnWindow = w;
+        }
+        else if (_request is not null && TransferPlanner.Evaluate(_request, departureUt, flightTimeS) is { } w)
+        {
+            SelectedWindow = w;
+        }
     }
 
     // ---------------- Outputs ----------------
 
-    public string WindowTitle => IsCustomSelection ? "Selected transfer" : "Best launch window";
-    public string DepartureText => SelectedWindow is { } w ? _calendar.FormatDate(w.DepartureUt) : "—";
-    public string WaitText => SelectedWindow is { } w && _request is { } r ? _calendar.FormatDuration(w.DepartureUt - r.EarliestDepartureUt) : "—";
-    public string ArrivalText => SelectedWindow is { } w ? _calendar.FormatDate(w.ArrivalUt) : "—";
-    public string FlightTimeText => SelectedWindow is { } w ? _calendar.FormatDuration(w.FlightTimeS) : "—";
-    public string PhaseAngleText => SelectedWindow is { } w ? Deg(w.PhaseAngleDeg) : "—";
-    public string EjectionAngleText => SelectedWindow is { } w ? w.Ejection.ToString() : "—";
-    public string EjectionInclinationText => SelectedWindow is { } w ? Deg(w.Ejection.InclinationDeg) : "—";
-    public string EjectionDvText => SelectedWindow is { } w ? Format.Speed(w.EjectionDv) : "—";
-    public string CaptureDvText => SelectedWindow is { } w ? Format.Speed(w.CaptureDv) : "—";
-    public string TransferDvText => SelectedWindow is { } w ? Format.Speed(w.TotalDv) : "—";
+    public string BudgetTotalLabel => Return is not null ? "Total (round trip)" : "Total (one way)";
     public string BudgetTotalText => BudgetLines.Count > 0 ? Format.Speed(MissionBudget.Total(BudgetLines)) : "—";
 
-    public string HohmannPhaseText => Plan is { } p ? Deg(p.Hohmann.PhaseAngleDeg) : "—";
-    public string HohmannTimeText => Plan is { } p ? _calendar.FormatDuration(p.Hohmann.TransferTimeS) : "—";
-    public string HohmannEjectionText => Plan is { } p ? Format.Speed(p.Hohmann.EjectionDv) : "—";
-    public string HohmannEjectionAngleText => Plan is { } p ? p.Hohmann.Ejection.ToString() : "—";
-    public string HohmannCaptureText => Plan is { } p ? Format.Speed(p.Hohmann.CaptureDv) : "—";
-    public string SynodicText => Plan is { } p ? _calendar.FormatDuration(p.Hohmann.SynodicPeriodS) : "—";
+    public string HohmannPhaseText => _plan is { } p ? Deg(p.Hohmann.PhaseAngleDeg) : "—";
+    public string HohmannTimeText => _plan is { } p ? _calendar.FormatDuration(p.Hohmann.TransferTimeS) : "—";
+    public string HohmannEjectionText => _plan is { } p ? Format.Speed(p.Hohmann.EjectionDv) : "—";
+    public string HohmannEjectionAngleText => _plan is { } p ? p.Hohmann.Ejection.ToString() : "—";
+    public string HohmannCaptureText => _plan is { } p ? Format.Speed(p.Hohmann.CaptureDv) : "—";
+    public string SynodicText => _plan is { } p ? _calendar.FormatDuration(p.Hohmann.SynodicPeriodS) : "—";
 
-    public string PorkchopStartLabel => Plan is { } p ? _calendar.FormatDay(p.Porkchop.DepartureStartUt) : "";
-    public string PorkchopEndLabel => Plan is { } p ? _calendar.FormatDay(p.Porkchop.DepartureEndUt) : "";
-    public string PorkchopMinFlightLabel => Plan is { } p ? $"{p.Porkchop.FlightTimeMinS / _calendar.SecondsPerDay:0} d" : "";
-    public string PorkchopMaxFlightLabel => Plan is { } p ? $"{p.Porkchop.FlightTimeMaxS / _calendar.SecondsPerDay:0} d" : "";
-    public string PorkchopScaleLabel => Plan is { } p ? $"{Format.Speed(p.Porkchop.TotalDv.Where(double.IsFinite).Min())} → 3×" : "";
+    public PorkchopPlot? CurrentPlot => ShowReturnPlot ? _returnPlan?.Porkchop : _plan?.Porkchop;
+    public TransferWindow? CurrentPlotSelection => ShowReturnPlot ? _returnWindow : _selectedWindow;
+    public string PlotTitle => ShowReturnPlot && _returnRequest is { } r ? $"Porkchop plot — return ({r.Origin.Name} → {r.Destination.Name})"
+        : _request is { } o ? $"Porkchop plot — outbound ({o.Origin.Name} → {o.Destination.Name})" : "Porkchop plot";
+    public string PorkchopStartLabel => CurrentPlot is { } p ? _calendar.FormatDay(p.DepartureStartUt) : "";
+    public string PorkchopEndLabel => CurrentPlot is { } p ? _calendar.FormatDay(p.DepartureEndUt) : "";
+    public string PorkchopMinFlightLabel => CurrentPlot is { } p ? $"{p.FlightTimeMinS / _calendar.SecondsPerDay:0} d" : "";
+    public string PorkchopMaxFlightLabel => CurrentPlot is { } p ? $"{p.FlightTimeMaxS / _calendar.SecondsPerDay:0} d" : "";
+    public string PorkchopScaleLabel => CurrentPlot is { } p ? $"{Format.Speed(p.TotalDv.Where(double.IsFinite).Min())} → 3×" : "";
 
     // ---------------- Logic ----------------
 
@@ -225,21 +316,22 @@ public sealed class TransferPlannerViewModel : ObservableObject
         {
             ErrorText = error;
             _request = null;
-            Plan = null;
+            _plan = null;
             SelectedWindow = null;
-            RefreshPlanOutputs();
+            RefreshHohmannOutputs();
             return;
         }
 
-        IsBusy = true;
+        SetBusy(+1);
         try
         {
             var plan = await Task.Run(() => TransferPlanner.Plan(request));
             if (version != _version) return;
             _request = request;
-            Plan = plan;
+            _plan = plan;
+            RefreshHohmannOutputs();
+            _selectedWindow = null; // force refresh even if the window is unchanged
             SelectedWindow = plan.BestWindow;
-            RefreshPlanOutputs();
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
@@ -247,7 +339,44 @@ public sealed class TransferPlannerViewModel : ObservableObject
         }
         finally
         {
-            if (version == _version) IsBusy = false;
+            SetBusy(-1);
+        }
+    }
+
+    private async void RecalculateReturn()
+    {
+        var version = ++_returnVersion;
+        if (!PlanReturn || _request is null || _selectedWindow is null)
+        {
+            _returnRequest = null;
+            _returnPlan = null;
+            ReturnWindow = null;
+            RefreshPlotOutputs();
+            return;
+        }
+
+        // Debounce: dragging on the outbound porkchop changes the arrival date many times a second.
+        await Task.Delay(150);
+        if (version != _returnVersion) return;
+
+        var request = _request.Reverse(_selectedWindow.ArrivalUt + MinimumStayDays * _calendar.SecondsPerDay, ReturnArrivalMode);
+        SetBusy(+1);
+        try
+        {
+            var plan = await Task.Run(() => TransferPlanner.Plan(request));
+            if (version != _returnVersion) return;
+            _returnRequest = request;
+            _returnPlan = plan;
+            _returnWindow = null; // force refresh even if the window is unchanged
+            ReturnWindow = plan.BestWindow;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            if (version == _returnVersion) ErrorText = $"Return trip: {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(-1);
         }
     }
 
@@ -265,34 +394,64 @@ public sealed class TransferPlannerViewModel : ObservableObject
             _calendar.ToUniversalTime(EarliestYear, EarliestDay), SelectedArrivalMode);
     }
 
-    private void RefreshWindowOutputs()
+    private LegSummary Summarize(TransferRequest request, TransferWindow w, string title, string waitLabel, double waitS) => new(
+        Title: title,
+        Departure: _calendar.FormatDate(w.DepartureUt),
+        WaitLabel: waitLabel,
+        Wait: _calendar.FormatDuration(waitS),
+        Arrival: _calendar.FormatDate(w.ArrivalUt),
+        FlightTime: _calendar.FormatDuration(w.FlightTimeS),
+        PhaseAngle: Deg(w.PhaseAngleDeg),
+        EjectionPoint: w.Ejection.ToString(),
+        EjectionInclination: Deg(w.Ejection.InclinationDeg),
+        EjectionDv: Format.Speed(w.EjectionDv),
+        CaptureLabel: request.Arrival switch
+        {
+            ArrivalMode.Aerobrake => "Capture Δv (aerobrake)",
+            ArrivalMode.Flyby => "Capture Δv (flyby)",
+            _ => "Capture Δv",
+        },
+        CaptureDv: Format.Speed(w.CaptureDv),
+        TransferDv: Format.Speed(w.TotalDv));
+
+    private void RefreshBudget()
     {
         BudgetLines.Clear();
-        if (_request is not null && SelectedWindow is { } w)
-            foreach (var line in MissionBudget.Build(_request, w, IncludeLanding)) BudgetLines.Add(line);
-
-        foreach (var name in WindowProperties) OnPropertyChanged(name);
+        if (_request is not null && _selectedWindow is { } w)
+        {
+            var returnLeg = _returnRequest is not null && _returnWindow is { } rw ? (_returnRequest, rw) : ((TransferRequest, TransferWindow)?)null;
+            foreach (var line in MissionBudget.Build(_request, w, IncludeLanding, returnLeg)) BudgetLines.Add(line);
+        }
+        OnPropertyChanged(nameof(BudgetTotalText));
+        OnPropertyChanged(nameof(BudgetTotalLabel));
     }
 
-    private void RefreshPlanOutputs()
+    private void RefreshHohmannOutputs()
     {
-        foreach (var name in PlanProperties) OnPropertyChanged(name);
-        RefreshWindowOutputs();
+        foreach (var name in HohmannProperties) OnPropertyChanged(name);
     }
 
-    private static readonly string[] WindowProperties =
-    [
-        nameof(IsCustomSelection), nameof(WindowTitle), nameof(DepartureText), nameof(WaitText), nameof(ArrivalText),
-        nameof(FlightTimeText), nameof(PhaseAngleText), nameof(EjectionAngleText), nameof(EjectionInclinationText),
-        nameof(EjectionDvText), nameof(CaptureDvText), nameof(TransferDvText), nameof(BudgetTotalText),
-    ];
+    private void RefreshPlotOutputs()
+    {
+        foreach (var name in PlotProperties) OnPropertyChanged(name);
+    }
 
-    private static readonly string[] PlanProperties =
+    private void SetBusy(int delta)
+    {
+        _busyCount += delta;
+        OnPropertyChanged(nameof(IsBusy));
+    }
+
+    private static readonly string[] HohmannProperties =
     [
         nameof(HohmannPhaseText), nameof(HohmannTimeText), nameof(HohmannEjectionText), nameof(HohmannEjectionAngleText),
-        nameof(HohmannCaptureText),
-        nameof(SynodicText), nameof(PorkchopStartLabel), nameof(PorkchopEndLabel), nameof(PorkchopMinFlightLabel),
-        nameof(PorkchopMaxFlightLabel), nameof(PorkchopScaleLabel),
+        nameof(HohmannCaptureText), nameof(SynodicText),
+    ];
+
+    private static readonly string[] PlotProperties =
+    [
+        nameof(CurrentPlot), nameof(CurrentPlotSelection), nameof(PlotTitle), nameof(PorkchopStartLabel),
+        nameof(PorkchopEndLabel), nameof(PorkchopMinFlightLabel), nameof(PorkchopMaxFlightLabel), nameof(PorkchopScaleLabel),
     ];
 
     private void FillFacts(ObservableCollection<Fact> facts, CelestialBody? body)

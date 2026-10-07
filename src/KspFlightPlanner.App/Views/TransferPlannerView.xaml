@@ -15,6 +15,40 @@
                 <TextBlock Grid.Column="1" Text="{Binding Value}" TextAlignment="Right" TextWrapping="Wrap" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
+
+        <!-- One transfer leg (LegSummary) -->
+        <DataTemplate x:Key="LegTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Depart" Style="{StaticResource Label}" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Departure}" Style="{StaticResource Value}" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="1" Text="{Binding WaitLabel}" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Wait}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="2" Text="Arrive" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Arrival}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="3" Text="Flight time" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FlightTime}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="4" Text="Phase angle at launch" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PhaseAngle}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="5" Text="Ejection burn point" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding EjectionPoint}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="6" Text="Ejection inclination" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding EjectionInclination}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="7" Text="Ejection Δv" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding EjectionDv}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="8" Text="{Binding CaptureLabel}" Style="{StaticResource Label}" />
+                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding CaptureDv}" Style="{StaticResource Value}" />
+                <TextBlock Grid.Row="9" Text="Transfer Δv" Style="{StaticResource Label}" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding TransferDv}" Style="{StaticResource Value}" FontWeight="SemiBold" />
+            </Grid>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Margin="8">
@@ -78,6 +112,16 @@
                 <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" />
                 <CheckBox Content="Include landing in budget" IsChecked="{Binding IncludeLanding}" Margin="0,8,0,0" />
 
+                <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" />
+                <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding StayLabel}" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding MinimumStayDays, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                    <TextBlock Style="{StaticResource Label}">
+                        <Run Text="Arriving back at " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
+                    </TextBlock>
+                    <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
+                </StackPanel>
+
                 <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,8,0,0" />
 
                 <TextBlock Style="{StaticResource SectionHeader}">
@@ -95,69 +139,61 @@
         <!-- Results -->
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,8,0">
-                <DockPanel Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetToBestCommand}"
-                            Visibility="{Binding IsCustomSelection, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="{Binding WindowTitle}" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-                </DockPanel>
                 <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,4"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Depart" Style="{StaticResource Label}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DepartureText}" Style="{StaticResource Value}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="1" Text="Wait from earliest" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WaitText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="2" Text="Arrive" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ArrivalText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="3" Text="Flight time" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FlightTimeText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="4" Text="Phase angle at launch" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PhaseAngleText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="5" Text="Ejection burn point" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding EjectionAngleText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="6" Text="Ejection inclination" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding EjectionInclinationText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="7" Text="Ejection Δv" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding EjectionDvText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="8" Text="Capture Δv" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding CaptureDvText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="9" Text="Transfer Δv" Style="{StaticResource Label}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding TransferDvText}" Style="{StaticResource Value}" FontWeight="SemiBold" />
-                </Grid>
+                <DockPanel Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetToBestCommand}"
+                            Visibility="{Binding IsCustomSelection, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="{Binding Outbound.Title}" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                </DockPanel>
+                <ContentControl Content="{Binding Outbound}" ContentTemplate="{StaticResource LegTemplate}" />
+
+                <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                    <DockPanel Margin="0,14,0,6">
+                        <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetReturnToBestCommand}"
+                                Visibility="{Binding IsCustomReturnSelection, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding Return.Title, TargetNullValue='Return window'}" Style="{StaticResource SectionHeader}"
+                                   Margin="0" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ContentControl Content="{Binding Return}" ContentTemplate="{StaticResource LegTemplate}" />
+                </StackPanel>
 
                 <TextBlock Text="Mission Δv budget" Style="{StaticResource SectionHeader}" />
                 <ItemsControl ItemsSource="{Binding BudgetLines}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="0,3">
+                            <StackPanel x:Name="Line" Margin="0,3">
                                 <DockPanel>
-                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Value}"
+                                    <TextBlock x:Name="Amount" DockPanel.Dock="Right" Style="{StaticResource Value}"
                                                Text="{Binding DeltaV, StringFormat='{}{0:N0} m/s', TargetNullValue='—'}" />
-                                    <TextBlock Text="{Binding Stage}" TextWrapping="Wrap" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="StageText" Text="{Binding Stage}" TextWrapping="Wrap" Margin="0,0,12,0" VerticalAlignment="Center" />
                                 </DockPanel>
-                                <TextBlock Text="{Binding Note}" Style="{StaticResource Note}" />
+                                <TextBlock x:Name="NoteText" Text="{Binding Note}" Style="{StaticResource Note}" />
                             </StackPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Note}" Value="{x:Null}">
+                                    <Setter TargetName="NoteText" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                                    <Setter TargetName="Amount" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="StageText" Property="FontWeight" Value="SemiBold" />
+                                    <Setter TargetName="StageText" Property="Opacity" Value="0.85" />
+                                    <Setter TargetName="Line" Property="Margin" Value="0,8,0,2" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <Separator Margin="0,6" />
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Right" Text="{Binding BudgetTotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
-                    <TextBlock Text="Total (one way)" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding BudgetTotalLabel}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
                 </DockPanel>
 
-                <TextBlock Text="Ideal Hohmann transfer" Style="{StaticResource SectionHeader}" />
+                <TextBlock Text="Ideal Hohmann transfer (outbound)" Style="{StaticResource SectionHeader}" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
-                           Text="Textbook estimate assuming circular, flat orbits. Useful as a rule of thumb; the window above uses the real orbits." />
+                           Text="Textbook estimate assuming circular, flat orbits. Useful as a rule of thumb; the windows above use the real orbits." />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -195,7 +231,14 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.ColumnSpan="2" Text="Porkchop plot" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
+            <DockPanel Grid.ColumnSpan="2">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                            Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                    <RadioButton Content="Outbound" IsChecked="{Binding ShowOutboundPlot}" GroupName="Leg" Margin="0,0,12,0" />
+                    <RadioButton Content="Return" IsChecked="{Binding ShowReturnPlot}" GroupName="Leg" />
+                </StackPanel>
+                <TextBlock Text="{Binding PlotTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
+            </DockPanel>
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Note}" Margin="0,0,0,8">
                 Total transfer Δv by departure date (→) and flight time (↑). Blue is cheap, red is expensive
                 (<Run Text="{Binding PorkchopScaleLabel, Mode=OneWay}" />). Click or drag to inspect another departure.
@@ -211,7 +254,7 @@
             </Grid>
 
             <Border Grid.Row="2" Grid.Column="1" CornerRadius="4" ClipToBounds="True">
-                <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding Plan.Porkchop}" Selected="{Binding SelectedWindow}"
+                <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding CurrentPlot}" Selected="{Binding CurrentPlotSelection}"
                                            Cursor="Cross" />
             </Border>
 
