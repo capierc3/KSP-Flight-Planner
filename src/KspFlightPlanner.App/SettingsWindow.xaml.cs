@@ -17,5 +17,13 @@ public partial class SettingsWindow : Window
         };
     }
 
+    private void Categories_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // Fires during InitializeComponent, before the pages exist.
+        if (KspPage is null || LivePage is null) return;
+        KspPage.Visibility = Categories.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
+        LivePage.Visibility = Categories.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void Ok_Click(object sender, RoutedEventArgs e) => DialogResult = true;
 }

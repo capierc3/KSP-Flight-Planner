@@ -35,6 +35,10 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
+- **Live connection (kRPC)** — *Tools › Connect to KSP* talks to the running game through the
+  [kRPC](https://krpc.github.io/krpc/) mod (install it with CKAN and click *Start server* in its in-game window). The
+  status bar shows the link and the game scene. Address and ports default to kRPC's stock server and can be changed in
+  *Tools › Settings › Live connection*. So far it only connects; no planner feature reads game data from it yet.
 
 ## Layout
 
@@ -74,7 +78,7 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 - `custom_locations.ksp_save`, `ksp_vessel_id` — set when a location was imported from a save and follows its vessel.
 - `ksp_parts`, `ksp_part_resources`, `ksp_part_engines`, `ksp_engine_propellants`, `ksp_part_antennas`, `ksp_resources` —
   the part catalog read from the KSP install (replaced as a whole when GameData changes).
-- `app_settings` — preferences as key/value text (KSP folder, chosen save, watch on/off); see `SettingsRepository`.
+- `app_settings` — preferences as key/value text (KSP folder, chosen save, watch on/off, kRPC address and ports); see `SettingsRepository`.
 - `saved_constellations`, `saved_missions` — user data.
 - **Pre-release:** the schema is a single v1 script that is still edited in place. When the schema or seed
   data changes, the database is rebuilt automatically and user tables are copied across

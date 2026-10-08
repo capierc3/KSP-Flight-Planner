@@ -16,6 +16,7 @@
         <CommandBinding Command="{x:Static app:MainCommands.ReloadSave}" Executed="Reload_Executed" CanExecute="HasSaveChosen_CanExecute" />
         <CommandBinding Command="{x:Static app:MainCommands.ReadPartData}" Executed="ReadPartData_Executed" CanExecute="HasSaveChosen_CanExecute" />
         <CommandBinding Command="{x:Static app:MainCommands.OpenDataFolder}" Executed="OpenDataFolder_Executed" />
+        <CommandBinding Command="{x:Static app:MainCommands.ConnectKsp}" Executed="ConnectKsp_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.Settings}" Executed="Settings_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.ShowTab}" Executed="ShowTab_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.About}" Executed="About_Executed" />
@@ -53,6 +54,9 @@
                 <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="6" InputGestureText="Ctrl+7" />
             </MenuItem>
             <MenuItem Header="_Tools">
+                <MenuItem Header="{Binding Link.MenuText}" Command="{x:Static app:MainCommands.ConnectKsp}"
+                          ToolTip="Talk to the running game through the kRPC mod (address and ports in Settings › Live connection)" />
+                <Separator />
                 <MenuItem Header="Read _Part Data Again" Command="{x:Static app:MainCommands.ReadPartData}"
                           ToolTip="Read part masses, engines and antennas from the KSP folder again" />
                 <Separator />
@@ -73,12 +77,36 @@
             <StatusBarItem Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" FontSize="12" />
             </StatusBarItem>
-            <StatusBarItem HorizontalAlignment="Right" Visibility="{Binding Sync.HasNewVessels, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock FontSize="12">
-                    <Hyperlink Command="{x:Static app:MainCommands.ImportVessels}" ToolTip="File › Import Vessels from Save…">
-                        <Run Text="{Binding Sync.NewVesselsText, Mode=OneWay}" /><Run Text=" to import" />
-                    </Hyperlink>
-                </TextBlock>
+            <!-- Right side: vessels waiting to be imported, then the live link to the game. -->
+            <StatusBarItem HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="12" Margin="0,0,16,0" Visibility="{Binding Sync.HasNewVessels, Converter={StaticResource BoolToVisibility}}">
+                        <Hyperlink Command="{x:Static app:MainCommands.ImportVessels}" ToolTip="File › Import Vessels from Save…">
+                            <Run Text="{Binding Sync.NewVesselsText, Mode=OneWay}" /><Run Text=" to import" />
+                        </Hyperlink>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Link.Problem}" Foreground="#EF5350" FontSize="12" Margin="0,0,12,0" />
+                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#808080" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Link.State}" Value="Connecting">
+                                        <Setter Property="Fill" Value="#FFB300" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Link.State}" Value="Connected">
+                                        <Setter Property="Fill" Value="#66BB6A" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock FontSize="12">
+                        <Hyperlink Command="{x:Static app:MainCommands.ConnectKsp}" ToolTip="{Binding Link.MenuText}">
+                            <Run Text="{Binding Link.Status, Mode=OneWay}" />
+                        </Hyperlink>
+                    </TextBlock>
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
 

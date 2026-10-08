@@ -15,9 +15,10 @@ public sealed class MainViewModel : ObservableObject
     private int _selectedTab;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
-        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, SaveSync sync, PlannerEvents events)
+        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, SaveSync sync, KspLink link, PlannerEvents events)
     {
         Sync = sync;
+        Link = link;
         Mission = mission;
         Locations = locations;
         Vessels = vessels;
@@ -39,6 +40,9 @@ public sealed class MainViewModel : ObservableObject
     public ResonantOrbitViewModel Resonant { get; }
     public SaveSync Sync { get; }
 
+    /// <summary>Live connection to the running game (kRPC).</summary>
+    public KspLink Link { get; }
+
     public int SelectedTab
     {
         get => _selectedTab;
@@ -54,6 +58,7 @@ public static class MainCommands
     public static readonly RoutedUICommand ReloadSave = new("Reload Save", nameof(ReloadSave), typeof(MainCommands), [new KeyGesture(Key.F5)]);
     public static readonly RoutedUICommand ReadPartData = new("Read Part Data Again", nameof(ReadPartData), typeof(MainCommands));
     public static readonly RoutedUICommand OpenDataFolder = new("Open Data Folder", nameof(OpenDataFolder), typeof(MainCommands));
+    public static readonly RoutedUICommand ConnectKsp = new("Connect to KSP", nameof(ConnectKsp), typeof(MainCommands));
     public static readonly RoutedUICommand Settings = new("Settings…", nameof(Settings), typeof(MainCommands),
         [new KeyGesture(Key.OemComma, ModifierKeys.Control, "Ctrl+,")]);
     public static readonly RoutedUICommand ShowTab = new("Show Tab", nameof(ShowTab), typeof(MainCommands));
@@ -68,7 +73,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel = viewModel;
-        Closed += (_, _) => viewModel.Sync.Dispose();
+        Closed += (_, _) =>
+        {
+            viewModel.Sync.Dispose();
+            viewModel.Link.Dispose();
+        };
     }
 
     // CanExecute is first queried during InitializeComponent, before _viewModel is set.
@@ -81,6 +90,8 @@ public partial class MainWindow : Window
         var settings = new SettingsViewModel(_viewModel.Sync.Settings, _viewModel.Sync.Parts);
         if (new SettingsWindow(settings) { Owner = this }.ShowDialog() == true) _viewModel.Sync.Apply(settings.Result);
     }
+
+    private async void ConnectKsp_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Link.ToggleAsync();
 
     private async void Reload_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Sync.ReloadAsync();
 

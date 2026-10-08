@@ -19,21 +19,24 @@
         <!-- OK / Cancel along the bottom, as in a Windows options dialog. -->
         <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="#30808080" Padding="16,10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="OK" IsDefault="True" MinWidth="88" Click="Ok_Click" Margin="0,0,8,0" />
+                <Button Content="OK" IsDefault="True" IsEnabled="{Binding CanSave}" MinWidth="88" Click="Ok_Click" Margin="0,0,8,0" />
                 <Button Content="Cancel" IsCancel="True" MinWidth="88" />
             </StackPanel>
         </Border>
 
         <!-- Categories on the left; each new group of options becomes another entry. -->
         <Border DockPanel.Dock="Left" Width="200" BorderThickness="0,0,1,0" BorderBrush="#30808080">
-            <ListBox x:Name="Categories" SelectedIndex="0" BorderThickness="0" Background="Transparent" Margin="6,8">
+            <ListBox x:Name="Categories" SelectedIndex="0" BorderThickness="0" Background="Transparent" Margin="6,8"
+                     SelectionChanged="Categories_SelectionChanged">
                 <ListBoxItem Content="Kerbal Space Program" />
+                <ListBoxItem Content="Live connection" />
             </ListBox>
         </Border>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,14,20,14">
+          <Grid>
             <!-- Kerbal Space Program -->
-            <StackPanel>
+            <StackPanel x:Name="KspPage">
                 <TextBlock Text="Kerbal Space Program" Style="{StaticResource PageHeader}" />
                 <TextBlock Style="{StaticResource Note}"
                            Text="Your save is read to place vessels as custom locations (File › Import Vessels from Save). KSP's files are only read, never changed." />
@@ -64,6 +67,43 @@
                 <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"
                            Text="KSP writes the save when you return to the Space Center, Tracking Station or VAB, on launch and recovery, and on autosave (every few minutes) — not continuously during flight. Quicksaves (F5 in game) go to a different file." />
             </StackPanel>
+
+            <!-- Live connection (kRPC) -->
+            <StackPanel x:Name="LivePage" Visibility="Collapsed">
+                <TextBlock Text="Live connection" Style="{StaticResource PageHeader}" />
+                <TextBlock Style="{StaticResource Note}"
+                           Text="Tools › Connect to KSP talks to the running game through the kRPC mod (install it with CKAN, then click Start server in its in-game window). The defaults match kRPC's stock server — change them only if you changed the server in game." />
+
+                <TextBlock Text="Address" Style="{StaticResource Field}" />
+                <TextBox Text="{Binding KrpcAddress, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,4,0,0"
+                           Text="127.0.0.1 when KSP runs on this computer. For KSP on another PC, enter its name or IP address and set kRPC's server address in game to that PC's address (or Any) instead of localhost." />
+
+                <Grid Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="RPC port" Style="{StaticResource Field}" />
+                        <TextBox Text="{Binding KrpcRpcPort, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Stream port" Style="{StaticResource Field}" />
+                        <TextBox Text="{Binding KrpcStreamPort, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="{Binding KrpcProblem}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12" />
+
+                <Button Content="Restore kRPC defaults" Command="{Binding RestoreKrpcDefaultsCommand}" HorizontalAlignment="Left"
+                        Margin="0,8,0,0" Padding="12,3" ToolTip="127.0.0.1, RPC port 50000, stream port 50001" />
+
+                <CheckBox Content="Connect to KSP when the planner starts" IsChecked="{Binding KrpcConnectOnStartup}" Margin="0,16,0,0" />
+                <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"
+                           Text="If KSP isn't running yet, the planner stays disconnected; use Tools › Connect to KSP later. The first time, kRPC asks in game whether to allow the planner — click Allow (or turn on auto-accept in kRPC's advanced settings)." />
+            </StackPanel>
+          </Grid>
         </ScrollViewer>
     </DockPanel>
 </Window>

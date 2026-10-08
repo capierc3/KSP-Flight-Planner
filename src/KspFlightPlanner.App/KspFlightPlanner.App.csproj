@@ -31,4 +31,9 @@
     <ProjectReference Include="..\KspFlightPlanner.Data\KspFlightPlanner.Data.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Live connection to the game (Services/KspLink). Built for .NET Framework but only uses APIs .NET still has. -->
+    <PackageReference Include="KRPC.Client" Version="0.6.0" NoWarn="NU1701" />
+  </ItemGroup>
+
 </Project>

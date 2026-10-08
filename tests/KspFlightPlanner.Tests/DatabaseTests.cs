@@ -139,6 +139,21 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Live_connection_settings_default_to_stock_krpc_and_round_trip()
+    {
+        var repository = new SettingsRepository(_db);
+        var defaults = repository.Load();
+        Assert.Equal(("127.0.0.1", 50000, 50001, false),
+            (defaults.KrpcAddress, defaults.KrpcRpcPort, defaults.KrpcStreamPort, defaults.KrpcConnectOnStartup));
+
+        repository.Save(defaults with { KrpcAddress = "gaming-pc", KrpcRpcPort = 51000, KrpcStreamPort = 51001, KrpcConnectOnStartup = true });
+
+        var loaded = repository.Load();
+        Assert.Equal(("gaming-pc", 51000, 51001, true),
+            (loaded.KrpcAddress, loaded.KrpcRpcPort, loaded.KrpcStreamPort, loaded.KrpcConnectOnStartup));
+    }
+
+    [Fact]
     public void Broken_database_with_current_fingerprint_is_rebuilt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");

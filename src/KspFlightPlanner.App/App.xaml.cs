@@ -24,6 +24,7 @@ public partial class App : Application
             var sync = new SaveSync(new SettingsRepository(database), bodies, locations,
                 new PartData(new PartCatalogRepository(database)), events);
             var designs = new DesignLibrary(sync);
+            var link = new KspLink(() => sync.Settings);
             var viewModel = new MainViewModel(
                 new MissionBuilderViewModel(maps, locations, events, designs, bodies),
                 new LocationsViewModel(bodies, maps, locations, events),
@@ -32,8 +33,10 @@ public partial class App : Application
                 new RendezvousViewModel(sync, locations, events, designs),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
                 sync,
+                link,
                 events);
             new MainWindow(viewModel).Show();
+            if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }
         catch (Exception ex)
         {
