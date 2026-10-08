@@ -14,6 +14,13 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   and on the in-app Guide tab (same file, embedded at build time).
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
+- **Rendezvous** — meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a KSC launch or
+  a craft already in orbit. Targets come straight from the linked save (no import needed) or from placed custom
+  locations. Plans when to lift off and which heading flies straight into the target's plane, then per target:
+  match planes, wait or fly a phasing orbit ("go lower to catch up"), a Lambert intercept with a clickable porkchop
+  plot, and the match-velocity burn (each leg also drawn from above: orbits, transfer arc and numbered burns); optionally a deorbit at the end. Every burn is shown by feel (which way, what to
+  look for) or as exact maneuver-node values (UT, prograde / normal / radial), with a Δv budget checked against a saved
+  design or the chosen vessel's remaining Δv.
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
 - **Vessels** — every vessel in the linked save, grouped by body, with its remaining Δv, thrust, burn time,
   fuel left per resource, engines, crew and parts. Part data (masses, engines, antennas, resource densities) is read

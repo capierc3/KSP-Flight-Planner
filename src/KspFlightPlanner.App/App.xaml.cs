@@ -29,6 +29,7 @@ public partial class App : Application
                 new LocationsViewModel(bodies, maps, locations, events),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events),
+                new RendezvousViewModel(sync, locations, events, designs),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
                 sync,
                 events);

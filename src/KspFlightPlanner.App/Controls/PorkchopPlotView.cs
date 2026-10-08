@@ -21,11 +21,11 @@ public sealed class PorkchopPlotView : FrameworkElement
             (d, _) => ((PorkchopPlotView)d)._bitmap = null));
 
     public static readonly DependencyProperty SelectedProperty = DependencyProperty.Register(
-        nameof(Selected), typeof(TransferWindow), typeof(PorkchopPlotView),
+        nameof(Selected), typeof(IPorkchopPoint), typeof(PorkchopPlotView),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
     public PorkchopPlot? Plot { get => (PorkchopPlot?)GetValue(PlotProperty); set => SetValue(PlotProperty, value); }
-    public TransferWindow? Selected { get => (TransferWindow?)GetValue(SelectedProperty); set => SetValue(SelectedProperty, value); }
+    public IPorkchopPoint? Selected { get => (IPorkchopPoint?)GetValue(SelectedProperty); set => SetValue(SelectedProperty, value); }
 
     /// <summary>Raised with (departure UT, flight time seconds) when the user picks a point.</summary>
     public event EventHandler<(double DepartureUt, double FlightTimeS)>? PointPicked;

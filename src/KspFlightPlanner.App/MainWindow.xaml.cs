@@ -15,13 +15,14 @@ public sealed class MainViewModel : ObservableObject
     private int _selectedTab;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
-        ResonantOrbitViewModel resonant, SaveSync sync, PlannerEvents events)
+        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, SaveSync sync, PlannerEvents events)
     {
         Sync = sync;
         Mission = mission;
         Locations = locations;
         Vessels = vessels;
         Transfer = transfer;
+        Rendezvous = rendezvous;
         Resonant = resonant;
         events.OpenLocationRequested += id =>
         {
@@ -34,6 +35,7 @@ public sealed class MainViewModel : ObservableObject
     public LocationsViewModel Locations { get; }
     public VesselsViewModel Vessels { get; }
     public TransferPlannerViewModel Transfer { get; }
+    public RendezvousViewModel Rendezvous { get; }
     public ResonantOrbitViewModel Resonant { get; }
     public SaveSync Sync { get; }
 
