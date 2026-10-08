@@ -164,7 +164,7 @@ public sealed class LocationsViewModel : ObservableObject
         new(body, _stock, _map, _locations.GetAll().Where(l => l.BodyName == body.Name).ToList(), id => SelectLocation(id));
 
     private CustomLocationEditorViewModel CreateEditor(CustomLocation location) =>
-        new(location, BodyOptions(), Analyze, _locations, this, OnSaved, OnDeleted);
+        new(location, BodyOptions(), Analyze, PhaseFromHome, _locations, this, OnSaved, OnDeleted);
 
     private void NewLocation()
     {
@@ -184,6 +184,23 @@ public sealed class LocationsViewModel : ObservableObject
     {
         if (_map is null) throw new ArgumentException("The Δv map is not available.");
         return CustomLocations.Analyze(location, _map, _stock.ToDictionary(b => b.Name));
+    }
+
+    /// <summary>For orbits around the star: how far ahead of Kerbin the location is at its entered date.</summary>
+    private double? PhaseFromHome(CustomLocation location)
+    {
+        var home = _stock.FirstOrDefault(b => b.IsDefault);
+        var body = _stock.FirstOrDefault(b => b.Name == location.BodyName);
+        if (home?.Orbit is null || body is null || home.ParentId != body.Id) return null;
+        try
+        {
+            var elements = CustomLocationOrbits.ToElements(location, body, home, body);
+            return CustomLocationOrbits.PhaseAngleFromHome(elements, body, home, location.EpochUt);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     private void OnSaved(long id)

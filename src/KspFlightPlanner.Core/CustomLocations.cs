@@ -3,9 +3,20 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Core;
 
+/// <summary>How a placed location's position on its orbit was entered.</summary>
+public enum PositionMode
+{
+    /// <summary>Longitude of ascending node, argument of periapsis and mean anomaly at a date (as Kerbal Engineer / MechJeb show).</summary>
+    Elements,
+    /// <summary>Angle ahead of the home planet (Kerbin) at a date; circular, uninclined orbits around the star only.</summary>
+    PhaseAngle,
+}
+
 /// <summary>
 /// A user-defined place, e.g. "Station Alpha" in a 150 km circular orbit of Kerbin.
-/// Only independent values are stored (periapsis, apoapsis, inclination); everything else is derived.
+/// Only independent values are stored (periapsis, apoapsis, inclination, position inputs); everything else is derived.
+/// A <b>planned</b> location doesn't exist yet: wherever you arrive becomes its position, so it has no launch windows.
+/// A <b>placed</b> location exists in your save: its position is known, so the Transfer Planner finds real windows.
 /// </summary>
 public sealed record CustomLocation(
     long Id,
@@ -14,7 +25,14 @@ public sealed record CustomLocation(
     double PeriapsisAltitudeM,
     double ApoapsisAltitudeM,
     double InclinationDeg = 0,
-    string? Description = null)
+    string? Description = null,
+    bool IsPlaced = false,
+    PositionMode Mode = PositionMode.Elements,
+    double LanDeg = 0,
+    double ArgumentOfPeriapsisDeg = 0,
+    double MeanAnomalyDeg = 0,
+    double PhaseAngleDeg = 0,
+    double EpochUt = 0)
 {
     public string Key => $"custom.{Id}";
     public bool IsCircular => Math.Abs(ApoapsisAltitudeM - PeriapsisAltitudeM) < 1;
@@ -67,6 +85,7 @@ public static class CustomLocations
 
         // The map's root is the home planet's surface (Kerbin). Orbiting that planet's star means an interplanetary trip.
         var homeName = map.Root.BodyName;
+        CustomLocationOrbits.ValidatePosition(location, body, bodies.GetValueOrDefault(homeName));
         if (body.Name != homeName && bodies.TryGetValue(homeName, out var home) && home.ParentId == body.Id)
         {
             var escape = map.Nodes.FirstOrDefault(n => n.BodyName == homeName && n.Kind == "Elliptical" && !n.IsCustom)

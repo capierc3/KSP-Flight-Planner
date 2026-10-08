@@ -22,14 +22,22 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            SELECT id, name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description
+            SELECT id, name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description,
+                   is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut
             FROM custom_locations ORDER BY body_name, periapsis_altitude_m, name;
             """;
         using var reader = cmd.ExecuteReader();
         var list = new List<CustomLocation>();
         while (reader.Read())
             list.Add(new CustomLocation(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetDouble(3),
-                reader.GetDouble(4), reader.GetDouble(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
+                reader.GetDouble(4), reader.GetDouble(5), reader.IsDBNull(6) ? null : reader.GetString(6),
+                IsPlaced: reader.GetInt64(7) != 0,
+                Mode: Enum.TryParse<PositionMode>(reader.GetString(8), out var mode) ? mode : PositionMode.Elements,
+                LanDeg: reader.GetDouble(9),
+                ArgumentOfPeriapsisDeg: reader.GetDouble(10),
+                MeanAnomalyDeg: reader.GetDouble(11),
+                PhaseAngleDeg: reader.GetDouble(12),
+                EpochUt: reader.GetDouble(13)));
         return list;
     }
 
@@ -46,8 +54,9 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO custom_locations
-                (name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description, created_utc)
-            VALUES ($name, $body, $pe, $ap, $inc, $desc, $now) RETURNING id;
+                (name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description,
+                 is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut, created_utc)
+            VALUES ($name, $body, $pe, $ap, $inc, $desc, $placed, $mode, $lan, $argpe, $mean, $phase, $epoch, $now) RETURNING id;
             """;
         AddValues(cmd, location);
         return Convert.ToInt64(cmd.ExecuteScalar());
@@ -64,7 +73,9 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         cmd.CommandText = """
             UPDATE custom_locations
             SET name = $name, body_name = $body, periapsis_altitude_m = $pe, apoapsis_altitude_m = $ap,
-                inclination_deg = $inc, description = $desc, updated_utc = $now
+                inclination_deg = $inc, description = $desc, is_placed = $placed, position_mode = $mode, lan_deg = $lan,
+                arg_periapsis_deg = $argpe, mean_anomaly_deg = $mean, phase_angle_deg = $phase, epoch_ut = $epoch,
+                updated_utc = $now
             WHERE id = $id;
             DELETE FROM dv_map_overrides WHERE node_key = $key;
             """;
@@ -135,6 +146,13 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         cmd.Parameters.AddWithValue("$ap", location.ApoapsisAltitudeM);
         cmd.Parameters.AddWithValue("$inc", location.InclinationDeg);
         cmd.Parameters.AddWithValue("$desc", string.IsNullOrWhiteSpace(location.Description) ? DBNull.Value : location.Description);
+        cmd.Parameters.AddWithValue("$placed", location.IsPlaced ? 1 : 0);
+        cmd.Parameters.AddWithValue("$mode", location.Mode.ToString());
+        cmd.Parameters.AddWithValue("$lan", location.LanDeg);
+        cmd.Parameters.AddWithValue("$argpe", location.ArgumentOfPeriapsisDeg);
+        cmd.Parameters.AddWithValue("$mean", location.MeanAnomalyDeg);
+        cmd.Parameters.AddWithValue("$phase", location.PhaseAngleDeg);
+        cmd.Parameters.AddWithValue("$epoch", location.EpochUt);
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
     }
 }

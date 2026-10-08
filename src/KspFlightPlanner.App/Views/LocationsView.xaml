@@ -150,6 +150,55 @@
                     <TextBlock Style="{StaticResource Note}" Margin="0,4,0,0"
                                Text="Inclination is relative to the body's equator (for Kerbol: Kerbin's orbital plane). Altitudes are above the surface." />
 
+                    <TextBlock Text="Position" Style="{StaticResource SectionHeader}" />
+                    <RadioButton GroupName="LocationPlacement" IsChecked="{Binding IsPlanned}"
+                                 Content="Planned — not built yet (any arrival point)" />
+                    <RadioButton GroupName="LocationPlacement" IsChecked="{Binding IsPlaced}" Margin="0,6,0,0"
+                                 Content="Placed — exists in my save" />
+                    <StackPanel Visibility="{Binding IsPlaced, Converter={StaticResource BoolToVisibility}}" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton GroupName="LocationEntry" IsChecked="{Binding UseElements}" Content="Orbital elements" Margin="0,0,16,0" />
+                            <RadioButton GroupName="LocationEntry" IsChecked="{Binding UsePhaseAngle}" Content="Phase angle from Kerbin" />
+                        </StackPanel>
+                        <Grid Visibility="{Binding UseElements, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="LAN (°)" Style="{StaticResource Label}" ToolTip="Longitude of the ascending node" />
+                                <TextBox Text="{Binding Lan, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Arg. of Pe (°)" Style="{StaticResource Label}" ToolTip="Argument of periapsis" />
+                                <TextBox Text="{Binding ArgumentOfPeriapsis, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="Mean anomaly (°)" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding MeanAnomaly, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Visibility="{Binding UsePhaseAngle, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
+                            <TextBlock Text="Degrees ahead of Kerbin (negative = behind)" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding PhaseAngle, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                        </StackPanel>
+                        <TextBlock Text="On this date" Style="{StaticResource Label}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Year" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="1" Text="{Binding EpochYear, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                            <TextBlock Grid.Column="3" Text="Day" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="4" Text="{Binding EpochDay, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                            <TextBlock Grid.Column="6" Text="Hour" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="7" Text="{Binding EpochHour, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                                   Text="Kerbal Engineer and MechJeb show LAN, Argument of Pe and Mean Anomaly for your vessel. Phase angle works for circular, 0° orbits around Kerbol: how far ahead of Kerbin it is (Math guide §8b)." />
+                    </StackPanel>
+
                     <TextBlock Text="Description" Style="{StaticResource SectionHeader}" />
                     <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap"
                              MinHeight="140" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" />

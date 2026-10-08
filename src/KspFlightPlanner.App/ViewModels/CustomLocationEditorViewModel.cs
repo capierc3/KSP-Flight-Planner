@@ -20,6 +20,8 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     private const long MaxImageBytes = 15 * 1024 * 1024;
 
     private readonly Func<CustomLocation, CustomLocationAnalysis> _analyze;
+    private readonly Func<CustomLocation, double?> _phaseFromHome;
+    private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private readonly CustomLocationRepository _repository;
     private readonly LocationsViewModel _owner;
     private readonly Action<long> _saved;
@@ -35,12 +37,23 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     private string _description = "";
     private string? _error;
 
+    private bool _isPlaced;
+    private bool _usePhaseAngle;
+    private string _lan = "0";
+    private string _argPe = "0";
+    private string _meanAnomaly = "0";
+    private string _phaseAngle = "0";
+    private string _epochYear = "1";
+    private string _epochDay = "1";
+    private string _epochHour = "0";
+
     public CustomLocationEditorViewModel(CustomLocation location, IReadOnlyList<CelestialBodyOption> bodies,
-        Func<CustomLocation, CustomLocationAnalysis> analyze, CustomLocationRepository repository, LocationsViewModel owner,
-        Action<long> saved, Action deleted)
+        Func<CustomLocation, CustomLocationAnalysis> analyze, Func<CustomLocation, double?> phaseFromHome,
+        CustomLocationRepository repository, LocationsViewModel owner, Action<long> saved, Action deleted)
     {
         Bodies = bodies;
         _analyze = analyze;
+        _phaseFromHome = phaseFromHome;
         _repository = repository;
         _owner = owner;
         _saved = saved;
@@ -110,6 +123,34 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
 
     public string Description { get => _description; set { if (SetProperty(ref _description, value)) OnPropertyChanged(nameof(IsDirty)); } }
 
+    // ---------------- Position (placed locations) ----------------
+
+    /// <summary>False: planned (doesn't exist yet, no fixed position). True: placed (exists in your save).</summary>
+    public bool IsPlaced
+    {
+        get => _isPlaced;
+        set { if (SetProperty(ref _isPlaced, value)) { OnPropertyChanged(nameof(IsPlanned)); Changed(); } }
+    }
+
+    public bool IsPlanned { get => !IsPlaced; set => IsPlaced = !value; }
+
+    /// <summary>Enter the position as a phase angle from Kerbin instead of orbital elements.</summary>
+    public bool UsePhaseAngle
+    {
+        get => _usePhaseAngle;
+        set { if (SetProperty(ref _usePhaseAngle, value)) { OnPropertyChanged(nameof(UseElements)); Changed(); } }
+    }
+
+    public bool UseElements { get => !UsePhaseAngle; set => UsePhaseAngle = !value; }
+
+    public string Lan { get => _lan; set { if (SetProperty(ref _lan, value)) Changed(); } }
+    public string ArgumentOfPeriapsis { get => _argPe; set { if (SetProperty(ref _argPe, value)) Changed(); } }
+    public string MeanAnomaly { get => _meanAnomaly; set { if (SetProperty(ref _meanAnomaly, value)) Changed(); } }
+    public string PhaseAngle { get => _phaseAngle; set { if (SetProperty(ref _phaseAngle, value)) Changed(); } }
+    public string EpochYear { get => _epochYear; set { if (SetProperty(ref _epochYear, value)) Changed(); } }
+    public string EpochDay { get => _epochDay; set { if (SetProperty(ref _epochDay, value)) Changed(); } }
+    public string EpochHour { get => _epochHour; set { if (SetProperty(ref _epochHour, value)) Changed(); } }
+
     // ---------------- State ----------------
 
     /// <summary>Why the current values can't be saved, or null when they're valid.</summary>
@@ -128,8 +169,22 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         _apoapsisKm = Km(location.ApoapsisAltitudeM);
         _inclination = location.InclinationDeg.ToString("0.###", CultureInfo.CurrentCulture);
         _description = location.Description ?? "";
+        _isPlaced = location.IsPlaced;
+        _usePhaseAngle = location.Mode == PositionMode.PhaseAngle;
+        _lan = Num(location.LanDeg);
+        _argPe = Num(location.ArgumentOfPeriapsisDeg);
+        _meanAnomaly = Num(location.MeanAnomalyDeg);
+        _phaseAngle = Num(location.PhaseAngleDeg);
+        var year = (int)Math.Floor(location.EpochUt / _calendar.SecondsPerYear);
+        var day = (int)Math.Floor((location.EpochUt - year * _calendar.SecondsPerYear) / _calendar.SecondsPerDay);
+        var hour = (location.EpochUt - year * _calendar.SecondsPerYear - day * _calendar.SecondsPerDay) / 3600;
+        _epochYear = (year + 1).ToString(CultureInfo.CurrentCulture);
+        _epochDay = (day + 1).ToString(CultureInfo.CurrentCulture);
+        _epochHour = Num(hour);
         foreach (var p in new[] { nameof(Name), nameof(Body), nameof(IsElliptical), nameof(PeriapsisKm), nameof(ApoapsisKm),
-                     nameof(Inclination), nameof(Description), nameof(PeriapsisLabel), nameof(Title) })
+                     nameof(Inclination), nameof(Description), nameof(PeriapsisLabel), nameof(Title), nameof(IsPlaced), nameof(IsPlanned),
+                     nameof(UsePhaseAngle), nameof(UseElements), nameof(Lan), nameof(ArgumentOfPeriapsis), nameof(MeanAnomaly),
+                     nameof(PhaseAngle), nameof(EpochYear), nameof(EpochDay), nameof(EpochHour) })
             OnPropertyChanged(p);
         Changed();
     }
@@ -140,7 +195,13 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         if (Body is not { } b) return null;
         if (!TryNumber(PeriapsisKm, out var pe) || !TryNumber(IsElliptical ? ApoapsisKm : PeriapsisKm, out var ap) || !TryNumber(Inclination, out var inc))
             return null;
-        return new CustomLocation(_original.Id, Name.Trim(), b.Name, pe * 1000, ap * 1000, inc, Normalize(Description));
+        if (!TryNumber(Lan, out var lan) || !TryNumber(ArgumentOfPeriapsis, out var argPe) || !TryNumber(MeanAnomaly, out var mean)
+            || !TryNumber(PhaseAngle, out var phase) || !int.TryParse(EpochYear, out var year) || !int.TryParse(EpochDay, out var day)
+            || !TryNumber(EpochHour, out var hour) || year < 1 || day < 1 || day > _calendar.DaysPerYear || hour < 0 || hour >= _calendar.HoursPerDay)
+            return null;
+        return new CustomLocation(_original.Id, Name.Trim(), b.Name, pe * 1000, ap * 1000, inc, Normalize(Description),
+            IsPlaced, UsePhaseAngle ? PositionMode.PhaseAngle : PositionMode.Elements, lan, argPe, mean, phase,
+            _calendar.ToUniversalTime(year, day, hour));
     }
 
     private void Changed()
@@ -149,7 +210,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         var location = Current();
         if (location is null)
         {
-            Error = "Enter numbers for the altitudes and inclination.";
+            Error = $"Enter numbers for the altitudes, inclination and position (day 1–{_calendar.DaysPerYear}, hour 0–{_calendar.HoursPerDay}).";
         }
         else
         {
@@ -197,6 +258,11 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         Add("Δv on the map edge", $"{Units.Dv(a.Node.DvFromParent)}  (transfer ≈ {a.Node.FlightTime})");
         if (a.PlaneChangeDv > 0) Add("Plane change (at apoapsis)", $"{Units.Dv(a.PlaneChangeDv)} — added when 'Include worst-case plane changes' is on");
         if (a.Node.AerobrakeUp) Add("Coming home by aerobraking", $"{Units.Dv(a.Node.AerobrakeResidualDv)} burn still needed");
+        var location = Current()!;
+        Add("Position", location.IsPlaced ? "Placed — the Transfer Planner finds real launch windows"
+                                          : "Planned — no fixed position yet, so any departure time works");
+        if (location.IsPlaced && _phaseFromHome(location) is { } phase)
+            Add($"Ahead of Kerbin on {_calendar.FormatDay(location.EpochUt)}", $"{phase:0.0}°  (check against the game)");
     }
 
     private void Save()
@@ -273,6 +339,8 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
 
     private static bool TryNumber(string text, out double value) =>
         double.TryParse(text.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out value);
+
+    private static string Num(double value) => value.ToString("0.###", CultureInfo.CurrentCulture);
 
     private static string Km(double metres) => (metres / 1000).ToString("0.###", CultureInfo.CurrentCulture);
 

@@ -103,6 +103,14 @@ internal static class Migrations
             apoapsis_altitude_m   REAL    NOT NULL,   -- equal to periapsis for a circular orbit
             inclination_deg       REAL    NOT NULL DEFAULT 0,
             description           TEXT,
+            -- Position (placed locations only). Planned locations have no fixed position yet.
+            is_placed             INTEGER NOT NULL DEFAULT 0,
+            position_mode         TEXT    NOT NULL DEFAULT 'Elements',   -- Elements | PhaseAngle
+            lan_deg               REAL    NOT NULL DEFAULT 0,
+            arg_periapsis_deg     REAL    NOT NULL DEFAULT 0,
+            mean_anomaly_deg      REAL    NOT NULL DEFAULT 0,   -- at epoch_ut (Elements mode)
+            phase_angle_deg       REAL    NOT NULL DEFAULT 0,   -- ahead of Kerbin at epoch_ut (PhaseAngle mode)
+            epoch_ut              REAL    NOT NULL DEFAULT 0,   -- seconds since Year 1, Day 1
             created_utc           TEXT    NOT NULL,
             updated_utc           TEXT
         );

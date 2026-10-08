@@ -73,6 +73,9 @@ public sealed record CelestialBody
 
     public bool HasAtmosphere => Atmosphere is { HeightM: > 0 };
 
+    /// <summary>A stand-in for a user's custom location (no gravity; see CustomLocationOrbits.ToBody).</summary>
+    public bool IsCustomLocation => BodyClass == CustomLocationOrbits.BodyClassName;
+
     /// <summary>Height of the top of the atmosphere above the surface; 0 if airless.</summary>
     public double AtmosphereHeightM => Atmosphere?.HeightM ?? 0;
 
