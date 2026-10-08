@@ -143,6 +143,8 @@ public static class CustomLocations
         AerobrakeResidualDv = Math.Round(aerobrakeResidual),
         AltitudeM = orbit.SemiMajorAxis - body.EquatorialRadiusM,
         CustomLocationId = location.Id,
+        CustomName = location.Name,
+        CustomOrbitText = AltitudeText(location),
         FlightTime = flightTime,
     };
 

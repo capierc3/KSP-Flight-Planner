@@ -114,12 +114,14 @@ public sealed class DeltaVMapView : Canvas
             var onRoute = route is null || route.Contains(node.Key)
                 || map.ChildrenOf(node).Any(ch => route.Contains(ch.Key))
                 || (StopKeys?.Contains(node.Key) ?? false);
-            // Body name above the first node of each body; its orbit size goes on the small line underneath.
+            // Title above the node: a custom location's own name, or the body name at the first node of each body
+            // (with the body's orbit size on the small line underneath).
             var firstOfBody = map.ParentOf(node) is not { } parent || parent.BodyName != node.BodyName;
             var distance = firstOfBody && !node.IsCustom && node.BodyOrbitRadiusM is { } orbit ? FormatDistance(orbit) : null;
             AddNode(node, pos, onRoute, distance);
-            if (firstOfBody)
-                AddText(node.BodyName, pos.X + 12, pos.Y - 30, 13, new SolidColorBrush(ColorOf(node.BodyName)), FontWeights.Bold);
+            var title = node.IsCustom ? node.CustomName : firstOfBody ? node.BodyName : null;
+            if (title is not null)
+                AddText(title, pos.X + 12, pos.Y - 30, 13, new SolidColorBrush(ColorOf(node.BodyName)), FontWeights.Bold);
 
             if (stopNumbers.TryGetValue(node.Key, out var numbers)) AddBadge(numbers, pos);
         }
@@ -297,7 +299,7 @@ public sealed class DeltaVMapView : Canvas
 
     private static string ShortLabel(DvMapNode node) => node.Kind switch
     {
-        "Custom" => node.Label,
+        "Custom" => $"{node.BodyName} orbit · {node.CustomOrbitText}",
         "LowOrbit" => node.Label.Replace("Low orbit ", "LO "),
         "Elliptical" => "Elliptical",
         "Synchronous" => "Keostationary",

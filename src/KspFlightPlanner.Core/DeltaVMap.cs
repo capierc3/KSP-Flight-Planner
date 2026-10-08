@@ -51,6 +51,12 @@ public sealed record DvMapNode
 
     /// <summary>For user-defined locations: the custom_locations row id.</summary>
     public long? CustomLocationId { get; init; }
+
+    /// <summary>For user-defined locations: the name alone (e.g. "Eye of Kerbin"), for map titles.</summary>
+    public string? CustomName { get; init; }
+
+    /// <summary>For user-defined locations: the orbit size alone (e.g. "150 km" or "100 × 2,000 km").</summary>
+    public string? CustomOrbitText { get; init; }
     public bool IsCustom => CustomLocationId is not null;
 
     public string DisplayName => $"{BodyName} — {Label}";

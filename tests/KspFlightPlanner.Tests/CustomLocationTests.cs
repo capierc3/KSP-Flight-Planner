@@ -129,6 +129,8 @@ public sealed class CustomLocationTests : IDisposable
         // Sibling of the Duna/Eve/Moho intercepts, not under Kerbol's 610 km low orbit.
         Assert.Equal("kerbin.soi", map.ParentOf(node)!.Key);
         Assert.Equal("Kerbol — Eye of Kerbol (10,000,000 km)", node.DisplayName);
+        Assert.Equal("Eye of Kerbol", node.CustomName);           // map title is the location, not the body
+        Assert.Equal("10,000,000 km", node.CustomOrbitText);
         Assert.Equal(787, node.DvFromParent);          // 64 extra ejection + 723 circularization (docs/MATH.md §4b)
         Assert.Equal(723, node.AerobrakeResidualDv);   // coming home, Kerbin's atmosphere does the capture
         Assert.Equal("175 days", node.FlightTime);
