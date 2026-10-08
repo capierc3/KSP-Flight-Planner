@@ -9,6 +9,11 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   (*View › Reset Window Layout* puts the current mode back to the default). Docking by
   [AvalonDock](https://github.com/Dirkster99/AvalonDock).
 
+- **Saved missions** — the mission is the document the app works on: name it at the top of the Mission pane and
+  *File › Save Mission* (Ctrl+S) stores its stops, phases, per-leg choices, options, the design checked against it and
+  its notes (Notes pane). The Missions pane lists saved missions, most recent first: double-click to open, or New /
+  Delete. *Save Mission As* saves a copy and carries on with the copy. The title bar shows the open mission, with `*`
+  for unsaved changes; you're asked before they'd be lost, and the last mission reopens at the next start.
 - **Mission builder** — plan a route as an ordered list of stops (add, reorder, remove, or click them on the
   interactive Δv map), split the legs into rocket phases (Launch / Transfer / Lander …) with per-phase margins,
   toggle aerobraking and plane changes per leg, edit any map value (e.g. Mun landing 580 → 700; stored as a

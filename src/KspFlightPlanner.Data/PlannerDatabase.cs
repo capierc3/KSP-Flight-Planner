@@ -61,7 +61,7 @@ public sealed class PlannerDatabase
         }),
         ("custom_location_images", []),
         ("dv_map_overrides", []),
-        ("saved_missions", []),
+        ("saved_missions", new() { ["updated_utc"] = "created_utc" }),
         ("saved_constellations", []),
         ("flights", []),
         ("app_settings", []),

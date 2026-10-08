@@ -178,6 +178,76 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Missions_save_over_and_list_most_recently_saved_first()
+    {
+        var repo = new MissionRepository(_db);
+        var duna = new MissionDefinition(
+            [new("kerbin.surface"), new("duna.lo", "Relays at 1,000 km")], [new("Launch"), new("Transfer", 15)], [new(0, true, false), new(1, false, true)],
+            UseAerobraking: false, IncludePlaneChanges: true, DesignPath: @"C:\KSP\saves\Protogen\Ships\VAB\Relay Carrier.craft",
+            Notes: "Bring HG-5s");
+        var dunaId = repo.Add("Duna relays", duna);
+        Thread.Sleep(5); // updated_utc has sub-millisecond resolution, but keep the order unambiguous
+        var munId = repo.Add("Mun base", new MissionDefinition([new("kerbin.surface"), new("mun.surface")], [new("Launch")], []));
+        Assert.Equal([munId, dunaId], repo.GetAll().Select(m => m.Id));
+
+        Thread.Sleep(5);
+        Assert.True(repo.Update(dunaId, "Duna relay network", duna with { Notes = "Bring HG-5s, not 16s" }));
+        Assert.Equal([dunaId, munId], repo.GetAll().Select(m => m.Id));
+
+        var saved = repo.Get(dunaId)!;
+        Assert.Equal("Duna relay network", saved.Name);
+        Assert.Equal("Bring HG-5s, not 16s", saved.Definition.Notes);
+        Assert.Equal((false, true), (saved.Definition.UseAerobraking, saved.Definition.IncludePlaneChanges));
+        Assert.Equal(duna.DesignPath, saved.Definition.DesignPath);
+        Assert.Equal(15, saved.Definition.Phases[1].MarginPercent);
+        Assert.True(saved.UpdatedUtc > saved.CreatedUtc);
+
+        repo.Delete(dunaId);
+        Assert.False(repo.Update(dunaId, "Gone", duna));
+        Assert.Null(repo.Get(dunaId));
+    }
+
+    [Fact]
+    public void Missions_saved_before_options_and_notes_still_open_with_defaults()
+    {
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO saved_missions (name, definition_json, created_utc, updated_utc) VALUES ('Old', $json, $now, $now);
+                """;
+            cmd.Parameters.AddWithValue("$json", """{"stops":[{"nodeKey":"kerbin.surface"},{"nodeKey":"mun.surface"}],"phases":[{"name":"Launch","marginPercent":10,"extraDv":0}],"legs":[]}""");
+            cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+            cmd.ExecuteNonQuery();
+        }
+
+        var old = Assert.Single(new MissionRepository(_db).GetAll()).Definition;
+        Assert.Equal((true, false, (string?)null, (string?)null), (old.UseAerobraking, old.IncludePlaneChanges, old.DesignPath, old.Notes));
+    }
+
+    [Fact]
+    public void Missions_and_the_last_open_one_survive_a_rebuild_from_before_updated_utc()
+    {
+        var repo = new MissionRepository(_db);
+        var id = repo.Add("Duna relays", new MissionDefinition([new("kerbin.surface"), new("duna.lo")], [new("Launch")], [], Notes: "Bring HG-5s"));
+        new SettingsRepository(_db).SaveLastMissionId(id);
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "ALTER TABLE saved_missions DROP COLUMN updated_utc;"; // as saved by an older version
+            cmd.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        _db.Initialize();
+
+        var saved = Assert.Single(new MissionRepository(_db).GetAll());
+        Assert.Equal(("Duna relays", "Bring HG-5s"), (saved.Name, saved.Definition.Notes));
+        Assert.Equal(saved.CreatedUtc, saved.UpdatedUtc); // filled from created_utc
+        Assert.Equal(id, new SettingsRepository(_db).LoadLastMissionId());
+    }
+
+    [Fact]
     public void Live_connection_settings_default_to_stock_krpc_and_round_trip()
     {
         var repository = new SettingsRepository(_db);

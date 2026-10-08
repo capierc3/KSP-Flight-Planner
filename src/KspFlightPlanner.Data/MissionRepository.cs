@@ -4,7 +4,7 @@ using KspFlightPlanner.Core;
 
 namespace KspFlightPlanner.Data;
 
-public sealed record SavedMission(long Id, string Name, MissionDefinition Definition, DateTime CreatedUtc)
+public sealed record SavedMission(long Id, string Name, MissionDefinition Definition, DateTime CreatedUtc, DateTime UpdatedUtc)
 {
     public override string ToString() => Name;
 }
@@ -165,37 +165,36 @@ public sealed class MissionRepository(PlannerDatabase database)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public IReadOnlyList<SavedMission> GetAll()
-    {
-        using var connection = database.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, name, definition_json, created_utc FROM saved_missions ORDER BY created_utc DESC;";
-        using var reader = cmd.ExecuteReader();
-        var list = new List<SavedMission>();
-        while (reader.Read())
-        {
-            MissionDefinition? definition;
-            try { definition = JsonSerializer.Deserialize<MissionDefinition>(reader.GetString(2), Json); }
-            catch (JsonException) { continue; }
-            if (definition?.Stops is not { Count: >= 2 }) continue; // unreadable or pre-stops format
-            list.Add(new SavedMission(reader.GetInt64(0), reader.GetString(1), definition,
-                DateTime.Parse(reader.GetString(3), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
-        }
-        return list;
-    }
+    /// <summary>Every readable saved mission, most recently saved first.</summary>
+    public IReadOnlyList<SavedMission> GetAll() => Read(null);
+
+    public SavedMission? Get(long id) => Read(id).FirstOrDefault();
 
     public long Add(string name, MissionDefinition definition)
     {
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO saved_missions (name, definition_json, created_utc)
-            VALUES ($name, $json, $created) RETURNING id;
+            INSERT INTO saved_missions (name, definition_json, created_utc, updated_utc)
+            VALUES ($name, $json, $now, $now) RETURNING id;
             """;
         cmd.Parameters.AddWithValue("$name", name);
         cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(definition, Json));
-        cmd.Parameters.AddWithValue("$created", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$now", Now());
         return Convert.ToInt64(cmd.ExecuteScalar());
+    }
+
+    /// <summary>Saves over an existing mission. Returns false if it no longer exists (deleted meanwhile).</summary>
+    public bool Update(long id, string name, MissionDefinition definition)
+    {
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE saved_missions SET name = $name, definition_json = $json, updated_utc = $now WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$name", name);
+        cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(definition, Json));
+        cmd.Parameters.AddWithValue("$now", Now());
+        return cmd.ExecuteNonQuery() == 1;
     }
 
     public void Delete(long id)
@@ -206,4 +205,31 @@ public sealed class MissionRepository(PlannerDatabase database)
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
     }
+
+    /// <summary>The definition as stored, for telling whether a mission has unsaved changes.</summary>
+    public static string Serialize(MissionDefinition definition) => JsonSerializer.Serialize(definition, Json);
+
+    private List<SavedMission> Read(long? id)
+    {
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT id, name, definition_json, created_utc, updated_utc FROM saved_missions" +
+                          (id is null ? "" : " WHERE id = $id") + " ORDER BY updated_utc DESC, id DESC;";
+        if (id is { } value) cmd.Parameters.AddWithValue("$id", value);
+        using var reader = cmd.ExecuteReader();
+        var list = new List<SavedMission>();
+        while (reader.Read())
+        {
+            MissionDefinition? definition;
+            try { definition = JsonSerializer.Deserialize<MissionDefinition>(reader.GetString(2), Json); }
+            catch (JsonException) { continue; }
+            if (definition?.Stops is not { Count: >= 2 }) continue; // unreadable or pre-stops format
+            list.Add(new SavedMission(reader.GetInt64(0), reader.GetString(1), definition, Utc(reader.GetString(3)), Utc(reader.GetString(4))));
+        }
+        return list;
+    }
+
+    private static string Now() => DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+
+    private static DateTime Utc(string text) => DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 }

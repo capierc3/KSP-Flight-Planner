@@ -1,0 +1,42 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.MissionListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <!-- Saved missions, most recently saved first; double-click (or Enter) opens one. -->
+    <DockPanel Margin="12,10">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="＋ New" Command="{Binding NewMissionCommand}" ToolTip="Start a new mission (Ctrl+N)" />
+            <Button Content="Open" Command="{Binding OpenMissionCommand}" CommandParameter="{Binding SelectedSavedMission}" Margin="6,0,0,0" />
+            <Button Content="Delete" Command="{Binding DeleteMissionCommand}" CommandParameter="{Binding SelectedSavedMission}" Margin="6,0,0,0" />
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,6"
+                   Visibility="{Binding HasNoSavedMissions, Converter={StaticResource BoolToVisibility}}"
+                   Text="No saved missions yet. Name the mission in the Mission pane and use File › Save Mission (Ctrl+S)." />
+        <ListBox x:Name="List" ItemsSource="{Binding SavedMissions}" SelectedItem="{Binding SelectedSavedMission}"
+                 BorderThickness="0" Background="Transparent" MouseDoubleClick="List_MouseDoubleClick" KeyDown="List_KeyDown">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0,2">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <!-- The open mission -->
+                                        <DataTrigger Binding="{Binding IsOpen}" Value="True">
+                                            <Setter Property="FontWeight" Value="Bold" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding Route}" Style="{StaticResource Note}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                        <TextBlock Text="{Binding Saved}" Style="{StaticResource Note}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

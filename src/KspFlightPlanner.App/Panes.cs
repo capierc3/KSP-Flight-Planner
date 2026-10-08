@@ -22,6 +22,8 @@ public static class Panes
 {
     // Tool panes
     public const string Mission = "mission";
+    public const string Missions = "missions";
+    public const string Notes = "notes";
     public const string Locations = "locations";
     public const string Vessels = "vessels";
     public const string Rocket = "rocket";
@@ -45,6 +47,8 @@ public static class Panes
     public static readonly IReadOnlyList<PaneInfo> All =
     [
         new(Mission, "Mission", false, Plan, vm => new MissionStopsView { DataContext = vm.Mission }),
+        new(Missions, "Missions", false, Plan, vm => new MissionListView { DataContext = vm.Mission }),
+        new(Notes, "Notes", false, Plan, vm => new MissionNotesView { DataContext = vm.Mission }) { OpensOnRight = true },
         new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
         new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },

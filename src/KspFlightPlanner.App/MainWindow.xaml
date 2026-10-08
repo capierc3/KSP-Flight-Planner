@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="clr-namespace:KspFlightPlanner.App"
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
-        Title="KSP Flight Planner"
+        Title="{Binding Mission.WindowTitle, FallbackValue='KSP Flight Planner'}"
         Width="1480" Height="920" MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen" WindowState="Maximized"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}" FontSize="{DynamicResource ControlContentThemeFontSize}">
@@ -35,6 +35,10 @@
         <KeyBinding Key="D1" Modifiers="Control" Command="{x:Static app:MainCommands.SetMode}" CommandParameter="Plan" />
         <KeyBinding Key="D2" Modifiers="Control" Command="{x:Static app:MainCommands.SetMode}" CommandParameter="Fly" />
         <KeyBinding Key="F1" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Guide}" />
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding Mission.NewMissionCommand}" />
+        <KeyBinding Key="O" Modifiers="Control" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Missions}" />
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding Mission.SaveMissionCommand}" />
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding Mission.SaveMissionAsCommand}" />
     </Window.InputBindings>
 
     <DockPanel>
@@ -49,6 +53,13 @@
 
             <Menu Padding="4,2">
                 <MenuItem Header="_File">
+                    <MenuItem Header="_New Mission" Command="{Binding Mission.NewMissionCommand}" InputGestureText="Ctrl+N" />
+                    <MenuItem Header="_Open Mission…" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Missions}"
+                              InputGestureText="Ctrl+O" ToolTip="Saved missions are listed in the Missions pane" />
+                    <MenuItem Header="_Save Mission" Command="{Binding Mission.SaveMissionCommand}" InputGestureText="Ctrl+S" />
+                    <MenuItem Header="Save Mission _As…" Command="{Binding Mission.SaveMissionAsCommand}" InputGestureText="Ctrl+Shift+S"
+                              ToolTip="Save a copy and keep editing the copy" />
+                    <Separator />
                     <MenuItem Header="_Import Vessels from Save…" Command="{x:Static app:MainCommands.ImportVessels}" />
                     <MenuItem Header="_Reload Save" Command="{x:Static app:MainCommands.ReloadSave}" />
                     <Separator />
@@ -64,6 +75,8 @@
                               IsChecked="{Binding IsFlying, Mode=OneWay}" />
                     <Separator />
                     <MenuItem Header="_Mission" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Mission}" />
+                    <MenuItem Header="M_issions" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Missions}" />
+                    <MenuItem Header="Not_es" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Notes}" />
                     <MenuItem Header="_Rocket" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rocket}" />
                     <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
                     <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />

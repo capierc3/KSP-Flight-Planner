@@ -9,11 +9,19 @@ public sealed record LegSetting(int PhaseIndex, bool UseAerobrake, bool IncludeP
 /// <summary>A place the mission visits, with an optional note ("Dock at station, pick up Jeb").</summary>
 public sealed record MissionStop(string NodeKey, string? Note = null);
 
-/// <summary>A saved mission: ordered stops plus phase/leg choices. Serialised to the database as JSON.</summary>
+/// <summary>
+/// A saved mission: ordered stops plus phase/leg choices, the route-wide options, the design checked against it
+/// (by .craft file path) and free-form notes. Serialised to the database as JSON; added fields need defaults so older
+/// missions still read.
+/// </summary>
 public sealed record MissionDefinition(
     IReadOnlyList<MissionStop> Stops,
     IReadOnlyList<PhaseDefinition> Phases,
-    IReadOnlyList<LegSetting> Legs);
+    IReadOnlyList<LegSetting> Legs,
+    bool UseAerobraking = true,
+    bool IncludePlaneChanges = false,
+    string? DesignPath = null,
+    string? Notes = null);
 
 /// <summary>The legs flown to reach stop <see cref="ToStop"/> from the previous stop.</summary>
 public sealed record RouteSegment(int ToStop, IReadOnlyList<RouteLeg> Legs);

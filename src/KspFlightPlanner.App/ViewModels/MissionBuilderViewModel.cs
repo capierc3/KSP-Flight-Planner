@@ -241,7 +241,7 @@ public sealed class LegRowViewModel : ObservableObject
     }
 }
 
-public sealed class MissionBuilderViewModel : ObservableObject
+public sealed partial class MissionBuilderViewModel : ObservableObject
 {
     private readonly DvMapRepository _maps;
     private readonly CustomLocationRepository _locations;
@@ -257,8 +257,11 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private bool _suspend;
 
     public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
-        PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null)
+        PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null,
+        MissionRepository? missions = null, SettingsRepository? settings = null)
     {
+        _missions = missions;
+        _settings = settings;
         // Surface gravity and pressure for the lander TWR check (stock system, like the Δv map).
         _bodies = bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
             ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
@@ -286,12 +289,21 @@ public sealed class MissionBuilderViewModel : ObservableObject
         RemovePhaseCommand = new RelayCommand<PhaseViewModel>(RemovePhase, _ => Phases.Count > 1);
         ResetPhasesCommand = new RelayCommand(() => RebuildRoute(keepPhaseTuning: false));
         ResetMapEditsCommand = new RelayCommand(ResetMapEdits, () => EditedCount > 0);
+        NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
+        SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
+        SaveMissionAsCommand = new RelayCommand(SaveMissionAs, () => _missions is not null && _map is not null);
+        OpenMissionCommand = new RelayCommand<SavedMissionItem>(item => { if (ConfirmDiscard()) OpenMission(item.Mission); },
+            item => item is not null && item.Mission.Id != MissionId);
+        DeleteMissionCommand = new RelayCommand<SavedMissionItem>(DeleteMission, item => item is not null);
 
         if (_map is not null)
         {
             SyncNodes();
-            SetStops([new("kerbin.surface"), new("mun.surface"), new("kerbin.surface")]);
+            // Pick up where the user left off; otherwise a fresh mission to the Mun and back.
+            if (settings?.LoadLastMissionId() is { } lastId && missions?.Get(lastId) is { } last) OpenMission(last);
+            else NewMission();
         }
+        RefreshSavedMissions();
     }
 
     public ObservableCollection<DvMapNode> Nodes { get; } = [];
@@ -389,6 +401,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
         {
             if (!SetProperty(ref _useAerobraking, value)) return;
             foreach (var leg in Legs) leg.UseAerobrake = value;
+            UpdateDirty();
         }
     }
 
@@ -400,6 +413,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
         {
             if (!SetProperty(ref _includePlaneChanges, value)) return;
             foreach (var leg in Legs) leg.IncludePlaneChange = value;
+            UpdateDirty();
         }
     }
 
@@ -414,7 +428,13 @@ public sealed class MissionBuilderViewModel : ObservableObject
     public DesignChoice? SelectedDesign
     {
         get => _selectedDesign;
-        set { if (SetProperty(ref _selectedDesign, value)) Recalculate(); }
+        set
+        {
+            if (!SetProperty(ref _selectedDesign, value)) return;
+            // The picker passes through null while the list is refilled; that isn't the user clearing the choice.
+            if (value is not null) _designPath = value.Design is null ? null : value.Path;
+            Recalculate();
+        }
     }
 
     public bool HasDesign => _check is not null;
@@ -506,13 +526,15 @@ public sealed class MissionBuilderViewModel : ObservableObject
 
     private void RefreshDesignChoices()
     {
-        var keep = _selectedDesign?.Path;
+        var keep = _designPath;
         DesignChoices.Clear();
         DesignChoices.Add(new DesignChoice(null, "— No design —"));
         foreach (var d in _designs?.Entries ?? [])
             if (d.Report is { Stages.Count: > 0 }) DesignChoices.Add(new DesignChoice(d, d.Title));
-        // Same file again (KSP re-saved it): keep it selected with its new numbers.
-        _selectedDesign = DesignChoices.FirstOrDefault(c => c.Path == keep) ?? DesignChoices[0];
+        // Same file again (KSP re-saved it): keep it selected with its new numbers. A mission's design that isn't
+        // in the list (save not read yet, file gone for now) stays remembered for when it comes back.
+        _designPath = keep;
+        _selectedDesign = SelectDesign(keep);
         OnPropertyChanged(nameof(SelectedDesign));
         OnPropertyChanged(nameof(DesignHint));
         if (Phases.Count > 0) Recalculate();
@@ -714,6 +736,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
         OnPropertyChanged(nameof(TotalRequiredText));
         OnPropertyChanged(nameof(TotalMarginText));
         OnPropertyChanged(nameof(TotalText));
+        UpdateDirty();
     }
 
     private void AddPhase()

@@ -14,7 +14,7 @@ namespace KspFlightPlanner.App;
 public sealed class DockWorkspace
 {
     // Bump when the default layout changes enough that old saved layouts should be dropped.
-    private const int LayoutVersion = 2;
+    private const int LayoutVersion = 3;
 
     private readonly DockingManager _dock;
     private readonly WorkMode _mode;
@@ -60,6 +60,9 @@ public sealed class DockWorkspace
         try
         {
             new XmlLayoutSerializer(_dock).Serialize(_file);
+            // Layouts from older versions are never read again.
+            foreach (var old in Directory.EnumerateFiles(Path.GetDirectoryName(_file)!, $"layout-{_mode.ToString().ToLowerInvariant()}.v*.xml"))
+                if (!string.Equals(old, _file, StringComparison.OrdinalIgnoreCase)) File.Delete(old);
         }
         catch (IOException)
         {
@@ -75,9 +78,9 @@ public sealed class DockWorkspace
 
         if (_mode == WorkMode.Plan)
         {
-            panel.Children.Add(SideColumn(320, [Panes.Mission], [Panes.Locations, Panes.Vessels]));
+            panel.Children.Add(SideColumn(320, [Panes.Mission, Panes.Missions], [Panes.Locations, Panes.Vessels]));
             panel.Children.Add(Documents(Panes.Legs, Panes.DvMap, Panes.Transfer, Panes.Rendezvous, Panes.Resonant));
-            panel.Children.Add(SideColumn(300, [Panes.Rocket]));
+            panel.Children.Add(SideColumn(300, [Panes.Rocket], [Panes.Notes]));
         }
         else
         {

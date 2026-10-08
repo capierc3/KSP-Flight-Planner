@@ -192,8 +192,9 @@ internal static class Migrations
         CREATE TABLE saved_missions (
             id               INTEGER PRIMARY KEY,
             name             TEXT    NOT NULL,
-            definition_json  TEXT    NOT NULL,   -- MissionDefinition (stops as node keys, phases, leg choices)
-            created_utc      TEXT    NOT NULL
+            definition_json  TEXT    NOT NULL,   -- MissionDefinition (stops as node keys, phases, leg choices, options, notes)
+            created_utc      TEXT    NOT NULL,
+            updated_utc      TEXT    NOT NULL    -- last saved; the Missions list shows the most recent first
         );
 
         CREATE TABLE flights (

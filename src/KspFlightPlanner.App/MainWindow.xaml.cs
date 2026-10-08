@@ -120,8 +120,22 @@ public partial class MainWindow : Window
 
         viewModel.PaneRequested += id => ShowPane(id);
         SystemEvents.UserPreferenceChanged += UserPreferenceChanged;
-        Closing += (_, _) =>
+        viewModel.Mission.AskToSave = message => MessageBox.Show(this, message, "KSP Flight Planner",
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question) switch
         {
+            MessageBoxResult.Yes => true,
+            MessageBoxResult.No => false,
+            _ => null,
+        };
+        viewModel.Mission.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        Closing += (_, e) =>
+        {
+            if (!viewModel.Mission.ConfirmDiscard())
+            {
+                e.Cancel = true;
+                return;
+            }
             _plan.Save();
             _fly.Save();
         };

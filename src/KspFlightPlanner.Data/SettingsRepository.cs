@@ -42,6 +42,7 @@ public sealed class SettingsRepository(PlannerDatabase database)
     private const string KrpcRpcPortKey = "krpc.rpc_port";
     private const string KrpcStreamPortKey = "krpc.stream_port";
     private const string KrpcConnectOnStartupKey = "krpc.connect_on_startup";
+    private const string LastMissionKey = "app.last_mission_id";
 
     public AppSettings Load()
     {
@@ -68,6 +69,15 @@ public sealed class SettingsRepository(PlannerDatabase database)
         Write(KrpcStreamPortKey, settings.KrpcStreamPort.ToString(CultureInfo.InvariantCulture));
         Write(KrpcConnectOnStartupKey, settings.KrpcConnectOnStartup ? "1" : "0");
     }
+
+    /// <summary>
+    /// The mission open when the app last closed, reopened at the next start. Kept apart from <see cref="AppSettings"/>
+    /// because it isn't a preference the Settings window edits.
+    /// </summary>
+    public long? LoadLastMissionId() =>
+        long.TryParse(ReadAll().GetValueOrDefault(LastMissionKey), NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
+
+    public void SaveLastMissionId(long? id) => Write(LastMissionKey, id?.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>A stored port number, or null if it's missing or out of range.</summary>
     private static int? Port(string? text) =>

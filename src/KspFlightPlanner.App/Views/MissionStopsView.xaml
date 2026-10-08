@@ -14,6 +14,11 @@
     <!-- The mission's stops, in order, and route options -->
     <ScrollViewer Padding="12,10,0,10" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,18,0">
+            <!-- The mission's name: what it's saved as and listed under in Missions -->
+            <TextBlock Text="Mission name" Style="{StaticResource Label}" Margin="0,0,0,3" />
+            <TextBox Text="{Binding MissionName, UpdateSourceTrigger=PropertyChanged}" FontSize="15" FontWeight="SemiBold"
+                     ToolTip="Saved with File › Save Mission (Ctrl+S)" Margin="0,0,0,14" />
+
             <DockPanel Margin="0,0,0,6">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
