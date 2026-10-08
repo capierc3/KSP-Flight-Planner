@@ -25,7 +25,7 @@ public partial class App : Application
                 new PartData(new PartCatalogRepository(database)), events);
             var designs = new DesignLibrary(sync);
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, locations, events, designs),
+                new MissionBuilderViewModel(maps, locations, events, designs, bodies),
                 new LocationsViewModel(bodies, maps, locations, events),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events),

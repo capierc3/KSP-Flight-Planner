@@ -23,6 +23,8 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   In the Mission Builder's Rocket pane, pick a design to check it against the mission: its stages fill the phases
   in order, showing which stages cover each phase, the spare or missing Δv, and the launch TWR. Margins count as
   wiggle room: a design that flies the route but not every margin is "enough, inside the margin" (amber), not "not enough".
+  It also checks the TWR at every landing and lift-off (Kerbin launch, Mun landing and ascent, …) with the stage
+  firing then, the mass left at that point, the body's surface gravity and, for atmospheres, the thrust lost to pressure.
 - **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.

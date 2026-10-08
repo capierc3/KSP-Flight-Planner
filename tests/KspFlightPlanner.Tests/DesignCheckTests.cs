@@ -65,4 +65,55 @@ public sealed class DesignCheckTests
         Assert.Equal(500, r.Stages[0].Spare, 1e-9);
         Assert.Equal(Coverage.Comfortable, r.Status);
     }
+
+    // Worked example in docs/MATH.md §16d. Lower stage: 1,000 m/s, 10 → 6 t, 200 kN vacuum / 150 kN at sea level.
+    // Lander: 2,000 m/s, 4 → 2 t, 30 kN vacuum / 10 kN at sea level.
+    private static DesignReport TwoStage() => new("Lander test", "VAB", 10, 10, 2,
+    [
+        new StageResult(1, 10, 6, 1000, 900, 60, 200, 150, 200 / (10 * 9.81), 150 / (10 * 9.81), []),
+        new StageResult(0, 4, 2, 2000, 700, 120, 30, 10, 30 / (4 * 9.81), 10 / (4 * 9.81), []),
+    ], [], [], [], []);
+
+    [Fact]
+    public void Surface_twr_uses_the_stage_firing_and_the_mass_left_at_that_moment()
+    {
+        var surfaces = new SurfaceEvent[]
+        {
+            new(SurfaceEventKind.LiftOff, 0, 0, "Kerbin", 9.81, 1),   // launch: first stage, full, sea-level thrust
+            new(SurfaceEventKind.Landing, 1, 0, "Mun", 1.63),         // lower stage just used up → lander, full
+            new(SurfaceEventKind.LiftOff, 1, 580, "Mun", 1.63),       // 580 m/s into the lander stage
+            new(SurfaceEventKind.Landing, 1, 2500, "Duna", 2.94, 0.067), // past the end of the stages
+        };
+        var r = DesignCheck.Check([new("Launch", 1000), new("Lander", 1500)], TwoStage(), surfaces);
+
+        var launch = r.Surfaces[0];
+        Assert.Equal((1, 10.0), (launch.Stage!.Value, launch.MassT));
+        Assert.Equal(150 / (10 * 9.81), launch.Twr, 1e-9);
+        Assert.Equal(TwrRating.Good, launch.Rating);
+
+        var landing = r.Surfaces[1];
+        Assert.Equal((0, 4.0), (landing.Stage!.Value, landing.MassT));
+        Assert.Equal(30 / (4 * 1.63), landing.Twr, 1e-9);
+
+        var ascent = r.Surfaces[2];
+        var mass = 4 * Math.Pow(2.0 / 4, 580.0 / 2000);           // constant Isp: mass falls exponentially with Δv
+        Assert.Equal(mass, ascent.MassT, 1e-9);
+        Assert.Equal(30 / (mass * 1.63), ascent.Twr, 1e-9);
+
+        Assert.Equal(TwrRating.NoStage, r.Surfaces[3].Rating);
+    }
+
+    [Fact]
+    public void Thrust_drops_with_surface_pressure_and_rates_low_and_too_low()
+    {
+        var lander = TwoStage().Stages[1];
+        Assert.Equal(30, DesignCheck.ThrustAt(lander, 0), 1e-9);
+        Assert.Equal(30 - 20 * 0.067, DesignCheck.ThrustAt(lander, 0.067), 1e-9); // Duna
+        Assert.Equal(0, DesignCheck.ThrustAt(lander, 5), 1e-9);                     // Eve: 30 − 20 × 5 < 0
+
+        SurfaceTwr Rated(double twr) => new(new SurfaceEvent(SurfaceEventKind.Landing, 0, 0, "X", 1), 0, 1, twr, twr);
+        Assert.Equal(TwrRating.TooLow, Rated(0.95).Rating);
+        Assert.Equal(TwrRating.Low, Rated(1.2).Rating);
+        Assert.Equal(TwrRating.Good, Rated(1.3).Rating);
+    }
 }

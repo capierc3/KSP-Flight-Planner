@@ -470,6 +470,34 @@ Worked example — KerbLink Mk2 (stages 2: 2,831, 0: 2,047 = 4,878 m/s) to keost
 
 - Code: `DesignCheck.Check`; tested in `DesignCheckTests`
 
+## 16d. TWR at every landing and lift-off
+
+Enough Δv isn't enough if the stage firing at a landing or lift-off can't hold the rocket up against that body's gravity. For every leg of the route that touches down on or leaves a surface (and costs Δv — parachute and aerobrake landings are skipped), the planner finds where it falls in the stages (the same pour as §16c, a phase's margin at its end), which stage is firing then, and how heavy the rocket is:
+
+```
+mass x m/s into a stage = m_start · (m_end / m_start)^(x / Δv_stage)     (constant Isp: mass falls exponentially with Δv)
+thrust at pressure p    = F_vac + (F_ASL − F_vac) · p                     (p in atm; 0 for airless bodies; never below 0)
+TWR                     = thrust / (mass · g_surface),   g_surface = μ / R²
+```
+
+| TWR | Rating |
+|---|---|
+| below 1 | ✗ can't lift off / can't slow the descent |
+| 1 – 1.3 | ✓ amber — works, but slowly and with little room to correct |
+| 1.3 and up | ✓ |
+
+A TWR below 1 anywhere turns the design verdict red; a low one turns it amber.
+
+Worked example (the numbers in `DesignCheckTests`): a lower stage giving 1,000 m/s (10 → 6 t, 200 kN vacuum / 150 kN at sea level) under a lander stage giving 2,000 m/s (4 → 2 t, 30 kN vacuum / 10 kN at sea level). Phases: Launch 1,000, Lander 1,500 m/s.
+
+1. Lift-off from Kerbin (g = 9.81, 1 atm): first stage, full, sea-level thrust → 150 / (10 × 9.81) = **1.53**
+2. Landing on the Mun (g = 1.63, airless) at the start of the Lander phase: the lower stage is just used up, so the lander fires at 4 t → 30 / (4 × 1.63) = **4.60**
+3. Lift-off from the Mun 580 m/s into the lander: mass = 4 × (2 / 4)^(580 / 2000) = **3.272 t** → 30 / (3.272 × 1.63) = **5.63**
+4. On Duna (0.067 atm) the lander would make 30 + (10 − 30) × 0.067 = **28.66 kN**; on Eve (5 atm) it would make none
+
+- Code: `DesignCheck.Check` (surface events), `DesignCheck.ThrustAt`, `SurfaceTwr.Rating`; tested in `DesignCheckTests`
+- Source: KSP engine thrust vs. pressure (thrust ∝ Isp at fixed fuel flow, Isp interpolated along `atmosphereCurve`); a linear curve between 0 and 1 atm is a simplification
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

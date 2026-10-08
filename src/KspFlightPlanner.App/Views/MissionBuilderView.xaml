@@ -262,122 +262,41 @@
         </Border>
 
         <!-- Rocket diagram: the mission's phases, and optionally a saved design's stages beside them -->
-        <Border Grid.Column="4" Style="{StaticResource Panel}">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Rocket" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,8"
+        <Border Grid.Column="4" Style="{StaticResource Panel}" Padding="14,10,4,10">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="0,0,10,0">
+                <TextBlock Text="Rocket" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,8"
                            Text="Phases stacked in burn order — launch at the bottom. Height shows each phase's share of the Δv." />
 
-                <TextBlock DockPanel.Dock="Top" Text="Check a saved design" Style="{StaticResource Label}" Margin="0,0,0,3" />
-                <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding DesignChoices}" SelectedItem="{Binding SelectedDesign}"
+                <TextBlock Text="Check a saved design" Style="{StaticResource Label}" Margin="0,0,0,3" />
+                <ComboBox ItemsSource="{Binding DesignChoices}" SelectedItem="{Binding SelectedDesign}"
                           DisplayMemberPath="Title" ToolTip="Designs saved in the VAB/SPH of your linked KSP save" />
-                <TextBlock DockPanel.Dock="Top" Text="{Binding DesignHint}" Style="{StaticResource Note}" Margin="0,4,0,0" />
-
-                <!-- Totals and the check -->
-                <Border DockPanel.Dock="Bottom" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-                    <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition /><RowDefinition /><RowDefinition />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Legs need" Style="{StaticResource Label}" />
-                            <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
-                            <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
-                            <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
-                        </Grid>
-
-                        <StackPanel Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}" Margin="0,8,0,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition /><RowDefinition />
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="Design Δv (vacuum)" Style="{StaticResource Label}" />
-                                <TextBlock Grid.Column="1" Text="{Binding DesignDeltaVText}" Style="{StaticResource Value}" />
-                                <TextBlock Grid.Row="1" Text="Launch TWR" Style="{StaticResource Label}" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LaunchTwrText}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Value}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding CanLiftOff}" Value="False">
-                                                    <Setter Property="Foreground" Value="#EF5350" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Grid>
-
-                            <!-- Verdict -->
-                            <Border Margin="0,8,0,6" Padding="10,6" CornerRadius="4" BorderThickness="1">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="BorderBrush" Value="#99EF5350" />
-                                        <Setter Property="Background" Value="#1FEF5350" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding DesignStatus}" Value="Comfortable">
-                                                <Setter Property="BorderBrush" Value="#9966BB6A" />
-                                                <Setter Property="Background" Value="#1F66BB6A" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding DesignStatus}" Value="InsideMargin">
-                                                <Setter Property="BorderBrush" Value="#99FFB300" />
-                                                <Setter Property="Background" Value="#1FFFB300" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding DesignVerdict}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                            </Border>
-
-                            <!-- Each phase: covered by which stages, or how much is missing -->
-                            <ItemsControl ItemsSource="{Binding PhaseChecks}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="16" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Mark}" FontWeight="Bold" VerticalAlignment="Top">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#EF5350" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Comfortable">
-                                                                <Setter Property="Foreground" Value="#66BB6A" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="InsideMargin">
-                                                                <Setter Property="Foreground" Value="#FFB300" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <StackPanel Grid.Column="1">
-                                                <TextBlock><Run Text="■ " Foreground="{Binding Color, Mode=OneWay}" /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
-                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Needed}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Top" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </StackPanel>
+                <TextBlock Text="{Binding DesignHint}" Style="{StaticResource Note}" Margin="0,4,0,0" />
+                <!-- Verdict -->
+                <Border Margin="0,10,0,0" Padding="10,6" CornerRadius="4" BorderThickness="1"
+                        Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="#99EF5350" />
+                            <Setter Property="Background" Value="#1FEF5350" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DesignStatus}" Value="Comfortable">
+                                    <Setter Property="BorderBrush" Value="#9966BB6A" />
+                                    <Setter Property="Background" Value="#1F66BB6A" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DesignStatus}" Value="InsideMargin">
+                                    <Setter Property="BorderBrush" Value="#99FFB300" />
+                                    <Setter Property="Background" Value="#1FFFB300" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding DesignVerdict}" FontWeight="SemiBold" TextWrapping="Wrap" />
                 </Border>
 
-                <!-- Shrinks to fit the space left, so the whole rocket is always visible -->
-                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" VerticalAlignment="Bottom" Margin="0,8,0,0">
+                <!-- The rocket: mission phases, and the design's stages beside them -->
+                <Border Margin="0,10,0,0">
                     <Grid HorizontalAlignment="Center" VerticalAlignment="Bottom">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -430,8 +349,117 @@
                             <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
                         </StackPanel>
                     </Grid>
-                </Viewbox>
-            </DockPanel>
+                </Border>
+
+                <!-- Totals and the check -->
+                <Border Margin="0,10,0,0" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition /><RowDefinition /><RowDefinition />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Legs need" Style="{StaticResource Label}" />
+                            <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
+                            <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
+                            <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}" Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Design Δv (vacuum)" Style="{StaticResource Label}" />
+                                <TextBlock Grid.Column="1" Text="{Binding DesignDeltaVText}" Style="{StaticResource Value}" />
+                            </Grid>
+
+
+                            <!-- Each phase: covered by which stages, or how much is missing -->
+                            <ItemsControl ItemsSource="{Binding PhaseChecks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Mark}" FontWeight="Bold" VerticalAlignment="Top">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#EF5350" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Comfortable">
+                                                                <Setter Property="Foreground" Value="#66BB6A" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="InsideMargin">
+                                                                <Setter Property="Foreground" Value="#FFB300" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock><Run Text="■ " Foreground="{Binding Color, Mode=OneWay}" /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Needed}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Top" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- TWR at every landing and lift-off, with the stage firing then -->
+                            <StackPanel Visibility="{Binding HasSurfaceChecks, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="TWR at landings &amp; lift-offs" Style="{StaticResource Label}" Margin="0,10,0,2"
+                                           ToolTip="Thrust ÷ weight at the body's surface gravity, with the mass left at that point. Below 1 the engines can't hold the rocket up; under 1.3 there's little room to correct." />
+                                <ItemsControl ItemsSource="{Binding SurfaceChecks}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Mark}" FontWeight="Bold" VerticalAlignment="Top">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="#EF5350" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Rating}" Value="Good">
+                                                                    <Setter Property="Foreground" Value="#66BB6A" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Rating}" Value="Low">
+                                                                    <Setter Property="Foreground" Value="#FFB300" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Title}" />
+                                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding Twr}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Top" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+            </ScrollViewer>
         </Border>
     </Grid>
 </UserControl>

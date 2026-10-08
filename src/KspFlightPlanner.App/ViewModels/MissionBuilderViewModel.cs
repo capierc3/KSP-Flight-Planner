@@ -3,6 +3,7 @@ using System.Globalization;
 using KspFlightPlanner.App.Services;
 using KspFlightPlanner.Core;
 using KspFlightPlanner.Core.Ksp;
+using KspFlightPlanner.Core.Models;
 using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
@@ -90,6 +91,12 @@ public sealed record StageBlock(string Label, string DeltaVText, string Color, d
 public sealed record PhaseCheckRow(string Name, string Color, string Needed, string Detail, Coverage Status)
 {
     public string Mark => Status switch { Coverage.Comfortable => "✓", Coverage.InsideMargin => "✓", _ => "✗" };
+}
+
+/// <summary>One landing or lift-off on the route with the TWR of the stage firing then.</summary>
+public sealed record SurfaceRow(string Title, string Detail, string Twr, TwrRating Rating)
+{
+    public string Mark => Rating switch { TwrRating.Good => "✓", TwrRating.Low => "✓", _ => "✗" };
 }
 
 /// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
@@ -240,6 +247,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
     private readonly DesignLibrary? _designs;
+    private readonly IReadOnlyDictionary<string, CelestialBody> _bodies;
     private DeltaVMap? _map;
     private DesignChoice? _selectedDesign;
     private DesignCheckResult? _check;
@@ -249,8 +257,12 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private bool _suspend;
 
     public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
-        PlannerEvents events, DesignLibrary? designs = null)
+        PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null)
     {
+        // Surface gravity and pressure for the lander TWR check (stock system, like the Δv map).
+        _bodies = bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
+            ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
+            : new Dictionary<string, CelestialBody>();
         _designs = designs;
         if (designs is not null) designs.PropertyChanged += (_, e) =>
         {
@@ -416,24 +428,77 @@ public sealed class MissionBuilderViewModel : ObservableObject
     /// Margins are wiggle room, not a requirement: a design that flies the route but not every margin is still enough,
     /// just with less room for error.
     /// </summary>
-    public string DesignVerdict => _check switch
+    public string DesignVerdict
     {
-        null => "",
-        { Status: Coverage.Comfortable } c => $"Enough — {Format.Speed0(c.SpareOverMargins)} to spare beyond your margins",
-        { Status: Coverage.InsideMargin } c =>
-            $"Enough — {Format.Speed0(c.SpareOverRequired)} to spare, inside your {Format.Speed0(c.MarginDeltaV)} of margins",
-        var c => $"Not enough — short by {Format.Speed0(c.Phases.Sum(p => p.Shortfall))} before any margin",
-    };
+        get
+        {
+            if (_check is not { } c) return "";
+            var dv = c.Status switch
+            {
+                Coverage.Comfortable => $"Enough — {Format.Speed0(c.SpareOverMargins)} to spare beyond your margins",
+                Coverage.InsideMargin => $"Enough — {Format.Speed0(c.SpareOverRequired)} to spare, inside your {Format.Speed0(c.MarginDeltaV)} of margins",
+                _ => $"Not enough — short by {Format.Speed0(c.Phases.Sum(p => p.Shortfall))} before any margin",
+            };
+            // Δv isn't the whole story: a stage too weak for a body's gravity can't land or lift off there.
+            var worst = c.Surfaces.Where(t => t.Rating is TwrRating.TooLow or TwrRating.Low)
+                .OrderBy(t => t.Rating == TwrRating.TooLow ? 0 : 1).FirstOrDefault();
+            if (worst is null) return dv;
+            var where = worst.Event.Kind == SurfaceEventKind.Landing ? $"landing on {worst.Event.BodyName}" : $"lift-off from {worst.Event.BodyName}";
+            return worst.Rating == TwrRating.TooLow
+                ? $"{dv}\nBut TWR {worst.Twr:0.00} is too low for the {where}."
+                : $"{dv}\nTWR {worst.Twr:0.00} is low for the {where}.";
+        }
+    }
 
-    /// <summary>Comfortable / InsideMargin / Short, for the verdict's colour.</summary>
-    public Coverage? DesignStatus => _check?.Status;
+    /// <summary>
+    /// Comfortable / InsideMargin / Short for the verdict's colour: the Δv verdict, made amber by a low TWR and red by
+    /// one below 1 at any landing or lift-off.
+    /// </summary>
+    public Coverage? DesignStatus
+    {
+        get
+        {
+            if (_check is not { } c) return null;
+            var twr = c.Surfaces.Any(t => t.Rating == TwrRating.TooLow) ? Coverage.Short
+                : c.Surfaces.Any(t => t.Rating == TwrRating.Low) ? Coverage.InsideMargin
+                : Coverage.Comfortable;
+            return (Coverage)Math.Max((int)c.Status, (int)twr);
+        }
+    }
 
     public string DesignDeltaVText => _check is { } c ? Format.Speed0(c.DesignDeltaV) : "";
 
-    public string LaunchTwrText => _check is not { } c ? ""
-        : c.CanLiftOff ? $"{c.LaunchTwr:0.00}" : $"{c.LaunchTwr:0.00} — can't lift off";
+    /// <summary>Every landing and lift-off on the route with the TWR of the stage firing then.</summary>
+    public IReadOnlyList<SurfaceRow> SurfaceChecks { get; private set; } = [];
 
-    public bool CanLiftOff => _check?.CanLiftOff != false;
+    public bool HasSurfaceChecks => SurfaceChecks.Count > 0;
+
+    /// <summary>
+    /// Landings and lift-offs on the route: legs that touch down on or leave a surface, where they fall in their
+    /// phase's Δv. Legs that cost nothing (parachutes, aerobraking) don't need engines, so they're left out.
+    /// </summary>
+    private List<SurfaceEvent> SurfaceEvents()
+    {
+        var events = new List<SurfaceEvent>();
+        var offset = new double[Phases.Count];
+        foreach (var row in Legs)
+        {
+            var setting = row.Setting(Phases);
+            var phase = Math.Clamp(setting.PhaseIndex, 0, Phases.Count - 1);
+            var dv = MissionPlanner.EffectiveDv(row.Leg, setting);
+            if (dv > 0.5)
+            {
+                if (row.Leg.From.Kind == "Surface" && _bodies.TryGetValue(row.Leg.From.BodyName, out var from))
+                    events.Add(new SurfaceEvent(SurfaceEventKind.LiftOff, phase, offset[phase], from.Name, from.SurfaceGravity,
+                        from.Atmosphere?.SeaLevelPressureAtm ?? 0));
+                if (row.Leg.To.Kind == "Surface" && _bodies.TryGetValue(row.Leg.To.BodyName, out var to))
+                    events.Add(new SurfaceEvent(SurfaceEventKind.Landing, phase, offset[phase], to.Name, to.SurfaceGravity,
+                        to.Atmosphere?.SeaLevelPressureAtm ?? 0));
+            }
+            offset[phase] += dv;
+        }
+        return events;
+    }
 
     public string DesignHint => _designs is null || DesignChoices.Count <= 1
         ? "Link a KSP save (Tools › Settings) to check one of your saved designs."
@@ -456,7 +521,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private void CheckDesign(double missionTotal)
     {
         _check = SelectedDesign?.Design?.Report is { } report
-            ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.RequiredDv, p.MarginDv)).ToList(), report)
+            ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.RequiredDv, p.MarginDv)).ToList(), report, SurfaceEvents())
             : null;
 
         if (_check is { } c && SelectedDesign?.Design?.Report is { } design)
@@ -484,13 +549,29 @@ public sealed class MissionBuilderViewModel : ObservableObject
                 return new PhaseCheckRow(p.Name, Phases[i].Color, Format.Speed0(p.Required + p.Margin), detail, p.Status);
             }).ToList();
         }
-        else
+        SurfaceChecks = _check?.Surfaces.Select(s =>
+        {
+            var e = s.Event;
+            var title = e.Kind == SurfaceEventKind.Landing ? $"Landing on {e.BodyName}" : $"Lift-off from {e.BodyName}";
+            var where = $"{e.SurfaceGravity / VesselAnalysis.G0:0.00} g" + (e.SurfacePressureAtm > 0 ? $", {e.SurfacePressureAtm:0.###} atm" : "");
+            var detail = s.Rating switch
+            {
+                TwrRating.NoStage => $"no stage left · {where}",
+                TwrRating.TooLow => $"stage {s.Stage} · {Units.Tonnes(s.MassT)} · {where} · " +
+                                    (e.Kind == SurfaceEventKind.Landing ? "can't slow the descent" : "can't lift off"),
+                TwrRating.Low => $"stage {s.Stage} · {Units.Tonnes(s.MassT)} · {where} · low, little room to correct",
+                _ => $"stage {s.Stage} · {Units.Tonnes(s.MassT)} · {where}",
+            };
+            return new SurfaceRow(title, detail, s.Stage is null ? "—" : $"{s.Twr:0.00}", s.Rating);
+        }).ToList() ?? [];
+
+        if (_check is null)
         {
             StageBlocksTopDown = [];
             PhaseChecks = [];
         }
         foreach (var p in new[] { nameof(HasDesign), nameof(StageBlocksTopDown), nameof(PhaseChecks), nameof(DesignVerdict),
-                     nameof(DesignStatus), nameof(DesignDeltaVText), nameof(LaunchTwrText), nameof(CanLiftOff) })
+                     nameof(DesignStatus), nameof(DesignDeltaVText), nameof(SurfaceChecks), nameof(HasSurfaceChecks) })
             OnPropertyChanged(p);
     }
 
