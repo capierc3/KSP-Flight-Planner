@@ -18,6 +18,8 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Vessels** — every vessel in the linked save, grouped by body, with its remaining Δv, thrust, burn time,
   fuel left per resource, engines, crew and parts. Part data (masses, engines, antennas, resource densities) is read
   from the KSP folder — ModuleManager's cache when present, so mod patches count — and stored in the database.
+  Saved designs (VAB/SPH .craft files, including the one open in the editor) get a stage-by-stage Δv, TWR and burn
+  time, simulated like KSP's own stage readout (crossfeed, fuel lines, boosters dropped when spent).
 - **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.

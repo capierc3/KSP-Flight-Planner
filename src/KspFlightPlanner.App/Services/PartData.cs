@@ -45,7 +45,7 @@ public sealed class PartData : ObservableObject
         if (installPath is null || KspSaveReader.CheckInstallFolder(installPath) is not null) return Task.CompletedTask;
         var source = PartCatalogReader.Source(installPath);
         if (source is null) return Task.CompletedTask;
-        var upToDate = !Catalog.IsEmpty && _info is { } info
+        var upToDate = !Catalog.IsEmpty && _info is { } info && info.FormatVersion >= PartCatalogReader.FormatVersion
             && string.Equals(info.Source, source.Value.Path, StringComparison.OrdinalIgnoreCase)
             && info.SourceWriteUtc >= source.Value.LastWriteUtc;
         return upToDate ? Task.CompletedTask : ReadAsync(installPath);

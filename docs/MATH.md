@@ -400,6 +400,40 @@ Worked example — the relay "KerbLink Mk2 A" (14 parts: HECS probe core, RA-2 r
 - Code: `VesselAnalysis.Analyze`, `PartCatalogReader.Parse`; tested in `VesselAnalysisTests`
 - Source: [Tsiolkovsky rocket equation (Wikipedia)](https://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation); part and resource values from the game's own configs (ModuleManager.ConfigCache)
 
+## 16b. A saved design's stage-by-stage Δv
+
+Ships saved in the VAB or SPH (`saves/<save>/Ships/*.craft`) list every part with the stage that fires it (`istg`), the stage whose decoupler drops it (`sepI`), what it's attached to, its fuel, thrust limiters and fuel lines. The planner flies the staging the way KSP's stage Δv readout does:
+
+```
+for stage s = first … 0:
+    attached  = parts not dropped yet          (sepI < s; launch clamps go at the first stage)
+    engines   = attached engines fired in stage s or earlier
+    burn in steps — each step lasts until the next tank runs dry:
+        each engine draws from the tanks it can reach (below), soonest-dropped first
+        Δv += (ΣF / Σṁ) · ln(m_start / m_end)        (§16: ΣF / Σṁ = Isp_eff · g₀)
+    the stage ends when its engines run dry, or when the parts the next stage drops have all been spent
+TWR(s) = ΣF / (m_start · g_Kerbin),  g_Kerbin = μ / R² = 9.81 m/s²
+```
+
+**Which tanks an engine reaches.** Solid fuel stays in its own part. Liquid fuel and oxidizer flow through attached parts that allow crossfeed — decouplers don't, unless their crossfeed is switched on — and along fuel lines from the part a line is attached to into the part it points at. Monopropellant and xenon reach the whole vessel. Tanks that will be dropped soonest are drained first, which is what makes asparagus staging and drop tanks work; tanks dropped together drain together.
+
+**Sea level.** An engine's fuel flow is fixed by its vacuum rating, so at sea level the same flow gives thrust × Isp_ASL / Isp_vac. The "Δv ASL" column is the stage flown entirely at Kerbin sea level — only meaningful for the first stage.
+
+Worked example 1 — a two-stage stack (the numbers in `StagingSimulationTests`): each half is a 0.5 t tank with 1 t of fuel and a 1 t engine (200 kN, Isp 300 s vacuum / 250 s sea level), joined by a 0.05 t decoupler that blocks crossfeed.
+
+1. Launch mass = 2 × (0.5 + 1 + 1) + 0.05 = **5.05 t**; TWR = 200 / (5.05 × 9.81) = **4.04**
+2. Stage 1 burns only the lower tank: Δv = 300 × 9.80665 × ln(5.05 / 4.05) = **649.2 m/s** (541.0 m/s at sea level), lasting 1 t ÷ (200 / (300 × 9.80665)) t/s = **14.7 s**
+3. Stage 0 drops the lower half and starts at 2.5 t: Δv = 300 × 9.80665 × ln(2.5 / 1.5) = **1,502.8 m/s**
+
+Worked example 2 — boosters that burn out first: a core (1 t tank with 4 t of fuel, the same engine) with two solid boosters (1 t dry + 0.75 t solid fuel, 100 kN, Isp 200 s) on 0.05 t radial decouplers. Launch mass 9.6 t.
+
+1. Each booster's fuel lasts 0.75 ÷ (100 / (200 × 9.80665)) = **14.7 s**; the core burns 1 t in that time → 7.1 t
+2. Together the engines give Isp_eff = 400 kN ÷ (9.80665 × Σṁ) = **240 s**, so Δv = 240 × 9.80665 × ln(9.6 / 7.1) = **710.0 m/s** — then the stage ends because everything the next stage drops is spent
+3. Dropping the boosters and decouplers (2.1 t) leaves 5.0 t: Δv = 300 × 9.80665 × ln(5.0 / 2.0) = **2,695.7 m/s**. Carrying the empty boosters instead would give only 300 × 9.80665 × ln(7.1 / 4.1) = 1,615.5 m/s — about 1,080 m/s less.
+
+- Code: `CraftReader.Parse`, `StagingSimulation.Simulate`; tested in `StagingSimulationTests`
+- Source: KSP 1.12 craft format and fuel-flow rules (resource flow modes, `fuelCrossFeed`, `CModuleFuelLine`); MechJeb's fuel-flow simulation for the staging approach; Tsiolkovsky rocket equation (§16)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

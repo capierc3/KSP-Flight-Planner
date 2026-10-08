@@ -15,6 +15,135 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <!-- Fuel table, shared by in-flight vessels and designs -->
+        <DataTemplate x:Key="ResourceRows">
+            <StackPanel>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="50" /><ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Resource" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="1" Text="Units / max" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="3" Text="Full" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="4" Text="Mass" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="50" /><ColumnDefinition Width="80" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Mono}" />
+                                    <ProgressBar Grid.Column="2" Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="6" MinHeight="0"
+                                                 VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Percent}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Mass}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="NoteBox">
+            <Border Margin="0,14,0,0" Padding="12,8" CornerRadius="4" BorderThickness="1" BorderBrush="#66FFB300" Background="#14FFB300">
+                <ItemsControl ItemsSource="{Binding}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat='•  {0}'}" TextWrapping="Wrap" Margin="0,2" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </DataTemplate>
+
+        <!-- Saved design: stage-by-stage Δv -->
+        <DataTemplate DataType="{x:Type vm:DesignDetailViewModel}">
+            <StackPanel Margin="0,0,16,16">
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+                <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" FontSize="13" />
+
+                <Border Margin="0,14,0,0" Padding="16,10" CornerRadius="4" BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,24,0">
+                            <TextBlock Text="TOTAL Δv" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Text="{Binding DeltaV}" FontFamily="Cascadia Mono, Consolas" FontSize="28" FontWeight="Bold" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding DeltaVNote}" Style="{StaticResource Note}" VerticalAlignment="Center" MaxWidth="420" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Stages, in firing order -->
+                <StackPanel Visibility="{Binding HasStages, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Stages" Style="{StaticResource SectionHeader}" />
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="90" /><ColumnDefinition Width="170" /><ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Stage" Style="{StaticResource ColumnHeader}" />
+                        <TextBlock Grid.Column="1" Text="Δv vac" Style="{StaticResource ColumnHeader}" />
+                        <TextBlock Grid.Column="2" Text="Δv ASL" Style="{StaticResource ColumnHeader}" ToolTip="If the whole stage were flown at Kerbin sea level" />
+                        <TextBlock Grid.Column="3" Text="TWR ASL / vac" Style="{StaticResource ColumnHeader}" ToolTip="At the start of the stage, weight at Kerbin's surface" />
+                        <TextBlock Grid.Column="4" Text="Burn" Style="{StaticResource ColumnHeader}" />
+                        <TextBlock Grid.Column="5" Text="Mass start → end" Style="{StaticResource ColumnHeader}" />
+                        <TextBlock Grid.Column="6" Text="Engines firing" Style="{StaticResource ColumnHeader}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Stages}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="50" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="90" /><ColumnDefinition Width="170" /><ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Stage}" Style="{StaticResource Mono}" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="1" Text="{Binding DeltaVVacuum}" Style="{StaticResource Mono}" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding DeltaVSeaLevel}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Twr}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="4" Text="{Binding BurnTime}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="5" Text="{Binding Mass}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="6" Text="{Binding Engines}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                               Text="Stage numbers as in KSP (the first to fire is the highest). Stages without Δv are left out. How it's worked out: Math guide §16b." />
+                </StackPanel>
+
+                <ContentControl Content="{Binding Notes}" ContentTemplate="{StaticResource NoteBox}"
+                                Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}" />
+
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="440" />
+                        <ColumnDefinition Width="28" />
+                        <ColumnDefinition Width="430" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Visibility="{Binding HasResources, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Fuel &amp; resources at launch" Style="{StaticResource SectionHeader}" />
+                        <ContentControl Content="{Binding Resources}" ContentTemplate="{StaticResource ResourceRows}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Grid.IsSharedSizeScope="True">
+                        <TextBlock Text="Design" Style="{StaticResource SectionHeader}" />
+                        <ItemsControl ItemsSource="{Binding Summary}" ItemTemplate="{StaticResource FactRow}" />
+                        <TextBlock Text="{Binding PartsTitle}" Style="{StaticResource SectionHeader}" />
+                        <ItemsControl ItemsSource="{Binding Parts}" ItemTemplate="{StaticResource FactRow}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type vm:VesselDetailViewModel}">
             <StackPanel Margin="0,0,16,16">
                 <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
@@ -46,36 +175,7 @@
                         <!-- Fuel and other resources -->
                         <StackPanel Visibility="{Binding HasResources, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="Fuel &amp; resources" Style="{StaticResource SectionHeader}" />
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" /><ColumnDefinition Width="80" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Resource" Style="{StaticResource ColumnHeader}" />
-                                <TextBlock Grid.Column="1" Text="Units left / max" Style="{StaticResource ColumnHeader}" />
-                                <TextBlock Grid.Column="3" Text="Full" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
-                                <TextBlock Grid.Column="4" Text="Mass" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding Resources}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="140" /><ColumnDefinition Width="150" /><ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="50" /><ColumnDefinition Width="80" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Mono}" />
-                                                <ProgressBar Grid.Column="2" Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="6" MinHeight="0"
-                                                             VerticalAlignment="Center" Margin="0,0,12,0" />
-                                                <TextBlock Grid.Column="3" Text="{Binding Percent}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
-                                                <TextBlock Grid.Column="4" Text="{Binding Mass}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <ContentControl Content="{Binding Resources}" ContentTemplate="{StaticResource ResourceRows}" />
                         </StackPanel>
 
                         <!-- Engines -->
@@ -124,16 +224,8 @@
                         </StackPanel>
 
                         <!-- How the numbers were worked out, and their limits -->
-                        <Border Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}" Margin="0,14,0,0" Padding="12,8"
-                                CornerRadius="4" BorderThickness="1" BorderBrush="#66FFB300" Background="#14FFB300">
-                            <ItemsControl ItemsSource="{Binding Notes}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding StringFormat='•  {0}'}" TextWrapping="Wrap" Margin="0,2" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
+                        <ContentControl Content="{Binding Notes}" ContentTemplate="{StaticResource NoteBox}"
+                                        Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
                                    Text="Δv assumes every tank feeds every engine (no staging). How it's worked out: Math guide §16." />
                     </StackPanel>
@@ -168,6 +260,7 @@
                         <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
                             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
                         </Style>
                     </TreeView.ItemContainerStyle>
                     <TreeView.ItemTemplate>

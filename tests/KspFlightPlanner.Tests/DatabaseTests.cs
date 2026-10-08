@@ -121,6 +121,24 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Missing_column_with_current_fingerprint_is_rebuilt_keeping_user_data()
+    {
+        new SettingsRepository(_db).Save(new AppSettings { KspSaveName = "Protogen" });
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "ALTER TABLE ksp_resources DROP COLUMN flow_mode;";
+            cmd.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        _db.Initialize();
+
+        Assert.True(new PartCatalogRepository(_db).Load().IsEmpty); // reads flow_mode again
+        Assert.Equal("Protogen", new SettingsRepository(_db).Load().KspSaveName);
+    }
+
+    [Fact]
     public void Broken_database_with_current_fingerprint_is_rebuilt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");

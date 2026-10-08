@@ -23,6 +23,13 @@ internal static class Units
 
     public static string Dv(double metresPerSecond) => metresPerSecond.ToString("#,0", Culture) + " m/s";
 
+    /// <summary>A burn's length: "37s", "1m 29s", "1h 02m".</summary>
+    public static string BurnTime(double seconds)
+    {
+        var s = (long)Math.Round(seconds);
+        return s < 60 ? $"{s}s" : s < 3600 ? $"{s / 60}m {s % 60:00}s" : $"{s / 3600}h {s % 3600 / 60:00}m";
+    }
+
     /// <summary>"0.497 t", "12.4 t", "1,250 t".</summary>
     public static string Tonnes(double tonnes) =>
         tonnes.ToString(Math.Abs(tonnes) < 10 ? "0.###" : Math.Abs(tonnes) < 1000 ? "#,0.#" : "#,0", Culture) + " t";

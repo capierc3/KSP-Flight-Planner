@@ -20,7 +20,10 @@ public sealed class SaveSync : ObservableObject, IDisposable
     private readonly PlannerEvents _events;
     private readonly PartData _parts;
     private readonly DispatcherTimer _debounce;
+    private readonly DispatcherTimer _shipsDebounce;
     private FileSystemWatcher? _watcher;
+    private FileSystemWatcher? _shipsWatcher;
+    private IReadOnlyList<CraftFileInfo> _crafts = [];
     private int _readVersion;
 
     private AppSettings _settings;
@@ -41,6 +44,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
         // KSP can write the file in several steps; wait for it to settle before reading.
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         _debounce.Tick += (_, _) => { _debounce.Stop(); _ = ReloadAsync(); };
+        // The editor writes the auto-saved ship as you build; settle before reading.
+        _shipsDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _shipsDebounce.Tick += (_, _) => { _shipsDebounce.Stop(); RefreshCrafts(); };
         Restart();
     }
 
@@ -53,6 +59,13 @@ public sealed class SaveSync : ObservableObject, IDisposable
     public KspSave? Save { get => _save; private set { if (SetProperty(ref _save, value)) OnPropertyChanged(nameof(HasSave)); } }
 
     public bool HasSave => Save is not null;
+
+    /// <summary>Saved ship designs (.craft) in the save's Ships/VAB and Ships/SPH folders, newest first.</summary>
+    public IReadOnlyList<CraftFileInfo> Crafts { get => _crafts; private set => SetProperty(ref _crafts, value); }
+
+    /// <summary>Surface gravity of the home planet (Kerbin), for launch TWR.</summary>
+    public double HomeSurfaceGravity =>
+        StockBodies().Values.FirstOrDefault(b => b.IsDefault) is { } home ? home.Mu / (home.EquatorialRadiusM * home.EquatorialRadiusM) : 9.81;
 
     /// <summary>One line for the main window: which save, its game date, when it was read, what changed.</summary>
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
@@ -203,6 +216,22 @@ public sealed class SaveSync : ObservableObject, IDisposable
             _watcher.Renamed += (_, _) => Dispatch();
             _watcher.EnableRaisingEvents = true;
         }
+        if (_settings.WatchSave && _settings.KspInstallPath is { } install && _settings.KspSaveName is { } saveName
+            && CraftReader.ShipsFolder(install, saveName) is var ships && Directory.Exists(ships))
+        {
+            _shipsWatcher = new FileSystemWatcher(ships, "*.craft")
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+            };
+            FileSystemEventHandler changed = (_, _) => DispatchShips();
+            _shipsWatcher.Changed += changed;
+            _shipsWatcher.Created += changed;
+            _shipsWatcher.Deleted += changed;
+            _shipsWatcher.Renamed += (_, _) => DispatchShips();
+            _shipsWatcher.EnableRaisingEvents = true;
+        }
+        RefreshCrafts();
         _ = _parts.EnsureCurrentAsync(_settings.KspInstallPath);
         _ = ReloadAsync();
     }
@@ -214,11 +243,24 @@ public sealed class SaveSync : ObservableObject, IDisposable
         _debounce.Start();
     });
 
+    private void DispatchShips() => _shipsDebounce.Dispatcher.BeginInvoke(() =>
+    {
+        _shipsDebounce.Stop();
+        _shipsDebounce.Start();
+    });
+
+    /// <summary>Lists the design files again; always a new list, so listeners rebuild even when only a file's contents changed.</summary>
+    public void RefreshCrafts() =>
+        Crafts = _settings.KspInstallPath is { } install && _settings.KspSaveName is { } save ? CraftReader.FindCrafts(install, save) : [];
+
     private void StopWatching()
     {
         _debounce.Stop();
+        _shipsDebounce.Stop();
         _watcher?.Dispose();
         _watcher = null;
+        _shipsWatcher?.Dispose();
+        _shipsWatcher = null;
     }
 
     public void Dispose() => StopWatching();

@@ -2,8 +2,29 @@ using System.Globalization;
 
 namespace KspFlightPlanner.Core.Ksp;
 
-/// <summary>A resource such as LiquidFuel: how heavy one unit is.</summary>
-public sealed record KspResource(string Name, string DisplayName, double DensityT, double UnitCost);
+/// <summary>A resource such as LiquidFuel: how heavy one unit is and how it flows between parts.</summary>
+/// <param name="FlowMode">KSP's flow rule: NO_FLOW (stays in its part, e.g. SolidFuel), STACK_PRIORITY_SEARCH (through
+/// parts that allow crossfeed, e.g. LiquidFuel), ALL_VESSEL / STAGE_PRIORITY_FLOW (anywhere on the vessel, e.g. MonoPropellant).</param>
+public sealed record KspResource(string Name, string DisplayName, double DensityT, double UnitCost, string FlowMode = "STACK_PRIORITY_SEARCH")
+{
+    public ResourceFlow Flow => FlowMode switch
+    {
+        "NO_FLOW" => ResourceFlow.OwnPart,
+        "ALL_VESSEL" or "ALL_VESSEL_BALANCE" or "STAGE_PRIORITY_FLOW" or "STAGE_PRIORITY_FLOW_BALANCE" => ResourceFlow.WholeVessel,
+        _ => ResourceFlow.Crossfeed,
+    };
+}
+
+/// <summary>Which tanks an engine can draw a resource from.</summary>
+public enum ResourceFlow
+{
+    /// <summary>Only the engine's own part (solid fuel).</summary>
+    OwnPart,
+    /// <summary>Parts connected through crossfeed (stack, radial, open decouplers) plus fuel lines (liquid fuel, oxidizer).</summary>
+    Crossfeed,
+    /// <summary>Any part still attached (monopropellant, xenon, electric charge).</summary>
+    WholeVessel,
+}
 
 /// <summary>A resource a part carries when built (a full tank).</summary>
 public sealed record PartResource(string Name, double Amount, double MaxAmount);
@@ -23,6 +44,7 @@ public sealed record PartAntenna(string Type, double Power, bool Combinable, dou
 
 /// <summary>A part definition from GameData, as KSP uses it after mods have patched it.</summary>
 /// <param name="Name">KSP's internal name with '_' written as '.', as saves and craft files write it (microEngine.v2).</param>
+/// <param name="FuelCrossfeed">Whether fuel passes through the part (false for decouplers unless crossfeed is switched on).</param>
 public sealed record KspPart(
     string Name,
     string Title,
@@ -33,7 +55,8 @@ public sealed record KspPart(
     int CrewCapacity,
     IReadOnlyList<PartResource> Resources,
     IReadOnlyList<PartEngine> Engines,
-    IReadOnlyList<PartAntenna> Antennas);
+    IReadOnlyList<PartAntenna> Antennas,
+    bool FuelCrossfeed = true);
 
 /// <summary>Every part and resource of a KSP install. Built by <see cref="PartCatalogReader"/>, stored in the planner database.</summary>
 public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResource> resources)
@@ -56,6 +79,15 @@ public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResou
 
     public string DisplayName(string resource) => Resources.TryGetValue(resource, out var r) ? r.DisplayName : resource;
 
+    /// <summary>How a resource flows; stock rules when the catalog doesn't know it.</summary>
+    public ResourceFlow Flow(string resource) =>
+        Resources.TryGetValue(resource, out var r) ? r.Flow : resource switch
+        {
+            "SolidFuel" => ResourceFlow.OwnPart,
+            "LiquidFuel" or "Oxidizer" => ResourceFlow.Crossfeed,
+            _ => ResourceFlow.WholeVessel,
+        };
+
     /// <summary>KSP turns '_' in a part's config name into '.' (microEngine_v2 → microEngine.v2).</summary>
     public static string NormalizeName(string name) => name.Trim().Replace('_', '.');
 
@@ -73,6 +105,9 @@ public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResou
 public static class PartCatalogReader
 {
     public const string ModuleManagerCache = "ModuleManager.ConfigCache";
+
+    /// <summary>Bumped when the reader starts collecting new fields, so stored catalogs are read again.</summary>
+    public const int FormatVersion = 2;
 
     /// <summary>The file or folder the catalog is read from, and when it last changed (to know when to read again).</summary>
     public static (string Path, DateTime LastWriteUtc)? Source(string installPath)
@@ -142,11 +177,13 @@ public static class PartCatalogReader
 
         return new KspPart(PartCatalog.NormalizeName(name), StripLocalization(p.GetValue("title")) ?? name, p.GetValue("category"),
             StripLocalization(p.GetValue("manufacturer")), Number(p.GetValue("mass")), Number(p.GetValue("cost")),
-            (int)Number(p.GetValue("CrewCapacity")), resources, engines, antennas);
+            (int)Number(p.GetValue("CrewCapacity")), resources, engines, antennas,
+            FuelCrossfeed: !bool.TryParse(p.GetValue("fuelCrossFeed"), out var crossfeed) || crossfeed);
     }
 
     private static KspResource? ReadResource(ConfigNode r) => r.GetValue("name") is { Length: > 0 } name
-        ? new KspResource(name, StripLocalization(r.GetValue("displayName")) ?? name, Number(r.GetValue("density")), Number(r.GetValue("unitCost")))
+        ? new KspResource(name, StripLocalization(r.GetValue("displayName")) ?? name, Number(r.GetValue("density")), Number(r.GetValue("unitCost")),
+            r.GetValue("flowMode") ?? "STACK_PRIORITY_SEARCH")
         : null;
 
     /// <summary>

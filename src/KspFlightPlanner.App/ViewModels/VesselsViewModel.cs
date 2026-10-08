@@ -6,8 +6,9 @@ using KspFlightPlanner.Core.Ksp;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-/// <summary>A row in the vessels tree: a body (group) or a vessel.</summary>
-public sealed class VesselTreeItem(string title, string subtitle, string glyph, SavedVessel? vessel = null) : ObservableObject
+/// <summary>A row in the vessels tree: a group (In flight, a body, Saved designs, VAB…), a vessel or a saved design.</summary>
+public sealed class VesselTreeItem(string title, string subtitle, string glyph, SavedVessel? vessel = null, CraftFileInfo? craft = null)
+    : ObservableObject
 {
     private bool _isSelected;
     private bool _isExpanded = true;
@@ -16,6 +17,10 @@ public sealed class VesselTreeItem(string title, string subtitle, string glyph, 
     public string Subtitle { get; } = subtitle;
     public string Glyph { get; } = glyph;
     public SavedVessel? Vessel { get; } = vessel;
+    public CraftFileInfo? Craft { get; } = craft;
+
+    /// <summary>What stays the same when the tree is rebuilt: the vessel's id or the design's file.</summary>
+    public string? Key => Vessel?.Id ?? Craft?.Path;
     public ObservableCollection<VesselTreeItem> Children { get; } = [];
 
     public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
@@ -23,13 +28,14 @@ public sealed class VesselTreeItem(string title, string subtitle, string glyph, 
 }
 
 /// <summary>
-/// The Vessels tab: every vessel in the linked KSP save, grouped by the body it's at, with its remaining Δv and fuel.
-/// Reads straight from the save, so it's always as current as KSP's last write.
+/// The Vessels tab: every vessel in the linked KSP save, grouped by the body it's at, with its remaining Δv and fuel;
+/// and every saved design (.craft) with its stage-by-stage Δv. Reads straight from KSP's files, so it's always as
+/// current as KSP's last write.
 /// </summary>
 public sealed class VesselsViewModel : ObservableObject
 {
     private readonly SaveSync _sync;
-    private VesselDetailViewModel? _detail;
+    private object? _detail;
     private string? _selectedId;
     private bool _showAll;
 
@@ -43,7 +49,8 @@ public sealed class VesselsViewModel : ObservableObject
 
     public ObservableCollection<VesselTreeItem> Tree { get; } = [];
 
-    public VesselDetailViewModel? Detail { get => _detail; private set => SetProperty(ref _detail, value); }
+    /// <summary>The right-hand panel: a <see cref="VesselDetailViewModel"/> or a <see cref="DesignDetailViewModel"/>.</summary>
+    public object? Detail { get => _detail; private set => SetProperty(ref _detail, value); }
 
     /// <summary>Also list debris, asteroids, flags and surface experiments.</summary>
     public bool ShowAll { get => _showAll; set { if (SetProperty(ref _showAll, value)) Rebuild(); } }
@@ -59,6 +66,12 @@ public sealed class VesselsViewModel : ObservableObject
     /// <summary>Called by the view when the tree selection changes.</summary>
     public void Select(VesselTreeItem? item)
     {
+        if (item?.Craft is { } craft)
+        {
+            _selectedId = craft.Path;
+            Detail = DesignDetail(craft);
+            return;
+        }
         if (item?.Vessel is not { } vessel) return;
         _selectedId = vessel.Id;
         var radius = vessel.Orbit?.BodyName is { } body && _sync.StockBodies().TryGetValue(body, out var b) ? b.EquatorialRadiusM : (double?)null;
@@ -67,17 +80,19 @@ public sealed class VesselsViewModel : ObservableObject
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SaveSync.Save) or nameof(PartData.Catalog)) Rebuild();
+        if (e.PropertyName is nameof(SaveSync.Save) or nameof(SaveSync.Crafts) or nameof(PartData.Catalog)) Rebuild();
         if (e.PropertyName is nameof(PartData.Summary)) OnPropertyChanged(nameof(PartDataSummary));
     }
 
     private void Rebuild()
     {
         Tree.Clear();
+        _designs.Clear();
         var save = _sync.Save;
+        var catalog = _sync.Parts.Catalog;
         if (save is not null)
         {
-            var catalog = _sync.Parts.Catalog;
+            var inFlight = new VesselTreeItem("In flight", "", "");
             var shown = save.Vessels.Where(v => ShowAll || SaveImport.IsUsuallyWanted(v));
             foreach (var group in shown.GroupBy(v => v.Orbit?.BodyName ?? "Unknown").OrderBy(g => BodyOrder(g.Key)))
             {
@@ -88,12 +103,31 @@ public sealed class VesselsViewModel : ObservableObject
                     var dv = report.Engines.Any(e => e.CountedForDeltaV) ? $" · {Units.Dv(report.DeltaVVacuum)}" : "";
                     body.Children.Add(new VesselTreeItem(v.Name, $"{SaveImport.TypeText(v.Type)} · {Situation(v.Situation)}{dv}", "◇", v));
                 }
-                Tree.Add(body);
+                inFlight.Children.Add(body);
             }
+            if (inFlight.Children.Count > 0) Tree.Add(inFlight);
         }
 
-        var selected = Tree.SelectMany(b => b.Children).FirstOrDefault(i => i.Vessel!.Id == _selectedId)
-                       ?? Tree.SelectMany(b => b.Children).FirstOrDefault();
+        if (_sync.Crafts.Count > 0)
+        {
+            var designs = new VesselTreeItem("Saved designs", "Ships in the VAB and SPH", "");
+            foreach (var facility in _sync.Crafts.GroupBy(c => c.Facility).OrderBy(g => g.Key == "VAB" ? 0 : 1))
+            {
+                var building = new VesselTreeItem(facility.Key, facility.Key == "VAB" ? "Vehicle Assembly Building" : "Spaceplane Hangar", "●");
+                foreach (var info in facility.OrderBy(c => c.IsAutoSave ? 0 : 1).ThenBy(c => System.IO.Path.GetFileNameWithoutExtension(c.Path)))
+                {
+                    if (Design(info) is not { } report) continue;
+                    var title = info.IsAutoSave ? $"{report.Name} (in the editor)" : report.Name;
+                    var dv = report.Stages.Count > 0 ? $"{Units.Dv(report.TotalDeltaVVacuum)} · {StageCount(report)} · " : "";
+                    building.Children.Add(new VesselTreeItem(title, $"{dv}{Units.Tonnes(report.LaunchMassT)}", "◇", craft: info));
+                }
+                if (building.Children.Count > 0) designs.Children.Add(building);
+            }
+            if (designs.Children.Count > 0) Tree.Add(designs);
+        }
+
+        var leaves = Leaves(Tree).ToList();
+        var selected = leaves.FirstOrDefault(i => i.Key == _selectedId) ?? leaves.FirstOrDefault();
         if (selected is not null)
         {
             selected.IsSelected = true;
@@ -104,6 +138,32 @@ public sealed class VesselsViewModel : ObservableObject
         OnPropertyChanged(nameof(Empty));
         OnPropertyChanged(nameof(PartDataSummary));
     }
+
+    private readonly Dictionary<string, DesignReport?> _designs = [];
+
+    /// <summary>Reads and flies a design once per rebuild; null if the file can't be read.</summary>
+    private DesignReport? Design(CraftFileInfo info)
+    {
+        if (_designs.TryGetValue(info.Path, out var cached)) return cached;
+        DesignReport? report;
+        try
+        {
+            report = StagingSimulation.Simulate(CraftReader.Read(info.Path), _sync.Parts.Catalog, _sync.HomeSurfaceGravity);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or FormatException)
+        {
+            report = null;
+        }
+        return _designs[info.Path] = report;
+    }
+
+    private DesignDetailViewModel? DesignDetail(CraftFileInfo info) =>
+        Design(info) is { } report ? new DesignDetailViewModel(report, info) : null;
+
+    private static string StageCount(DesignReport report) => report.Stages.Count == 1 ? "1 stage" : $"{report.Stages.Count} stages";
+
+    private static IEnumerable<VesselTreeItem> Leaves(IEnumerable<VesselTreeItem> items) =>
+        items.SelectMany(i => i.Children.Count == 0 ? (i.Key is null ? [] : [i]) : Leaves(i.Children));
 
     /// <summary>Stock bodies in KSP's order (Kerbol, Kerbin, Mun, …); anything else after.</summary>
     private static int BodyOrder(string body) =>
@@ -211,4 +271,60 @@ public sealed class VesselDetailViewModel
     public string PartsTitle { get; }
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+}
+
+/// <summary>One stage row of a design, in firing order.</summary>
+public sealed record StageRow(string Stage, string DeltaVVacuum, string DeltaVSeaLevel, string Twr, string BurnTime, string Mass, string Engines);
+
+/// <summary>A saved design: total Δv, launch mass and TWR, stage-by-stage table, what it carries and is built from.</summary>
+public sealed class DesignDetailViewModel
+{
+    public DesignDetailViewModel(DesignReport report, CraftFileInfo file)
+    {
+        Title = report.Name;
+        Subtitle = $"{(file.Facility == "SPH" ? "Spaceplane Hangar" : "Vehicle Assembly Building")} design · " +
+                   (file.IsAutoSave ? $"open in the editor now (auto-saved {file.LastWriteTime:g})" : $"saved {file.LastWriteTime:g}");
+        HasStages = report.Stages.Count > 0;
+        DeltaV = HasStages ? Units.Dv(report.TotalDeltaVVacuum) : "—";
+        DeltaVNote = HasStages
+            ? $"in vacuum, over {report.Stages.Count} stage{(report.Stages.Count == 1 ? "" : "s")} · launch TWR {report.LaunchTwr:0.00} at sea level"
+            : "no stage with an engine and fuel it can reach";
+
+        Summary =
+        [
+            new("Mass at launch", Units.Tonnes(report.LaunchMassT)),
+            new("Dry mass (all parts)", Units.Tonnes(report.DryMassT)),
+            new("Parts", report.PartCount.ToString("N0")),
+            new("File", System.IO.Path.GetFileName(file.Path)),
+        ];
+        Stages = report.Stages.Select(s => new StageRow(
+            s.Stage.ToString(),
+            Units.Dv(s.DeltaVVacuum),
+            Units.Dv(s.DeltaVSeaLevel),
+            $"{s.TwrSeaLevel:0.00} / {s.TwrVacuum:0.00}",
+            Units.BurnTime(s.BurnTimeS),
+            $"{Units.Tonnes(s.StartMassT)} → {Units.Tonnes(s.EndMassT)}",
+            string.Join(", ", s.Engines.Select(e => e.Count == 1 ? e.Title : $"{e.Count} × {e.Title}")))).ToList();
+        Resources = report.Resources
+            .Select(r => new ResourceRow(r.DisplayName, $"{r.Amount:#,0.##} / {r.MaxAmount:#,0.##}", r.Fraction, $"{r.Fraction:0%}",
+                r.MassT > 0 ? Units.Tonnes(r.MassT) : "—"))
+            .ToList();
+        Notes = report.Notes;
+        Parts = report.Parts.Select(p => new Fact(p.Title, $"× {p.Count}")).ToList();
+        PartsTitle = $"Parts ({report.PartCount})";
+    }
+
+    public string Title { get; }
+    public string Subtitle { get; }
+    public bool HasStages { get; }
+    public string DeltaV { get; }
+    public string DeltaVNote { get; }
+    public IReadOnlyList<Fact> Summary { get; }
+    public IReadOnlyList<StageRow> Stages { get; }
+    public IReadOnlyList<ResourceRow> Resources { get; }
+    public bool HasResources => Resources.Count > 0;
+    public IReadOnlyList<string> Notes { get; }
+    public bool HasNotes => Notes.Count > 0;
+    public IReadOnlyList<Fact> Parts { get; }
+    public string PartsTitle { get; }
 }

@@ -76,7 +76,7 @@ public sealed class PlannerDatabase
     public void Initialize()
     {
         var fingerprint = Migrations.Fingerprint + BodySeeder.Fingerprint + DvMapSeeder.Fingerprint;
-        if (ResetOnSchemaChange && File.Exists(DatabasePath) && (ReadFingerprint() != fingerprint || HasMissingTables()))
+        if (ResetOnSchemaChange && File.Exists(DatabasePath) && (ReadFingerprint() != fingerprint || DiffersFromSchema()))
         {
             RebuildKeepingUserData(fingerprint);
             return;
@@ -177,23 +177,38 @@ public sealed class PlannerDatabase
         File.Delete(DatabasePath);
     }
 
-    /// <summary>Pre-release safety net: the fingerprint says current but a table is missing (e.g. an interrupted rebuild).</summary>
-    private bool HasMissingTables()
+    /// <summary>
+    /// Pre-release safety net: the fingerprint says current, but a table or column the scripts create is missing
+    /// (seen after an app instance was killed mid-start). Compared against the scripts run on an in-memory database.
+    /// </summary>
+    private bool DiffersFromSchema()
     {
         try
         {
-            using var connection = Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table';";
-            using var reader = cmd.ExecuteReader();
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            while (reader.Read()) existing.Add(reader.GetString(0));
-            return Migrations.Tables.Any(t => !existing.Contains(t));
+            using var expected = new SqliteConnection("Data Source=:memory:");
+            expected.Open();
+            Migrations.Apply(expected);
+            using var actual = Open();
+            return !Columns(expected).SetEquals(Columns(actual));
         }
         catch (SqliteException)
         {
             return true;
         }
+    }
+
+    /// <summary>Every "table.column" in the database's main schema.</summary>
+    private static HashSet<string> Columns(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT m.name || '.' || c.name FROM sqlite_master m JOIN pragma_table_info(m.name) c
+            WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%';
+            """;
+        using var reader = cmd.ExecuteReader();
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read()) columns.Add(reader.GetString(0));
+        return columns;
     }
 
     private string? ReadFingerprint()

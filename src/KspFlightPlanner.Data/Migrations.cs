@@ -138,7 +138,8 @@ internal static class Migrations
             name          TEXT PRIMARY KEY,
             display_name  TEXT NOT NULL,
             density_t     REAL NOT NULL,     -- tonnes per unit
-            unit_cost     REAL NOT NULL DEFAULT 0
+            unit_cost     REAL NOT NULL DEFAULT 0,
+            flow_mode     TEXT NOT NULL DEFAULT 'STACK_PRIORITY_SEARCH'   -- NO_FLOW / STACK_PRIORITY_SEARCH / ALL_VESSEL …
         );
 
         CREATE TABLE ksp_parts (
@@ -148,7 +149,8 @@ internal static class Migrations
             manufacturer   TEXT,
             mass_t         REAL NOT NULL,    -- dry
             cost           REAL NOT NULL DEFAULT 0,
-            crew_capacity  INTEGER NOT NULL DEFAULT 0
+            crew_capacity  INTEGER NOT NULL DEFAULT 0,
+            fuel_crossfeed INTEGER NOT NULL DEFAULT 1    -- 0: fuel can't pass through (decouplers)
         );
 
         CREATE TABLE ksp_part_resources (      -- what a new part holds (full tanks)
@@ -209,11 +211,6 @@ internal static class Migrations
     ];
 
     public static int LatestVersion => Scripts.Length;
-
-    /// <summary>Every table the scripts create; a database missing one of them is incomplete.</summary>
-    public static IReadOnlyList<string> Tables { get; } = Scripts
-        .SelectMany(s => System.Text.RegularExpressions.Regex.Matches(s, @"CREATE TABLE (\w+)"))
-        .Select(m => m.Groups[1].Value).ToList();
 
     /// <summary>Hash of all schema scripts; changes whenever the schema text changes.</summary>
     public static string Fingerprint { get; } = Hashing.Sha256(string.Join("\n", Scripts));
