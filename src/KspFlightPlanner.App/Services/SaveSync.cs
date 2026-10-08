@@ -11,6 +11,8 @@ namespace KspFlightPlanner.App.Services;
 /// <summary>
 /// Reads the chosen KSP save, keeps custom locations linked to its vessels up to date, and (when enabled) watches
 /// persistent.sfs so they follow the game whenever KSP saves — on scene changes, launches and its autosave.
+/// While connected to the game (<see cref="KspLink"/>), its live time and orbits are laid over the save, so everything
+/// reading <see cref="Save"/> follows the game between saves too.
 /// </summary>
 public sealed class SaveSync : ObservableObject, IDisposable
 {
@@ -19,6 +21,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
     private readonly PartData _parts;
+    private readonly KspLink _link;
     private readonly DispatcherTimer _debounce;
     private readonly DispatcherTimer _shipsDebounce;
     private FileSystemWatcher? _watcher;
@@ -28,14 +31,22 @@ public sealed class SaveSync : ObservableObject, IDisposable
 
     private AppSettings _settings;
     private KspSave? _save;
+    private KspSave? _fileSave;
+    private LiveMerge? _live;
+    private DateTime _readAt;
     private string _status = "";
     private string? _problem;
     private int _newVessels;
 
+    // A plan that starts "now" moves on this much game time before it's worth re-planning (orbit changes re-plan at once).
+    private const double LiveTimeStepS = 60;
+
     public SaveSync(SettingsRepository settings, BodyRepository bodies, CustomLocationRepository locations, PartData parts,
-        PlannerEvents events)
+        PlannerEvents events, KspLink link)
     {
         _parts = parts;
+        _link = link;
+        link.GameUpdated += _ => ApplyLive(fileChanged: false);
         _settingsRepository = settings;
         _bodies = bodies;
         _locations = locations;
@@ -55,10 +66,22 @@ public sealed class SaveSync : ObservableObject, IDisposable
     /// <summary>Part data from the same KSP install; read again when the install or its mods change.</summary>
     public PartData Parts => _parts;
 
-    /// <summary>The last save read, or null if none is configured or it couldn't be read.</summary>
+    /// <summary>The live connection to the game.</summary>
+    public KspLink Link => _link;
+
+    /// <summary>
+    /// The last game state read: the save file, with the game's live time and orbits laid over it while connected.
+    /// Null if no save is configured or it couldn't be read.
+    /// </summary>
     public KspSave? Save { get => _save; private set { if (SetProperty(ref _save, value)) OnPropertyChanged(nameof(HasSave)); } }
 
     public bool HasSave => Save is not null;
+
+    /// <summary>How the live game matched the save: which vessel is being flown and targeted, and vessels not in the save yet.</summary>
+    public LiveMerge? Live { get => _live; private set { if (SetProperty(ref _live, value)) OnPropertyChanged(nameof(IsLive)); } }
+
+    /// <summary>The game time and (in flight) orbits come from the running game rather than the save file.</summary>
+    public bool IsLive => Live is not null;
 
     /// <summary>Saved ship designs (.craft) in the save's Ships/VAB and Ships/SPH folders, newest first.</summary>
     public IReadOnlyList<CraftFileInfo> Crafts { get => _crafts; private set => SetProperty(ref _crafts, value); }
@@ -127,7 +150,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
         var path = PersistentPath;
         if (path is null)
         {
+            _fileSave = null;
             Save = null;
+            Live = null;
             Problem = null;
             Status = "No KSP save chosen — Tools › Settings to link one.";
             NewVessels = 0;
@@ -139,14 +164,17 @@ public sealed class SaveSync : ObservableObject, IDisposable
         {
             var save = await Task.Run(() => KspSaveReader.Read(path));
             if (version != _readVersion) return; // settings changed while reading
-            Save = save;
+            _fileSave = save;
+            _readAt = DateTime.Now;
             Problem = null;
-            UpdateStatus(RefreshLinkedLocations(save));
+            ApplyLive(fileChanged: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
         {
             if (version != _readVersion) return;
+            _fileSave = null;
             Save = null;
+            Live = null;
             Problem = ex is FileNotFoundException or DirectoryNotFoundException
                 ? $"Can't find {path}. Check the KSP folder and save in Settings."
                 : $"Couldn't read the save: {ex.Message}";
@@ -154,6 +182,53 @@ public sealed class SaveSync : ObservableObject, IDisposable
             NewVessels = 0;
         }
     }
+
+    /// <summary>
+    /// Publishes the save file with the live game over it (or the file alone when not connected, or when the file is newer).
+    /// A live update only replaces <see cref="Save"/> when an orbit or situation changed or the game time moved on by
+    /// <see cref="LiveTimeStepS"/>, so tabs that re-plan from it don't churn every poll.
+    /// </summary>
+    private void ApplyLive(bool fileChanged)
+    {
+        if (_fileSave is not { } file) return;
+        var previous = Save;
+        if (_link.Game is not { } game || game.Ut < file.Ut)
+        {
+            Live = null;
+            if (!fileChanged && ReferenceEquals(previous, file)) return;
+            Save = file;
+        }
+        else
+        {
+            var bodies = StockBodies();
+            double? mu(string body) => bodies.GetValueOrDefault(body)?.Mu;
+            var merge = LiveMerge.Apply(file, game, previous, mu);
+            // Keep the objects so the list doesn't look changed. (Their IsActive/IsTarget may then be stale: look those up
+            // in the link's Game by name.)
+            if (Live is { } last && SameVessels(last.Unmatched, merge.Unmatched, game.Ut, mu))
+                merge = merge with { Unmatched = last.Unmatched };
+            var changed = fileChanged || previous is null || Math.Abs(merge.Save.Ut - previous.Ut) >= LiveTimeStepS
+                          || !ReferenceEquals(merge.Unmatched, Live?.Unmatched) || VesselsChanged(previous, merge.Save);
+            Live = merge;
+            if (!changed) return;
+            Save = merge.Save;
+        }
+        UpdateStatus(RefreshLinkedLocations(Save!));
+    }
+
+    private static bool VesselsChanged(KspSave before, KspSave after) =>
+        before.Vessels.Count != after.Vessels.Count
+        || before.Vessels.Zip(after.Vessels).Any(p => p.First.Id != p.Second.Id || p.First.Situation != p.Second.Situation
+                                                       || !ReferenceEquals(p.First.Orbit, p.Second.Orbit));
+
+    private static bool SameVessels(IReadOnlyList<LiveVessel> a, IReadOnlyList<LiveVessel> b, double ut, Func<string, double?> mu) =>
+        a.Count == b.Count && a.Zip(b).All(p => p.First.Name == p.Second.Name && p.First.Situation == p.Second.Situation
+            && (p.First.Orbit, p.Second.Orbit) switch
+            {
+                (null, null) => true,
+                ({ } x, { } y) => LiveMerge.SamePath(x, y, ut, mu),
+                _ => false,
+            });
 
     /// <summary>Moves every location linked to this save onto its vessel's current orbit. Returns how many changed.</summary>
     private int RefreshLinkedLocations(KspSave save)
@@ -186,7 +261,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
         var parts = new List<string>
         {
             $"{SaveName} · {GameCalendar.Kerbin.FormatDay(Save.Ut)}",
-            $"read {DateTime.Now:t}",
+            IsLive ? "live from KSP" : $"read {_readAt:t}",
             linked.Count == 1 ? "1 linked location" : $"{linked.Count} linked locations",
         };
         if (updated > 0) parts.Add($"{updated} updated");

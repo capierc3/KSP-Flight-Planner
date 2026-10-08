@@ -103,12 +103,14 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="8" />
-                            <ColumnDefinition Width="Auto" /><ColumnDefinition />
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Year" Style="{StaticResource Label}" Margin="0,0,6,0" />
                         <TextBox Grid.Column="1" Text="{Binding EarliestYear, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
                         <TextBlock Grid.Column="3" Text="Day" Style="{StaticResource Label}" Margin="0,0,6,0" />
                         <TextBox Grid.Column="4" Text="{Binding EarliestDay, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                        <Button Grid.Column="5" Content="Today" Command="{Binding UseGameDateCommand}" Margin="6,0,0,0" Padding="8,0"
+                                ToolTip="Today's date in the game: live while connected to KSP, else when KSP last saved" />
                     </Grid>
 
                     <TextBlock Text="At destination" Style="{StaticResource Label}" />

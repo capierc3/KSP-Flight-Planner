@@ -34,6 +34,23 @@
                     </Border>
                     <StackPanel Grid.Column="1">
                         <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Send to KSP" Padding="8,1" Margin="10,0,0,0" FontSize="11" MinHeight="0" MinWidth="0"
+                                    Command="{Binding DataContext.SendStepCommand, ElementName=Root}" CommandParameter="{Binding}"
+                                    ToolTip="Add this burn as a maneuver node on the craft you're flying">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.IsLinked, ElementName=Root}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding HasNode}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding DeltaV}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="0" />
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </DockPanel>
@@ -81,6 +98,17 @@
                     <TextBlock Text="Start from" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
                     <RadioButton Content="Launch from the KSC" IsChecked="{Binding StartFromLaunch}" GroupName="Start" />
                     <RadioButton Content="A craft already in orbit" IsChecked="{Binding StartFromCraft}" GroupName="Start" Margin="0,2,0,0" />
+
+                    <!-- Live game: what's being flown and targeted in KSP. -->
+                    <StackPanel Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0">
+                        <TextBlock Text="{Binding GameText}" Style="{StaticResource Note}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <Button Content="Use the craft I'm flying" Command="{Binding UseActiveVesselCommand}" Padding="8,2"
+                                    ToolTip="Start from the craft you're flying in KSP, on its live orbit" />
+                            <Button Content="Add KSP's target" Command="{Binding AddGameTargetCommand}" Padding="8,2" Margin="6,0,0,0"
+                                    ToolTip="Add the craft targeted in KSP as the next target (it must orbit the same body)" />
+                        </StackPanel>
+                    </StackPanel>
 
                     <StackPanel Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}">
                         <Grid Margin="0,4,0,0">
@@ -134,7 +162,8 @@
                     </DockPanel>
 
                     <TextBlock Text="Timing" Style="{StaticResource SectionHeader}" />
-                    <CheckBox Content="Start from the save's current time" IsChecked="{Binding FollowSaveTime}" />
+                    <CheckBox Content="Start from the game's current time" IsChecked="{Binding FollowSaveTime}"
+                              ToolTip="The live game time while connected to KSP, else the time KSP last saved" />
                     <TextBlock Text="{Binding SaveTimeText}" Style="{StaticResource Note}" Margin="0,2,0,0" />
                     <Grid Visibility="{Binding FollowSaveTime, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
@@ -195,6 +224,11 @@
                                      ToolTip="Time and prograde / normal / radial values to type into a maneuver node" />
                     </StackPanel>
                     <TextBlock Text="Flight plan" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                </DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,18,6" Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}">
+                    <Button DockPanel.Dock="Right" Content="Send all burns to KSP" Command="{Binding SendAllCommand}" Padding="10,2" VerticalAlignment="Top"
+                            ToolTip="Replace the maneuver nodes on the craft you're flying with every burn of this plan" />
+                    <TextBlock Text="{Binding SendStatus}" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0" />
                 </DockPanel>
                 <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3" Margin="0,0,18,4"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using KspFlightPlanner.App.Services;
 using KspFlightPlanner.Core;
 using KspFlightPlanner.Core.Models;
 using KspFlightPlanner.Data;
@@ -28,6 +29,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
     private readonly CustomLocationRepository _locations;
+    private readonly SaveSync? _sync;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private Dictionary<long, CelestialBody> _byId = [];
 
@@ -63,10 +65,12 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private TransferPlan? _returnPlan;
     private TransferWindow? _returnWindow;
 
-    public TransferPlannerViewModel(BodyRepository bodies, CustomLocationRepository locations, PlannerEvents events)
+    public TransferPlannerViewModel(BodyRepository bodies, CustomLocationRepository locations, PlannerEvents events, SaveSync? sync = null)
     {
         _bodies = bodies;
         _locations = locations;
+        _sync = sync;
+        UseGameDateCommand = new RelayCommand(UseGameDate, () => _sync?.Save is not null);
         events.LocationsChanged += _ => ReloadBodies();
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
         ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
@@ -87,6 +91,9 @@ public sealed class TransferPlannerViewModel : ObservableObject
     public IReadOnlyList<ArrivalMode> ReturnArrivalModes { get; } = [ArrivalMode.Aerobrake, ArrivalMode.Circularize];
 
     public RelayCommand ResetToBestCommand { get; }
+
+    /// <summary>Earliest departure = today in the game (live while connected to KSP, else the save's date).</summary>
+    public RelayCommand UseGameDateCommand { get; }
     public RelayCommand ResetReturnToBestCommand { get; }
 
     // ---------------- Inputs ----------------
@@ -168,6 +175,18 @@ public sealed class TransferPlannerViewModel : ObservableObject
     {
         get => _arrivalAltitudeText;
         set { if (SetProperty(ref _arrivalAltitudeText, value)) Recalculate(); }
+    }
+
+    private void UseGameDate()
+    {
+        if (_sync?.Save is not { } save) return;
+        var year = (int)Math.Floor(save.Ut / _calendar.SecondsPerYear);
+        var day = (int)Math.Floor((save.Ut - year * _calendar.SecondsPerYear) / _calendar.SecondsPerDay);
+        _earliestYear = year + 1;
+        _earliestDay = day + 1;
+        OnPropertyChanged(nameof(EarliestYear));
+        OnPropertyChanged(nameof(EarliestDay));
+        Recalculate();
     }
 
     public int EarliestYear

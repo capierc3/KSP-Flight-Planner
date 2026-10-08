@@ -272,6 +272,37 @@ Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
 - Code: `KspSaveReader.Parse`, `SaveImport.Convert`, `SaveImport.Refresh`; tested in `KspSaveTests`
 - Source: KSP 1.12 save format (`ORBIT` node written by `OrbitSnapshot`); Curtis §4.4 (orbital elements)
 
+## 8d. Following the live game (kRPC)
+
+While connected to the game (*Tools › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8c) with i, Ω and ω × 180/π.
+
+**Which save vessel is it?** kRPC has no vessel ids, so live vessels are paired with save vessels by name. A different type adds 100 to the score. Among same-named vessels, the closest orbit wins:
+
+```
+score = |ln(a₁/a₂)| + |e₁ − e₂| + |i₁ − i₂|/180°        (+10 if they orbit different bodies)
+```
+
+**Has the orbit really changed?** KSP restates a coasting craft's orbit at a new epoch, so the numbers change while the path doesn't. Two statements are the same path when a, e and i agree, and the craft is in the same place at the same time *t*. The angles that are undefined for circular or equatorial orbits are compared through the combinations that stay defined:
+
+```
+n = √(μ / a³)                                  mean motion (rad/s)
+ϖ = Ω + ω                                      longitude of periapsis (Ω skipped if i ≈ 0, ϖ skipped if e ≈ 0)
+L(t) = ϖ + M₀ + n·(t − epoch)                  mean longitude: where the craft is along the orbit at t
+same path ⇔ |Δa|/a, |Δe|, |Δi|, |ΔΩ|, |Δϖ|, |ΔL(t)| all ≤ 10⁻⁵   (angles in radians, wrapped to ±π)
+```
+
+10⁻⁵ rad is about 10 m per 1,000 km of orbit radius. That's more than a coasting craft's jitter under physics, and far less than any burn. Only a real change re-plans the Rendezvous tab and moves linked custom locations. Otherwise only the game time moves the plan's start, once per 60 s of game time.
+
+Worked example: "KerbLink Mk2 A" (a = 3,470,794.97 m, M₀ = 4.0125185 rad at epoch 816,532.3 s), restated by KSP 1,000 s later:
+
+1. n = √(3.5316×10¹² / 3,470,794.97³) = **0.000290631 rad/s** (period 21,619 s)
+2. The restated orbit has M₀′ = 4.0125185 + 0.000290631 × 1,000 = **4.3031497 rad** at epoch 817,532.3 s
+3. At any t, L(t) − L′(t) = (4.0125185 + n·(t − 816,532.3)) − (4.3031497 + n·(t − 817,532.3)) = 0, so it's the same path: nothing re-plans
+4. Had the craft been 0.01 rad (35 km) further along, |ΔL| = 0.01 > 10⁻⁵, so it counts as changed
+
+- Code: `LiveMerge.Apply`, `LiveMerge.SamePath` (`Core/Ksp/LiveGame.cs`), read by `KspLink.ReadVessels`, laid over the save by `SaveSync.ApplyLive`; tested in `LiveGameTests`
+- Source: kRPC SpaceCenter API (`Orbit` class); mean longitude as in Murray & Dermott, *Solar System Dynamics* §2.9; Curtis §3.4 (mean motion)
+
 ## 9. Ejection angle: where in your parking orbit to burn
 
 Your escape hyperbola bends by θ∞ between the burn (periapsis) and the direction you leave in:
@@ -595,7 +626,7 @@ normal   = (r × v) / |r × v|          "up" out of the orbit plane (purple tria
 radial   = prograde × normal          in the plane, at right angles to prograde, pointing away from the body (cyan)
 ```
 
-Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode.
+Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
 
 - Code: `NodeBurn.From`; tested in `RendezvousTests`
 

@@ -3,16 +3,23 @@ using System.Net.Sockets;
 using System.Windows.Threading;
 using KRPC.Client;
 using KRPC.Client.Services.KRPC;
+using KRPC.Client.Services.SpaceCenter;
 using KspFlightPlanner.App.ViewModels;
+using KspFlightPlanner.Core;
+using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.Services;
 
 public enum KspLinkState { Disconnected, Connecting, Connected }
 
+/// <summary>Maneuver nodes sent to the vessel being flown.</summary>
+public sealed record NodesSent(string Vessel, int Count, int Skipped);
+
 /// <summary>
-/// A live connection to the running game through the kRPC mod's server. For now it only connects, reports the game
-/// scene and notices when the game goes away; nothing in the planner reads game data from it yet.
+/// A live connection to the running game through the kRPC mod's server. While connected it reads the game time every
+/// couple of seconds and, in flight, every vessel's orbit (<see cref="Game"/>); it can also put maneuver nodes on the
+/// vessel being flown.
 /// </summary>
 public sealed class KspLink : ObservableObject, IDisposable
 {
@@ -20,25 +27,33 @@ public sealed class KspLink : ObservableObject, IDisposable
 
     // Connecting blocks until KSP replies, which waits for the player when kRPC asks them to allow the client.
     private static readonly TimeSpan AskPlayerAfter = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan CheckEvery = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan VesselsEvery = TimeSpan.FromSeconds(10);
 
     private readonly Func<AppSettings> _settings;
-    private readonly DispatcherTimer _check;
+    private readonly DispatcherTimer _poll;
+    private readonly SemaphoreSlim _gate = new(1, 1); // one call at a time on the connection
     private Connection? _connection;
     private int _attempt;
-    private bool _checking;
+    private bool _polling;
+    private bool _vesselsDue;
+    private DateTime _vesselsReadAt;
     private KspLinkState _state;
     private string _status = "KSP: not connected";
     private string? _problem;
     private string? _serverVersion;
     private GameScene? _scene;
+    private LiveGame? _game;
 
     public KspLink(Func<AppSettings> settings)
     {
         _settings = settings;
-        _check = new DispatcherTimer { Interval = CheckEvery };
-        _check.Tick += async (_, _) => await CheckAsync();
+        _poll = new DispatcherTimer { Interval = PollEvery };
+        _poll.Tick += async (_, _) => await PollAsync();
     }
+
+    /// <summary>Raised on the UI thread whenever <see cref="Game"/> is read again (or cleared on disconnect).</summary>
+    public event Action<LiveGame?>? GameUpdated;
 
     public KspLinkState State
     {
@@ -70,8 +85,18 @@ public sealed class KspLink : ObservableObject, IDisposable
     /// <summary>The kRPC mod's version, once connected.</summary>
     public string? ServerVersion { get => _serverVersion; private set => SetProperty(ref _serverVersion, value); }
 
-    /// <summary>Where the player is in the game (flight, VAB, tracking station…), checked every few seconds.</summary>
-    public GameScene? Scene { get => _scene; private set => SetProperty(ref _scene, value); }
+    /// <summary>Where the player is in the game (flight, VAB, tracking station…).</summary>
+    public GameScene? Scene
+    {
+        get => _scene;
+        private set { if (SetProperty(ref _scene, value)) OnPropertyChanged(nameof(InFlight)); }
+    }
+
+    /// <summary>Flying a vessel: the only scene where kRPC lists vessels and nodes can be added.</summary>
+    public bool InFlight => Scene == GameScene.Flight;
+
+    /// <summary>The game as last read: its time and, in flight, its vessels. Null when not connected.</summary>
+    public LiveGame? Game { get => _game; private set => SetProperty(ref _game, value); }
 
     /// <summary>Connects, cancels a pending attempt, or disconnects, depending on the state.</summary>
     public async Task ToggleAsync()
@@ -122,15 +147,24 @@ public sealed class KspLink : ObservableObject, IDisposable
 
         _connection = connection;
         State = KspLinkState.Connected;
-        ServerVersion = await Task.Run(() => connection.KRPC().GetStatus().Version);
-        await CheckAsync();
-        _check.Start();
+        Status = "KSP: connected";
+        _vesselsDue = true;
+        try
+        {
+            ServerVersion = await CallAsync(c => c.KRPC().GetStatus().Version);
+        }
+        catch (Exception)
+        {
+            return; // CallAsync has already disconnected and said why
+        }
+        await PollAsync();
+        _poll.Start();
     }
 
     public void Disconnect()
     {
         _attempt++; // abandons a pending attempt; it disposes its own connection when kRPC answers
-        _check.Stop();
+        _poll.Stop();
         _connection?.Dispose();
         _connection = null;
         ServerVersion = null;
@@ -138,33 +172,171 @@ public sealed class KspLink : ObservableObject, IDisposable
         Problem = null;
         State = KspLinkState.Disconnected;
         Status = "KSP: not connected";
+        if (Game is not null)
+        {
+            Game = null;
+            GameUpdated?.Invoke(null);
+        }
     }
 
     public void Dispose() => Disconnect();
 
-    /// <summary>Asks for the game scene, which also shows the game is still there.</summary>
-    private async Task CheckAsync()
+    /// <summary>Reads everything again now, vessels included (e.g. after the player switched craft).</summary>
+    public Task RefreshAsync()
     {
-        if (_connection is not { } connection || _checking) return;
-        _checking = true;
+        _vesselsDue = true;
+        return PollAsync();
+    }
+
+    /// <summary>The vessel being flown and how many maneuver nodes it already has, or null outside flight.</summary>
+    public async Task<(string Vessel, int Nodes)?> ActiveVesselNodesAsync()
+    {
+        if (!IsConnected) return null;
+        return await CallAsync<(string, int)?>(c =>
+        {
+            var space = c.SpaceCenter();
+            if (c.KRPC().GameScene != GameScene.Flight || space.ActiveVessel is not { } vessel) return null;
+            return (vessel.Name, vessel.Control.Nodes.Count);
+        });
+    }
+
+    /// <summary>
+    /// Puts maneuver nodes on the vessel being flown, optionally removing the ones it has first. Nodes whose time has
+    /// already passed are skipped. Node axes are as in <see cref="NodeBurn"/>, which match KSP's.
+    /// </summary>
+    public async Task<NodesSent> SendNodesAsync(IReadOnlyList<(double Ut, NodeBurn Burn)> nodes, bool replaceExisting)
+    {
+        var sent = await CallAsync(c =>
+        {
+            var space = c.SpaceCenter();
+            if (c.KRPC().GameScene != GameScene.Flight || space.ActiveVessel is not { } vessel)
+                throw new System.InvalidOperationException("Switch to the craft in KSP (flight view) first.");
+            var control = vessel.Control;
+            if (replaceExisting) control.RemoveNodes();
+            var now = space.UT;
+            var count = 0;
+            foreach (var (ut, burn) in nodes.OrderBy(n => n.Ut))
+            {
+                if (ut <= now) continue;
+                control.AddNode(ut, (float)burn.Prograde, (float)burn.Normal, (float)burn.Radial);
+                count++;
+            }
+            return new NodesSent(vessel.Name, count, nodes.Count - count);
+        });
+        await RefreshAsync();
+        return sent;
+    }
+
+    /// <summary>Reads the time and scene, and the vessels when due. Losing the game disconnects.</summary>
+    private async Task PollAsync()
+    {
+        if (_connection is null || _polling) return;
+        _polling = true;
         try
         {
-            var scene = await Task.Run(() => connection.KRPC().GameScene);
-            if (connection != _connection) return;
+            var readVessels = _vesselsDue || DateTime.UtcNow - _vesselsReadAt >= VesselsEvery;
+            var (scene, game) = await CallAsync(c =>
+            {
+                var scene = c.KRPC().GameScene;
+                var space = c.SpaceCenter();
+                var vessels = scene == GameScene.Flight && readVessels ? ReadVessels(space) : null;
+                string? targetBody = null;
+                if (vessels is not null && space.TargetBody is { } body) targetBody = BodyName(body.Name);
+                return (scene, new LiveGame(space.UT, vessels, targetBody));
+            });
+
+            // Between full reads keep the vessels from the last one, so the game always has some while in flight.
+            if (game.Vessels is null && scene == GameScene.Flight && Game?.Vessels is { } last) game = game with { Vessels = last, TargetBody = Game.TargetBody };
+            if (game.Vessels is not null && readVessels)
+            {
+                _vesselsDue = false;
+                _vesselsReadAt = DateTime.UtcNow;
+            }
+            if (scene != Scene) _vesselsDue = scene == GameScene.Flight; // read straight away on entering flight
             Scene = scene;
-            Status = $"KSP: connected · {SceneName(scene)}";
+            Game = game;
+            Status = $"KSP: {SceneName(scene)} · {GameCalendar.Kerbin.FormatDate(game.Ut)}";
+            GameUpdated?.Invoke(game);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (connection != _connection) return;
-            Disconnect();
-            Problem = $"Lost the connection to KSP ({ex.Message.TrimEnd('.')}).";
+            // CallAsync has already disconnected and said why.
         }
         finally
         {
-            _checking = false;
+            _polling = false;
         }
     }
+
+    /// <summary>Every vessel with its situation and, unless it's on the ground, its orbit. Runs on a worker thread.</summary>
+    private static List<LiveVessel> ReadVessels(KRPC.Client.Services.SpaceCenter.Service space)
+    {
+        var activeId = TryGet(() => space.ActiveVessel)?.id;
+        var targetId = TryGet(() => space.TargetVessel)?.id;
+        var bodies = new Dictionary<ulong, string>();
+        var list = new List<LiveVessel>();
+        foreach (var v in space.Vessels)
+        {
+            var situation = SituationName(v.Situation);
+            SavedOrbit? orbit = null;
+            if (situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH"))
+            {
+                var o = v.Orbit;
+                var body = o.Body;
+                if (!bodies.TryGetValue(body.id, out var bodyName)) bodies[body.id] = bodyName = body.Name;
+                orbit = new SavedOrbit(o.SemiMajorAxis, o.Eccentricity, o.Inclination * RadToDeg, o.LongitudeOfAscendingNode * RadToDeg,
+                    o.ArgumentOfPeriapsis * RadToDeg, o.MeanAnomalyAtEpoch, o.Epoch, -1, bodyName);
+            }
+            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId });
+        }
+        return list;
+    }
+
+    /// <summary>Runs <paramref name="call"/> on a worker thread, one at a time. Disconnects (and rethrows) if the game has gone.</summary>
+    private async Task<T> CallAsync<T>(Func<Connection, T> call)
+    {
+        if (_connection is not { } connection) throw new System.InvalidOperationException("Not connected to KSP.");
+        await _gate.WaitAsync();
+        try
+        {
+            return await Task.Run(() => call(connection));
+        }
+        catch (Exception ex) when (ex is not (System.InvalidOperationException or RPCException))
+        {
+            if (connection == _connection)
+            {
+                Disconnect();
+                Problem = $"Lost the connection to KSP ({ex.Message.TrimEnd('.')}).";
+            }
+            throw;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private static T? TryGet<T>(Func<T> get) where T : class
+    {
+        try { return get(); }
+        catch (RPCException) { return null; }
+    }
+
+    private static string SituationName(VesselSituation situation) => situation switch
+    {
+        VesselSituation.PreLaunch => "PRELAUNCH",
+        VesselSituation.Orbiting => "ORBITING",
+        VesselSituation.SubOrbital => "SUB_ORBITAL",
+        VesselSituation.Escaping => "ESCAPING",
+        VesselSituation.Flying => "FLYING",
+        VesselSituation.Landed => "LANDED",
+        VesselSituation.Splashed => "SPLASHED",
+        VesselSituation.Docked => "DOCKED",
+        _ => situation.ToString().ToUpperInvariant(),
+    };
+
+    /// <summary>The planner's name for a body (KSP calls Kerbol "Sun").</summary>
+    private static string BodyName(string kspName) => kspName == "Sun" ? "Kerbol" : kspName;
 
     private static async Task<IPAddress> ResolveAsync(string host)
     {
@@ -197,4 +369,6 @@ public sealed class KspLink : ObservableObject, IDisposable
         GameScene.Administration => "Administration",
         _ => scene.ToString(),
     };
+
+    private const double RadToDeg = 180 / Math.PI;
 }

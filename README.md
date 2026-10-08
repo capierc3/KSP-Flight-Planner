@@ -37,8 +37,13 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
 - **Live connection (kRPC)** — *Tools › Connect to KSP* talks to the running game through the
   [kRPC](https://krpc.github.io/krpc/) mod (install it with CKAN and click *Start server* in its in-game window). The
-  status bar shows the link and the game scene. Address and ports default to kRPC's stock server and can be changed in
-  *Tools › Settings › Live connection*. So far it only connects; no planner feature reads game data from it yet.
+  status bar shows the link, the game scene and the game date. Address and ports default to kRPC's stock server and can
+  be changed in *Tools › Settings › Live connection*. While connected:
+  - the game's live time and (in flight) every vessel's live orbit are laid over the save, so the Rendezvous tab, Vessels
+    tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
+  - the Rendezvous tab can start from **the craft you're flying**, add **the craft you've targeted**, and **send burns
+    to KSP** as maneuver nodes (one at a time, or the whole plan)
+  - the Transfer Planner's **Today** button sets the earliest departure to the game's date
 
 ## Layout
 
