@@ -157,9 +157,9 @@
                     <TextBlock Text="{Binding GameText}" Style="{StaticResource Note}" />
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <Button Content="Use the craft I'm flying" Command="{Binding UseActiveVesselCommand}" Padding="8,2"
-                                ToolTip="Start from the craft you're flying in KSP, on its live orbit" />
+                                ToolTip="Start from the craft you're flying in KSP, on its live orbit (around another body, the Δv map's steps get it to the targets first)" />
                         <Button Content="Add KSP's target" Command="{Binding AddGameTargetCommand}" Padding="8,2" Margin="6,0,0,0"
-                                ToolTip="Add the craft targeted in KSP as the next target (it must orbit the same body)" />
+                                ToolTip="Add the craft targeted in KSP as the next target (it must orbit the same body as the other targets)" />
                     </StackPanel>
                 </StackPanel>
 

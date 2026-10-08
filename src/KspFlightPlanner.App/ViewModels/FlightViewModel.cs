@@ -163,6 +163,15 @@ public sealed class FlightViewModel : ObservableObject
 
     public string PlannedText => _selected is { } f ? $"Planned for {_calendar.FormatDate(f.PlannedUt)}" : "";
 
+    /// <summary>A flight that starts around another body: the Δv map's steps to fly first, until it's re-planned from there.</summary>
+    public bool HasApproach => _selected?.Approach is not null;
+
+    public string ApproachTitle => _selected is { Approach: { } a } f
+        ? $"First, get to {f.BodyName}'s {a.ParkingAltitudeM / 1000:#,0.#} km orbit · {Format.Speed0(a.DeltaV)}" : "";
+
+    public IReadOnlyList<string> ApproachSteps => _selected?.Approach is { } a
+        ? a.Steps.Select((s, i) => $"{i + 1}. {s.Title}   {Format.Speed0(s.DeltaV)}").ToList() : [];
+
     /// <summary>How far the craft is from where the plan has it now.</summary>
     public string DriftText { get => _driftText; private set => SetProperty(ref _driftText, value); }
 
@@ -203,7 +212,11 @@ public sealed class FlightViewModel : ObservableObject
         Burns.Clear();
         if (_selected is { } f)
             for (var i = 0; i < f.Burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, f.Burns[i]));
-        foreach (var name in new[] { nameof(HasFlight), nameof(KindText), nameof(CraftText), nameof(Note), nameof(HasNote), nameof(PlannedText) })
+        foreach (var name in new[]
+                 {
+                     nameof(HasFlight), nameof(KindText), nameof(CraftText), nameof(Note), nameof(HasNote), nameof(PlannedText), nameof(HasApproach),
+                     nameof(ApproachTitle), nameof(ApproachSteps),
+                 })
             OnPropertyChanged(name);
         RefreshLive();
     }
@@ -233,9 +246,12 @@ public sealed class FlightViewModel : ObservableObject
         if (_selected is not { } f || now is not { } t) { DriftText = ""; return; }
         if (f.Craft is not { } craft) { DriftText = ""; return; }
         if (Body(f.BodyName) is not { } body) { DriftText = ""; return; }
-        if (_sync.OrbitOf(craft) is not { } orbit || orbit.BodyName != f.BodyName)
+        var orbit = _sync.OrbitOf(craft);
+        if (orbit is null || orbit.BodyName != f.BodyName)
         {
-            DriftText = $"{craft.Name} isn't in orbit around {f.BodyName} right now.";
+            DriftText = f.Approach is not null && orbit?.BodyName is { } there
+                ? $"{craft.Name} is around {there}: fly the steps above to {f.BodyName}'s orbit, then Re-plan from here."
+                : $"{craft.Name} isn't in orbit around {f.BodyName} right now.";
             return;
         }
         if (f.DriftM(orbit.ToElements(), t, body.Mu) is not { } drift)
@@ -266,9 +282,12 @@ public sealed class FlightViewModel : ObservableObject
         if (_selected is not { } f || f.Craft is not { } craft) return;
         if (Body(f.BodyName) is not { } body) { Status = $"{f.BodyName} isn't in the planner's bodies."; return; }
         if (_sync.Now is not { } now) { Status = "No game time yet: connect to KSP or link a save."; return; }
-        if (_sync.OrbitOf(craft) is not { } orbit || orbit.BodyName != f.BodyName)
+        var orbit = _sync.OrbitOf(craft);
+        if (orbit is null || orbit.BodyName != f.BodyName)
         {
-            Status = $"{craft.Name} isn't in orbit around {f.BodyName}, so there's nothing to plan from.";
+            Status = f.Approach is not null && orbit?.BodyName is { } there
+                ? $"{craft.Name} is still around {there}. Fly the steps to {f.BodyName}'s orbit first, then re-plan from there."
+                : $"{craft.Name} isn't in orbit around {f.BodyName}, so there's nothing to plan from.";
             return;
         }
 
@@ -339,6 +358,7 @@ public sealed class FlightViewModel : ObservableObject
             Targets = left.Zip(plan.Legs, (t, leg) => t with { Orbit = leg.Target.Orbit, ArrivalUt = leg.ArrivalUt }).ToList(),
             PlannedUt = now,
             Note = null,
+            Approach = null, // planned from around the body, so the way there is flown
         };
     }
 
@@ -392,6 +412,9 @@ public sealed class FlightViewModel : ObservableObject
                 questions.Add($"This burn is for a released satellite, but you're flying the carrier, {vessel}.");
             else if (burns.Any(b => !b.ByReleasedCraft) && active != f.Craft)
                 questions.Add($"You're flying {vessel}, but this flight is flown by {f.Craft.Name}.");
+            if (burns.Any(b => !b.ByReleasedCraft) && active is not null && _sync.OrbitOf(active)?.BodyName is { } there && there != f.BodyName)
+                questions.Add($"{vessel} is around {there}, but these burns are for {f.BodyName}'s orbit." +
+                              (f.Approach is null ? "" : $" Fly to {f.BodyName} first, then Re-plan from here."));
             if (replace && nodes > 0) questions.Add($"{vessel}'s {(nodes == 1 ? "maneuver node" : $"{nodes} maneuver nodes")} will be replaced.");
             var what = burns.Count == 1 ? "the node" : $"{burns.Count} nodes";
             if (questions.Count > 0 && !Confirm(string.Join("\n\n", questions) + $"\n\nSend {what} to {vessel}?")) return;

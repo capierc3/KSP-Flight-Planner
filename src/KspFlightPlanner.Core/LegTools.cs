@@ -63,6 +63,22 @@ public sealed record RendezvousSpan(string BodyName, long TargetLocationId, long
 }
 
 /// <summary>
+/// The way from a craft around <see cref="FromBody"/> to a rendezvous around <see cref="ToBody"/>: the Δv map's steps
+/// from the first body's low orbit to the second's, where the rendezvous starts (at <see cref="ParkingAltitudeM"/>).
+/// <see cref="TripTimeS"/> estimates how long the steps take; null when they cross between planets, where the wait for a
+/// launch window matters more than the flight (pick one on the Transfer Planner).
+/// </summary>
+public sealed record RendezvousApproach(string FromBody, string ToBody, IReadOnlyList<RouteLeg> Steps, double FromAltitudeM,
+    double ParkingAltitudeM, double? TripTimeS)
+{
+    /// <summary>The steps' map Δv (no plane changes, no aerobraking).</summary>
+    public double DeltaV => Steps.Sum(s => s.DeltaV);
+
+    /// <summary>The worst-case plane changes the map adds to the steps.</summary>
+    public double PlaneChangeDv => Steps.Sum(s => s.PlaneChangeDv);
+}
+
+/// <summary>
 /// Releasing <paramref name="SatelliteCount"/> satellites, evenly spaced, into the circular orbit of the stop, from a
 /// resonant (or dive) carrier orbit. <paramref name="PhaseIndex"/> is the rocket phase that flies the carrier's burns;
 /// null for the phase of the leg arriving at the stop.
@@ -210,6 +226,45 @@ public static class LegTools
         return last.Kind == "LowOrbit" && !last.IsCustom && last.BodyName == to.BodyName && last.AltitudeM is > 0
             ? new RendezvousSpan(to.BodyName, target, null, legs.Count - 1, FromParking: true)
             : null;
+    }
+
+    /// <summary>
+    /// How a craft around <paramref name="fromBody"/> gets to a rendezvous around <paramref name="toBody"/>, by the same
+    /// rule as a mission leg from another body (<see cref="FindRendezvous"/>): the map's steps from the first body's low
+    /// orbit to the second's, where the rendezvous starts. Null for the same body, or where the map has no low orbit.
+    /// </summary>
+    public static RendezvousApproach? FindApproach(DeltaVMap map, string fromBody, string toBody,
+        IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (fromBody == toBody || !bodies.ContainsKey(fromBody) || !bodies.ContainsKey(toBody)) return null;
+        if (LowOrbit(map, fromBody) is not { AltitudeM: { } fromAltitude } from || LowOrbit(map, toBody) is not { AltitudeM: { } parking } to)
+            return null;
+        var steps = map.Route(from, to);
+        return new RendezvousApproach(fromBody, toBody, steps, fromAltitude, parking, TripTimeS(steps, bodies));
+    }
+
+    private static DvMapNode? LowOrbit(DeltaVMap map, string bodyName) =>
+        map.Nodes.FirstOrDefault(n => n.BodyName == bodyName && n.Kind == "LowOrbit" && !n.IsCustom && n.AltitudeM is > 0);
+
+    /// <summary>
+    /// About how long the steps take: a Hohmann half-orbit for each step between a moon and its planet, from the moon's
+    /// orbit to the planet's low orbit (or back). Time spent inside a sphere of influence is left out. Null when a step
+    /// crosses between planets (it waits for a window) or a body's orbit isn't known. See docs/MATH.md §19d.
+    /// </summary>
+    public static double? TripTimeS(IReadOnlyList<RouteLeg> steps, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        var total = 0.0;
+        foreach (var step in steps)
+        {
+            if (step.From.BodyName == step.To.BodyName) continue;
+            if (!bodies.TryGetValue(step.From.BodyName, out var a) || !bodies.TryGetValue(step.To.BodyName, out var b)) return null;
+            // The moon and the planet it orbits, whichever way the step goes; the planet's end of the step is its orbit.
+            var (moon, planet, planetNode) = a.ParentId == b.Id ? (a, b, step.To) : b.ParentId == a.Id ? (b, a, step.From) : (null, null, null);
+            if (moon?.Orbit is not { } orbit || planet!.ParentId is null) return null; // between planets, or around the star
+            var low = planet.EquatorialRadiusM + (planetNode!.AltitudeM ?? planet.DefaultParkingAltitudeM);
+            total += OrbitMath.Hohmann(planet.Mu, orbit.SemiMajorAxisM, low).TransferTimeS;
+        }
+        return total;
     }
 
     /// <summary>

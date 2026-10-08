@@ -127,6 +127,13 @@
                         <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Note}" FontSize="13" Margin="0,8"
                                    Visibility="{Binding HasNoPlan, Converter={StaticResource BoolToVisibility}}" />
 
+                        <!-- From a craft around another body: the Δv map's steps to the targets' body first -->
+                        <StackPanel Visibility="{Binding HasApproach, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding ApproachTitle}" Style="{StaticResource SectionHeader}" Margin="0,6,0,4" />
+                            <TextBlock Text="{Binding ApproachText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding ApproachSteps}" ItemTemplate="{StaticResource StepTemplate}" />
+                        </StackPanel>
+
                         <!-- Launch -->
                         <StackPanel Visibility="{Binding HasLaunch, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="When to launch" Style="{StaticResource SectionHeader}" Margin="0,6,0,4" />

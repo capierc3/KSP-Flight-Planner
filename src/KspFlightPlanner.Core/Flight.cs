@@ -32,6 +32,18 @@ public sealed record FlightCraft(string Name, string? SaveVesselId);
 /// <summary>A craft to meet, with its orbit when planned and when the plan arrives alongside it.</summary>
 public sealed record FlightTarget(string Name, string? SaveVesselId, OrbitalElements Orbit, double ArrivalUt);
 
+/// <summary>One Δv-map step of the way to a flight's body ("Mun — Intercept → Kerbin — Low orbit (80 km)").</summary>
+public sealed record FlightApproachStep(string Title, double DeltaV);
+
+/// <summary>
+/// A flight that starts around another body: the Δv map's steps from <paramref name="FromBody"/>'s low orbit to the
+/// flight body's <paramref name="ParkingAltitudeM"/> orbit, flown before its burns (which start there).
+/// </summary>
+public sealed record FlightApproach(string FromBody, double ParkingAltitudeM, IReadOnlyList<FlightApproachStep> Steps)
+{
+    public double DeltaV => Steps.Sum(s => s.DeltaV);
+}
+
 /// <summary>
 /// A plan handed from a planning tab to the Flight tab: its burns as maneuver nodes, the orbit they start from (to see
 /// how far the real craft has drifted), and the plan's inputs, so it can be planned again from the craft's real orbit.
@@ -45,6 +57,9 @@ public sealed record Flight
 
     /// <summary>Who flies it; null until chosen (a plan that starts with a launch).</summary>
     public FlightCraft? Craft { get; init; }
+
+    /// <summary>The way there when the craft starts around another body; null once it's around <see cref="BodyName"/>.</summary>
+    public FlightApproach? Approach { get; init; }
 
     /// <summary>The orbit the burns start from (for a launch, the parking orbit), stated at its epoch.</summary>
     public OrbitalElements? StartOrbit { get; init; }

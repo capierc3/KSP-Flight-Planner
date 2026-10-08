@@ -32,7 +32,7 @@ public partial class App : Application
                 new LocationsViewModel(bodies, maps, locations, events),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync),
-                new RendezvousViewModel(sync, locations, events, designs, flights),
+                new RendezvousViewModel(sync, locations, events, designs, flights, maps),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
                 new FlightViewModel(flights, sync, events),
                 sync,

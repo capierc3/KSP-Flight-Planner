@@ -794,6 +794,29 @@ Worked example: launch to a placed station in a 150 km circular orbit inclined 5
 - Code: `LegTools.FindRendezvous`, `LegTools.ApplyRendezvous`, `MissionBuilderViewModel.RendezvousStartFor`, `RendezvousViewModel.EditLeg`; tested in `LegToolsTests`
 - Source: §17 (Curtis §6.6–6.9, §5.3), Hohmann transfer (§4)
 
+### 19d. A rendezvous from a craft around another body
+
+The Rendezvous tab can start from a craft (or the craft you're flying in KSP) that orbits another body than the targets: a lander around the Mun meeting a relay around Kerbin, say. It uses the same rule as a mission leg from another body (§19c). The Δv map's steps go from the craft's body's low orbit to the targets' body's low orbit, and the rendezvous starts on that low orbit, anywhere on it. The map's steps keep their map values (the craft's real orbit may differ from the map's low orbit).
+
+To date the rendezvous burns, the plan estimates how long the steps take. Each step between a moon and the planet it orbits counts as a Hohmann half-orbit (§4) around the planet, between the moon's orbit and the planet's low orbit:
+
+```
+a = (r_moon + R_planet + h_low) / 2
+t = π·√(a³ / μ_planet)                for each moon ↔ planet step; time inside the moon's SOI is left out
+rendezvous start = start time + Σ t   (rounded up to the minute)
+```
+
+A step between planets waits for a launch window, which matters far more than the flight, so there is no estimate: pick the window on the Transfer Planner (§11) and set the start time to the arrival. On the Flight tab the steps are shown first; once the craft is around the targets' body, Re-plan (§18a) plans the rendezvous from its real orbit.
+
+Worked example: from the Mun to Kerbin's 80 km orbit (μ = 3.5316×10¹², Mun orbit r = 12,000,000 m, low orbit 680,000 m):
+
+1. Map steps: Mun low orbit → Mun intercept (310) → Kerbin low orbit (860), **1,170 m/s** (or 310 when aerobraking into Kerbin's orbit).
+2. a = (12,000,000 + 680,000) / 2 = 6,340,000 m, so t = π·√(6,340,000³ / 3.5316×10¹²) = π × 8,494.7 = **26,686.9 s**, about 7 h 25 m (the map says about 8 hours).
+3. Planning from Year 1, Day 1, 0:00, the rendezvous starts Year 1, Day 2, 1:25 (26,700 s). To a relay at 2,868 km: a 668 m/s transfer burn and a 431 m/s match, **2,269 m/s** in all with the map's steps.
+
+- Code: `LegTools.FindApproach`, `LegTools.TripTimeS`, `RendezvousViewModel.BuildRequest`, `FlightViewModel.RefreshDrift`; tested in `LegToolsTests`
+- Source: Hohmann transfer (§4, Curtis §6.2), the Δv map (§15)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

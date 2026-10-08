@@ -54,6 +54,18 @@
             <TextBlock Text="{Binding Note}" Foreground="#FFA726" TextWrapping="Wrap" Margin="0,6,0,0"
                        Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
 
+            <!-- Starting around another body: the Δv map's steps to fly first -->
+            <StackPanel Margin="0,8,0,0" Visibility="{Binding HasApproach, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding ApproachTitle}" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding ApproachSteps}" Margin="0,2,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
             <!-- Drift from the plan, and re-planning -->
             <DockPanel Margin="0,8,0,0">
                 <Button DockPanel.Dock="Right" Content="Re-plan from here" Command="{Binding ReplanCommand}" Padding="10,2"

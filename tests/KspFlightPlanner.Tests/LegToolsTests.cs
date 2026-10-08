@@ -293,6 +293,32 @@ public sealed class LegToolsTests : IDisposable
     }
 
     [Fact]
+    public void Craft_around_the_mun_reaches_a_kerbin_rendezvous_by_the_map_steps_home()
+    {
+        var approach = LegTools.FindApproach(_map, "Mun", "Kerbin", _bodies)!;
+
+        Assert.Equal(["mun.lo", "mun.intercept", "kerbin.lo"], approach.Steps.Select(s => s.From.Key).Append(approach.Steps[^1].To.Key));
+        Assert.Equal(310 + 860, approach.DeltaV);
+        Assert.Equal((14_000, 80_000), (approach.FromAltitudeM, approach.ParkingAltitudeM));
+        // Mun → Kerbin: a Hohmann half-orbit from the Mun's 12,000 km orbit down to 680 km (docs/MATH.md §19d).
+        Assert.Equal(26_686.9, approach.TripTimeS!.Value, 0.1);
+    }
+
+    [Fact]
+    public void Trip_time_counts_each_moon_step_and_leaves_out_interplanetary_ones()
+    {
+        // Mun → Minmus goes through Kerbin's low orbit: two half-orbits, out from the Mun and up to Minmus.
+        var mun = OrbitMath.Hohmann(_bodies["Kerbin"].Mu, 12_000_000, 680_000).TransferTimeS;
+        var minmus = OrbitMath.Hohmann(_bodies["Kerbin"].Mu, 47_000_000, 680_000).TransferTimeS;
+        Assert.Equal(mun + minmus, LegTools.FindApproach(_map, "Mun", "Minmus", _bodies)!.TripTimeS!.Value, 1e-6);
+        // Kerbin → Duna waits for a window.
+        var duna = LegTools.FindApproach(_map, "Kerbin", "Duna", _bodies)!;
+        Assert.Null(duna.TripTimeS);
+        Assert.Equal(60_000, duna.ParkingAltitudeM);
+        Assert.Null(LegTools.FindApproach(_map, "Kerbin", "Kerbin", _bodies));
+    }
+
+    [Fact]
     public void Missions_saved_before_leg_tools_open_without_them()
     {
         var old = System.Text.Json.JsonSerializer.Deserialize<MissionDefinition>(
