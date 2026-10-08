@@ -34,7 +34,7 @@ public sealed class DeltaVMapView : Canvas
             new PropertyMetadata(default(T), (d, _) => ((DeltaVMapView)d).Rebuild()));
 
     private const double ColumnWidth = 150;
-    private const double RowHeight = 64;
+    private const double RowHeight = 68;
     private const double Margin0 = 36;
     private const double TrunkOffset = 30;
 
@@ -114,10 +114,11 @@ public sealed class DeltaVMapView : Canvas
             var onRoute = route is null || route.Contains(node.Key)
                 || map.ChildrenOf(node).Any(ch => route.Contains(ch.Key))
                 || (StopKeys?.Contains(node.Key) ?? false);
-            AddNode(node, pos, onRoute);
-
-            // Body name at the first node of each body.
-            if (map.ParentOf(node) is not { } parent || parent.BodyName != node.BodyName)
+            // Body name above the first node of each body; its orbit size goes on the small line underneath.
+            var firstOfBody = map.ParentOf(node) is not { } parent || parent.BodyName != node.BodyName;
+            var distance = firstOfBody && !node.IsCustom && node.BodyOrbitRadiusM is { } orbit ? FormatDistance(orbit) : null;
+            AddNode(node, pos, onRoute, distance);
+            if (firstOfBody)
                 AddText(node.BodyName, pos.X + 12, pos.Y - 30, 13, new SolidColorBrush(ColorOf(node.BodyName)), FontWeights.Bold);
 
             if (stopNumbers.TryGetValue(node.Key, out var numbers)) AddBadge(numbers, pos);
@@ -134,8 +135,8 @@ public sealed class DeltaVMapView : Canvas
         double Place(DvMapNode node, int depth)
         {
             maxDepth = Math.Max(maxDepth, depth);
-            // Custom locations first, so they sit right next to their parent instead of below its whole subtree.
-            var children = map.ChildrenOf(node).OrderByDescending(c => c.IsCustom).ToList();
+            // Nearest first: Kerbol, Moho, Eve, … Eeloo; low orbits and stations before moons; escape node last.
+            var children = map.ChildrenOf(node).OrderBy(c => c.OrbitRadiusM ?? double.MaxValue).ToList();
             double y;
             if (children.Count == 0)
             {
@@ -224,7 +225,7 @@ public sealed class DeltaVMapView : Canvas
         return string.Join("\n", lines);
     }
 
-    private void AddNode(DvMapNode node, Point pos, bool onRoute)
+    private void AddNode(DvMapNode node, Point pos, bool onRoute, string? distance = null)
     {
         var color = ColorOf(node.BodyName);
         var brush = new SolidColorBrush(color);
@@ -253,7 +254,9 @@ public sealed class DeltaVMapView : Canvas
             Children.Add(dot);
         }
 
-        AddText(ShortLabel(node), pos.X - 4, pos.Y + 12, 10, onRoute ? DimText : new SolidColorBrush(C("#5A6275")));
+        var labelBrush = onRoute ? DimText : new SolidColorBrush(C("#5A6275"));
+        AddText(ShortLabel(node), pos.X - 4, pos.Y + 11, 10, labelBrush);
+        if (distance is not null) AddText(distance, pos.X - 4, pos.Y + 23, 10, labelBrush); // orbit size, own line so it can't hit edge tags
     }
 
     private void AddBadge(string text, Point pos)
@@ -300,6 +303,12 @@ public sealed class DeltaVMapView : Canvas
         "Synchronous" => "Keostationary",
         _ => node.Label,
     };
+
+    /// <summary>Orbit sizes: 12 Mm (Mun), 5.26 Gm (Moho). 1 Mm = 1,000 km, 1 Gm = 1,000,000 km.</summary>
+    private static string FormatDistance(double metres) =>
+        metres >= 1e9 ? $"{metres / 1e9:0.00} Gm"
+        : metres >= 1e6 ? $"{metres / 1e6:0.#} Mm"
+        : $"{metres / 1e3:N0} km";
 
     private static Color ColorOf(string body) => BodyColors.TryGetValue(body, out var c) ? c : Colors.Gray;
     private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);

@@ -36,8 +36,31 @@ public sealed class DvMapRepository(PlannerDatabase database)
             }
         }
 
+        var byId = nodes.ToDictionary(n => n.Id);
         return new DeltaVMap(nodes.Select(n =>
-            !n.IsCustom && overrides.TryGetValue(n.Key, out var dv) ? n with { DvFromParent = dv } : n));
+        {
+            var edited = !n.IsCustom && overrides.TryGetValue(n.Key, out var dv) ? n with { DvFromParent = dv } : n;
+            return edited with
+            {
+                OrbitRadiusM = OrbitRadius(n, byId, bodies),
+                BodyOrbitRadiusM = bodies.TryGetValue(n.BodyName, out var b) ? b.Orbit?.SemiMajorAxisM : null,
+            };
+        }));
+    }
+
+    /// <summary>
+    /// How far a stop is from the centre of its parent node's body, so the map can be drawn nearest-first.
+    /// Same body as the parent (low orbits, stations, escape node): radius from that body. Another body
+    /// (a moon or planet intercept): that body's orbit. The star itself: 0, so it sorts first.
+    /// </summary>
+    private static double? OrbitRadius(DvMapNode node, Dictionary<long, DvMapNode> byId, Dictionary<string, Core.Models.CelestialBody> bodies)
+    {
+        if (node.ParentId is not { } pid || !bodies.TryGetValue(node.BodyName, out var body)) return null;
+        var parent = byId[pid];
+        if (node.BodyName == parent.BodyName)
+            return node.Kind == "Elliptical" ? body.SoiRadiusM : body.EquatorialRadiusM + (node.AltitudeM ?? 0);
+        if (node.IsCustom) return body.EquatorialRadiusM + (node.AltitudeM ?? 0); // orbit around the star
+        return body.Orbit?.SemiMajorAxisM ?? 0;
     }
 
     /// <summary>Bodies that can host a custom location (have a low orbit on the map), with their physical data.</summary>

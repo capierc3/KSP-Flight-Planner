@@ -154,6 +154,34 @@ public sealed class CustomLocationTests : IDisposable
     }
 
     [Fact]
+    public void Interplanetary_branches_order_by_distance_from_kerbol()
+    {
+        new CustomLocationRepository(_db).Add("Eye of Kerbol", "Kerbol", 10_000_000_000);
+        var map = new DvMapRepository(_db).GetMap()!;
+
+        var order = map.ChildrenOf(map["kerbin.soi"])
+            .OrderBy(n => n.OrbitRadiusM)
+            .Select(n => n.IsCustom ? "custom" : n.BodyName);
+
+        // Kerbol (sun-diving) first, then nearest to farthest; the 10.26 Gm orbit sits between Eve and Duna.
+        Assert.Equal(["Kerbol", "Moho", "Eve", "custom", "Duna", "Dres", "Jool", "Eeloo"], order);
+        Assert.Equal(5_263_138_304, map["moho.intercept"].BodyOrbitRadiusM);
+    }
+
+    [Fact]
+    public void Low_orbit_and_stations_come_before_moons_and_escape_last()
+    {
+        new CustomLocationRepository(_db).Add("Station Alpha", "Kerbin", 150_000);
+        var map = new DvMapRepository(_db).GetMap()!;
+
+        var kerbin = map.ChildrenOf(map["kerbin.lo"]).OrderBy(n => n.OrbitRadiusM).Select(n => n.IsCustom ? "custom" : n.Key);
+        Assert.Equal(["custom", "kerbin.keo", "mun.intercept", "minmus.intercept", "kerbin.soi"], kerbin);
+
+        var jool = map.ChildrenOf(map["jool.elliptical"]).OrderBy(n => n.OrbitRadiusM).Select(n => n.Key);
+        Assert.Equal(["jool.lo", "laythe.intercept", "vall.intercept", "tylo.intercept", "bop.intercept", "pol.intercept"], jool);
+    }
+
+    [Fact]
     public void Bodies_for_custom_locations_include_kerbin_and_mun()
     {
         var bodies = new DvMapRepository(_db).GetCustomLocationBodies();

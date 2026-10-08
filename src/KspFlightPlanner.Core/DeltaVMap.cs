@@ -39,6 +39,16 @@ public sealed record DvMapNode
     /// <summary>Altitude for low/synchronous/custom orbits, when known.</summary>
     public double? AltitudeM { get; init; }
 
+    /// <summary>
+    /// Distance of this stop from the centre of its parent node's body, used to order the map by distance:
+    /// low/custom orbits by radius, moons and planets by their orbit's semi-major axis, the star itself as 0,
+    /// and a body's escape (SOI-edge) node at its SOI radius.
+    /// </summary>
+    public double? OrbitRadiusM { get; init; }
+
+    /// <summary>Semi-major axis of this node's body around its own parent (e.g. Moho ≈ 5.26 Gm), for labels.</summary>
+    public double? BodyOrbitRadiusM { get; init; }
+
     /// <summary>For user-defined locations: the custom_locations row id.</summary>
     public long? CustomLocationId { get; init; }
     public bool IsCustom => CustomLocationId is not null;
