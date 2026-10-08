@@ -146,9 +146,13 @@
                         ToolTip="A place on the Δv map. You can also click a stop on the Δv map to add it." />
                 <Button Content="＋ Rendezvous" Command="{Binding AddRendezvousCommand}" Margin="0,0,6,6"
                         ToolTip="Meet crafts in orbit (relays, stations, debris): plan it in the Calculators pane, then Add to mission" />
+                <Button Content="＋ Transfer" Command="{Binding AddTransferCommand}" Margin="0,0,6,6"
+                        ToolTip="Fly to another planet in a launch window: pick it in the Transfer Planner, then Add to mission" />
+                <Button Content="＋ Deploy" Command="{Binding AddDeployCommand}" Margin="0,0,6,6"
+                        ToolTip="Release a satellite constellation into an orbit: plan it in Resonant Orbits, then Add to mission" />
             </WrapPanel>
             <TextBlock Style="{StaticResource Note}" Margin="0,0,0,0" TextWrapping="Wrap">
-                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=", before the last one. Rendezvous opens its calculator set up from there; the steps to get there come from the Δv map." />
+                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=", before the last one. Rendezvous, Transfer and Deploy open their calculator set up from there; the steps to get there come from the Δv map." />
             </TextBlock>
 
             <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />

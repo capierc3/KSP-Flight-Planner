@@ -238,6 +238,8 @@ public sealed partial class MissionBuilderViewModel
         OnPropertyChanged(nameof(HasNoSavedMissions));
     }
 
-    private string RouteText(MissionDefinition definition) => string.Join(" → ",
-        definition.Stops.Select(s => _map is not null && _map.TryGet(s.NodeKey, out var node) ? node.DisplayName : s.NodeKey));
+    /// <summary>The route by stop names; a mission's own places (not on this mission's map) by their saved name.</summary>
+    private string RouteText(MissionDefinition definition) => string.Join(" → ", definition.Stops.Select(s =>
+        definition.Places?.FirstOrDefault(p => p.Key == s.NodeKey) is { } place ? $"{place.BodyName} — {place.Name} ({CustomLocations.AltitudeText(place)})"
+        : _map is not null && _map.TryGet(s.NodeKey, out var node) ? node.DisplayName : s.NodeKey));
 }

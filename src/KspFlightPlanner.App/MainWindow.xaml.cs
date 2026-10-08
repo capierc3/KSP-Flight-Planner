@@ -58,6 +58,26 @@ public sealed class MainViewModel : ObservableObject
         {
             if (mission.RendezvousLinkFor(stop) is { } link) Rendezvous.EditLeg(link);
         };
+        Transfer.AttachMission(mission);
+        mission.AddTransferRequested += () =>
+        {
+            Transfer.StartAdding();
+            ShowCalculator(Panes.Transfer);
+        };
+        Transfer.AddedToMission += stop =>
+        {
+            if (mission.TransferLinkFor(stop) is { } link) Transfer.EditLeg(link);
+        };
+        Resonant.AttachMission(mission);
+        mission.AddDeployRequested += () =>
+        {
+            Resonant.StartAdding();
+            ShowCalculator(Panes.Resonant);
+        };
+        Resonant.AddedToMission += stop =>
+        {
+            if (mission.DeployLinkFor(stop) is { } link) Resonant.EditDeploy(link);
+        };
         mission.RouteChanged += () =>
         {
             if (Transfer.Leg is { } transfer)

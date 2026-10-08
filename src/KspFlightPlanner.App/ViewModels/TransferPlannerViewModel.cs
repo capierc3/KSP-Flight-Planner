@@ -89,6 +89,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
         ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
         StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
+        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         // Only systems with orbital data can plan transfers.
         foreach (var system in bodies.GetSystems())
@@ -147,7 +148,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
 
         _leg = link;
         _pendingChoice = link.Choice;
-        foreach (var name in new[] { nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle) }) OnPropertyChanged(name);
+        foreach (var name in LegProperties) OnPropertyChanged(name);
         Recalculate();
     }
 
@@ -156,7 +157,66 @@ public sealed class TransferPlannerViewModel : ObservableObject
     {
         _leg = null;
         _pendingChoice = null;
-        foreach (var name in new[] { nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle) }) OnPropertyChanged(name);
+        foreach (var name in LegProperties) OnPropertyChanged(name);
+    }
+
+    private static readonly string[] LegProperties =
+        [nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle), nameof(ShowsAddToMission), nameof(CanAddToMission), nameof(AddToMissionText)];
+
+    // ---------------- Adding to the mission ----------------
+
+    private MissionBuilderViewModel? _mission;
+
+    public RelayCommand AddToMissionCommand { get; }
+
+    /// <summary>The window was added to the mission: the new stop, whose leg the planner can now show.</summary>
+    public event Action<StopViewModel>? AddedToMission;
+
+    /// <summary>Links the planner to the mission, so the window chosen can be added to it as a leg.</summary>
+    public void AttachMission(MissionBuilderViewModel mission)
+    {
+        _mission = mission;
+        mission.RouteChanged += () =>
+        {
+            OnPropertyChanged(nameof(CanAddToMission));
+            OnPropertyChanged(nameof(AddToMissionText));
+        };
+        OnPropertyChanged(nameof(ShowsAddToMission));
+    }
+
+    /// <summary>Chooses a window for a leg to add: from the planet the mission is at, on the stock system.</summary>
+    public void StartAdding()
+    {
+        StopEditingLeg();
+        PlanReturn = false;
+        if (Systems.FirstOrDefault(s => s.Name == "KSP Stock") is { } stock && SelectedSystem != stock) SelectedSystem = stock;
+        if (_mission?.TransferOrigin is { } origin && Origins.FirstOrDefault(b => b.Name == origin) is { } body && body != SelectedOrigin)
+            SelectedOrigin = body;
+        if (_sync?.Save is not null) UseGameDate();
+        foreach (var name in LegProperties) OnPropertyChanged(name);
+    }
+
+    public bool ShowsAddToMission => _mission is not null && _leg is null;
+
+    /// <summary>The trip leaves the planet the mission is at, to a planet or moon (not a custom location), and has a window.</summary>
+    private bool AddFits => _mission?.TransferOrigin is { } origin && SelectedOrigin?.Name == origin && SelectedSystem?.Name == "KSP Stock"
+        && SelectedDestination is { IsCustomLocation: false };
+
+    public bool CanAddToMission => ShowsAddToMission && AddFits && _request is not null && SelectedWindow is not null;
+
+    public string AddToMissionText => _mission is null ? ""
+        : _mission.TransferOrigin is not { } origin ? $"The mission is around the star after {_mission.AddAfterText}: no planet to leave from."
+        : SelectedOrigin?.Name != origin || SelectedSystem?.Name != "KSP Stock" ? $"The mission is at {origin} after {_mission.AddAfterText}: set From to {origin} to add this window."
+        : SelectedDestination is not { IsCustomLocation: false } dest ? "Pick a planet or moon to go to; custom locations are added as stops instead."
+        : SelectedArrivalMode == ArrivalMode.Flyby ? $"Adds a flyby of {dest.Name} after {_mission.AddAfterText}, flown in the window picked."
+        : $"Adds a stop in {dest.Name}'s {ArrivalAltitudeText} km orbit after {_mission.AddAfterText}, flown in the window picked.";
+
+    private void AddToMission()
+    {
+        if (!CanAddToMission || _request is not { } request || SelectedWindow is not { } window) return;
+        var stop = _mission!.AddTransferStop(request.Destination, request.Arrival == ArrivalMode.Flyby, request.ArrivalAltitudeM,
+            new TransferLeg(request.EarliestDepartureUt, window.DepartureUt, window.FlightTimeS));
+        if (stop is not null) AddedToMission?.Invoke(stop);
     }
 
     private void SetEarliest(double ut)
@@ -343,6 +403,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
             if (value is not null && _leg is not null)
                 _leg.Save(new TransferLeg(_request!.EarliestDepartureUt, value.DepartureUt, value.FlightTimeS));
             OnPropertyChanged(nameof(IsCustomSelection));
+            OnPropertyChanged(nameof(CanAddToMission));
+            OnPropertyChanged(nameof(AddToMissionText));
             RefreshPlotOutputs();
             RefreshBudget();
             RecalculateReturn();

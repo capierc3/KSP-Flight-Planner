@@ -25,7 +25,10 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   values in Legs & phases and the Rocket totals. *＋ Rendezvous* in the Mission pane plans meeting crafts from the
   save (relays, stations, debris, without importing them) from where the mission is before its last stop: from a
   KSC launch, from a craft it's at, or from the low orbit the Δv map's steps reach (e.g. home from the Mun). *Add to
-  mission* adds a stop per craft; the crafts are kept with the mission, not on the Locations tab. Any leg to a placed
+  mission* adds a stop per craft; the crafts are kept with the mission, not on the Locations tab. *＋ Transfer* opens
+  the Transfer Planner from the planet the mission is at (a moon's planet, via the map), and adds the destination's
+  orbit (or a flyby) flown in the window picked; *＋ Deploy* opens Resonant Orbits around the body the mission is at,
+  and adds a stop in that orbit with the constellation. Orbits not on the Δv map are kept with the mission too. Any leg to a placed
   craft can *Plan the rendezvous*: the Rendezvous tab opens locked to the leg, and the plan's burns replace the map's
   orbital values (the plan is kept as made, since craft move). A new tool on the next leg starts when the previous leg's tool arrives. A stop in a circular orbit can
   *Deploy satellites here*: Resonant Orbits opens locked to the stop's orbit, and the carrier's burns are added to a

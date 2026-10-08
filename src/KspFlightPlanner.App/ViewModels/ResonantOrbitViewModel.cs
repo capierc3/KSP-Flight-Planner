@@ -53,6 +53,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         LoadPlanCommand = new RelayCommand(LoadSelectedPlan, () => SelectedPlan is not null);
         DeletePlanCommand = new RelayCommand(DeleteSelectedPlan, () => SelectedPlan is not null);
         StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
+        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         foreach (var system in _bodies.GetSystems()) Systems.Add(system);
         SelectedSystem = Systems.FirstOrDefault();
@@ -116,7 +117,52 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         foreach (var name in LegProperties) OnPropertyChanged(name);
     }
 
-    private static readonly string[] LegProperties = [nameof(Leg), nameof(IsEditingLeg), nameof(IsOrbitEditable), nameof(LegTitle)];
+    private static readonly string[] LegProperties =
+        [nameof(Leg), nameof(IsEditingLeg), nameof(IsOrbitEditable), nameof(LegTitle), nameof(ShowsAddToMission), nameof(CanAddToMission), nameof(AddToMissionText)];
+
+    // ---------------- Adding to the mission ----------------
+
+    private MissionBuilderViewModel? _mission;
+
+    public RelayCommand AddToMissionCommand { get; }
+
+    /// <summary>The deployment was added to the mission: the new stop, whose deployment the calculator can now show.</summary>
+    public event Action<StopViewModel>? AddedToMission;
+
+    /// <summary>Links the calculator to the mission, so the constellation can be added to it as a stop.</summary>
+    public void AttachMission(MissionBuilderViewModel mission)
+    {
+        _mission = mission;
+        mission.RouteChanged += () => OnPropertyChanged(nameof(AddToMissionText));
+        OnPropertyChanged(nameof(ShowsAddToMission));
+    }
+
+    /// <summary>Plans a deployment to add: around the body the mission is at, on the stock system.</summary>
+    public void StartAdding()
+    {
+        StopEditingLeg();
+        if (Systems.FirstOrDefault(s => s.Name == StockSystem) is { } stock && SelectedSystem != stock) SelectedSystem = stock;
+        if (_mission?.AddAfterBody is { } name && Bodies.FirstOrDefault(b => b.Name == name) is { } body && body != SelectedBody)
+            SelectedBody = body;
+        foreach (var n in LegProperties) OnPropertyChanged(n);
+    }
+
+    public bool ShowsAddToMission => _mission is not null && _leg is null;
+
+    public bool CanAddToMission => ShowsAddToMission && Result is not null && SelectedSystem?.Name == StockSystem;
+
+    public string AddToMissionText => _mission is null ? ""
+        : SelectedSystem?.Name != StockSystem ? "Only the stock system's bodies can be added to the mission."
+        : SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude) ? "Pick a body and an orbit."
+        : $"Adds a stop in a {altitude / 1000:#,0.#} km orbit of {body.Name} after {_mission.AddAfterText}, releasing {SatelliteCount} satellites there.";
+
+    private void AddToMission()
+    {
+        if (!CanAddToMission || SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude)) return;
+        if (_mission!.AddDeployStop(body, altitude, new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion)) is { } stop)
+            AddedToMission?.Invoke(stop);
+        else ErrorText = $"The mission can't stop in that orbit of {body.Name} (is it inside the atmosphere?).";
+    }
 
     public StarSystem? SelectedSystem
     {
@@ -282,6 +328,8 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         }
 
         foreach (var name in DerivedProperties) OnPropertyChanged(name);
+        OnPropertyChanged(nameof(CanAddToMission));
+        OnPropertyChanged(nameof(AddToMissionText));
     }
 
     private static readonly string[] DerivedProperties =

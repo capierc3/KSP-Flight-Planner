@@ -84,6 +84,15 @@
                     </TextBlock>
                     <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
                 </StackPanel>
+                <!-- Add the result to the mission, before its last stop -->
+                <Border Visibility="{Binding ShowsAddToMission, Converter={StaticResource BoolToVisibility}}" Padding="10,8" CornerRadius="4" Margin="0,12,0,0"
+                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding AddToMissionText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                        <Button Content="Add to mission" Command="{Binding AddToMissionCommand}" Style="{StaticResource AccentButtonStyle}"
+                                HorizontalAlignment="Left" Margin="0,6,0,0" Padding="12,3" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
             <StackPanel DataContext="{Binding Resonant}"
                         Visibility="{Binding DataContext.ShowsResonantInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -114,6 +123,15 @@
                 <CheckBox Content="Dive orbit (release at apoapsis)" IsChecked="{Binding PreferDiveOrbit}" Margin="0,10,0,0" />
                 <CheckBox Content="Occlusion modifiers (0.75 atm / 0.9 vacuum)" IsChecked="{Binding UseOcclusion}" Margin="0,4,0,0" />
                 <CheckBox Content="Show line-of-sight links" IsChecked="{Binding ShowLineOfSight}" Margin="0,4,0,0" />
+                <!-- Add the result to the mission, before its last stop -->
+                <Border Visibility="{Binding ShowsAddToMission, Converter={StaticResource BoolToVisibility}}" Padding="10,8" CornerRadius="4" Margin="0,12,0,0"
+                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding AddToMissionText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                        <Button Content="Add to mission" Command="{Binding AddToMissionCommand}" Style="{StaticResource AccentButtonStyle}"
+                                HorizontalAlignment="Left" Margin="0,6,0,0" Padding="12,3" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
             <StackPanel x:Name="RendezvousInputs" DataContext="{Binding Rendezvous}"
                         Visibility="{Binding DataContext.ShowsRendezvousInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">

@@ -89,13 +89,82 @@ public sealed partial class MissionBuilderViewModel
     // ---------------- Adding legs from the calculators ----------------
 
     public RelayCommand AddRendezvousCommand { get; private set; } = null!;
+    public RelayCommand AddTransferCommand { get; private set; } = null!;
+    public RelayCommand AddDeployCommand { get; private set; } = null!;
 
     /// <summary>The Rendezvous tab should start planning a leg to add (its start: where the mission is).</summary>
     public event Action? AddRendezvousRequested;
 
+    /// <summary>The Transfer Planner should start choosing a window for a leg to add (from the planet the mission is at).</summary>
+    public event Action? AddTransferRequested;
+
+    /// <summary>Resonant Orbits should start planning a deployment to add (around the body the mission is at).</summary>
+    public event Action? AddDeployRequested;
+
     private void InitAdding()
     {
         AddRendezvousCommand = new RelayCommand(() => AddRendezvousRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
+        AddTransferCommand = new RelayCommand(() => AddTransferRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
+        AddDeployCommand = new RelayCommand(() => AddDeployRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
+    }
+
+    /// <summary>The body the mission is at (or around) before its last stop.</summary>
+    public string? AddAfterBody => _map is null || Stops.Count < 2 ? null : _map[Stops[AddAfterIndex].NodeKey].BodyName;
+
+    /// <summary>
+    /// The planet a transfer added before the last stop leaves from: the body the mission is at, or the planet its moon
+    /// orbits (the Δv map climbs out to it first). Null around the star.
+    /// </summary>
+    public string? TransferOrigin
+    {
+        get
+        {
+            if (AddAfterBody is not { } name || !_bodies.TryGetValue(name, out var body) || body.ParentId is not { } parentId) return null;
+            var parent = _bodies.Values.FirstOrDefault(b => b.Id == parentId);
+            return parent?.ParentId is null ? body.Name : parent.Name;
+        }
+    }
+
+    /// <summary>
+    /// Adds a stop at <paramref name="destination"/> before the last stop, the leg flown in <paramref name="window"/>: its
+    /// orbit at <paramref name="arrivalAltitudeM"/> (a map orbit if there's one at that height, else the mission's own),
+    /// or its intercept for a flyby. The Δv map supplies the steps on either side. Returns the new stop.
+    /// </summary>
+    public StopViewModel? AddTransferStop(CelestialBody destination, bool flyby, double arrivalAltitudeM, TransferLeg window)
+    {
+        if (_map is null) return null;
+        var key = flyby
+            ? _map.Nodes.FirstOrDefault(n => n.BodyName == destination.Name && n.Kind == "Intercept" && !n.IsCustom)?.Key
+            : OrbitStopKey(destination.Name, arrivalAltitudeM);
+        return key is null ? null : InsertStop(new MissionStop(key, Transfer: window));
+    }
+
+    /// <summary>Adds a stop in a circular orbit of <paramref name="body"/> before the last stop, releasing a constellation there.</summary>
+    public StopViewModel? AddDeployStop(CelestialBody body, double altitudeM, DeployStep step) =>
+        OrbitStopKey(body.Name, altitudeM) is { } key ? InsertStop(new MissionStop(key, Deploy: step)) : null;
+
+    /// <summary>
+    /// A stop key for a circular orbit: the map's low or synchronous orbit at that height (within a kilometre), a place
+    /// the mission already has, or a new place for it. Null if the orbit can't be flown (inside the atmosphere, say).
+    /// </summary>
+    private string? OrbitStopKey(string bodyName, double altitudeM)
+    {
+        if (_map is null) return null;
+        if (_map.Nodes.FirstOrDefault(n => n.BodyName == bodyName && n.Kind is "LowOrbit" or "Synchronous" && !n.IsCustom
+                && n.AltitudeM is { } a && Math.Abs(a - altitudeM) < 1_000) is { } node)
+            return node.Key;
+        var place = _places.Values.FirstOrDefault(p => p.BodyName == bodyName && !p.IsPlaced && p.IsCircular
+                        && Math.Abs(p.PeriapsisAltitudeM - altitudeM) < 1)
+            ?? AddPlace(CustomLocation.Circular(0, "Orbit", bodyName, altitudeM));
+        return _map.TryGet(place.Key, out _) ? place.Key : null;
+    }
+
+    private StopViewModel InsertStop(MissionStop definition)
+    {
+        var stop = new StopViewModel(definition, StopChanged, RefreshLegs);
+        Stops.Insert(Math.Max(1, Stops.Count - 1), stop);
+        StopChanged();
+        return stop;
     }
 
     /// <summary>Index of the stop new legs leave from: the one before the last stop (new stops go before the last).</summary>
