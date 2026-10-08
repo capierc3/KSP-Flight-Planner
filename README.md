@@ -2,6 +2,13 @@
 
 Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 
+- **Window** — laid out like an IDE: tool panes at the sides (Mission, Locations, Vessels, Rocket, Flights), documents in
+  the middle (Legs & phases, Δv map, Transfer Planner, Rendezvous, …). Drag any pane to another side, split a side top
+  and bottom, tab panes together, pin them to the edge or float them; *View* reopens anything closed. Two modes, switched
+  top right or with Ctrl+1 / Ctrl+2: **Plan** and **Fly**, each with its own arrangement, saved when the app closes
+  (*View › Reset Window Layout* puts the current mode back to the default). Docking by
+  [AvalonDock](https://github.com/Dirkster99/AvalonDock).
+
 - **Mission builder** — plan a route as an ordered list of stops (add, reorder, remove, or click them on the
   interactive Δv map), split the legs into rocket phases (Launch / Transfer / Lander …) with per-phase margins,
   toggle aerobraking and plane changes per leg, edit any map value (e.g. Mun landing 580 → 700; stored as a
@@ -43,8 +50,8 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
     tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
   - the Rendezvous tab can start from **the craft you're flying** and add **the craft you've targeted**
   - the Transfer Planner's **Today** button sets the earliest departure to the game's date
-- **Flight tab** — the flying side. *Fly this plan* on the Rendezvous tab (or *Fly this deployment* on Resonant
-  Orbits) hands a plan over: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
+- **Fly mode** — the flying side. *Fly this plan* on the Rendezvous tab (or *Fly this deployment* on Resonant
+  Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the
   rest from its real orbit. Resonant deployments time the carrier's burn and each satellite's circularize burn from
   the carrier's real orbit. Flights are kept until you delete them.

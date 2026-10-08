@@ -33,144 +33,111 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="8,10,8,8">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <!-- Flights handed over from the planning tabs -->
-        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="12">
+    <DockPanel Margin="16,12,8,12">
+        <!-- The live game -->
+        <Border DockPanel.Dock="Top" Margin="0,0,18,10" Padding="10,6" CornerRadius="4" Background="#14808080">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Flights" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
-                <Button DockPanel.Dock="Bottom" Content="Delete flight" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
-                           Visibility="{Binding HasNoFlights, Converter={StaticResource BoolToVisibility}}"
-                           Text="No flights yet. Plan on the Rendezvous or Resonant Orbits tab, then click Fly this plan." />
-                <ListBox ItemsSource="{Binding Flights}" SelectedItem="{Binding SelectedFlight}" BorderThickness="0" Background="Transparent">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="0,2">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Style="{StaticResource Note}">
-                                    <Run Text="{Binding Kind, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Burns.Count, Mode=OneWay}" /><Run Text=" burns" />
-                                </TextBlock>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding GameTimeText}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding GameText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
             </DockPanel>
         </Border>
 
-        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="16,12,8,12">
-            <DockPanel>
-                <!-- The live game -->
-                <Border DockPanel.Dock="Top" Margin="0,0,18,10" Padding="10,6" CornerRadius="4" Background="#14808080">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding GameTimeText}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding GameText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
-                    </DockPanel>
-                </Border>
+        <!-- The flight -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,18,0" Visibility="{Binding HasFlight, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding SelectedFlight.Name}" Style="{StaticResource SectionHeader}" Margin="0" />
+            <TextBlock Text="{Binding KindText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+            <DockPanel Margin="0,8,0,0">
+                <Button DockPanel.Dock="Right" Content="Use the craft I'm flying" Command="{Binding UseActiveCraftCommand}" Padding="10,2"
+                        ToolTip="Fly this flight with the craft you're flying in KSP, and plan it from its orbit" />
+                <TextBlock Text="{Binding CraftText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
+            </DockPanel>
+            <TextBlock Text="{Binding Note}" Foreground="#FFA726" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
 
-                <!-- The flight -->
-                <StackPanel DockPanel.Dock="Top" Margin="0,0,18,0" Visibility="{Binding HasFlight, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{Binding SelectedFlight.Name}" Style="{StaticResource SectionHeader}" Margin="0" />
-                    <TextBlock Text="{Binding KindText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
-                    <DockPanel Margin="0,8,0,0">
-                        <Button DockPanel.Dock="Right" Content="Use the craft I'm flying" Command="{Binding UseActiveCraftCommand}" Padding="10,2"
-                                ToolTip="Fly this flight with the craft you're flying in KSP, and plan it from its orbit" />
-                        <TextBlock Text="{Binding CraftText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    </DockPanel>
-                    <TextBlock Text="{Binding Note}" Foreground="#FFA726" TextWrapping="Wrap" Margin="0,6,0,0"
-                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+            <!-- Drift from the plan, and re-planning -->
+            <DockPanel Margin="0,8,0,0">
+                <Button DockPanel.Dock="Right" Content="Re-plan from here" Command="{Binding ReplanCommand}" Padding="10,2"
+                        ToolTip="Plan the rest again from the craft's real orbit, starting a few minutes from now">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDrifting}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
+                                    <Setter Property="Foreground" Value="White" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
+                    <TextBlock Text="{Binding DriftText}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding PlannedText}" Style="{StaticResource Note}" />
+                </StackPanel>
+            </DockPanel>
 
-                    <!-- Drift from the plan, and re-planning -->
-                    <DockPanel Margin="0,8,0,0">
-                        <Button DockPanel.Dock="Right" Content="Re-plan from here" Command="{Binding ReplanCommand}" Padding="10,2"
-                                ToolTip="Plan the rest again from the craft's real orbit, starting a few minutes from now">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <DockPanel Margin="0,12,0,4">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Send next burn" Command="{Binding SendNextCommand}" Padding="10,2"
+                            ToolTip="Add the next burn as a maneuver node on the craft you're flying" />
+                    <Button Content="Send all burns" Command="{Binding SendAllCommand}" Padding="10,2" Margin="6,0,0,0"
+                            ToolTip="Replace the craft's maneuver nodes with every burn still to come (satellites' burns are sent to each satellite on its own)" />
+                </StackPanel>
+                <TextBlock Text="Burns" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,4"
+                       Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
+        <!-- Burn list -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasFlight, Converter={StaticResource BoolToVisibility}}">
+            <ItemsControl ItemsSource="{Binding Burns}" Margin="0,0,18,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,8">
+                            <Border.Style>
+                                <Style TargetType="Border">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDrifting}" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
-                                            <Setter Property="Foreground" Value="White" />
+                                        <DataTrigger Binding="{Binding State}" Value="Passed">
+                                            <Setter Property="Opacity" Value="0.55" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </Button.Style>
-                        </Button>
-                        <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
-                            <TextBlock Text="{Binding DriftText}" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding PlannedText}" Style="{StaticResource Note}" />
-                        </StackPanel>
-                    </DockPanel>
-
-                    <DockPanel Margin="0,12,0,4">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <Button Content="Send next burn" Command="{Binding SendNextCommand}" Padding="10,2"
-                                    ToolTip="Add the next burn as a maneuver node on the craft you're flying" />
-                            <Button Content="Send all burns" Command="{Binding SendAllCommand}" Padding="10,2" Margin="6,0,0,0"
-                                    ToolTip="Replace the craft's maneuver nodes with every burn still to come (satellites' burns are sent to each satellite on its own)" />
-                        </StackPanel>
-                        <TextBlock Text="Burns" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-                    </DockPanel>
-                    <TextBlock Text="{Binding Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,4"
-                               Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibility}}" />
-                </StackPanel>
-
-                <!-- Burn list -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasFlight, Converter={StaticResource BoolToVisibility}}">
-                    <ItemsControl ItemsSource="{Binding Burns}" Margin="0,0,18,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,8">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="Passed">
-                                                    <Setter Property="Opacity" Value="0.55" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="28" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="20" Height="20" CornerRadius="10" VerticalAlignment="Top" HorizontalAlignment="Left"
-                                                Background="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}">
-                                            <TextBlock Text="{Binding Number}" Foreground="White" FontSize="11" FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </Border>
-                                        <StackPanel Grid.Column="1">
-                                            <DockPanel>
-                                                <Button DockPanel.Dock="Right" Content="Send to KSP" Style="{StaticResource SmallButton}" Margin="10,0,0,0"
-                                                        Command="{Binding DataContext.SendBurnCommand, ElementName=Root}" CommandParameter="{Binding}"
-                                                        ToolTip="Add this burn as a maneuver node on the craft you're flying" />
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding DeltaV}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="0" />
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                    <Border Style="{StaticResource StateChip}">
-                                                        <TextBlock Text="{Binding StateText}" FontSize="11" />
-                                                    </Border>
-                                                </StackPanel>
-                                            </DockPanel>
-                                            <TextBlock Style="{StaticResource Note}" Margin="0,1,0,2">
-                                                <Run Text="{Binding When, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding Countdown, Mode=OneWay}" />
-                                            </TextBlock>
-                                            <TextBlock Text="{Binding NodeText}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Note}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
-                                        </StackPanel>
-                                    </Grid>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="20" Height="20" CornerRadius="10" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                        Background="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}">
+                                    <TextBlock Text="{Binding Number}" Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </DockPanel>
-        </Border>
-    </Grid>
+                                <StackPanel Grid.Column="1">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Send to KSP" Style="{StaticResource SmallButton}" Margin="10,0,0,0"
+                                                Command="{Binding DataContext.SendBurnCommand, ElementName=Root}" CommandParameter="{Binding}"
+                                                ToolTip="Add this burn as a maneuver node on the craft you're flying" />
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding DeltaV}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="0" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Border Style="{StaticResource StateChip}">
+                                                <TextBlock Text="{Binding StateText}" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <TextBlock Style="{StaticResource Note}" Margin="0,1,0,2">
+                                        <Run Text="{Binding When, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding Countdown, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding NodeText}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Note}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
 </UserControl>

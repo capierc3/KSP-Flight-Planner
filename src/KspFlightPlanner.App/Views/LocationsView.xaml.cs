@@ -30,9 +30,6 @@ public partial class LocationsView : UserControl
         };
     }
 
-    private void Tree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) =>
-        (DataContext as LocationsViewModel)?.Select(e.NewValue as LocationTreeItem);
-
     /// <summary>Shows an image full size in its own window.</summary>
     private void Image_Click(object sender, MouseButtonEventArgs e)
     {

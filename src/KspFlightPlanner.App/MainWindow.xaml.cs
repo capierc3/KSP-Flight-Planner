@@ -3,17 +3,17 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using KspFlightPlanner.App.Services;
 using KspFlightPlanner.App.ViewModels;
 using KspFlightPlanner.Data;
+using Microsoft.Win32;
 
 namespace KspFlightPlanner.App;
 
 public sealed class MainViewModel : ObservableObject
 {
-    public const int LocationsTab = 1;
-    public const int FlightTab = 6;
-    private int _selectedTab;
+    private WorkMode _mode;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, SaveSync sync, KspLink link, PlannerEvents events)
@@ -27,11 +27,11 @@ public sealed class MainViewModel : ObservableObject
         Rendezvous = rendezvous;
         Resonant = resonant;
         Flight = flight;
-        events.OpenFlightRequested += _ => SelectedTab = FlightTab;
+        events.OpenFlightRequested += _ => RequestPane(Panes.Flight);
         events.OpenLocationRequested += id =>
         {
-            SelectedTab = LocationsTab;
             Locations.SelectLocation(id);
+            RequestPane(Panes.Location);
         };
     }
 
@@ -42,18 +42,41 @@ public sealed class MainViewModel : ObservableObject
     public RendezvousViewModel Rendezvous { get; }
     public ResonantOrbitViewModel Resonant { get; }
 
-    /// <summary>Flying the plans handed over from the planning tabs, against the live game.</summary>
+    /// <summary>Flying the plans handed over from planning, against the live game.</summary>
     public FlightViewModel Flight { get; }
     public SaveSync Sync { get; }
 
     /// <summary>Live connection to the running game (kRPC).</summary>
     public KspLink Link { get; }
 
-    public int SelectedTab
+    /// <summary>Planning or flying; each has its own window layout.</summary>
+    public WorkMode Mode
     {
-        get => _selectedTab;
-        set => SetProperty(ref _selectedTab, value);
+        get => _mode;
+        set
+        {
+            if (!SetProperty(ref _mode, value)) return;
+            OnPropertyChanged(nameof(IsPlanning));
+            OnPropertyChanged(nameof(IsFlying));
+        }
     }
+
+    public bool IsPlanning
+    {
+        get => Mode == WorkMode.Plan;
+        set { if (value) Mode = WorkMode.Plan; }
+    }
+
+    public bool IsFlying
+    {
+        get => Mode == WorkMode.Fly;
+        set { if (value) Mode = WorkMode.Fly; }
+    }
+
+    /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
+    public event Action<string>? PaneRequested;
+
+    public void RequestPane(string id) => PaneRequested?.Invoke(id);
 }
 
 /// <summary>Menu and keyboard commands for the main window.</summary>
@@ -67,23 +90,70 @@ public static class MainCommands
     public static readonly RoutedUICommand ConnectKsp = new("Connect to KSP", nameof(ConnectKsp), typeof(MainCommands));
     public static readonly RoutedUICommand Settings = new("Settings…", nameof(Settings), typeof(MainCommands),
         [new KeyGesture(Key.OemComma, ModifierKeys.Control, "Ctrl+,")]);
-    public static readonly RoutedUICommand ShowTab = new("Show Tab", nameof(ShowTab), typeof(MainCommands));
+
+    /// <summary>Bring a pane into view; the parameter is its id from <see cref="Panes"/>.</summary>
+    public static readonly RoutedUICommand ShowPane = new("Show Pane", nameof(ShowPane), typeof(MainCommands));
+
+    /// <summary>Switch to Plan or Fly; the parameter is the <see cref="WorkMode"/> name.</summary>
+    public static readonly RoutedUICommand SetMode = new("Set Mode", nameof(SetMode), typeof(MainCommands));
+    public static readonly RoutedUICommand ResetLayout = new("Reset Window Layout", nameof(ResetLayout), typeof(MainCommands));
     public static readonly RoutedUICommand About = new("About", nameof(About), typeof(MainCommands));
 }
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly DockWorkspace _plan;
+    private readonly DockWorkspace _fly;
 
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
         DataContext = _viewModel = viewModel;
+
+        var folder = Path.GetDirectoryName(PlannerDatabase.DefaultPath())!;
+        _plan = new DockWorkspace(PlanDock, WorkMode.Plan, viewModel, folder);
+        _fly = new DockWorkspace(FlyDock, WorkMode.Fly, viewModel, folder);
+        ApplyDockTheme();
+        _plan.Load();
+        _fly.Load();
+
+        viewModel.PaneRequested += id => ShowPane(id);
+        SystemEvents.UserPreferenceChanged += UserPreferenceChanged;
+        Closing += (_, _) =>
+        {
+            _plan.Save();
+            _fly.Save();
+        };
         Closed += (_, _) =>
         {
+            SystemEvents.UserPreferenceChanged -= UserPreferenceChanged;
             viewModel.Sync.Dispose();
             viewModel.Link.Dispose();
         };
+    }
+
+    private DockWorkspace Current => _viewModel.Mode == WorkMode.Fly ? _fly : _plan;
+
+    /// <summary>Shows a pane, switching to Plan or Fly first if it only lives in the other mode.</summary>
+    private void ShowPane(string id, bool activate = true)
+    {
+        if (Panes.Find(id) is not { } info) return;
+        if (!info.Modes.Contains(_viewModel.Mode)) _viewModel.Mode = info.Modes[0];
+        Current.Show(id, activate);
+    }
+
+    private void ApplyDockTheme()
+    {
+        DockTheme.Apply(PlanDock);
+        DockTheme.Apply(FlyDock);
+    }
+
+    // Windows switched light/dark or the accent colour: Fluent follows by itself, the docking frame needs recolouring.
+    private void UserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle)
+            Dispatcher.BeginInvoke(ApplyDockTheme, DispatcherPriority.ApplicationIdle);
     }
 
     // CanExecute is first queried during InitializeComponent, before _viewModel is set.
@@ -108,8 +178,8 @@ public partial class MainWindow : Window
         var import = new ImportVesselsViewModel(_viewModel.Sync);
         if (new ImportVesselsWindow(import) { Owner = this }.ShowDialog() == true && import.ImportedIds.Count > 0)
         {
-            _viewModel.SelectedTab = MainViewModel.LocationsTab;
             _viewModel.Locations.SelectLocation(import.ImportedIds[0]);
+            ShowPane(Panes.Location);
         }
     }
 
@@ -121,10 +191,19 @@ public partial class MainWindow : Window
     private void OpenDataFolder_Executed(object sender, ExecutedRoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo { FileName = Path.GetDirectoryName(PlannerDatabase.DefaultPath())!, UseShellExecute = true });
 
-    private void ShowTab_Executed(object sender, ExecutedRoutedEventArgs e)
+    // A list picking an item only brings its detail forward; keyboard focus stays in the list.
+    private void ShowPane_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        if (int.TryParse(e.Parameter?.ToString(), out var tab)) _viewModel.SelectedTab = tab;
+        if (e.Parameter is string id)
+            ShowPane(id, activate: e.OriginalSource is not (Views.LocationListView or Views.VesselListView or Views.FlightListView));
     }
+
+    private void SetMode_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (Enum.TryParse<WorkMode>(e.Parameter?.ToString(), out var mode)) _viewModel.Mode = mode;
+    }
+
+    private void ResetLayout_Executed(object sender, ExecutedRoutedEventArgs e) => Current.Reset();
 
     private void About_Executed(object sender, ExecutedRoutedEventArgs e)
     {

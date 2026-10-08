@@ -1,0 +1,64 @@
+using System.Windows;
+using KspFlightPlanner.App.Views;
+
+namespace KspFlightPlanner.App;
+
+/// <summary>What the window is set up for: planning a mission, or flying one against the live game.</summary>
+public enum WorkMode { Plan, Fly }
+
+/// <summary>
+/// One dockable piece of the main window: a tool pane at the side (Mission, Rocket…) or a document in the middle
+/// (Legs &amp; phases, Transfer Planner…). <paramref name="Modes"/> lists the modes it appears in; the first is its home.
+/// </summary>
+public sealed record PaneInfo(string Id, string Title, bool IsDocument, WorkMode[] Modes, Func<MainViewModel, FrameworkElement> Create)
+{
+    /// <summary>Tool panes open on this side when they aren't in the layout yet.</summary>
+    public bool OpensOnRight { get; init; }
+}
+
+/// <summary>Every pane the window can show. The ids are stored in the saved window layouts, so don't rename them.</summary>
+public static class Panes
+{
+    // Tool panes
+    public const string Mission = "mission";
+    public const string Locations = "locations";
+    public const string Vessels = "vessels";
+    public const string Rocket = "rocket";
+    public const string Flights = "flights";
+
+    // Documents
+    public const string Legs = "legs";
+    public const string DvMap = "dvmap";
+    public const string Location = "location";
+    public const string Vessel = "vessel";
+    public const string Transfer = "transfer";
+    public const string Rendezvous = "rendezvous";
+    public const string Resonant = "resonant";
+    public const string Flight = "flight";
+    public const string Guide = "guide";
+
+    private static readonly WorkMode[] Plan = [WorkMode.Plan];
+    private static readonly WorkMode[] Fly = [WorkMode.Fly];
+    private static readonly WorkMode[] Both = [WorkMode.Plan, WorkMode.Fly];
+
+    public static readonly IReadOnlyList<PaneInfo> All =
+    [
+        new(Mission, "Mission", false, Plan, vm => new MissionStopsView { DataContext = vm.Mission }),
+        new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
+        new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
+        new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },
+        new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
+
+        new(Legs, "Legs & phases", true, Plan, vm => new MissionLegsView { DataContext = vm.Mission }),
+        new(DvMap, "Δv map", true, Plan, vm => new DvMapView { DataContext = vm.Mission }),
+        new(Location, "Location", true, Both, vm => new LocationsView { DataContext = vm.Locations }),
+        new(Vessel, "Vessel", true, Both, vm => new VesselsView { DataContext = vm.Vessels }),
+        new(Transfer, "Transfer Planner", true, Plan, vm => new TransferPlannerView { DataContext = vm.Transfer }),
+        new(Rendezvous, "Rendezvous", true, Plan, vm => new RendezvousView { DataContext = vm.Rendezvous }),
+        new(Resonant, "Resonant Orbits", true, Plan, vm => new ResonantOrbitView { DataContext = vm.Resonant }),
+        new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
+        new(Guide, "Math Guide", true, Both, _ => new GuideView()),
+    ];
+
+    public static PaneInfo? Find(string id) => All.FirstOrDefault(p => p.Id == id);
+}

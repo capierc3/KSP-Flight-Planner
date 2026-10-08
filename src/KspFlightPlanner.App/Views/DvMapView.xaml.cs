@@ -3,9 +3,9 @@ using KspFlightPlanner.App.ViewModels;
 
 namespace KspFlightPlanner.App.Views;
 
-public partial class MissionBuilderView : UserControl
+public partial class DvMapView : UserControl
 {
-    public MissionBuilderView()
+    public DvMapView()
     {
         InitializeComponent();
         MapView.NodeClicked += (_, node) => ViewModel?.AddStopFromMap(node);

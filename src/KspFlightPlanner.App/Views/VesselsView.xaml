@@ -241,47 +241,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="8,10,8,8">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="340" />
-            <ColumnDefinition Width="10" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <Border Style="{StaticResource Panel}">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Vessels" Style="{StaticResource SectionHeader}" Margin="0,2,0,6" />
-                <CheckBox DockPanel.Dock="Top" Content="Show debris, asteroids &amp; flags" IsChecked="{Binding ShowAll}" Margin="0,0,0,6" />
-                <TextBlock DockPanel.Dock="Bottom" Text="{Binding PartDataSummary}" Style="{StaticResource Note}" Margin="0,8,0,0" />
-                <TextBlock DockPanel.Dock="Top" Text="{Binding Empty}" Style="{StaticResource Note}" Margin="0,6,0,0"
-                           Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
-                <TreeView ItemsSource="{Binding Tree}" Background="Transparent" BorderThickness="0" SelectedItemChanged="Tree_SelectedItemChanged">
-                    <TreeView.ItemContainerStyle>
-                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
-                        </Style>
-                    </TreeView.ItemContainerStyle>
-                    <TreeView.ItemTemplate>
-                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                            <StackPanel Orientation="Horizontal" Margin="0,2">
-                                <TextBlock Text="{Binding Glyph}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Title}" />
-                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" />
-                                </StackPanel>
-                            </StackPanel>
-                        </HierarchicalDataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
-            </DockPanel>
-        </Border>
-
-        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="24,12,8,12">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ContentControl Content="{Binding Detail}" />
-            </ScrollViewer>
-        </Border>
-    </Grid>
+    <ScrollViewer Padding="24,12,8,12" VerticalScrollBarVisibility="Auto">
+        <ContentControl Content="{Binding Detail}" />
+    </ScrollViewer>
 </UserControl>

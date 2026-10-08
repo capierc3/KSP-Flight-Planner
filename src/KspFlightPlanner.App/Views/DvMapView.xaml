@@ -1,0 +1,24 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.DvMapView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <DockPanel Margin="12,10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right" Content="Reset all edits" Command="{Binding ResetMapEditsCommand}" />
+            <StackPanel>
+                <TextBlock Style="{StaticResource Note}" FontSize="12"
+                           Text="Click a number to change it (e.g. Mun landing 580 → 700); it updates every mission. Click a stop to add it to the route. ∠ = worst-case plane change, aero = aerobraking possible." />
+                <TextBlock Text="{Binding EditedText}" Style="{StaticResource Note}" FontSize="12" Foreground="#FFB74D" />
+            </StackPanel>
+        </DockPanel>
+        <Border CornerRadius="6" ClipToBounds="True">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0B101E">
+                <controls:DeltaVMapView x:Name="MapView" Map="{Binding Map}" RouteEdgeKeys="{Binding RouteEdgeKeys}" StopKeys="{Binding StopKeys}" />
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,85 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.MissionStopsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Margin" Value="2,0,0,0" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- The mission's stops, in order, and route options -->
+    <ScrollViewer Padding="12,10,0,10" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,18,0">
+            <DockPanel Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
+                            ToolTip="Flip the route (e.g. plan the trip home)" />
+                </StackPanel>
+                <TextBlock Text="Stops" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+            </DockPanel>
+
+            <ItemsControl ItemsSource="{Binding Stops}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="30" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Border Width="22" Height="22" CornerRadius="11" Background="White" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <TextBlock Text="{Binding Number}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <DockPanel Grid.Column="1">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="4,0,0,0">
+                                    <Button Content="↑" Style="{StaticResource SmallButton}" ToolTip="Move up"
+                                            Command="{Binding DataContext.MoveStopUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                    <Button Content="↓" Style="{StaticResource SmallButton}" ToolTip="Move down"
+                                            Command="{Binding DataContext.MoveStopDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                    <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Remove stop"
+                                            Command="{Binding DataContext.RemoveStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                </StackPanel>
+                                <ComboBox ItemsSource="{Binding DataContext.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          SelectedValuePath="Key" SelectedValue="{Binding NodeKey}" DisplayMemberPath="DisplayName" />
+                            </DockPanel>
+
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
+                            <Grid Grid.Row="2" Grid.Column="1">
+                                <TextBox x:Name="NoteBox" Text="{Binding Note}" FontSize="12" />
+                                <TextBlock Text="Note, e.g. dock at station, pick up Bob" IsHitTestVisible="False" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Text, ElementName=NoteBox}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Content="＋ Add stop" Command="{Binding AddStopCommand}" HorizontalAlignment="Left" />
+            <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                       Text="New stops go before the last one. You can also click a stop on the Δv map to add it." />
+
+            <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
+            <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
+            <CheckBox Content="Include worst-case plane changes" IsChecked="{Binding IncludePlaneChanges}" Margin="0,6,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

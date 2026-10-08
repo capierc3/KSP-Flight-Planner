@@ -1,0 +1,27 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.FlightListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <!-- Flights handed over from planning; the selected one opens in the Flight document. -->
+    <DockPanel Margin="12,10">
+        <Button DockPanel.Dock="Bottom" Content="Delete flight" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                   Visibility="{Binding HasNoFlights, Converter={StaticResource BoolToVisibility}}"
+                   Text="No flights yet. Plan on the Rendezvous or Resonant Orbits tab, then click Fly this plan." />
+        <ListBox ItemsSource="{Binding Flights}" SelectedItem="{Binding SelectedFlight}" SelectionChanged="List_SelectionChanged" BorderThickness="0" Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0,2">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Style="{StaticResource Note}">
+                            <Run Text="{Binding Kind, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Burns.Count, Mode=OneWay}" /><Run Text=" burns" />
+                        </TextBlock>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
