@@ -20,7 +20,7 @@ public static partial class MarkdownRenderer
 
     public static FlowDocument Render(string markdown)
     {
-        var doc = new FlowDocument { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, PagePadding = new Thickness(24, 12, 24, 24) };
+        var doc = new FlowDocument { FontFamily = new FontFamily("Segoe UI"), FontSize = 13, PagePadding = new Thickness(24, 12, 24, 24) };
         var lines = markdown.Replace("\r\n", "\n").Split('\n');
 
         for (var i = 0; i < lines.Length;)
@@ -35,7 +35,7 @@ public static partial class MarkdownRenderer
                 i++; // closing fence
                 doc.Blocks.Add(new Paragraph(new Run(string.Join("\n", code)))
                 {
-                    FontFamily = Mono, FontSize = 13, Background = CodeBackground,
+                    FontFamily = Mono, FontSize = 12, Background = CodeBackground,
                     Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 4, 0, 10),
                 });
                 continue;
@@ -46,7 +46,7 @@ public static partial class MarkdownRenderer
                 var level = h.Groups[1].Value.Length;
                 var heading = new Paragraph
                 {
-                    FontSize = level switch { 1 => 28, 2 => 20, _ => 16 },
+                    FontSize = level switch { 1 => 22, 2 => 17, _ => 14 },
                     FontWeight = level == 1 ? FontWeights.Bold : FontWeights.SemiBold,
                     Margin = new Thickness(0, level == 1 ? 0 : 22, 0, 6),
                 };

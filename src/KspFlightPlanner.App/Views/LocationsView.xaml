@@ -21,6 +21,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Label}" Style="{StaticResource Label}" Margin="0,0,16,0" />
                     <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                             FontFamily="Cascadia Mono, Consolas" FontSize="12"
                              Padding="0" MinHeight="0" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </Grid>
             </Border>
@@ -32,7 +33,7 @@
                 <StackPanel Orientation="Horizontal">
                     <Ellipse Width="34" Height="34" Fill="{Binding Color}" Margin="0,0,12,0" />
                     <StackPanel>
-                        <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="Bold" />
+                        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
                         <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>
@@ -122,7 +123,7 @@
                         <Button Content="Delete" Command="{Binding DeleteCommand}" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold"><Run Text="◆ " Foreground="{Binding Body.Body.Color, Mode=OneWay}" /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
+                        <TextBlock FontSize="20" FontWeight="Bold"><Run Text="◆ " Foreground="{Binding Body.Body.Color, Mode=OneWay}" /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
                         <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Custom location — edit the values on the left; everything on the right is calculated from them." />
                         <TextBlock Text="{Binding LinkText}" Style="{StaticResource Note}" Margin="0,4,0,0" Foreground="#4FC3F7" Opacity="1"
                                    Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" />

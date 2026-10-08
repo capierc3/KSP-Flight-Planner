@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings" Width="820" Height="500" MinWidth="640" MinHeight="420"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontSize="{DynamicResource ControlContentThemeFontSize}">
     <Window.Resources>
         <Style x:Key="PageHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="15" />

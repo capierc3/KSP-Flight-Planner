@@ -118,7 +118,7 @@
 
         <!-- Legs/phases and the map -->
         <Border Grid.Column="2" Style="{StaticResource Panel}">
-            <TabControl>
+            <TabControl BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
                 <TabItem Header="Legs &amp; phases">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="0,14,18,0" Grid.IsSharedSizeScope="True">
