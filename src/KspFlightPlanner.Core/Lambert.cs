@@ -3,20 +3,21 @@ namespace KspFlightPlanner.Core;
 /// <summary>
 /// Lambert's problem: the orbit that connects two positions in a given time.
 /// Universal-variable formulation (Curtis, Orbital Mechanics for Engineering Students, Alg. 5.2),
-/// solved by bisection on z for robustness. Single revolution, prograde (motion about +Z).
+/// solved by bisection on z for robustness. Single revolution, prograde: motion about +Z, or about
+/// <c>prograde</c> when given (e.g. the departing craft's angular momentum, for inclined or polar orbits).
 /// </summary>
 public static class Lambert
 {
     public readonly record struct Solution(Vector3d DepartureVelocity, Vector3d ArrivalVelocity);
 
-    public static Solution? Solve(Vector3d r1, Vector3d r2, double timeOfFlight, double mu)
+    public static Solution? Solve(Vector3d r1, Vector3d r2, double timeOfFlight, double mu, Vector3d? prograde = null)
     {
         var r1Len = r1.Length;
         var r2Len = r2.Length;
 
         var cosDTheta = Math.Clamp(Vector3d.Dot(r1, r2) / (r1Len * r2Len), -1, 1);
         var dTheta = Math.Acos(cosDTheta);
-        if (Vector3d.Cross(r1, r2).Z < 0) dTheta = 2 * Math.PI - dTheta; // prograde transfer
+        if (Vector3d.Dot(Vector3d.Cross(r1, r2), prograde ?? new Vector3d(0, 0, 1)) < 0) dTheta = 2 * Math.PI - dTheta; // prograde transfer
 
         var A = Math.Sin(dTheta) * Math.Sqrt(r1Len * r2Len / (1 - cosDTheta));
         if (Math.Abs(A) < 1e-9 || double.IsNaN(A)) return null; // 0° or 180° transfer: plane undefined

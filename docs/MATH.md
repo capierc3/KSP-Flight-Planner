@@ -498,6 +498,143 @@ Worked example (the numbers in `DesignCheckTests`): a lower stage giving 1,000 m
 - Code: `DesignCheck.Check` (surface events), `DesignCheck.ThrustAt`, `SurfaceTwr.Rating`; tested in `DesignCheckTests`
 - Source: KSP engine thrust vs. pressure (thrust ∝ Isp at fixed fuel flow, Isp interpolated along `atmosphereCurve`); a linear curve between 0 and 1 atm is a simplification
 
+## 17. Rendezvous: meeting a craft in orbit
+
+The Rendezvous tab takes you from a launch (or a craft already in orbit) to a standstill next to each target in turn: a relay to repair, debris to deorbit. Every leg is the same four steps, and every burn is given both ways: **by feel** (which way to point, what to look for) and as **exact maneuver-node values** (time, prograde / normal / radial).
+
+1. **Match planes** at the cheaper of the next two crossings of the orbits' planes (§17a)
+2. **Get into position**: wait for the window, or fly a phasing orbit to bring it sooner (§17b)
+3. **Transfer**: a Lambert intercept, searched around the Hohmann window (§17c)
+4. **Match velocity** at the meeting point
+
+The positions come straight from the save: KSP stores each vessel's orbit as Keplerian elements (SMA, ECC, INC, LAN, LPE, MNA at epoch EPH), and §10 turns them into positions at any time. That is why the page asks you to plan from the save's current time — quicksave right before you plan.
+
+To chain legs and to read a burn back as an orbit, the planner also needs the inverse of §10: **elements from a position r and velocity v**:
+
+```
+h = r × v                               angular momentum (plane normal)
+a = 1 / (2/|r| − |v|²/μ)                vis-viva solved for a
+e = ((|v|² − μ/|r|)·r − (r·v)·v) / μ    eccentricity vector (points at periapsis)
+i = acos(h_z / |h|)
+Ω = atan2(n_y, n_x),  n = ẑ × h         (Ω = 0 for an equatorial orbit)
+ω, ν from the angles of e and r in the plane, measured from the node line
+M = E − e·sin E,  E from ν              mean anomaly at this moment = the new epoch
+```
+
+- Code: `Kepler.ElementsFrom` (round-trips with `Kepler.StateAt`; tested in `RendezvousTests`), `Rendezvous.Plan`, `Rendezvous.PlanLeg`
+- Source: Curtis, Algorithm 4.2 (orbital elements from the state vector)
+
+### 17a. Matching planes
+
+Two orbits' planes cross along a line through the body's centre; you cross it twice per orbit, at the ascending node (AN, going "up" through the target's plane) and the descending node (DN). At the crossing your position lies in both planes, so you keep your speed and climb angle and just turn the horizontal part of your velocity into the target's plane:
+
+```
+v_new = v_r·r̂ + |v_h|·(n̂_target × r̂)        v_r = radial speed, v_h = horizontal velocity
+Δv    = |v_new − v| = 2·|v_h|·sin(Δi/2)       Δi = angle between the planes (between the two h vectors)
+```
+
+That's §14 again, using the horizontal speed. Burn **anti-normal at the AN, normal at the DN**. The planner takes the cheaper of the next two crossings (the higher, slower one if your orbit is eccentric).
+
+Worked example — circular 200 km orbit, target tilted 10°: v = √(3.5316×10¹² / 800,000) = 2,101.07 m/s → Δv = 2 × 2,101.07 × sin 5° = **366.24 m/s**.
+
+- Code: `Rendezvous.MatchPlane`, `Rendezvous.RelativeInclinationDeg`; tested in `RendezvousTests`
+- Source: Curtis §6.10
+
+### 17b. Phase angle, waiting, and phasing orbits
+
+With both craft in the same plane, the Hohmann rule of thumb (§4) tells you when to burn. From your orbit's size a₁ to the target's a₂:
+
+```
+t_H = π·√(((a₁ + a₂)/2)³ / μ)            transfer time (half the transfer ellipse)
+φ   = 180° − n₂·t_H                       lead angle: how far ahead the target must be when you burn
+n   = √(μ / a³) = 360° / T                mean motion of each orbit
+θ̇   = n₂ − n₁                             how fast the angle to the target changes
+wait = (θ₀ − φ) / (n₁ − n₂)  (mod 360°)   time until the target is φ ahead (θ₀ = how far ahead it is now)
+T_syn = 1 / |1/T₁ − 1/T₂|                  windows repeat every synodic period
+```
+
+Worked example — 100 km orbit to a 1,000 km relay: a₁ = 700 km, a₂ = 1,600 km → t_H = **2,061.6 s** (34 min), T₂ = 6,766.7 s so φ = 180° − 360° × 2,061.6 / 6,766.7 = **70.32°**; T₁ = 1,958.1 s → a window every **2,755.5 s** (46 min). Burns: **403.26 m/s** prograde, then **326.57 m/s** to match (§4).
+
+When the window is far away (orbits of nearly the same size, like two relays in one constellation, never come into step), a **phasing orbit** brings it sooner: burn prograde or retrograde to change your orbital period to T_p, fly k whole laps back to the burn point, and arrive when the target is at the lead angle:
+
+```
+target ahead after k laps:  θ₀ + n₂·k·T_p ≡ φ  (mod 360°)
+T_p = (Δ + 360°·m) / (n₂·k),   Δ = (φ − θ₀) mod 360°,   m = whole number
+```
+
+For each k = 1…6 the planner offers the m giving a period just below yours (**lower**: faster, you catch up) and just above (**higher**: slower, the target catches up), and skips any that dip into the atmosphere or leave the SOI. The burn changes your speed at the burn point to √(μ·(2/r − 1/a_p)) with a_p = ∛(μ·T_p² / 4π²) (§5). More laps means a smaller change, so it's cheaper but slower. The planner waits if the window is within 3 of your orbits; otherwise it picks the cheapest phasing orbit that still beats waiting. When the orbits are the same size (within 0.5%) the lead angle is 0°: the phasing lap brings you back next to the target, and a short hop of ¼ to under ½ an orbit (§17c) closes what's left.
+
+Worked example — both in 200 km circular orbits (T = 2,392.37 s), target 40° ahead, so Δ = 320°. With k = 6: m = 5, T_p = (320° + 5 × 360°) / (6 × 360° / 2,392.37 s) = **2,348.07 s** → a_p = 790,092.7 m, far side at **180.2 km** (lower), burn √(μ(2/800,000 − 1/790,092.7)) − 2,101.07 = **−13.21 m/s** (retrograde), and the same again to stop: about 26 m/s in total over 6 laps (3.9 h). With k = 1 it would be −87.64 m/s with the far side at 79.2 km, but only one lap.
+
+- Code: `Rendezvous.Guide`, `Rendezvous.PhasingOptions`; tested in `RendezvousTests`
+- Source: Curtis ch. 6 (Hohmann transfers and phasing maneuvers)
+
+### 17c. The intercept: Lambert's problem again
+
+The rule of thumb assumes circular orbits. The real transfer is found like the Transfer Planner's (§11): for each burn time near the predicted window and each flight time (½ to 1½ × t_H), solve Lambert's problem from your position to where the target will be, and add up the two burns:
+
+```
+cost = |v_depart − v_you| + |v_target − v_arrive|
+```
+
+The cheapest cell is refined by zooming in, and drawn as a small porkchop plot you can click to fly a different transfer (later legs move with it). Two details matter here:
+
+- **Prograde about your orbit**, not about the planet's north pole, so polar and retrograde orbits work (`Lambert.Solve` takes the reference direction)
+- **180° transfers are unsolvable**: the transfer plane is undefined and the formulas divide by nearly zero, which can give a confidently wrong answer that looks cheaper than Hohmann. Every solution is therefore flown (propagated, §10) and thrown away if it ends more than 10 m from the target. That leaves dark gaps on the plot. Between coplanar circular orbits the best transfer sits right next to one, and is found to within a few cm/s of the Hohmann numbers (test: 403.26 / 326.57 m/s, arriving within 10 m)
+
+- Code: `Rendezvous.PlanLeg`, `Rendezvous.Intercept`; tested in `RendezvousTests`
+- Source: Curtis §5.3; the propagation check is this app's safeguard
+
+### 17d. Maneuver-node axes
+
+KSP's maneuver node has three handles. For a craft at position r with velocity v:
+
+```
+prograde = v / |v|
+normal   = (r × v) / |r × v|          "up" out of the orbit plane (purple triangle)
+radial   = prograde × normal          in the plane, at right angles to prograde, pointing away from the body (cyan)
+```
+
+Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode.
+
+- Code: `NodeBurn.From`; tested in `RendezvousTests`
+
+### 17e. When and where to launch
+
+Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
+
+```
+λ(t) = longitude + initial rotation + 360° · t / T_sidereal        KSC: longitude −74.5575°, latitude −0.0972°
+```
+
+The pad is (nearly) on the equator, so it passes under the target's plane when λ = Ω (northbound: the ascending pass) or Ω + 180° (southbound). Lifting off then puts you straight into the plane, with no plane change. The compass heading uses the launch azimuth for inclination i (sin β = cos i / cos(latitude)), less the speed Kerbin's spin already gives you eastward:
+
+```
+β = 90° − i (northbound pass) or 90° + i (southbound)
+v_orbit = √(μ / r_parking),  v_spin = 2π·R·cos(latitude) / T_sidereal
+heading = atan2(v_orbit·sin β − v_spin, v_orbit·cos β)
+```
+
+You arrive in the parking orbit at the climb time you enter, at the downrange angle you enter (degrees around Kerbin from the pad). Fly a normal launch once and note both, so the plan matches your ascents. The planner lists the next two passes each way, plus a **due-east** launch at the moment that gives the shortest wait once in orbit (plane fixed later, §17a). It picks the cheapest, or the earliest arrival among those within 10 m/s of it.
+
+Worked example — KSC at UT 0: λ = −74.5575° + 90° = **15.4425°**; a quarter of a sidereal day (21,549.4 s) later, **105.4425°**. Target at i = 45° from an 80 km parking orbit: v_orbit = 2,278.93 m/s, v_spin = 174.94 m/s, β = 45° → heading = atan2(1,611.47 − 174.94, 1,611.47) = **41.7°**.
+
+- Code: `LaunchSite.InertialLongitudeDeg`, `Rendezvous.LaunchOptions`; tested in `RendezvousTests`
+- Source: launch azimuth from spherical trigonometry, sin β = cos i / cos φ ([Braeunig, Orbital Mechanics](http://www.braeunig.us/space/orbmech.htm)); KSP's body `initialRotation` (Kerbin 90°) and `rotationAngle` = initial rotation + 360°·UT / rotation period, the same convention kOS exposes as `BODY:ROTATIONANGLE`. Check it in game the first time: at the planned lift-off, the target's AN or DN marker should be right over the KSC
+
+### 17f. Deorbiting
+
+To bring a target down (docked to your craft), burn retrograde at apoapsis r_a so the new periapsis r_p is inside the atmosphere (about 30 km on Kerbin; the default is 43% of the atmosphere's height, or the ground on airless bodies):
+
+```
+Δv = v_a − √(2μ·r_p / (r_a·(r_a + r_p)))       (v_a = speed at apoapsis now; the second term is vis-viva at r_a for the new orbit)
+```
+
+Worked examples — from 80 km circular to a 30 km periapsis: √(3.5316×10¹² / 680,000) − √(2 × 3.5316×10¹² × 630,000 / (680,000 × 1,310,000)) = **43.91 m/s**. From a 2,870 km relay orbit: **449.6 m/s**. The Δv is per m/s of the docked stack, which is heavier than your craft alone, so it burns more fuel than the same Δv would solo.
+
+- Code: `Rendezvous.Deorbit`; tested in `RendezvousTests`
+- Source: vis-viva (§3)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

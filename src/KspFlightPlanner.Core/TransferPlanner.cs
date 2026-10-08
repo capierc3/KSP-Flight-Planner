@@ -49,6 +49,13 @@ public sealed record HohmannEstimate(
     double DepartureVInf = 0,
     double ArrivalVInf = 0);
 
+/// <summary>A point on a porkchop plot: a departure time and a flight time.</summary>
+public interface IPorkchopPoint
+{
+    double DepartureUt { get; }
+    double FlightTimeS { get; }
+}
+
 public sealed record TransferWindow(
     double DepartureUt,
     double ArrivalUt,
@@ -57,7 +64,7 @@ public sealed record TransferWindow(
     double ArrivalVInf,
     double EjectionDv,
     double CaptureDv,
-    EjectionBurn Ejection)
+    EjectionBurn Ejection) : IPorkchopPoint
 {
     public double FlightTimeS => ArrivalUt - DepartureUt;
     public double TotalDv => EjectionDv + CaptureDv;
