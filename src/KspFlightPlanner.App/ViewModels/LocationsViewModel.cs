@@ -106,6 +106,8 @@ public sealed class LocationsViewModel : ObservableObject
     {
         var selectedBody = _selected?.Body?.Id;
         var selectedLocation = _selected?.Location?.Id;
+        // Another screen (or the save watcher) changed locations: don't throw away edits in progress.
+        var unsaved = keepSelection && Detail is CustomLocationEditorViewModel { IsDirty: true } editor ? editor : null;
 
         var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock");
         _stock = system is null ? [] : _bodies.GetBodies(system.Id);
@@ -120,7 +122,8 @@ public sealed class LocationsViewModel : ObservableObject
             var item = new LocationTreeItem(body.Name, subtitle, body.Color, body: body);
             foreach (var child in byParent[body.Id].OrderBy(c => c.Orbit?.SemiMajorAxisM ?? 0)) item.Children.Add(Build(child));
             foreach (var l in custom.Where(l => l.BodyName == body.Name).OrderBy(l => l.PeriapsisAltitudeM))
-                item.Children.Add(new LocationTreeItem(l.Name, CustomLocations.AltitudeText(l), body.Color, location: l));
+                item.Children.Add(new LocationTreeItem(l.Name, CustomLocations.AltitudeText(l) + (l.IsLinked ? " · from save" : ""),
+                    body.Color, location: l));
             return item;
         }
         foreach (var root in byParent[null]) Tree.Add(Build(root));
@@ -133,6 +136,7 @@ public sealed class LocationsViewModel : ObservableObject
             SelectQuietly(bi);
         else if (All(Tree).FirstOrDefault(i => i.Body?.Name == "Kerbin" && !i.IsCustom) is { } kerbin)
             SelectQuietly(kerbin);
+        if (unsaved is not null) Detail = unsaved;
     }
 
     private void SelectQuietly(LocationTreeItem item)

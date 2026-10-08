@@ -63,6 +63,7 @@ public sealed class PlannerDatabase
         ("dv_map_overrides", []),
         ("saved_missions", []),
         ("saved_constellations", []),
+        ("app_settings", []),
     ];
 
     public void Initialize()

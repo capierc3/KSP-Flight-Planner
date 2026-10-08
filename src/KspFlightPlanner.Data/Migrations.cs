@@ -111,6 +111,9 @@ internal static class Migrations
             mean_anomaly_deg      REAL    NOT NULL DEFAULT 0,   -- at epoch_ut (Elements mode)
             phase_angle_deg       REAL    NOT NULL DEFAULT 0,   -- ahead of Kerbin at epoch_ut (PhaseAngle mode)
             epoch_ut              REAL    NOT NULL DEFAULT 0,   -- seconds since Year 1, Day 1
+            -- Imported from a KSP save: the orbit follows the vessel (save folder name + vessel pid). NULL = not linked.
+            ksp_save              TEXT,
+            ksp_vessel_id         TEXT,
             created_utc           TEXT    NOT NULL,
             updated_utc           TEXT
         );
@@ -121,6 +124,12 @@ internal static class Migrations
             file_name    TEXT    NOT NULL,
             image        BLOB    NOT NULL,
             sort_order   INTEGER NOT NULL DEFAULT 0
+        );
+
+        -- User preferences (KSP install folder, chosen save, …) as key/value text.
+        CREATE TABLE app_settings (
+            key    TEXT PRIMARY KEY,
+            value  TEXT NOT NULL
         );
 
         CREATE TABLE saved_missions (

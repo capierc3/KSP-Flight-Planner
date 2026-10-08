@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using KspFlightPlanner.App.Services;
 using KspFlightPlanner.App.ViewModels;
 using KspFlightPlanner.Data;
 
@@ -25,6 +26,7 @@ public partial class App : Application
                 new LocationsViewModel(bodies, maps, locations, events),
                 new TransferPlannerViewModel(bodies, locations, events),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
+                new SaveSync(new SettingsRepository(database), bodies, locations, events),
                 events);
             new MainWindow(viewModel).Show();
         }

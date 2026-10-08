@@ -246,6 +246,32 @@ Worked example — the 10,000,000 km "Eye of Kerbol" (r = 10,261,600,000 m), pla
 - Code: `CustomLocationOrbits.ToElements`, `CustomLocationOrbits.ToBody`, `CustomLocationOrbits.PhaseAngleFromHome`, `TransferPlanner.PlanAnyTime`
 - Source: Curtis §3.4 (mean anomaly), §8.2 (phase angles), §8.3 (synodic period)
 
+## 8c. Importing vessels from a KSP save
+
+KSP stores every vessel's orbit in the save (`saves/<name>/persistent.sfs`) as an `ORBIT` block with the same Keplerian elements a placed custom location uses — so importing is a unit conversion, not an orbit fit:
+
+```
+SMA  semi-major axis a (m, from the body's centre)     ECC  eccentricity e
+INC  inclination (°)    LAN  Ω (°)    LPE  argument of periapsis ω (°)
+MNA  mean anomaly M at the epoch (radians)    EPH  epoch (UT seconds)    IDENT / REF  the body orbited
+
+periapsis altitude = a(1 − e) − R        apoapsis altitude = a(1 + e) − R        (R = body's equatorial radius)
+mean anomaly (°)   = MNA × 180/π,  wrapped into 0–360°  (Ω and ω are wrapped the same way)
+date of position   = EPH
+```
+
+From there the location moves exactly like the vessel: Kepler's equation (§10) from M at EPH. Only `ORBITING` vessels with e < 1 import; landed, sub-orbital and escaping vessels don't have an orbit to place. When KSP writes the save again, a linked location's orbit and position are replaced by the new values (name, description and images are kept).
+
+Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
+
+1. SMA = 3,470,794.97 m, ECC = 0.0027130 → a·e = **9,416.3 m**
+2. Periapsis = 3,470,794.97 − 9,416.3 − 600,000 = **2,861,378.7 m** (2,861.4 km); apoapsis = 3,470,794.97 + 9,416.3 − 600,000 = **2,880,211.2 m** (2,880.2 km)
+3. MNA = 4.0125185 rad × 57.29578 = **229.900°** at EPH = 816,532.3 s (Year 1, Day 38)
+4. INC 0.560°, LAN 281.711°, LPE 160.828° are copied as they are
+
+- Code: `KspSaveReader.Parse`, `SaveImport.Convert`, `SaveImport.Refresh`; tested in `KspSaveTests`
+- Source: KSP 1.12 save format (`ORBIT` node written by `OrbitSnapshot`); Curtis §4.4 (orbital elements)
+
 ## 9. Ejection angle: where in your parking orbit to burn
 
 Your escape hyperbola bends by θ∞ between the burn (periapsis) and the direction you leave in:

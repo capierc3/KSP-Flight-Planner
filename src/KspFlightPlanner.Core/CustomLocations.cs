@@ -37,6 +37,14 @@ public sealed record CustomLocation(
     public string Key => $"custom.{Id}";
     public bool IsCircular => Math.Abs(ApoapsisAltitudeM - PeriapsisAltitudeM) < 1;
 
+    /// <summary>Imported from a KSP save: the save folder's name. The orbit follows the vessel while linked.</summary>
+    public string? KspSave { get; init; }
+
+    /// <summary>Imported from a KSP save: the vessel's id (pid) in that save.</summary>
+    public string? KspVesselId { get; init; }
+
+    public bool IsLinked => KspSave is not null && KspVesselId is not null;
+
     public static CustomLocation Circular(long id, string name, string bodyName, double altitudeM, string? description = null) =>
         new(id, name, bodyName, altitudeM, altitudeM, 0, description);
 }

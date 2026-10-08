@@ -23,7 +23,8 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT id, name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description,
-                   is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut
+                   is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut,
+                   ksp_save, ksp_vessel_id
             FROM custom_locations ORDER BY body_name, periapsis_altitude_m, name;
             """;
         using var reader = cmd.ExecuteReader();
@@ -37,7 +38,11 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
                 ArgumentOfPeriapsisDeg: reader.GetDouble(10),
                 MeanAnomalyDeg: reader.GetDouble(11),
                 PhaseAngleDeg: reader.GetDouble(12),
-                EpochUt: reader.GetDouble(13)));
+                EpochUt: reader.GetDouble(13))
+            {
+                KspSave = reader.IsDBNull(14) ? null : reader.GetString(14),
+                KspVesselId = reader.IsDBNull(15) ? null : reader.GetString(15),
+            });
         return list;
     }
 
@@ -55,10 +60,14 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         cmd.CommandText = """
             INSERT INTO custom_locations
                 (name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description,
-                 is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut, created_utc)
-            VALUES ($name, $body, $pe, $ap, $inc, $desc, $placed, $mode, $lan, $argpe, $mean, $phase, $epoch, $now) RETURNING id;
+                 is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut,
+                 ksp_save, ksp_vessel_id, created_utc)
+            VALUES ($name, $body, $pe, $ap, $inc, $desc, $placed, $mode, $lan, $argpe, $mean, $phase, $epoch,
+                    $save, $vessel, $now) RETURNING id;
             """;
         AddValues(cmd, location);
+        cmd.Parameters.AddWithValue("$save", (object?)location.KspSave ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$vessel", (object?)location.KspVesselId ?? DBNull.Value);
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
@@ -82,6 +91,17 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         AddValues(cmd, location);
         cmd.Parameters.AddWithValue("$id", location.Id);
         cmd.Parameters.AddWithValue("$key", location.Key);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Stops a location following its vessel in a KSP save; it keeps its last orbit.</summary>
+    public void Unlink(long id)
+    {
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE custom_locations SET ksp_save = NULL, ksp_vessel_id = NULL, updated_utc = $now WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         cmd.ExecuteNonQuery();
     }
 

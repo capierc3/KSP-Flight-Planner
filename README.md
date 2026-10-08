@@ -15,6 +15,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
+- **KSP save link** — set your KSP folder and save in ⚙ Settings, then *Import vessels…* turns vessels in orbit
+  into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
+  watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
 
 ## Layout
 
@@ -51,6 +54,8 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 - `dv_map_overrides` — user edits to map values, keyed by node key.
 - `custom_locations`, `custom_location_images` — user-defined orbits (periapsis, apoapsis, inclination,
   description) and their images (stored as BLOBs).
+- `custom_locations.ksp_save`, `ksp_vessel_id` — set when a location was imported from a save and follows its vessel.
+- `app_settings` — preferences as key/value text (KSP folder, chosen save, watch on/off); see `SettingsRepository`.
 - `saved_constellations`, `saved_missions` — user data.
 - **Pre-release:** the schema is a single v1 script that is still edited in place. When the schema or seed
   data changes, the database is rebuilt automatically and user tables are copied across

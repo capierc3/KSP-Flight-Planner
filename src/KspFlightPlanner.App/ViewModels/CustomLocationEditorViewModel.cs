@@ -27,6 +27,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     private readonly Action<long> _saved;
     private readonly Action _deleted;
     private CustomLocation _original;
+    private CustomLocation? _loaded; // _original as the inputs show it (rounded for display)
 
     private string _name = "";
     private CelestialBodyOption? _body;
@@ -63,6 +64,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         SaveCommand = new RelayCommand(Save, () => IsDirty && Error is null);
         RevertCommand = new RelayCommand(() => Load(_original), () => IsDirty);
         DeleteCommand = new RelayCommand(Delete, () => !IsNew);
+        UnlinkCommand = new RelayCommand(Unlink, () => IsLinked);
         AddImagesCommand = new RelayCommand(AddImages, () => !IsNew);
         RemoveImageCommand = new RelayCommand<LocationImageItem>(RemoveImage);
 
@@ -77,11 +79,18 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     public RelayCommand SaveCommand { get; }
     public RelayCommand RevertCommand { get; }
     public RelayCommand DeleteCommand { get; }
+    public RelayCommand UnlinkCommand { get; }
     public RelayCommand AddImagesCommand { get; }
     public RelayCommand<LocationImageItem> RemoveImageCommand { get; }
 
     public bool IsNew => _original.Id == 0;
     public string Title => IsNew ? "New location" : _original.Name;
+    /// <summary>Follows a vessel in a KSP save: its orbit and position are replaced whenever the game saves.</summary>
+    public bool IsLinked => _original.IsLinked;
+    public string LinkText => IsLinked
+        ? $"Linked to a vessel in the KSP save \"{_original.KspSave}\" — the orbit and position update whenever KSP saves, so edits to them are overwritten. Name, description and images stay yours."
+        : "";
+
     public string ImagesHint => IsNew ? "Save the location first, then add images." : "PNG, JPG, BMP or GIF up to 15 MB. Stored in the planner database.";
 
     // ---------------- Editable values ----------------
@@ -156,7 +165,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     /// <summary>Why the current values can't be saved, or null when they're valid.</summary>
     public string? Error { get => _error; private set => SetProperty(ref _error, value); }
 
-    public bool IsDirty => IsNew || Current() is not { } c || c != _original with { Description = Normalize(_original.Description) };
+    public bool IsDirty => IsNew || Current() is not { } c || c != _loaded;
 
     // ---------------- Logic ----------------
 
@@ -186,6 +195,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
                      nameof(UsePhaseAngle), nameof(UseElements), nameof(Lan), nameof(ArgumentOfPeriapsis), nameof(MeanAnomaly),
                      nameof(PhaseAngle), nameof(EpochYear), nameof(EpochDay), nameof(EpochHour) })
             OnPropertyChanged(p);
+        _loaded = Current();
         Changed();
     }
 
@@ -201,7 +211,11 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
             return null;
         return new CustomLocation(_original.Id, Name.Trim(), b.Name, pe * 1000, ap * 1000, inc, Normalize(Description),
             IsPlaced, UsePhaseAngle ? PositionMode.PhaseAngle : PositionMode.Elements, lan, argPe, mean, phase,
-            _calendar.ToUniversalTime(year, day, hour));
+            _calendar.ToUniversalTime(year, day, hour))
+        {
+            KspSave = _original.KspSave,
+            KspVesselId = _original.KspVesselId,
+        };
     }
 
     private void Changed()
@@ -275,7 +289,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
             _repository.Update(location);
             id = location.Id;
         }
-        _original = location with { Id = id };
+        _original = _loaded = location with { Id = id };
         OnPropertyChanged(nameof(IsDirty));
         _saved(id);
     }
@@ -287,6 +301,15 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
             return;
         _repository.Delete(_original.Id);
         _deleted();
+    }
+
+    private void Unlink()
+    {
+        if (!_owner.Confirm($"Stop \"{_original.Name}\" following its vessel in the KSP save?\n\nIt keeps its current orbit; " +
+                            "you can import the vessel again later."))
+            return;
+        _repository.Unlink(_original.Id);
+        _saved(_original.Id);
     }
 
     private void AddImages()

@@ -114,11 +114,16 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Content="Save" Command="{Binding SaveCommand}" Margin="0,0,8,0" MinWidth="80" />
                         <Button Content="Revert" Command="{Binding RevertCommand}" Margin="0,0,8,0" />
+                        <Button Content="Unlink" Command="{Binding UnlinkCommand}" Margin="0,0,8,0"
+                                Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Stop following the vessel in the KSP save; keep the current orbit" />
                         <Button Content="Delete" Command="{Binding DeleteCommand}" />
                     </StackPanel>
                     <StackPanel>
                         <TextBlock FontSize="26" FontWeight="Bold"><Run Text="◆ " Foreground="{Binding Body.Body.Color, Mode=OneWay}" /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
                         <TextBlock Opacity="0.7" Text="Custom location — edit the values on the left; everything on the right is calculated from them." />
+                        <TextBlock Text="{Binding LinkText}" Style="{StaticResource Note}" Margin="0,4,0,0" Foreground="#4FC3F7" Opacity="1"
+                                   Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </DockPanel>
 
