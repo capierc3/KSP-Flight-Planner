@@ -57,7 +57,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
     public bool HasProblem => Problem is not null;
 
     /// <summary>Vessels in orbit that aren't imported yet (ships, stations, probes… not debris or asteroids).</summary>
-    public int NewVessels { get => _newVessels; private set { if (SetProperty(ref _newVessels, value)) OnPropertyChanged(nameof(NewVesselsText)); } }
+    public int NewVessels { get => _newVessels; private set { if (SetProperty(ref _newVessels, value)) { OnPropertyChanged(nameof(NewVesselsText)); OnPropertyChanged(nameof(HasNewVessels)); } } }
+
+    public bool HasNewVessels => NewVessels > 0;
 
     public string NewVesselsText => NewVessels == 1 ? "1 new vessel" : $"{NewVessels} new vessels";
 
@@ -108,7 +110,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
         {
             Save = null;
             Problem = null;
-            Status = "No KSP save chosen — open Settings to link one.";
+            Status = "No KSP save chosen — Tools › Settings to link one.";
             NewVessels = 0;
             return;
         }

@@ -13,15 +13,17 @@
 
         <!-- Label/value pairs; values are selectable so they can be copied. -->
         <DataTemplate x:Key="FactRow" DataType="{x:Type vm:Fact}">
-            <Grid Margin="0,4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" SharedSizeGroup="FactLabel" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Label}" Style="{StaticResource Label}" Margin="0,0,16,0" />
-                <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                         Padding="0" MinHeight="0" TextWrapping="Wrap" VerticalAlignment="Center" />
-            </Grid>
+            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="FactLabel" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Label}" Margin="0,0,16,0" />
+                    <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                             Padding="0" MinHeight="0" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
         </DataTemplate>
 
         <!-- Read-only body -->
@@ -31,7 +33,7 @@
                     <Ellipse Width="34" Height="34" Fill="{Binding Color}" Margin="0,0,12,0" />
                     <StackPanel>
                         <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="Bold" />
-                        <TextBlock Text="{Binding Subtitle}" Opacity="0.7" />
+                        <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0" Text="Built-in data — read only. Custom locations around this body can be edited." />
@@ -48,7 +50,7 @@
                 </ItemsControl>
 
                 <TextBlock Text="Stops on the Δv map" Style="{StaticResource SectionHeader}" />
-                <Grid Opacity="0.6" Margin="0,0,0,4">
+                <Grid TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextElement.FontWeight="SemiBold" Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="200" /><ColumnDefinition Width="230" /><ColumnDefinition Width="180" />
                         <ColumnDefinition Width="70" /><ColumnDefinition Width="140" /><ColumnDefinition Width="*" />
@@ -59,14 +61,14 @@
                 <ItemsControl ItemsSource="{Binding MapStops}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,4">
+                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,4">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="200" /><ColumnDefinition Width="230" /><ColumnDefinition Width="180" />
                                         <ColumnDefinition Width="70" /><ColumnDefinition Width="140" /><ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding Stop}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <TextBlock Grid.Column="1" Text="{Binding From}" TextWrapping="Wrap" Opacity="0.8" />
+                                    <TextBlock Grid.Column="1" Text="{Binding From}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <TextBlock Grid.Column="2" Text="{Binding DeltaV}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" />
                                     <TextBlock Grid.Column="3" Text="{Binding PlaneChange}" FontFamily="Cascadia Mono, Consolas" />
                                     <TextBlock Grid.Column="4" Text="{Binding Aerobrake}" />
@@ -121,7 +123,7 @@
                     </StackPanel>
                     <StackPanel>
                         <TextBlock FontSize="26" FontWeight="Bold"><Run Text="◆ " Foreground="{Binding Body.Body.Color, Mode=OneWay}" /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
-                        <TextBlock Opacity="0.7" Text="Custom location — edit the values on the left; everything on the right is calculated from them." />
+                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Custom location — edit the values on the left; everything on the right is calculated from them." />
                         <TextBlock Text="{Binding LinkText}" Style="{StaticResource Note}" Margin="0,4,0,0" Foreground="#4FC3F7" Opacity="1"
                                    Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
@@ -230,7 +232,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Margin="0,0,10,10" CornerRadius="4" BorderBrush="#30808080" BorderThickness="1" Padding="4">
+                                <Border Margin="0,0,10,10" CornerRadius="4" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="1" Padding="4">
                                     <StackPanel>
                                         <Image Source="{Binding Thumbnail}" Height="160" Stretch="Uniform" Cursor="Hand"
                                                ToolTip="Click to view full size" MouseLeftButtonUp="Image_Click" />
@@ -250,43 +252,47 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="28,20,28,24">
+    <Grid Margin="8,10,8,8">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320" />
-            <ColumnDefinition Width="36" />
+            <ColumnDefinition Width="340" />
+            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <DockPanel>
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                <Button DockPanel.Dock="Right" Content="＋ New location" Command="{Binding NewLocationCommand}" />
-                <TextBlock Text="Locations" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-            </DockPanel>
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,8"
-                       Text="● built-in bodies (read only)   ◆ your custom locations (editable). Ordered by distance from the parent." />
-            <TreeView x:Name="Tree" ItemsSource="{Binding Tree}" SelectedItemChanged="Tree_SelectedItemChanged">
-                <TreeView.ItemContainerStyle>
-                    <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
-                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                    </Style>
-                </TreeView.ItemContainerStyle>
-                <TreeView.ItemTemplate>
-                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                        <StackPanel Orientation="Horizontal" Margin="0,2">
-                            <TextBlock Text="{Binding Glyph}" Foreground="{Binding Color}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <StackPanel>
-                                <TextBlock Text="{Binding Title}" />
-                                <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" />
+        <Border Style="{StaticResource Panel}">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="＋ New location" Command="{Binding NewLocationCommand}" />
+                    <TextBlock Text="Locations" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,8"
+                           Text="● built-in bodies (read only)   ◆ your custom locations (editable). Ordered by distance from the parent." />
+                <TreeView x:Name="Tree" ItemsSource="{Binding Tree}" Background="Transparent" BorderThickness="0" SelectedItemChanged="Tree_SelectedItemChanged">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                <TextBlock Text="{Binding Glyph}" Foreground="{Binding Color}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" />
+                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </HierarchicalDataTemplate>
-                </TreeView.ItemTemplate>
-            </TreeView>
-        </DockPanel>
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+        </Border>
 
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <ContentControl Content="{Binding Detail}" />
-        </ScrollViewer>
+        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="24,12,8,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ContentControl Content="{Binding Detail}" />
+            </ScrollViewer>
+        </Border>
     </Grid>
 </UserControl>

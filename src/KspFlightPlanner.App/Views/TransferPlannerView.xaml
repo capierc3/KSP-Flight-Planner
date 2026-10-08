@@ -51,225 +51,231 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="28,20,28,24">
+    <Grid Margin="8,10,8,8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="320" />
-            <ColumnDefinition Width="36" />
+            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="400" />
-            <ColumnDefinition Width="36" />
+            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <!-- Inputs and body data -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,18,0" Grid.IsSharedSizeScope="True">
-                <TextBlock Text="Trip" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,18,0" Grid.IsSharedSizeScope="True">
+                    <TextBlock Text="Trip" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
 
-                <TextBlock Text="System" Style="{StaticResource Label}" />
-                <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
+                    <TextBlock Text="System" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
 
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="From" Style="{StaticResource Label}" />
-                        <ComboBox ItemsSource="{Binding Origins}" SelectedItem="{Binding SelectedOrigin}" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="From" Style="{StaticResource Label}" />
+                            <ComboBox ItemsSource="{Binding Origins}" SelectedItem="{Binding SelectedOrigin}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="To" Style="{StaticResource Label}" />
+                            <ComboBox ItemsSource="{Binding Destinations}" SelectedItem="{Binding SelectedDestination}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Parking orbit (km)" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsParkingAltitudeEnabled}"
+                                     ToolTip="Not used when leaving a custom location (you start in its orbit)" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Arrival orbit (km)" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding ArrivalAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsArrivalAltitudeEnabled}"
+                                     ToolTip="Not used when going to a custom location (you match its orbit)" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Earliest departure" Style="{StaticResource Label}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Year" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                        <TextBox Grid.Column="1" Text="{Binding EarliestYear, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                        <TextBlock Grid.Column="3" Text="Day" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                        <TextBox Grid.Column="4" Text="{Binding EarliestDay, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                    </Grid>
+
+                    <TextBlock Text="At destination" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" />
+                    <CheckBox Content="Include landing in budget" IsChecked="{Binding IncludeLanding}" Margin="0,8,0,0" />
+
+                    <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" />
+                    <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding StayLabel}" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding MinimumStayDays, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                        <TextBlock Style="{StaticResource Label}">
+                            <Run Text="Arriving back at " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
+                        </TextBlock>
+                        <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="To" Style="{StaticResource Label}" />
-                        <ComboBox ItemsSource="{Binding Destinations}" SelectedItem="{Binding SelectedDestination}" />
-                    </StackPanel>
-                </Grid>
 
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="Parking orbit (km)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsParkingAltitudeEnabled}"
-                                 ToolTip="Not used when leaving a custom location (you start in its orbit)" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="Arrival orbit (km)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding ArrivalAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsArrivalAltitudeEnabled}"
-                                 ToolTip="Not used when going to a custom location (you match its orbit)" />
-                    </StackPanel>
-                </Grid>
+                    <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,8,0,0" />
 
-                <TextBlock Text="Earliest departure" Style="{StaticResource Label}" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="Auto" /><ColumnDefinition />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Year" Style="{StaticResource Label}" Margin="0,0,6,0" />
-                    <TextBox Grid.Column="1" Text="{Binding EarliestYear, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
-                    <TextBlock Grid.Column="3" Text="Day" Style="{StaticResource Label}" Margin="0,0,6,0" />
-                    <TextBox Grid.Column="4" Text="{Binding EarliestDay, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
-                </Grid>
-
-                <TextBlock Text="At destination" Style="{StaticResource Label}" />
-                <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" />
-                <CheckBox Content="Include landing in budget" IsChecked="{Binding IncludeLanding}" Margin="0,8,0,0" />
-
-                <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" />
-                <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{Binding StayLabel}" Style="{StaticResource Label}" />
-                    <TextBox Text="{Binding MinimumStayDays, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
-                    <TextBlock Style="{StaticResource Label}">
-                        <Run Text="Arriving back at " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
+                    <TextBlock Style="{StaticResource SectionHeader}">
+                        <Run Text="Destination: " /><Run Text="{Binding SelectedDestination.Name, Mode=OneWay}" />
                     </TextBlock>
-                    <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
+                    <ItemsControl ItemsSource="{Binding DestinationFacts}" ItemTemplate="{StaticResource FactTemplate}" />
+
+                    <TextBlock Style="{StaticResource SectionHeader}">
+                        <Run Text="Origin: " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
+                    </TextBlock>
+                    <ItemsControl ItemsSource="{Binding OriginFacts}" ItemTemplate="{StaticResource FactTemplate}" />
                 </StackPanel>
-
-                <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,8,0,0" />
-
-                <TextBlock Style="{StaticResource SectionHeader}">
-                    <Run Text="Destination: " /><Run Text="{Binding SelectedDestination.Name, Mode=OneWay}" />
-                </TextBlock>
-                <ItemsControl ItemsSource="{Binding DestinationFacts}" ItemTemplate="{StaticResource FactTemplate}" />
-
-                <TextBlock Style="{StaticResource SectionHeader}">
-                    <Run Text="Origin: " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
-                </TextBlock>
-                <ItemsControl ItemsSource="{Binding OriginFacts}" ItemTemplate="{StaticResource FactTemplate}" />
-            </StackPanel>
-        </ScrollViewer>
+            </ScrollViewer>
+        </Border>
 
         <!-- Results -->
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,18,0">
-                <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,4"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="16,12,8,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,18,0">
+                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,4"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
 
-                <DockPanel Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetToBestCommand}"
-                            Visibility="{Binding IsCustomSelection, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="{Binding Outbound.Title}" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-                </DockPanel>
-                <ContentControl Content="{Binding Outbound}" ContentTemplate="{StaticResource LegTemplate}" />
-
-                <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
-                    <DockPanel Margin="0,14,0,6">
-                        <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetReturnToBestCommand}"
-                                Visibility="{Binding IsCustomReturnSelection, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="{Binding Return.Title, TargetNullValue='Return window'}" Style="{StaticResource SectionHeader}"
-                                   Margin="0" VerticalAlignment="Center" />
+                    <DockPanel Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetToBestCommand}"
+                                Visibility="{Binding IsCustomSelection, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding Outbound.Title}" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
                     </DockPanel>
-                    <ContentControl Content="{Binding Return}" ContentTemplate="{StaticResource LegTemplate}" />
+                    <ContentControl Content="{Binding Outbound}" ContentTemplate="{StaticResource LegTemplate}" />
+
+                    <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel Margin="0,14,0,6">
+                            <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetReturnToBestCommand}"
+                                    Visibility="{Binding IsCustomReturnSelection, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Text="{Binding Return.Title, TargetNullValue='Return window'}" Style="{StaticResource SectionHeader}"
+                                       Margin="0" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <ContentControl Content="{Binding Return}" ContentTemplate="{StaticResource LegTemplate}" />
+                    </StackPanel>
+
+                    <TextBlock Text="Mission Δv budget" Style="{StaticResource SectionHeader}" />
+                    <ItemsControl ItemsSource="{Binding BudgetLines}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel x:Name="Line" Margin="0,3">
+                                    <DockPanel>
+                                        <TextBlock x:Name="Amount" DockPanel.Dock="Right" Style="{StaticResource Value}"
+                                                   Text="{Binding DeltaV, StringFormat='{}{0:N0} m/s', TargetNullValue='—'}" />
+                                        <TextBlock x:Name="StageText" Text="{Binding Stage}" TextWrapping="Wrap" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock x:Name="NoteText" Text="{Binding Note}" Style="{StaticResource Note}" />
+                                </StackPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Note}" Value="{x:Null}">
+                                        <Setter TargetName="NoteText" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                                        <Setter TargetName="Amount" Property="Visibility" Value="Collapsed" />
+                                        <Setter TargetName="StageText" Property="FontWeight" Value="SemiBold" />
+                                        <Setter TargetName="StageText" Property="Opacity" Value="0.85" />
+                                        <Setter TargetName="Line" Property="Margin" Value="0,8,0,2" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Separator Margin="0,6" />
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding BudgetTotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
+                        <TextBlock Text="{Binding BudgetTotalLabel}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <TextBlock Text="Ideal Hohmann transfer (outbound)" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
+                               Text="Textbook estimate assuming circular, flat orbits. Useful as a rule of thumb; the windows above use the real orbits." />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Phase angle" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HohmannPhaseText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="1" Text="Transfer time" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HohmannTimeText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="2" Text="Ejection Δv" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HohmannEjectionText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="3" Text="Ejection burn point" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HohmannEjectionAngleText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="4" Text="Capture Δv" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding HohmannCaptureText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="5" Text="Windows repeat every" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SynodicText}" Style="{StaticResource Value}" />
+                    </Grid>
                 </StackPanel>
-
-                <TextBlock Text="Mission Δv budget" Style="{StaticResource SectionHeader}" />
-                <ItemsControl ItemsSource="{Binding BudgetLines}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel x:Name="Line" Margin="0,3">
-                                <DockPanel>
-                                    <TextBlock x:Name="Amount" DockPanel.Dock="Right" Style="{StaticResource Value}"
-                                               Text="{Binding DeltaV, StringFormat='{}{0:N0} m/s', TargetNullValue='—'}" />
-                                    <TextBlock x:Name="StageText" Text="{Binding Stage}" TextWrapping="Wrap" Margin="0,0,12,0" VerticalAlignment="Center" />
-                                </DockPanel>
-                                <TextBlock x:Name="NoteText" Text="{Binding Note}" Style="{StaticResource Note}" />
-                            </StackPanel>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding Note}" Value="{x:Null}">
-                                    <Setter TargetName="NoteText" Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsHeader}" Value="True">
-                                    <Setter TargetName="Amount" Property="Visibility" Value="Collapsed" />
-                                    <Setter TargetName="StageText" Property="FontWeight" Value="SemiBold" />
-                                    <Setter TargetName="StageText" Property="Opacity" Value="0.85" />
-                                    <Setter TargetName="Line" Property="Margin" Value="0,8,0,2" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Separator Margin="0,6" />
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding BudgetTotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
-                    <TextBlock Text="{Binding BudgetTotalLabel}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                </DockPanel>
-
-                <TextBlock Text="Ideal Hohmann transfer (outbound)" Style="{StaticResource SectionHeader}" />
-                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
-                           Text="Textbook estimate assuming circular, flat orbits. Useful as a rule of thumb; the windows above use the real orbits." />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="Phase angle" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding HohmannPhaseText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="1" Text="Transfer time" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HohmannTimeText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="2" Text="Ejection Δv" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HohmannEjectionText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="3" Text="Ejection burn point" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HohmannEjectionAngleText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="4" Text="Capture Δv" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding HohmannCaptureText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="5" Text="Windows repeat every" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SynodicText}" Style="{StaticResource Value}" />
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
+            </ScrollViewer>
+        </Border>
 
         <!-- Porkchop plot -->
-        <Grid Grid.Column="4">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <Border Grid.Column="4" Style="{StaticResource Panel}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <DockPanel Grid.ColumnSpan="2">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
-                            Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
-                    <RadioButton Content="Outbound" IsChecked="{Binding ShowOutboundPlot}" GroupName="Leg" Margin="0,0,12,0" />
-                    <RadioButton Content="Return" IsChecked="{Binding ShowReturnPlot}" GroupName="Leg" />
-                </StackPanel>
-                <TextBlock Text="{Binding PlotTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,16,2" TextTrimming="CharacterEllipsis" />
-            </DockPanel>
-            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Note}" Margin="0,0,0,8"
-                       Visibility="{Binding HasPlot, Converter={StaticResource BoolToVisibility}}">
-                Total transfer Δv by departure date (→) and flight time (↑). Blue is cheap, red is expensive
-                (<Run Text="{Binding PorkchopScaleLabel, Mode=OneWay}" />). Click or drag to inspect another departure.
-                The dotted ridge marks exact 180° transfers, which need a large plane change.
-            </TextBlock>
-
-            <Grid Grid.Row="2" Margin="0,0,6,0">
-                <TextBlock Text="{Binding PorkchopMaxFlightLabel}" VerticalAlignment="Top" Style="{StaticResource Note}" />
-                <TextBlock Text="Flight time" VerticalAlignment="Center" Style="{StaticResource Note}">
-                    <TextBlock.LayoutTransform><RotateTransform Angle="-90" /></TextBlock.LayoutTransform>
+                <DockPanel Grid.ColumnSpan="2">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                        <RadioButton Content="Outbound" IsChecked="{Binding ShowOutboundPlot}" GroupName="Leg" Margin="0,0,12,0" />
+                        <RadioButton Content="Return" IsChecked="{Binding ShowReturnPlot}" GroupName="Leg" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding PlotTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,16,2" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Note}" Margin="0,0,0,8"
+                           Visibility="{Binding HasPlot, Converter={StaticResource BoolToVisibility}}">
+                    Total transfer Δv by departure date (→) and flight time (↑). Blue is cheap, red is expensive
+                    (<Run Text="{Binding PorkchopScaleLabel, Mode=OneWay}" />). Click or drag to inspect another departure.
+                    The dotted ridge marks exact 180° transfers, which need a large plane change.
                 </TextBlock>
-                <TextBlock Text="{Binding PorkchopMinFlightLabel}" VerticalAlignment="Bottom" Style="{StaticResource Note}" />
-            </Grid>
 
-            <Border Grid.Row="2" Grid.Column="1" CornerRadius="4" ClipToBounds="True">
-                <Grid>
-                    <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding CurrentPlot}" Selected="{Binding CurrentPlotSelection}"
-                                               Cursor="Cross" />
-                    <TextBlock Text="{Binding AnyTimeNote}" Foreground="#E6E9F0" TextWrapping="Wrap" FontSize="14" Margin="40"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" TextAlignment="Center" />
+                <Grid Grid.Row="2" Margin="0,0,6,0">
+                    <TextBlock Text="{Binding PorkchopMaxFlightLabel}" VerticalAlignment="Top" Style="{StaticResource Note}" />
+                    <TextBlock Text="Flight time" VerticalAlignment="Center" Style="{StaticResource Note}">
+                        <TextBlock.LayoutTransform><RotateTransform Angle="-90" /></TextBlock.LayoutTransform>
+                    </TextBlock>
+                    <TextBlock Text="{Binding PorkchopMinFlightLabel}" VerticalAlignment="Bottom" Style="{StaticResource Note}" />
                 </Grid>
-            </Border>
 
-            <Grid Grid.Row="3" Grid.Column="1" Margin="0,4,0,0">
-                <TextBlock Text="{Binding PorkchopStartLabel}" HorizontalAlignment="Left" Style="{StaticResource Note}" />
-                <TextBlock Text="Departure date" HorizontalAlignment="Center" Style="{StaticResource Note}" />
-                <TextBlock Text="{Binding PorkchopEndLabel}" HorizontalAlignment="Right" Style="{StaticResource Note}" />
+                <Border Grid.Row="2" Grid.Column="1" CornerRadius="4" ClipToBounds="True">
+                    <Grid>
+                        <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding CurrentPlot}" Selected="{Binding CurrentPlotSelection}"
+                                                   Cursor="Cross" />
+                        <TextBlock Text="{Binding AnyTimeNote}" Foreground="#E6E9F0" TextWrapping="Wrap" FontSize="14" Margin="40"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" TextAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="3" Grid.Column="1" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding PorkchopStartLabel}" HorizontalAlignment="Left" Style="{StaticResource Note}" />
+                    <TextBlock Text="Departure date" HorizontalAlignment="Center" Style="{StaticResource Note}" />
+                    <TextBlock Text="{Binding PorkchopEndLabel}" HorizontalAlignment="Right" Style="{StaticResource Note}" />
+                </Grid>
             </Grid>
-        </Grid>
+        </Border>
     </Grid>
 </UserControl>

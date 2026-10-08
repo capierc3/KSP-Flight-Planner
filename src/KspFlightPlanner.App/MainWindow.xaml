@@ -2,44 +2,122 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:KspFlightPlanner.App.Views"
+        xmlns:app="clr-namespace:KspFlightPlanner.App"
         Title="KSP Flight Planner"
         Width="1480" Height="920" MinWidth="980" MinHeight="640"
-        WindowStartupLocation="CenterScreen" WindowState="Maximized">
+        WindowStartupLocation="CenterScreen" WindowState="Maximized"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-    </Window.Resources>
-    <Grid>
-    <TabControl Margin="12,8,12,12" SelectedIndex="{Binding SelectedTab}">
-        <TabItem Header="Mission builder">
-            <views:MissionBuilderView DataContext="{Binding Mission}" />
-        </TabItem>
-        <TabItem Header="Locations">
-            <views:LocationsView DataContext="{Binding Locations}" />
-        </TabItem>
-        <TabItem Header="Transfer planner">
-            <views:TransferPlannerView DataContext="{Binding Transfer}" />
-        </TabItem>
-        <TabItem Header="Resonant orbits">
-            <views:ResonantOrbitView DataContext="{Binding Resonant}" />
-        </TabItem>
-        <TabItem Header="Math guide">
-            <views:GuideView />
-        </TabItem>
-    </TabControl>
 
-    <!-- KSP save link: status, import and settings, at the right of the tab strip. -->
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,16,0">
-        <TextBlock Text="{Binding Sync.Status}" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0"
-                   ToolTip="{Binding Sync.PersistentPath}" />
-        <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12"
-                   Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}" />
-        <Button Content="↻" ToolTip="Read the save again now" Click="Reload_Click" Margin="0,0,6,0" Padding="8,2"
-                Visibility="{Binding Sync.HasSave, Converter={StaticResource BoolToVisibility}}" />
-        <Button Click="Import_Click" Margin="0,0,6,0" Padding="10,2" ToolTip="Add vessels from your KSP save as custom locations"
-                Visibility="{Binding Sync.HasSave, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock><Run Text="Import vessels…" /><Run Text="{Binding Sync.NewVesselsText, Mode=OneWay, StringFormat='  ({0})'}" /></TextBlock>
-        </Button>
-        <Button Content="⚙ Settings" Click="Settings_Click" Padding="10,2" />
-    </StackPanel>
-    </Grid>
+        <!-- Flat document tabs (Visual Studio style): accent underline on the open tab. -->
+        <Style x:Key="DocumentTab" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,2"
+                                Padding="14,5" Margin="0,0,1,0">
+                            <ContentPresenter x:Name="Header" ContentSource="Header" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14808080" />
+                                <Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#22808080" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
+                                <Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="{x:Static app:MainCommands.ImportVessels}" Executed="Import_Executed" CanExecute="HasSave_CanExecute" />
+        <CommandBinding Command="{x:Static app:MainCommands.ReloadSave}" Executed="Reload_Executed" CanExecute="HasSaveChosen_CanExecute" />
+        <CommandBinding Command="{x:Static app:MainCommands.OpenDataFolder}" Executed="OpenDataFolder_Executed" />
+        <CommandBinding Command="{x:Static app:MainCommands.Settings}" Executed="Settings_Executed" />
+        <CommandBinding Command="{x:Static app:MainCommands.ShowTab}" Executed="ShowTab_Executed" />
+        <CommandBinding Command="{x:Static app:MainCommands.About}" Executed="About_Executed" />
+        <CommandBinding Command="{x:Static ApplicationCommands.Close}" Executed="Exit_Executed" />
+    </Window.CommandBindings>
+    <Window.InputBindings>
+        <KeyBinding Key="D1" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="0" />
+        <KeyBinding Key="D2" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="1" />
+        <KeyBinding Key="D3" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="2" />
+        <KeyBinding Key="D4" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="3" />
+        <KeyBinding Key="D5" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" />
+        <KeyBinding Key="F1" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" />
+    </Window.InputBindings>
+
+    <DockPanel>
+        <Menu DockPanel.Dock="Top" Padding="4,2">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Import Vessels from Save…" Command="{x:Static app:MainCommands.ImportVessels}" />
+                <MenuItem Header="_Reload Save" Command="{x:Static app:MainCommands.ReloadSave}" />
+                <Separator />
+                <MenuItem Header="Open _Data Folder" Command="{x:Static app:MainCommands.OpenDataFolder}"
+                          ToolTip="Where the planner database is stored" />
+                <Separator />
+                <MenuItem Header="E_xit" Command="{x:Static ApplicationCommands.Close}" InputGestureText="Alt+F4" />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="_Mission Builder" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="0" InputGestureText="Ctrl+1" />
+                <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="1" InputGestureText="Ctrl+2" />
+                <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="2" InputGestureText="Ctrl+3" />
+                <MenuItem Header="_Resonant Orbits" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="3" InputGestureText="Ctrl+4" />
+                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" InputGestureText="Ctrl+5" />
+            </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Header="_Settings…" Command="{x:Static app:MainCommands.Settings}" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" InputGestureText="F1" />
+                <Separator />
+                <MenuItem Header="_About KSP Flight Planner" Command="{x:Static app:MainCommands.About}" />
+            </MenuItem>
+        </Menu>
+
+        <!-- KSP save link: what was read, when, and whether it's being watched. -->
+        <StatusBar DockPanel.Dock="Bottom" Padding="8,0">
+            <StatusBarItem ToolTip="{Binding Sync.PersistentPath}">
+                <TextBlock Text="{Binding Sync.Status}" FontSize="12" />
+            </StatusBarItem>
+            <StatusBarItem Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" FontSize="12" />
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right" Visibility="{Binding Sync.HasNewVessels, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock FontSize="12">
+                    <Hyperlink Command="{x:Static app:MainCommands.ImportVessels}" ToolTip="File › Import Vessels from Save…">
+                        <Run Text="{Binding Sync.NewVesselsText, Mode=OneWay}" /><Run Text=" to import" />
+                    </Hyperlink>
+                </TextBlock>
+            </StatusBarItem>
+        </StatusBar>
+
+        <TabControl Margin="8,6,8,6" SelectedIndex="{Binding SelectedTab}" ItemContainerStyle="{StaticResource DocumentTab}"
+                    BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+            <TabItem Header="Mission Builder">
+                <views:MissionBuilderView DataContext="{Binding Mission}" />
+            </TabItem>
+            <TabItem Header="Locations">
+                <views:LocationsView DataContext="{Binding Locations}" />
+            </TabItem>
+            <TabItem Header="Transfer Planner">
+                <views:TransferPlannerView DataContext="{Binding Transfer}" />
+            </TabItem>
+            <TabItem Header="Resonant Orbits">
+                <views:ResonantOrbitView DataContext="{Binding Resonant}" />
+            </TabItem>
+            <TabItem Header="Math Guide">
+                <views:GuideView />
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </Window>

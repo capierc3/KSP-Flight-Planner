@@ -20,301 +20,307 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="28,20,28,24">
+    <Grid Margin="8,10,8,8">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="310" />
-            <ColumnDefinition Width="36" />
+            <ColumnDefinition Width="330" />
+            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="36" />
-            <ColumnDefinition Width="240" />
+            <ColumnDefinition Width="10" />
+            <ColumnDefinition Width="272" />
         </Grid.ColumnDefinitions>
 
         <!-- Stops + options + saved missions -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,18,0">
-                <DockPanel Margin="0,0,0,6">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
-                                ToolTip="Flip the route (e.g. plan the trip home)" />
-                    </StackPanel>
-                    <TextBlock Text="Stops" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-                </DockPanel>
-
-                <ItemsControl ItemsSource="{Binding Stops}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="0,0,0,18">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="30" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-
-                                <Border Width="22" Height="22" CornerRadius="11" Background="White" VerticalAlignment="Center" HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding Number}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <DockPanel Grid.Column="1">
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="4,0,0,0">
-                                        <Button Content="↑" Style="{StaticResource SmallButton}" ToolTip="Move up"
-                                                Command="{Binding DataContext.MoveStopUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                        <Button Content="↓" Style="{StaticResource SmallButton}" ToolTip="Move down"
-                                                Command="{Binding DataContext.MoveStopDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                        <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Remove stop"
-                                                Command="{Binding DataContext.RemoveStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                    </StackPanel>
-                                    <ComboBox ItemsSource="{Binding DataContext.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              SelectedValuePath="Key" SelectedValue="{Binding NodeKey}" DisplayMemberPath="DisplayName" />
-                                </DockPanel>
-
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
-                                <Grid Grid.Row="2" Grid.Column="1">
-                                    <TextBox x:Name="NoteBox" Text="{Binding Note}" FontSize="12" />
-                                    <TextBlock Text="Note, e.g. dock at station, pick up Bob" IsHitTestVisible="False" Opacity="0.45"
-                                               FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Text, ElementName=NoteBox}" Value="">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Grid>
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button Content="＋ Add stop" Command="{Binding AddStopCommand}" HorizontalAlignment="Left" />
-                <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                           Text="New stops go before the last one. You can also click a stop on the Δv map to add it." />
-
-                <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
-                <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
-                <CheckBox Content="Include worst-case plane changes" IsChecked="{Binding IncludePlaneChanges}" Margin="0,6,0,0" />
-
-                <TextBlock Text="Saved missions" Style="{StaticResource SectionHeader}" />
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Save" Command="{Binding SaveCommand}" Margin="8,0,0,0" />
-                    <TextBox Text="{Binding MissionName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Mission name" />
-                </DockPanel>
-                <ListBox ItemsSource="{Binding SavedMissions}" SelectedItem="{Binding SelectedMission}" Height="130" Margin="0,8,0,0"
-                         DisplayMemberPath="Name" />
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <Button Content="Load" Command="{Binding LoadCommand}" Margin="0,0,8,0" />
-                    <Button Content="Delete" Command="{Binding DeleteCommand}" />
-                </StackPanel>
-                <TextBlock Text="{Binding MissionStatus}" Style="{StaticResource Note}" FontSize="12" Margin="0,6,0,0" Foreground="#FFB74D" />
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- Legs/phases and the map -->
-        <TabControl Grid.Column="2">
-            <TabItem Header="Legs &amp; phases">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,14,18,0" Grid.IsSharedSizeScope="True">
-                        <TextBlock Text="{Binding RouteSummary}" Style="{StaticResource Note}" Margin="0,0,0,8" />
-
-                        <!-- Column headers -->
-                        <Grid Margin="0,0,0,4" Opacity="0.6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="28" />
-                                <ColumnDefinition Width="*" MinWidth="190" />
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Eff" />
-                                <ColumnDefinition Width="150" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="#" />
-                            <TextBlock Grid.Column="1" Text="Leg" />
-                            <TextBlock Grid.Column="2" Text="Map Δv (editable)" Margin="8,0" />
-                            <TextBlock Grid.Column="3" Text="Plane chg." Margin="8,0" />
-                            <TextBlock Grid.Column="4" Text="Aerobrake" Margin="8,0" />
-                            <TextBlock Grid.Column="5" Text="Δv needed" Margin="8,0" />
-                            <TextBlock Grid.Column="6" Text="Phase" />
-                        </Grid>
-
-                        <ItemsControl ItemsSource="{Binding Legs}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding SectionHeader}" FontWeight="SemiBold" Opacity="0.85" Margin="0,10,0,4" TextWrapping="Wrap"
-                                                   Visibility="{Binding HasSectionHeader, Converter={StaticResource BoolToVisibility}}" />
-                                        <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,10">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="28" />
-                                                    <ColumnDefinition Width="*" MinWidth="190" />
-                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
-                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
-                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
-                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Eff" />
-                                                    <ColumnDefinition Width="150" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Number}" Opacity="0.6" VerticalAlignment="Center" />
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding ToText}" TextWrapping="Wrap" />
-                                                    <TextBlock Style="{StaticResource Note}">
-                                                        <Run Text="from " /><Run Text="{Binding FromText, Mode=OneWay}" />
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding Notes}" Style="{StaticResource Note}" />
-                                                </StackPanel>
-                                                <TextBox x:Name="DvBox" Grid.Column="2" Text="{Binding DvText, Mode=TwoWay}" Width="72" Margin="8,0"
-                                                         TextAlignment="Right" VerticalAlignment="Center" ToolTip="{Binding DvToolTip}"
-                                                         FontFamily="Cascadia Mono, Consolas" />
-                                                <CheckBox Grid.Column="3" Content="{Binding PlaneChangeText}" IsChecked="{Binding IncludePlaneChange}"
-                                                          Visibility="{Binding HasPlaneChange, Converter={StaticResource BoolToVisibility}}"
-                                                          Margin="8,0" VerticalAlignment="Center" ToolTip="Add the map's worst-case plane change for this leg" />
-                                                <CheckBox Grid.Column="4" IsChecked="{Binding UseAerobrake}"
-                                                          Visibility="{Binding CanAerobrake, Converter={StaticResource BoolToVisibility}}"
-                                                          Margin="8,0" VerticalAlignment="Center" ToolTip="Use the atmosphere instead of a burn" />
-                                                <TextBlock Grid.Column="5" Text="{Binding EffectiveText}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="8,0" />
-                                                <ComboBox Grid.Column="6" VerticalAlignment="Center"
-                                                          ItemsSource="{Binding DataContext.Phases, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          SelectedItem="{Binding Phase}" ItemTemplate="{StaticResource PhaseChoice}" />
-                                            </Grid>
-                                        </Border>
-                                    </StackPanel>
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding IsEdited}" Value="True">
-                                            <Setter TargetName="DvBox" Property="Foreground" Value="#FFB74D" />
-                                            <Setter TargetName="DvBox" Property="FontWeight" Value="Bold" />
-                                        </DataTrigger>
-                                    </DataTemplate.Triggers>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <DockPanel Margin="0,18,0,6">
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <Button Content="Add phase" Command="{Binding AddPhaseCommand}" Margin="0,0,8,0" />
-                                <Button Content="Reset to defaults" Command="{Binding ResetPhasesCommand}" />
-                            </StackPanel>
-                            <TextBlock Text="Phases" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
-                        </DockPanel>
-                        <TextBlock Style="{StaticResource Note}" Margin="0,0,0,8"
-                                   Text="Each phase is a part of the rocket that must supply the Δv of its legs. Margin % is added to the phase's Δv; Extra is fixed wiggle room (e.g. landing assist)." />
-
-                        <Grid Margin="0,0,0,4" Opacity="0.6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="22" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="80" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="40" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="1" Text="Name" />
-                            <TextBlock Grid.Column="2" Text="Margin %" Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="3" Text="Extra (m/s)" Margin="8,0,0,0" />
-                            <TextBlock Grid.Column="4" Text="Legs need" HorizontalAlignment="Right" />
-                            <TextBlock Grid.Column="5" Text="Margin" HorizontalAlignment="Right" />
-                            <TextBlock Grid.Column="6" Text="Phase total" HorizontalAlignment="Right" />
-                        </Grid>
-                        <ItemsControl ItemsSource="{Binding Phases}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="22" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="80" />
-                                            <ColumnDefinition Width="90" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="90" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="40" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Color}" HorizontalAlignment="Left" />
-                                        <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="2" Text="{Binding MarginPercent, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="8,0,0,0" />
-                                        <TextBox Grid.Column="3" Text="{Binding ExtraDv, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="8,0,0,0" />
-                                        <TextBlock Grid.Column="4" Text="{Binding RequiredText}" Style="{StaticResource Value}" />
-                                        <TextBlock Grid.Column="5" Text="{Binding MarginText}" Style="{StaticResource Value}" Opacity="0.7" />
-                                        <TextBlock Grid.Column="6" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="SemiBold" />
-                                        <Button Grid.Column="7" Content="✕" Padding="6,2" HorizontalAlignment="Right" ToolTip="Remove phase (its legs move to the previous phase)"
-                                                Command="{Binding DataContext.RemovePhaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="Δv map">
-                <DockPanel Margin="0,8,0,0">
-                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Reset all edits" Command="{Binding ResetMapEditsCommand}" />
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource Note}" FontSize="12"
-                                       Text="Click a number to change it (e.g. Mun landing 580 → 700); it updates every mission. Click a stop to add it to the route. ∠ = worst-case plane change, aero = aerobraking possible." />
-                            <TextBlock Text="{Binding EditedText}" Style="{StaticResource Note}" FontSize="12" Foreground="#FFB74D" />
-                        </StackPanel>
-                    </DockPanel>
-                    <Border CornerRadius="6" ClipToBounds="True">
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0B101E">
-                            <controls:DeltaVMapView x:Name="MapView" Map="{Binding Map}" RouteEdgeKeys="{Binding RouteEdgeKeys}" StopKeys="{Binding StopKeys}" />
-                        </ScrollViewer>
-                    </Border>
-                </DockPanel>
-            </TabItem>
-        </TabControl>
-
-        <!-- Rocket diagram -->
-        <DockPanel Grid.Column="4">
-            <TextBlock DockPanel.Dock="Top" Text="Rocket" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,10"
-                       Text="Phases stacked in burn order — launch at the bottom. Height shows each phase's share of the Δv." />
-
-            <Border DockPanel.Dock="Bottom" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="#30808080">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition /><RowDefinition /><RowDefinition />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="Legs need" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
-                    <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
-                </Grid>
-            </Border>
-
+        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                    <Path Data="M 0,40 L 30,0 L 60,40 Z" Fill="#90A4AE" HorizontalAlignment="Center" />
-                    <ItemsControl ItemsSource="{Binding PhasesTopDown}">
+                <StackPanel Margin="0,0,18,0">
+                    <DockPanel Margin="0,0,0,6">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
+                                    ToolTip="Flip the route (e.g. plan the trip home)" />
+                        </StackPanel>
+                        <TextBlock Text="Stops" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <ItemsControl ItemsSource="{Binding Stops}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{Binding Color}" Width="{Binding BarWidth}" Height="{Binding BarHeight}"
-                                        CornerRadius="3" Margin="0,0,0,3" HorizontalAlignment="Center">
-                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" Foreground="#101418" FontWeight="SemiBold" HorizontalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding TotalText}" Foreground="#101418" HorizontalAlignment="Center"
-                                                   FontFamily="Cascadia Mono, Consolas" FontSize="12" />
-                                    </StackPanel>
-                                </Border>
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Border Width="22" Height="22" CornerRadius="11" Background="White" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                        <TextBlock Text="{Binding Number}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <DockPanel Grid.Column="1">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="4,0,0,0">
+                                            <Button Content="↑" Style="{StaticResource SmallButton}" ToolTip="Move up"
+                                                    Command="{Binding DataContext.MoveStopUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                            <Button Content="↓" Style="{StaticResource SmallButton}" ToolTip="Move down"
+                                                    Command="{Binding DataContext.MoveStopDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                            <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Remove stop"
+                                                    Command="{Binding DataContext.RemoveStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                        <ComboBox ItemsSource="{Binding DataContext.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  SelectedValuePath="Key" SelectedValue="{Binding NodeKey}" DisplayMemberPath="DisplayName" />
+                                    </DockPanel>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
+                                    <Grid Grid.Row="2" Grid.Column="1">
+                                        <TextBox x:Name="NoteBox" Text="{Binding Note}" FontSize="12" />
+                                        <TextBlock Text="Note, e.g. dock at station, pick up Bob" IsHitTestVisible="False" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=NoteBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
+                    <Button Content="＋ Add stop" Command="{Binding AddStopCommand}" HorizontalAlignment="Left" />
+                    <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                               Text="New stops go before the last one. You can also click a stop on the Δv map to add it." />
+
+                    <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
+                    <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
+                    <CheckBox Content="Include worst-case plane changes" IsChecked="{Binding IncludePlaneChanges}" Margin="0,6,0,0" />
+
+                    <TextBlock Text="Saved missions" Style="{StaticResource SectionHeader}" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Save" Command="{Binding SaveCommand}" Margin="8,0,0,0" />
+                        <TextBox Text="{Binding MissionName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Mission name" />
+                    </DockPanel>
+                    <ListBox ItemsSource="{Binding SavedMissions}" SelectedItem="{Binding SelectedMission}" Height="130" Margin="0,8,0,0"
+                             DisplayMemberPath="Name" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="Load" Command="{Binding LoadCommand}" Margin="0,0,8,0" />
+                        <Button Content="Delete" Command="{Binding DeleteCommand}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding MissionStatus}" Style="{StaticResource Note}" FontSize="12" Margin="0,6,0,0" Foreground="#FFB74D" />
                 </StackPanel>
             </ScrollViewer>
-        </DockPanel>
+        </Border>
+
+        <!-- Legs/phases and the map -->
+        <Border Grid.Column="2" Style="{StaticResource Panel}">
+            <TabControl>
+                <TabItem Header="Legs &amp; phases">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="0,14,18,0" Grid.IsSharedSizeScope="True">
+                            <TextBlock Text="{Binding RouteSummary}" Style="{StaticResource Note}" Margin="0,0,0,8" />
+
+                            <!-- Column headers -->
+                            <Grid Margin="0,0,0,4" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextElement.FontWeight="SemiBold">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="*" MinWidth="190" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Eff" />
+                                    <ColumnDefinition Width="150" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="#" />
+                                <TextBlock Grid.Column="1" Text="Leg" />
+                                <TextBlock Grid.Column="2" Text="Map Δv (editable)" Margin="8,0" />
+                                <TextBlock Grid.Column="3" Text="Plane chg." Margin="8,0" />
+                                <TextBlock Grid.Column="4" Text="Aerobrake" Margin="8,0" />
+                                <TextBlock Grid.Column="5" Text="Δv needed" Margin="8,0" />
+                                <TextBlock Grid.Column="6" Text="Phase" />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Legs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SectionHeader}" FontWeight="SemiBold" Margin="0,10,0,4" TextWrapping="Wrap"
+                                                       Visibility="{Binding HasSectionHeader, Converter={StaticResource BoolToVisibility}}" />
+                                            <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,10">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="28" />
+                                                        <ColumnDefinition Width="*" MinWidth="190" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Eff" />
+                                                        <ColumnDefinition Width="150" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Number}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding ToText}" TextWrapping="Wrap" />
+                                                        <TextBlock Style="{StaticResource Note}">
+                                                            <Run Text="from " /><Run Text="{Binding FromText, Mode=OneWay}" />
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Notes}" Style="{StaticResource Note}" />
+                                                    </StackPanel>
+                                                    <TextBox x:Name="DvBox" Grid.Column="2" Text="{Binding DvText, Mode=TwoWay}" Width="72" Margin="8,0"
+                                                             TextAlignment="Right" VerticalAlignment="Center" ToolTip="{Binding DvToolTip}"
+                                                             FontFamily="Cascadia Mono, Consolas" />
+                                                    <CheckBox Grid.Column="3" Content="{Binding PlaneChangeText}" IsChecked="{Binding IncludePlaneChange}"
+                                                              Visibility="{Binding HasPlaneChange, Converter={StaticResource BoolToVisibility}}"
+                                                              Margin="8,0" VerticalAlignment="Center" ToolTip="Add the map's worst-case plane change for this leg" />
+                                                    <CheckBox Grid.Column="4" IsChecked="{Binding UseAerobrake}"
+                                                              Visibility="{Binding CanAerobrake, Converter={StaticResource BoolToVisibility}}"
+                                                              Margin="8,0" VerticalAlignment="Center" ToolTip="Use the atmosphere instead of a burn" />
+                                                    <TextBlock Grid.Column="5" Text="{Binding EffectiveText}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="8,0" />
+                                                    <ComboBox Grid.Column="6" VerticalAlignment="Center"
+                                                              ItemsSource="{Binding DataContext.Phases, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              SelectedItem="{Binding Phase}" ItemTemplate="{StaticResource PhaseChoice}" />
+                                                </Grid>
+                                            </Border>
+                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsEdited}" Value="True">
+                                                <Setter TargetName="DvBox" Property="Foreground" Value="#FFB74D" />
+                                                <Setter TargetName="DvBox" Property="FontWeight" Value="Bold" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <DockPanel Margin="0,18,0,6">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="Add phase" Command="{Binding AddPhaseCommand}" Margin="0,0,8,0" />
+                                    <Button Content="Reset to defaults" Command="{Binding ResetPhasesCommand}" />
+                                </StackPanel>
+                                <TextBlock Text="Phases" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Note}" Margin="0,0,0,8"
+                                       Text="Each phase is a part of the rocket that must supply the Δv of its legs. Margin % is added to the phase's Δv; Extra is fixed wiggle room (e.g. landing assist)." />
+
+                            <Grid Margin="0,0,0,4" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextElement.FontWeight="SemiBold">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="22" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="40" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1" Text="Name" />
+                                <TextBlock Grid.Column="2" Text="Margin %" Margin="8,0,0,0" />
+                                <TextBlock Grid.Column="3" Text="Extra (m/s)" Margin="8,0,0,0" />
+                                <TextBlock Grid.Column="4" Text="Legs need" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="5" Text="Margin" HorizontalAlignment="Right" />
+                                <TextBlock Grid.Column="6" Text="Phase total" HorizontalAlignment="Right" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Phases}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="22" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="40" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Color}" HorizontalAlignment="Left" />
+                                            <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBox Grid.Column="2" Text="{Binding MarginPercent, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="8,0,0,0" />
+                                            <TextBox Grid.Column="3" Text="{Binding ExtraDv, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="8,0,0,0" />
+                                            <TextBlock Grid.Column="4" Text="{Binding RequiredText}" Style="{StaticResource Value}" />
+                                            <TextBlock Grid.Column="5" Text="{Binding MarginText}" Style="{StaticResource Value}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Grid.Column="6" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="SemiBold" />
+                                            <Button Grid.Column="7" Content="✕" Padding="6,2" HorizontalAlignment="Right" ToolTip="Remove phase (its legs move to the previous phase)"
+                                                    Command="{Binding DataContext.RemovePhaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Δv map">
+                    <DockPanel Margin="0,8,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <Button DockPanel.Dock="Right" Content="Reset all edits" Command="{Binding ResetMapEditsCommand}" />
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Note}" FontSize="12"
+                                           Text="Click a number to change it (e.g. Mun landing 580 → 700); it updates every mission. Click a stop to add it to the route. ∠ = worst-case plane change, aero = aerobraking possible." />
+                                <TextBlock Text="{Binding EditedText}" Style="{StaticResource Note}" FontSize="12" Foreground="#FFB74D" />
+                            </StackPanel>
+                        </DockPanel>
+                        <Border CornerRadius="6" ClipToBounds="True">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0B101E">
+                                <controls:DeltaVMapView x:Name="MapView" Map="{Binding Map}" RouteEdgeKeys="{Binding RouteEdgeKeys}" StopKeys="{Binding StopKeys}" />
+                            </ScrollViewer>
+                        </Border>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
+        </Border>
+
+        <!-- Rocket diagram -->
+        <Border Grid.Column="4" Style="{StaticResource Panel}">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Rocket" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,10"
+                           Text="Phases stacked in burn order — launch at the bottom. Height shows each phase's share of the Δv." />
+
+                <Border DockPanel.Dock="Bottom" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="#30808080">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition /><RowDefinition /><RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Legs need" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
+                        <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
+                    </Grid>
+                </Border>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                        <Path Data="M 0,40 L 30,0 L 60,40 Z" Fill="#90A4AE" HorizontalAlignment="Center" />
+                        <ItemsControl ItemsSource="{Binding PhasesTopDown}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding Color}" Width="{Binding BarWidth}" Height="{Binding BarHeight}"
+                                            CornerRadius="3" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" Foreground="#101418" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding TotalText}" Foreground="#101418" HorizontalAlignment="Center"
+                                                       FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
     </Grid>
 </UserControl>

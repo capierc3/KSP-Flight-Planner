@@ -6,7 +6,7 @@
     <DockPanel Margin="24,16,24,20">
         <StackPanel DockPanel.Dock="Top">
             <TextBlock Text="{Binding Header}" FontSize="22" FontWeight="Bold" />
-            <TextBlock Text="{Binding Subheader}" Opacity="0.7" />
+            <TextBlock Text="{Binding Subheader}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             <TextBlock Style="{StaticResource Note}" Margin="0,8,0,10"
                        Text="Each vessel you import becomes a placed custom location linked to the vessel: its orbit follows the save whenever KSP writes it. You can rename it, add a description and images — those stay yours. Only closed orbits can be imported." />
         </StackPanel>
@@ -22,7 +22,7 @@
             </StackPanel>
         </DockPanel>
 
-        <Grid DockPanel.Dock="Top" Opacity="0.6" Margin="0,0,0,4">
+        <Grid DockPanel.Dock="Top" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextElement.FontWeight="SemiBold" Margin="0,0,0,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="36" /><ColumnDefinition Width="230" /><ColumnDefinition Width="130" />
                 <ColumnDefinition Width="90" /><ColumnDefinition Width="190" /><ColumnDefinition Width="*" />

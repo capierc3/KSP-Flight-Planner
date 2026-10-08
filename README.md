@@ -15,7 +15,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
-- **KSP save link** — set your KSP folder and save in ⚙ Settings, then *Import vessels…* turns vessels in orbit
+- **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
 
