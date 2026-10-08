@@ -5,13 +5,13 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </UserControl.Resources>
 
-    <!-- Inputs for the calculator document in focus in the middle (Transfer Planner, Resonant Orbits), so the documents can give
-         their room to results -->
+    <!-- Inputs for the calculator document looked at last (Transfer Planner, Resonant Orbits), so the documents can give their
+         room to results -->
     <ScrollViewer Padding="12,10,0,10" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,18,0">
             <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                        Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
-                       Text="Inputs for the Transfer Planner or Resonant Orbits show here while that tab is in front in the middle." />
+                       Text="Inputs for the Transfer Planner or Resonant Orbits show here: whichever of the two you looked at last." />
 
             <StackPanel DataContext="{Binding Transfer}"
                         Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">

@@ -14,7 +14,7 @@ namespace KspFlightPlanner.App;
 public sealed class MainViewModel : ObservableObject
 {
     private WorkMode _mode;
-    private string? _activeDocument;
+    private string? _activeCalculator;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, SaveSync sync, KspLink link, PlannerEvents events)
@@ -109,22 +109,31 @@ public sealed class MainViewModel : ObservableObject
         set { if (value) Mode = WorkMode.Fly; }
     }
 
-    /// <summary>The Plan document in front in the middle (a <see cref="Panes"/> id); the Calculators pane shows its inputs.</summary>
-    public string? ActiveDocument
+    /// <summary>
+    /// The calculator whose inputs the Calculators pane shows (a <see cref="Panes"/> id): the last calculator document to take
+    /// focus. Other panes taking focus leave it as it is.
+    /// </summary>
+    public string? ActiveCalculator
     {
-        get => _activeDocument;
-        set
+        get => _activeCalculator;
+        private set
         {
-            if (!SetProperty(ref _activeDocument, value)) return;
+            if (!SetProperty(ref _activeCalculator, value)) return;
             OnPropertyChanged(nameof(ShowsTransferInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
 
-    public bool ShowsTransferInputs => ActiveDocument == Panes.Transfer;
-    public bool ShowsResonantInputs => ActiveDocument == Panes.Resonant;
-    public bool ShowsNoCalculator => !ShowsTransferInputs && !ShowsResonantInputs;
+    public bool ShowsTransferInputs => ActiveCalculator == Panes.Transfer;
+    public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
+    public bool ShowsNoCalculator => ActiveCalculator is null;
+
+    /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
+    public void DocumentFocused(string id)
+    {
+        if (id is Panes.Transfer or Panes.Resonant) ActiveCalculator = id;
+    }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
     public event Action<string>? PaneRequested;
@@ -166,7 +175,7 @@ public partial class MainWindow : Window
 
         var folder = Path.GetDirectoryName(PlannerDatabase.DefaultPath())!;
         _plan = new DockWorkspace(PlanDock, WorkMode.Plan, viewModel, folder);
-        _plan.ActiveDocumentChanged += id => viewModel.ActiveDocument = id;
+        _plan.ActiveDocumentChanged += viewModel.DocumentFocused;
         _fly = new DockWorkspace(FlyDock, WorkMode.Fly, viewModel, folder);
         ApplyDockTheme();
         _plan.Load();

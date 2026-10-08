@@ -36,7 +36,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
   Its inputs (bodies, orbits, earliest departure…) sit in the Calculators pane, which shows the inputs of whichever
-  calculator (Transfer Planner, Resonant Orbits) is in front in the middle, so the documents are all results.
+  calculator (Transfer Planner, Resonant Orbits) you looked at last, so the documents are all results.
   Opened from a mission leg it chooses that leg's window; on its own it's a free calculator.
 - **Rendezvous** — meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a KSC launch or
   a craft already in orbit. Targets come straight from the linked save (no import needed) or from placed custom
