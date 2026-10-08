@@ -78,12 +78,27 @@
         <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="0,0,18,0">
+                    <!-- Planning a mission leg: where it starts and what it meets come from the leg -->
+                    <Border Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,10" Padding="10,8"
+                            CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                        <StackPanel>
+                            <TextBlock Text="Rendezvous for the mission leg" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding LegTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
+                                       Text="The plan shown is saved with the mission: change the start time, the launch, the phasing orbit or the porkchop point to plan it another way." />
+                            <Button Content="Stop editing the leg" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
+                                    ToolTip="Use the tab on its own again; the mission keeps this plan" />
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="Start from" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                    <StackPanel IsEnabled="{Binding IsRouteEditable}">
                     <RadioButton Content="Launch from the KSC" IsChecked="{Binding StartFromLaunch}" GroupName="Start" />
                     <RadioButton Content="A craft already in orbit" IsChecked="{Binding StartFromCraft}" GroupName="Start" Margin="0,2,0,0" />
+                    </StackPanel>
 
                     <!-- Live game: what's being flown and targeted in KSP. -->
-                    <StackPanel Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0">
+                    <StackPanel Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0" IsEnabled="{Binding IsRouteEditable}">
                         <TextBlock Text="{Binding GameText}" Style="{StaticResource Note}" />
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <Button Content="Use the craft I'm flying" Command="{Binding UseActiveVesselCommand}" Padding="8,2"
@@ -100,7 +115,8 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Parking (km)" Style="{StaticResource Label}" />
-                                <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
+                                <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" IsEnabled="{Binding IsRouteEditable}"
+                                         ToolTip="For a mission leg, the low orbit of the leg's launch step" />
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="Climb (min)" Style="{StaticResource Label}" />
@@ -119,10 +135,11 @@
 
                     <StackPanel Visibility="{Binding StartFromCraft, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="Craft" Style="{StaticResource Label}" />
-                        <ComboBox ItemsSource="{Binding Crafts}" SelectedItem="{Binding SelectedChaser}" DisplayMemberPath="Title" />
+                        <ComboBox ItemsSource="{Binding Crafts}" SelectedItem="{Binding SelectedChaser}" DisplayMemberPath="Title" IsEnabled="{Binding IsRouteEditable}" />
                     </StackPanel>
 
                     <TextBlock Text="Targets, in order" Style="{StaticResource SectionHeader}" />
+                    <StackPanel IsEnabled="{Binding IsRouteEditable}">
                     <ItemsControl ItemsSource="{Binding Targets}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -143,9 +160,10 @@
                         <Button DockPanel.Dock="Right" Content="Add" Command="{Binding AddTargetCommand}" Margin="6,0,0,0" />
                         <ComboBox ItemsSource="{Binding AvailableTargets}" SelectedItem="{Binding TargetToAdd}" DisplayMemberPath="Title" />
                     </DockPanel>
+                    </StackPanel>
 
                     <TextBlock Text="Timing" Style="{StaticResource SectionHeader}" />
-                    <CheckBox Content="Start from the game's current time" IsChecked="{Binding FollowSaveTime}"
+                    <CheckBox Content="Start from the game's current time" IsChecked="{Binding FollowSaveTime}" IsEnabled="{Binding IsRouteEditable}"
                               ToolTip="The live game time while connected to KSP, else the time KSP last saved" />
                     <TextBlock Text="{Binding SaveTimeText}" Style="{StaticResource Note}" Margin="0,2,0,0" />
                     <Grid Visibility="{Binding FollowSaveTime, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
@@ -182,7 +200,7 @@
                     </Grid>
 
                     <TextBlock Text="Afterwards" Style="{StaticResource SectionHeader}" />
-                    <CheckBox Content="{Binding DeorbitLabel}" IsChecked="{Binding Deorbit}" />
+                    <CheckBox Content="{Binding DeorbitLabel}" IsChecked="{Binding Deorbit}" IsEnabled="{Binding IsRouteEditable}" />
                     <Grid Visibility="{Binding Deorbit, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />

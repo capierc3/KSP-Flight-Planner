@@ -35,6 +35,11 @@ public sealed class MainViewModel : ObservableObject
             Transfer.EditLeg(link);
             RequestPane(Panes.Transfer);
         };
+        mission.RendezvousRequested += link =>
+        {
+            Rendezvous.EditLeg(link);
+            RequestPane(Panes.Rendezvous);
+        };
         mission.DeployRequested += link =>
         {
             Resonant.EditDeploy(link);
@@ -46,6 +51,11 @@ public sealed class MainViewModel : ObservableObject
             {
                 if (mission.TransferLinkFor(transfer.Owner) is not { } link) Transfer.StopEditingLeg();
                 else if (link.Span != transfer.Span) Transfer.EditLeg(link);
+            }
+            if (Rendezvous.Leg is { } rendezvous)
+            {
+                if (mission.RendezvousLinkFor(rendezvous.Owner) is not { } link) Rendezvous.StopEditingLeg();
+                else if (link.Span != rendezvous.Span) Rendezvous.EditLeg(link);
             }
             if (Resonant.Leg is { } deploy)
             {

@@ -22,9 +22,12 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Leg tools** — a leg between planets (Kerbin → Duna) can be flown in a chosen launch window: *Plan a transfer
   window for this leg* under its stop opens the Transfer Planner locked to the leg. The window picked (best, or
   clicked on the porkchop plot) is saved with the mission, and its ejection and capture burns replace the Δv map's
-  values in Legs & phases and the Rocket totals. A stop in a circular orbit can *Deploy satellites here*: Resonant
-  Orbits opens locked to the stop's orbit, and the carrier's burns are added to a phase you pick (each satellite's own
-  circularize burn is shown, not added).
+  values in Legs & phases and the Rocket totals. A leg to a placed craft (a placed custom location or imported vessel),
+  from a KSC launch or from another placed craft around the same body, can *Plan the rendezvous*: the Rendezvous tab
+  opens locked to the leg, and the plan's burns replace the map's orbital values (the plan is kept as made, since craft
+  move). A new tool on the next leg starts when the previous leg's tool arrives. A stop in a circular orbit can
+  *Deploy satellites here*: Resonant Orbits opens locked to the stop's orbit, and the carrier's burns are added to a
+  phase you pick (each satellite's own circularize burn is shown, not added).
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
@@ -39,7 +42,8 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   match planes, wait or fly a phasing orbit ("go lower to catch up"), a Lambert intercept with a clickable porkchop
   plot, and the match-velocity burn (each leg also drawn from above: orbits, transfer arc and numbered burns); optionally a deorbit at the end. Every burn is shown by feel (which way, what to
   look for) or as exact maneuver-node values (UT, prograde / normal / radial), with a Δv budget checked against a saved
-  design or the chosen vessel's remaining Δv.
+  design or the chosen vessel's remaining Δv. Opened from a mission leg it plans that leg (one target, start and target
+  from the leg).
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations. Opened from a mission stop it plans
   that stop's deployment.
 - **Vessels** — every vessel in the linked save, grouped by body, with its remaining Δv, thrust, burn time,

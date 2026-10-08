@@ -36,6 +36,31 @@ public sealed record TransferSpan(
 public sealed record TransferLegResult(TransferSpan Span, TransferWindow Window);
 
 /// <summary>
+/// A rendezvous leg as planned on the Rendezvous tab: meeting the placed custom location (or imported vessel)
+/// <paramref name="TargetLocationId"/>, starting at <paramref name="StartUt"/>. Where craft are depends on the date and the
+/// save, so the result is kept as planned: <paramref name="OrbitalDv"/> (plane match, phasing, transfer and match burns)
+/// and <paramref name="ArrivalUt"/>. The picks (launch, phasing orbit, porkchop point; null = the planner's) let the
+/// Rendezvous tab show the same plan again.
+/// </summary>
+public sealed record RendezvousLeg(
+    long TargetLocationId,
+    double StartUt,
+    double ArrivalUt,
+    double OrbitalDv,
+    int? LaunchIndex = null,
+    PhasingChoice? Phasing = null,
+    InterceptPoint? Intercept = null);
+
+/// <summary>
+/// Where a rendezvous fits in a leg's Δv-map steps: steps from <see cref="Start"/> on are the orbital part (the launch
+/// before it stays the map's). <see cref="ChaserLocationId"/> is the craft it starts from; null for a launch from KSC.
+/// </summary>
+public sealed record RendezvousSpan(string BodyName, long TargetLocationId, long? ChaserLocationId, int Start)
+{
+    public bool IsLaunch => ChaserLocationId is null;
+}
+
+/// <summary>
 /// Releasing <paramref name="SatelliteCount"/> satellites, evenly spaced, into the circular orbit of the stop, from a
 /// resonant (or dive) carrier orbit. <paramref name="PhaseIndex"/> is the rocket phase that flies the carrier's burns;
 /// null for the phase of the leg arriving at the stop.
@@ -160,6 +185,39 @@ public static class LegTools
             s.ToStop < stops.Count && stops[s.ToStop].Transfer is { } choice && EvaluateTransfer(s.Legs, choice, bodies) is { } transfer
                 ? s with { Legs = ApplyTransfer(s.Legs, transfer) }
                 : s).ToList();
+
+    /// <summary>
+    /// A leg can be a rendezvous when it arrives at a placed custom location (its position is known, so there is a craft
+    /// to meet) and starts either on the surface of the body it orbits, where there is a launch site (KSC), or at another
+    /// placed location around the same body. Null otherwise.
+    /// </summary>
+    /// <param name="isPlaced">Whether a custom location (by id) is placed.</param>
+    public static RendezvousSpan? FindRendezvous(IReadOnlyList<RouteLeg> legs, DvMapNode from, DvMapNode to, Func<long, bool> isPlaced)
+    {
+        if (legs.Count == 0 || to.CustomLocationId is not { } target || !isPlaced(target) || from.BodyName != to.BodyName) return null;
+        if (from.Kind == "Surface" && from.BodyName == LaunchSite.Ksc.BodyName)
+        {
+            var start = legs.TakeWhile(l => l.From.Kind == "Surface").Count();
+            return start < legs.Count ? new RendezvousSpan(to.BodyName, target, null, start) : null;
+        }
+        return from.CustomLocationId is { } chaser && chaser != target && isPlaced(chaser)
+            ? new RendezvousSpan(to.BodyName, target, chaser, 0)
+            : null;
+    }
+
+    /// <summary>
+    /// The leg's steps with the rendezvous in place of the map's orbital steps: the planned orbital Δv on the first of
+    /// them, nothing on the rest. The plan's burns already include any plane change, and can't be aerobraked.
+    /// </summary>
+    public static IReadOnlyList<RouteLeg> ApplyRendezvous(IReadOnlyList<RouteLeg> legs, RendezvousSpan span, RendezvousLeg rendezvous) =>
+        legs.Select((leg, i) => i < span.Start ? leg : leg with
+        {
+            DeltaV = i == span.Start ? Math.Round(rendezvous.OrbitalDv) : 0,
+            PlaneChangeDv = 0,
+            CanAerobrake = false,
+            AerobrakeDv = 0,
+            ToolNote = i == span.Start ? "Rendezvous burns as planned (plane match, phasing, transfer, match)" : "Part of the rendezvous",
+        }).ToList();
 
     /// <summary>A constellation can be released at stops that are an orbit (not a surface, intercept or escape).</summary>
     public static bool CanDeploy(DvMapNode stop, IReadOnlyDictionary<string, CelestialBody> bodies) =>

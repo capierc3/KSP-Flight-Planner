@@ -767,6 +767,26 @@ Worked example: 3 relays at Duna 1,000 km, the last stop of the mission (μ = 3.
 - Code: `LegTools.CanDeploy`, `LegTools.EvaluateDeploy`, `MissionPlanner.Summarize` (its `steps`); tested in `LegToolsTests`
 - Source: §6 (resonant carrier orbit), vis-viva (§3)
 
+### 19c. Rendezvous legs: meeting a placed craft
+
+A leg is a rendezvous leg when it arrives at a *placed* custom location (or an imported vessel), so there is a real craft whose position is known, and it starts either on Kerbin's surface (a launch from KSC) or at another placed craft around the same body. The Rendezvous tab plans it (§17): the launch time, a plane match, phasing, the Lambert intercept and the match-velocity burn.
+
+```
+launch steps    = the leg's steps from the surface to low orbit      keep the map's values (the climb)
+orbital steps   = every step after that                              first step = Σ planned burns, the rest 0
+```
+
+The plan's burns already include any plane change, so these steps get no plane-change extra. Where craft are depends on the date and on the save, so the mission keeps the plan's result (its orbital Δv and arrival time) as well as the start time and picks (launch, phasing orbit, porkchop point). Opening the leg again plans from those, so it shows the same plan while the craft haven't moved. A new leg tool on the next leg starts when this one arrives.
+
+Worked example: launch to a placed station in a 150 km circular orbit inclined 5° (μ = 3.5316×10¹², LKO r₁ = 680,000 m, station r₂ = 750,000 m):
+
+1. The map's step LKO → Station is a Hohmann transfer (§4): a = 715,000 m, so 2,334.04 − 2,278.93 = 55.11 m/s, then 2,169.98 − 2,116.20 = 53.78 m/s, **108.9 m/s** in all. Its worst-case plane change for 5° at the station is 2 × 2,169.98 × sin 2.5° = **189.3 m/s** (§14).
+2. The Rendezvous tab lifts off as KSC passes under the station's orbit, so the rocket climbs straight into its plane. The plan needs only **109 m/s** of orbital burns and no plane change, and that replaces the step.
+3. Going on from the station to a relay at 400 km in Kerbin's equatorial plane starts from the station's 5° orbit, so that plan has a 189 m/s plane match among its burns (479 m/s in total).
+
+- Code: `LegTools.FindRendezvous`, `LegTools.ApplyRendezvous`, `RendezvousViewModel.EditLeg`; tested in `LegToolsTests`
+- Source: §17 (Curtis §6.6–6.9, §5.3), Hohmann transfer (§4)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

@@ -187,12 +187,71 @@ public sealed class LegToolsTests : IDisposable
         Assert.Equal(definition.Stops[2].Transfer, reopened.Stops[2].Transfer);
     }
 
+    /// <summary>A placed station (150 km, 5°) and relay (400 km) around Kerbin, and a planned base, to meet.</summary>
+    private (DeltaVMap Map, CustomLocation Station, CustomLocation Relay, CustomLocation Planned) KerbinCraft()
+    {
+        var repo = new CustomLocationRepository(_db);
+        var station = repo.Get(repo.Add(new CustomLocation(0, "Station", "Kerbin", 150_000, 150_000, 5,
+            IsPlaced: true, MeanAnomalyDeg: 90)))!;
+        var relay = repo.Get(repo.Add(new CustomLocation(0, "Relay", "Kerbin", 400_000, 400_000, IsPlaced: true, MeanAnomalyDeg: 200)))!;
+        var planned = repo.Get(repo.Add("Planned", "Kerbin", 250_000))!;
+        return (new DvMapRepository(_db).GetMap()!, station, relay, planned);
+    }
+
+    [Fact]
+    public void Launching_to_a_placed_station_is_a_rendezvous_after_the_climb_to_orbit()
+    {
+        var (map, station, relay, planned) = KerbinCraft();
+        var placed = new CustomLocationRepository(_db).GetAll().Where(l => l.IsPlaced).Select(l => l.Id).ToHashSet();
+        RendezvousSpan? Find(string from, string to) => LegTools.FindRendezvous(map.Route(map[from], map[to]), map[from], map[to], placed.Contains);
+
+        var launch = Find("kerbin.surface", station.Key)!;
+        Assert.True(launch.IsLaunch);
+        Assert.Equal((station.Id, 1), (launch.TargetLocationId, launch.Start)); // surface → LKO stays the map's
+
+        var hop = Find(station.Key, relay.Key)!;
+        Assert.Equal((relay.Id, station.Id, 0), (hop.TargetLocationId, hop.ChaserLocationId!.Value, hop.Start));
+
+        Assert.Null(Find("kerbin.surface", planned.Key)); // not placed: nothing to meet yet
+        Assert.Null(Find("kerbin.lo", station.Key));      // where you are in LKO isn't known
+        Assert.Null(Find("mun.surface", station.Key));    // another body
+    }
+
+    [Fact]
+    public void Rendezvous_leg_carries_the_planned_burns_in_place_of_the_map()
+    {
+        var (map, station, _, _) = KerbinCraft();
+        var kerbin = _bodies["Kerbin"];
+        var target = new RendezvousTarget("Station", CustomLocationOrbits.ToElements(station, kerbin, kerbin, _bodies["Kerbol"]));
+        var plan = Rendezvous.Plan(new RendezvousRequest(kerbin, [target], 0, 0, Site: LaunchSite.Ksc, Ascent: new AscentProfile(80_000)));
+        var leg = new RendezvousLeg(station.Id, 0, plan.Legs[0].ArrivalUt, plan.Legs[0].TotalDv, plan.LaunchIndex);
+
+        var legs = map.Route(map["kerbin.surface"], map[station.Key]);
+        var span = LegTools.FindRendezvous(legs, map["kerbin.surface"], map[station.Key], _ => true)!;
+        var applied = LegTools.ApplyRendezvous(legs, span, leg);
+
+        Assert.Equal(legs[0], applied[0]);
+        Assert.Equal(Math.Round(plan.Legs[0].TotalDv), applied[1].DeltaV);
+        Assert.True(applied[1].IsFromTool && applied[1].PlaneChangeDv == 0);
+        // Launching straight into the station's plane: a few hundred m/s at most to catch it, close to the map's Hohmann.
+        Assert.InRange(applied[1].DeltaV, 50, 400);
+    }
+
+    [Fact]
+    public void Rendezvous_picks_survive_a_save()
+    {
+        var leg = new RendezvousLeg(7, 1_000, 9_000, 123.4, 2, new PhasingChoice(3, true), new InterceptPoint(5_000, 1_800));
+        var definition = new MissionDefinition([new("kerbin.surface"), new("custom.7", Rendezvous: leg)], [new("Launch")], []);
+        var repo = new MissionRepository(_db);
+        Assert.Equal(leg, repo.Get(repo.Add("Station visit", definition))!.Definition.Stops[1].Rendezvous);
+    }
+
     [Fact]
     public void Missions_saved_before_leg_tools_open_without_them()
     {
         var old = System.Text.Json.JsonSerializer.Deserialize<MissionDefinition>(
             """{"stops":[{"nodeKey":"kerbin.surface","note":null},{"nodeKey":"duna.lo","note":"Relays"}],"phases":[],"legs":[]}""",
             new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
-        Assert.All(old.Stops, s => Assert.True(s.Transfer is null && s.Deploy is null));
+        Assert.All(old.Stops, s => Assert.True(s.Transfer is null && s.Deploy is null && s.Rendezvous is null));
     }
 }

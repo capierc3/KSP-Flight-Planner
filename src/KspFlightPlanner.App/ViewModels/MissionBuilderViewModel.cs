@@ -115,6 +115,7 @@ public sealed class StopViewModel : ObservableObject
     private string _note;
     private TransferLeg? _transfer;
     private DeployStep? _deploy;
+    private RendezvousLeg? _rendezvous;
 
     /// <param name="changed">The stop moved somewhere else: the route changes.</param>
     /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
@@ -124,6 +125,7 @@ public sealed class StopViewModel : ObservableObject
         _note = stop.Note ?? "";
         _transfer = stop.Transfer;
         _deploy = stop.Deploy;
+        _rendezvous = stop.Rendezvous;
         _changed = changed;
         _legsChanged = legsChanged;
     }
@@ -157,6 +159,32 @@ public sealed class StopViewModel : ObservableObject
 
     /// <summary>"Depart Year 1, Day 231, arrive Year 2, Day 75 / Ejection 1,055 m/s, capture 652 m/s", or why the saved window isn't used.</summary>
     public string TransferText { get; private set; } = "";
+
+    /// <summary>The rendezvous the leg arriving here is flown as, as planned on the Rendezvous tab; null for a Δv-map leg.</summary>
+    public RendezvousLeg? Rendezvous
+    {
+        get => _rendezvous;
+        set { if (SetProperty(ref _rendezvous, value)) _legsChanged(); }
+    }
+
+    /// <summary>The stop is a placed craft, reached by launching from KSC or from another placed craft around the same body.</summary>
+    public bool CanHaveRendezvous { get; private set; }
+    public bool HasRendezvous => _rendezvous is not null;
+    public bool OffersRendezvous => CanHaveRendezvous && _rendezvous is null;
+
+    /// <summary>"Arrive Year 1, Day 3, 2:41:07 / Orbital burns 187 m/s", or why the plan isn't used.</summary>
+    public string RendezvousText { get; private set; } = "";
+
+    internal void SetRendezvous(bool canHaveRendezvous, bool used)
+    {
+        CanHaveRendezvous = canHaveRendezvous;
+        RendezvousText = _rendezvous is not { } r ? ""
+            : used ? $"Start {GameCalendar.Kerbin.FormatDate(r.StartUt)}, meet {GameCalendar.Kerbin.FormatDate(r.ArrivalUt)}\n" +
+                     $"Orbital burns {Format.Speed0(r.OrbitalDv)} (as planned)"
+            : "The leg here no longer meets this craft, so the plan isn't used.";
+        foreach (var name in new[] { nameof(CanHaveRendezvous), nameof(HasRendezvous), nameof(OffersRendezvous), nameof(RendezvousText) })
+            OnPropertyChanged(name);
+    }
 
     /// <summary>A satellite constellation released at this stop; null if none.</summary>
     public DeployStep? Deploy
@@ -214,7 +242,7 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(Role));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy);
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous);
 }
 
 /// <summary>A constellation released at a stop, shown after the leg that arrives there, with the phase that flies it.</summary>
@@ -401,6 +429,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         OpenTransferCommand = new RelayCommand<StopViewModel>(OpenTransfer, s => s is not null && s.CanHaveTransfer);
         RemoveTransferCommand = new RelayCommand<StopViewModel>(RemoveTransfer, s => s?.HasTransfer == true);
         OpenDeployCommand = new RelayCommand<StopViewModel>(OpenDeploy, s => s is not null && s.CanDeploy);
+        OpenRendezvousCommand = new RelayCommand<StopViewModel>(OpenRendezvous, s => s is not null && s.CanHaveRendezvous);
+        RemoveRendezvousCommand = new RelayCommand<StopViewModel>(RemoveRendezvous, s => s?.HasRendezvous == true);
         RemoveDeployCommand = new RelayCommand<StopViewModel>(RemoveDeploy, s => s?.HasDeploy == true);
         NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
         SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
@@ -493,6 +523,43 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     /// <summary>A stop's constellation deployment should be opened in Resonant Orbits.</summary>
     public event Action<DeployLink>? DeployRequested;
 
+    public RelayCommand<StopViewModel> OpenRendezvousCommand { get; }
+    public RelayCommand<StopViewModel> RemoveRendezvousCommand { get; }
+
+    /// <summary>A stop's rendezvous leg should be opened on the Rendezvous tab.</summary>
+    public event Action<RendezvousLegLink>? RendezvousRequested;
+
+    /// <summary>The Rendezvous link for the leg arriving at <paramref name="owner"/> (a stop), if it still has a rendezvous.</summary>
+    public RendezvousLegLink? RendezvousLinkFor(object owner) =>
+        owner is StopViewModel { HasRendezvous: true } stop && Stops.Contains(stop) ? RendezvousLink(stop) : null;
+
+    private RendezvousLegLink? RendezvousLink(StopViewModel stop)
+    {
+        var index = Stops.IndexOf(stop);
+        if (_map is null || index < 1 || index > _mapSegments.Count) return null;
+        var legs = _mapSegments[index - 1].Legs;
+        if (FindRendezvous(legs, Stops[index - 1], stop, PlacedLocations()) is not { } span) return null;
+        var title = $"Stop {index} → {index + 1}: {_map[Stops[index - 1].NodeKey].DisplayName} → {_map[stop.NodeKey].DisplayName}";
+        return new RendezvousLegLink(stop, title, span, legs[span.Start].From.AltitudeM ?? 80_000, stop.Rendezvous,
+            plan => stop.Rendezvous = plan) { EarliestUt = ArrivalAt(index - 1) };
+    }
+
+    private RendezvousSpan? FindRendezvous(IReadOnlyList<RouteLeg> legs, StopViewModel from, StopViewModel to, HashSet<long> placed) =>
+        LegTools.FindRendezvous(legs, _map![from.NodeKey], _map[to.NodeKey], placed.Contains);
+
+    private HashSet<long> PlacedLocations() => _locations.GetAll().Where(l => l.IsPlaced).Select(l => l.Id).ToHashSet();
+
+    private void OpenRendezvous(StopViewModel stop)
+    {
+        if (RendezvousLink(stop) is { } link) RendezvousRequested?.Invoke(link);
+    }
+
+    private void RemoveRendezvous(StopViewModel stop)
+    {
+        stop.Rendezvous = null;
+        RouteChanged?.Invoke();
+    }
+
     /// <summary>The stops or the whole mission changed: tools open on a leg should check it's still there.</summary>
     public event Action? RouteChanged;
 
@@ -507,7 +574,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         var segment = _mapSegments[index - 1];
         if (LegTools.FindTransfer(segment.Legs, _bodies) is not { } span) return null;
         var title = $"Stop {index} → {index + 1}: {_map[Stops[index - 1].NodeKey].DisplayName} → {_map[stop.NodeKey].DisplayName}";
-        return new TransferLegLink(stop, title, span, stop.Transfer, choice => stop.Transfer = choice);
+        return new TransferLegLink(stop, title, span, stop.Transfer, choice => stop.Transfer = choice) { EarliestUt = ArrivalAt(index - 1) };
     }
 
     /// <summary>The Resonant Orbits link for the deployment at <paramref name="owner"/> (a stop), if it still has one.</summary>
@@ -558,6 +625,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     {
         _mapSegments = segments;
         Stops[0].SetTools(false, null);
+        Stops[0].SetRendezvous(false, false);
+        var placed = PlacedLocations();
         _deploys = new DeployResult?[Stops.Count];
         for (var i = 0; i < Stops.Count; i++)
         {
@@ -568,14 +637,26 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                 : null;
             Stops[i].SetDeploy(canDeploy, _deploys[i]);
         }
+        _arrivals = new double?[Stops.Count];
         return segments.Select(segment =>
         {
             var stop = Stops[segment.ToStop];
             var transfer = stop.Transfer is { } choice ? LegTools.EvaluateTransfer(segment.Legs, choice, _bodies) : null;
             stop.SetTools(LegTools.FindTransfer(segment.Legs, _bodies) is not null, transfer);
+            var rendezvousSpan = FindRendezvous(segment.Legs, Stops[segment.ToStop - 1], stop, placed);
+            var rendezvous = stop.Rendezvous is { } plan && rendezvousSpan is { } span && plan.TargetLocationId == span.TargetLocationId ? plan : null;
+            stop.SetRendezvous(rendezvousSpan is not null, rendezvous is not null);
+            _arrivals[segment.ToStop] = rendezvous?.ArrivalUt ?? transfer?.Window.ArrivalUt;
+            if (rendezvous is not null) return segment with { Legs = LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous) };
             return transfer is null ? segment : segment with { Legs = LegTools.ApplyTransfer(segment.Legs, transfer) };
         }).ToList();
     }
+
+    /// <summary>When each stop is reached, where a leg tool knows it (a transfer's or rendezvous's arrival), by stop index.</summary>
+    private double?[] _arrivals = [];
+
+    /// <summary>A new tool on the leg leaving stop <paramref name="index"/> starts no sooner than the mission gets there.</summary>
+    private double? ArrivalAt(int index) => index >= 0 && index < _arrivals.Length ? _arrivals[index] : null;
 
     // ---------------- Map view bindings ----------------
 
@@ -864,7 +945,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private void ReverseStops()
     {
         // Each leg is flown the other way now, so the tools of the old legs don't apply.
-        var reversed = Stops.Reverse().Select(s => s.ToDefinition() with { Transfer = null }).ToList();
+        var reversed = Stops.Reverse().Select(s => s.ToDefinition() with { Transfer = null, Rendezvous = null }).ToList();
         SetStops(reversed);
     }
 

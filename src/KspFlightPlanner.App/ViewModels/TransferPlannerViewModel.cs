@@ -30,7 +30,11 @@ public sealed record LegSummary(
 /// window picked is saved back into the mission through <see cref="Save"/>.
 /// </summary>
 /// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
-public sealed record TransferLegLink(object Owner, string Title, TransferSpan Span, TransferLeg? Choice, Action<TransferLeg> Save);
+public sealed record TransferLegLink(object Owner, string Title, TransferSpan Span, TransferLeg? Choice, Action<TransferLeg> Save)
+{
+    /// <summary>When the mission reaches the start of the leg, if known: a new window is searched from then.</summary>
+    public double? EarliestUt { get; init; }
+}
 
 public sealed class TransferPlannerViewModel : ObservableObject
 {
@@ -136,7 +140,10 @@ public sealed class TransferPlannerViewModel : ObservableObject
         ArrivalAltitudeText = Km(span.ArrivalAltitudeM ?? span.Destination.DefaultParkingAltitudeM);
         SelectedArrivalMode = span.Captures ? ArrivalMode.Circularize : ArrivalMode.Flyby;
         PlanReturn = false;
-        var earliest = link.Choice?.EarliestDepartureUt ?? (_sync?.Save is { } save ? save.Ut : _calendar.ToUniversalTime(EarliestYear, EarliestDay));
+        // The earliest date is kept to the day: round the arrival up so the window is never before the mission gets there.
+        var earliest = link.Choice?.EarliestDepartureUt
+            ?? (link.EarliestUt is { } arrival ? Math.Ceiling(arrival / _calendar.SecondsPerDay) * _calendar.SecondsPerDay : (double?)null)
+            ?? (_sync?.Save is { } save ? save.Ut : _calendar.ToUniversalTime(EarliestYear, EarliestDay));
         SetEarliest(earliest);
         _suspendRecalculate = false;
 

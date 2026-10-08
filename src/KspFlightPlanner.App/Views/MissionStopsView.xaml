@@ -97,6 +97,25 @@
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
+                                <Button Content="Plan the rendezvous for this leg" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                        Visibility="{Binding OffersRendezvous, Converter={StaticResource BoolToVisibility}}"
+                                        Command="{Binding DataContext.OpenRendezvousCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                        ToolTip="This stop is a placed craft: plan meeting it on the Rendezvous tab. Its burns replace the Δv map's orbital values for this leg." />
+                                <Border Visibility="{Binding HasRendezvous, Converter={StaticResource BoolToVisibility}}" Padding="8,5" CornerRadius="4" Margin="0,4,0,0"
+                                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                            <Button Content="Open" Style="{StaticResource SmallButton}" ToolTip="Show the plan on the Rendezvous tab"
+                                                    Command="{Binding DataContext.OpenRendezvousCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                            <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Back to the Δv map's values for this leg"
+                                                    Command="{Binding DataContext.RemoveRendezvousCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Rendezvous" FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="{Binding RendezvousText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
                                 <Button Content="Deploy satellites here" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
                                         Visibility="{Binding OffersDeploy, Converter={StaticResource BoolToVisibility}}"
                                         Command="{Binding DataContext.OpenDeployCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"

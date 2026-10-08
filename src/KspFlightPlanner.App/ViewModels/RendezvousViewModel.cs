@@ -74,6 +74,19 @@ public sealed class LegRow : ObservableObject
 }
 
 /// <summary>
+/// A mission leg the Rendezvous tab is planning: where it starts (a KSC launch or a craft) and the craft it meets come
+/// from the leg, and every plan made is saved back into the mission through <see cref="Save"/>.
+/// </summary>
+/// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
+/// <param name="ParkingAltitudeM">The low orbit a launch climbs to (the map's, so the leg's launch step matches).</param>
+public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpan Span, double ParkingAltitudeM, RendezvousLeg? Choice,
+    Action<RendezvousLeg> Save)
+{
+    /// <summary>When the mission reaches the start of the leg, if known: a new plan starts then.</summary>
+    public double? EarliestUt { get; init; }
+}
+
+/// <summary>
 /// The Rendezvous tab: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
 /// KSC or from a craft already in orbit. Burns are shown as exact maneuver-node values or as instructions to fly by feel.
 /// </summary>
@@ -117,6 +130,7 @@ public sealed class RendezvousViewModel : ObservableObject
     private bool _suspend;
     private int _plotLeg;
     private bool _showDiagram = true;
+    private RendezvousLegLink? _leg;
 
     public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
         FlightRepository? flights = null)
@@ -156,9 +170,88 @@ public sealed class RendezvousViewModel : ObservableObject
         UseActiveVesselCommand = new RelayCommand(UseActiveVessel, () => CraftFor(ActiveKey) is not null);
         AddGameTargetCommand = new RelayCommand(AddGameTarget, () => AvailableTargets.Any(c => c.Key == TargetKey));
         FlyCommand = new RelayCommand(Fly, () => _plan is not null && _flights is not null);
+        StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
 
         RefreshDesignChoices();
         RebuildCrafts();
+    }
+
+    // ---------------- Leg mode ----------------
+
+    public RelayCommand StopEditingLegCommand { get; }
+
+    /// <summary>The mission leg being planned; null when the tab is used on its own.</summary>
+    public RendezvousLegLink? Leg => _leg;
+
+    public bool IsEditingLeg => _leg is not null;
+
+    /// <summary>The start, targets and what happens afterwards can be changed: not while they come from a mission leg.</summary>
+    public bool IsRouteEditable => _leg is null;
+
+    public string LegTitle => _leg?.Title ?? "";
+
+    /// <summary>
+    /// Plans a mission leg: start and target from the leg, and the start time and picks it was saved with (or the game's
+    /// time and the planner's picks). The start time is fixed rather than following the game, so the plan stays put; every
+    /// plan made afterwards is saved into the mission.
+    /// </summary>
+    public void EditLeg(RendezvousLegLink link)
+    {
+        var span = link.Span;
+        var choice = link.Choice is { } c && c.TargetLocationId == span.TargetLocationId ? c : null;
+        _leg = null; // don't save anything while it's being set up
+        _suspend = true;
+        _startFromLaunch = span.IsLaunch;
+        if (span.ChaserLocationId is { } chaser) _selectedChaser = CraftForLocation(chaser);
+        Targets.Clear();
+        if (CraftForLocation(span.TargetLocationId) is { } target) Targets.Add(target);
+        _deorbit = false;
+        _parkingAltitudeText = Km(link.ParkingAltitudeM);
+        _followSaveTime = false;
+        // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
+        SetStartFields(choice?.StartUt ?? (link.EarliestUt is { } arrival ? Math.Ceiling(arrival / 60) * 60 : (double?)null)
+            ?? (_sync.Save is { } save ? save.Ut + _leadMinutes * 60 : _calendar.ToUniversalTime(StartYear, StartDay)));
+        _launchChoice = choice?.LaunchIndex;
+        _phasing.Clear();
+        _phasing.Add(choice?.Phasing);
+        _intercepts.Clear();
+        _intercepts.Add(choice?.Intercept);
+        _suspend = false;
+
+        _leg = link;
+        foreach (var name in new[] { nameof(StartFromLaunch), nameof(StartFromCraft), nameof(SelectedChaser), nameof(Deorbit), nameof(ParkingAltitudeText),
+                     nameof(FollowSaveTime), nameof(ManualStart), nameof(DeorbitLabel), nameof(CapacityHint) })
+            OnPropertyChanged(name);
+        foreach (var name in LegProperties) OnPropertyChanged(name);
+        RefreshAvailableTargets();
+        if (Targets.Count == 0) ErrorText = "The craft this leg meets isn't in the list: check it's placed on the Locations tab (or in the linked save).";
+        else Recalculate();
+    }
+
+    /// <summary>Back to using the tab on its own; the mission keeps the plan last made.</summary>
+    public void StopEditingLeg()
+    {
+        _leg = null;
+        foreach (var name in LegProperties) OnPropertyChanged(name);
+    }
+
+    private static readonly string[] LegProperties = [nameof(Leg), nameof(IsEditingLeg), nameof(IsRouteEditable), nameof(LegTitle)];
+
+    /// <summary>A custom location in the craft list: the save's vessel while it's linked to this save, else the location itself.</summary>
+    private CraftChoice? CraftForLocation(long id)
+    {
+        var location = _locations.Get(id);
+        var vesselKey = location is { IsLinked: true } && location.KspSave == _sync.SaveName ? $"vessel:{location.KspVesselId}" : null;
+        return Crafts.FirstOrDefault(c => c.Key == vesselKey) ?? Crafts.FirstOrDefault(c => c.Key == $"location:{id}");
+    }
+
+    /// <summary>Saves the plan into the mission leg being planned (the first leg of the plan is the mission leg).</summary>
+    private void SaveLeg(RendezvousRequest request, RendezvousPlan plan)
+    {
+        if (_leg is not { } link || plan.Legs.Count == 0) return;
+        var leg = plan.Legs[0];
+        link.Save(new RendezvousLeg(link.Span.TargetLocationId, request.EarliestUt, leg.ArrivalUt, leg.TotalDv, _launchChoice,
+            _phasing.Count > 0 ? _phasing[0] : null, _intercepts.Count > 0 ? _intercepts[0] : null));
     }
 
     // ---------------- Inputs ----------------
@@ -711,6 +804,7 @@ public sealed class RendezvousViewModel : ObservableObject
             var plan = await Task.Run(() => Rendezvous.Plan(request, choices));
             if (version != _version) return;
             SetPlan(request, plan);
+            SaveLeg(request, plan);
         }
         catch (ArgumentException ex)
         {
