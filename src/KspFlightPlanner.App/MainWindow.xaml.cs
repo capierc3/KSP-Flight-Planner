@@ -14,6 +14,7 @@ namespace KspFlightPlanner.App;
 public sealed class MainViewModel : ObservableObject
 {
     private WorkMode _mode;
+    private string? _activeDocument;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, SaveSync sync, KspLink link, PlannerEvents events)
@@ -108,6 +109,23 @@ public sealed class MainViewModel : ObservableObject
         set { if (value) Mode = WorkMode.Fly; }
     }
 
+    /// <summary>The Plan document in front in the middle (a <see cref="Panes"/> id); the Calculators pane shows its inputs.</summary>
+    public string? ActiveDocument
+    {
+        get => _activeDocument;
+        set
+        {
+            if (!SetProperty(ref _activeDocument, value)) return;
+            OnPropertyChanged(nameof(ShowsTransferInputs));
+            OnPropertyChanged(nameof(ShowsResonantInputs));
+            OnPropertyChanged(nameof(ShowsNoCalculator));
+        }
+    }
+
+    public bool ShowsTransferInputs => ActiveDocument == Panes.Transfer;
+    public bool ShowsResonantInputs => ActiveDocument == Panes.Resonant;
+    public bool ShowsNoCalculator => !ShowsTransferInputs && !ShowsResonantInputs;
+
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
     public event Action<string>? PaneRequested;
 
@@ -148,6 +166,7 @@ public partial class MainWindow : Window
 
         var folder = Path.GetDirectoryName(PlannerDatabase.DefaultPath())!;
         _plan = new DockWorkspace(PlanDock, WorkMode.Plan, viewModel, folder);
+        _plan.ActiveDocumentChanged += id => viewModel.ActiveDocument = id;
         _fly = new DockWorkspace(FlyDock, WorkMode.Fly, viewModel, folder);
         ApplyDockTheme();
         _plan.Load();

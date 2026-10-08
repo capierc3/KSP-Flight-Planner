@@ -28,6 +28,20 @@ public sealed class DockWorkspace
         _mode = mode;
         _viewModel = viewModel;
         _file = Path.Combine(folder, $"layout-{mode.ToString().ToLowerInvariant()}.v{LayoutVersion}.xml");
+        _dock.ActiveContentChanged += (_, _) => ReportActiveDocument();
+    }
+
+    /// <summary>The document pane in front changed (its id); tool panes taking focus don't count.</summary>
+    public event Action<string>? ActiveDocumentChanged;
+
+    private void ReportActiveDocument()
+    {
+        // Focus on a document pane (wherever it's docked) makes it the active one; with nothing focused yet (just loaded),
+        // the tab in front in the middle is.
+        var content = _dock.Layout.ActiveContent is { } active && Panes.Find(active.ContentId) is { IsDocument: true }
+            ? active
+            : _dock.Layout.ActiveContent is null ? _dock.Layout.Descendents().OfType<LayoutDocumentPane>().FirstOrDefault()?.SelectedContent : null;
+        if (content?.ContentId is { } id) ActiveDocumentChanged?.Invoke(id);
     }
 
     /// <summary>Restores the saved layout, or sets up the default one if there is none (or it can't be read).</summary>
@@ -45,6 +59,7 @@ public sealed class DockWorkspace
                     else e.Cancel = true;
                 };
                 serializer.Deserialize(_file);
+                ReportActiveDocument();
                 return;
             }
             catch (Exception)
@@ -88,6 +103,7 @@ public sealed class DockWorkspace
             panel.Children.Add(Documents(Panes.Flight));
         }
         _dock.Layout = root;
+        ReportActiveDocument();
     }
 
     /// <summary>Brings a pane into view, opening it (or reopening a closed/hidden one) if needed.</summary>

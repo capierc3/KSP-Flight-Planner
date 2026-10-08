@@ -1,6 +1,7 @@
 <UserControl x:Class="KspFlightPlanner.App.Views.ResonantOrbitView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:KspFlightPlanner.App"
              xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls">
     <Grid Margin="8,10,8,8">
         <Grid.ColumnDefinitions>
@@ -35,31 +36,18 @@
                         </StackPanel>
                     </Border>
 
-                    <TextBlock Text="Parameters" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                    <!-- The deployment being planned; its inputs live in the Calculators pane -->
+                    <DockPanel Margin="0,0,0,4">
+                        <Button DockPanel.Dock="Right" Content="Change…" Padding="8,1" VerticalAlignment="Center"
+                                Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}"
+                                ToolTip="Edit the deployment in the Calculators pane" />
+                        <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Run Text="{Binding SelectedBody.Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run
+                                 Text="{Binding SatelliteCount, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" satellites" />
+                        </TextBlock>
+                    </DockPanel>
 
-                    <StackPanel IsEnabled="{Binding IsOrbitEditable}">
-                    <TextBlock Text="System" Style="{StaticResource Label}" />
-                    <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
-
-                    <TextBlock Text="Celestial body" Style="{StaticResource Label}" />
-                    <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding SelectedBody}" />
-                    </StackPanel>
-
-                    <TextBlock Text="Number of satellites" Style="{StaticResource Label}" />
-                    <TextBox Text="{Binding SatelliteCount, UpdateSourceTrigger=PropertyChanged}" />
-
-                    <TextBlock Text="Orbital altitude (m)" Style="{StaticResource Label}" />
-                    <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsOrbitEditable}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" IsEnabled="{Binding IsOrbitEditable}">
-                        <Button Content="Use synchronous" Command="{Binding UseSynchronousAltitudeCommand}" Margin="0,0,8,0" />
-                        <Button Content="Use min. line-of-sight" Command="{Binding UseMinimumLineOfSightCommand}" />
-                    </StackPanel>
-
-                    <CheckBox Content="Dive orbit (release at apoapsis)" IsChecked="{Binding PreferDiveOrbit}" Margin="0,10,0,0" />
-                    <CheckBox Content="Occlusion modifiers (0.75 atm / 0.9 vacuum)" IsChecked="{Binding UseOcclusion}" Margin="0,4,0,0" />
-                    <CheckBox Content="Show line-of-sight links" IsChecked="{Binding ShowLineOfSight}" Margin="0,4,0,0" />
-
-                    <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,4,0,0" />
 
                     <TextBlock Text="Carrier orbit" Style="{StaticResource SectionHeader}" />
                     <Grid>

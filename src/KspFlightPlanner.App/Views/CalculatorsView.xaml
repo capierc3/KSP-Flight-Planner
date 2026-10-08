@@ -5,10 +5,16 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     </UserControl.Resources>
 
-    <!-- Inputs for the calculator documents (Transfer Planner…), so the documents can give their room to results -->
+    <!-- Inputs for the calculator document in focus in the middle (Transfer Planner, Resonant Orbits), so the documents can give
+         their room to results -->
     <ScrollViewer Padding="12,10,0,10" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,18,0">
-            <StackPanel DataContext="{Binding Transfer}">
+            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
+                       Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
+                       Text="Inputs for the Transfer Planner or Resonant Orbits show here while that tab is in front in the middle." />
+
+            <StackPanel DataContext="{Binding Transfer}"
+                        Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="Transfer window" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
                 <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
                            Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}">
@@ -78,6 +84,36 @@
                     </TextBlock>
                     <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
                 </StackPanel>
+            </StackPanel>
+            <StackPanel DataContext="{Binding Resonant}"
+                        Visibility="{Binding DataContext.ShowsResonantInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Resonant orbit" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}">
+                    <Run Text="Set by the mission stop " /><Run Text="{Binding LegTitle, Mode=OneWay}" /><Run Text=". The body and orbit can't change here." />
+                </TextBlock>
+
+                <StackPanel IsEnabled="{Binding IsOrbitEditable}">
+                    <TextBlock Text="System" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
+
+                    <TextBlock Text="Celestial body" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding SelectedBody}" />
+                </StackPanel>
+
+                <TextBlock Text="Number of satellites" Style="{StaticResource Label}" />
+                <TextBox Text="{Binding SatelliteCount, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Text="Orbital altitude (m)" Style="{StaticResource Label}" />
+                <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsOrbitEditable}" />
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" IsEnabled="{Binding IsOrbitEditable}">
+                    <Button Content="Use synchronous" Command="{Binding UseSynchronousAltitudeCommand}" Margin="0,0,8,0" />
+                    <Button Content="Use min. line-of-sight" Command="{Binding UseMinimumLineOfSightCommand}" />
+                </StackPanel>
+
+                <CheckBox Content="Dive orbit (release at apoapsis)" IsChecked="{Binding PreferDiveOrbit}" Margin="0,10,0,0" />
+                <CheckBox Content="Occlusion modifiers (0.75 atm / 0.9 vacuum)" IsChecked="{Binding UseOcclusion}" Margin="0,4,0,0" />
+                <CheckBox Content="Show line-of-sight links" IsChecked="{Binding ShowLineOfSight}" Margin="0,4,0,0" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>
