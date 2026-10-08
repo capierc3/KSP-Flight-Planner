@@ -15,6 +15,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
 - **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
+- **Vessels** — every vessel in the linked save, grouped by body, with its remaining Δv, thrust, burn time,
+  fuel left per resource, engines, crew and parts. Part data (masses, engines, antennas, resource densities) is read
+  from the KSP folder — ModuleManager's cache when present, so mod patches count — and stored in the database.
 - **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
@@ -55,6 +58,8 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 - `custom_locations`, `custom_location_images` — user-defined orbits (periapsis, apoapsis, inclination,
   description) and their images (stored as BLOBs).
 - `custom_locations.ksp_save`, `ksp_vessel_id` — set when a location was imported from a save and follows its vessel.
+- `ksp_parts`, `ksp_part_resources`, `ksp_part_engines`, `ksp_engine_propellants`, `ksp_part_antennas`, `ksp_resources` —
+  the part catalog read from the KSP install (replaced as a whole when GameData changes).
 - `app_settings` — preferences as key/value text (KSP folder, chosen save, watch on/off); see `SettingsRepository`.
 - `saved_constellations`, `saved_missions` — user data.
 - **Pre-release:** the schema is a single v1 script that is still edited in place. When the schema or seed

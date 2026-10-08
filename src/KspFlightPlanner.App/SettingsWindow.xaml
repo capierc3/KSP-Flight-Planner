@@ -51,6 +51,15 @@
                 <ComboBox ItemsSource="{Binding Saves}" SelectedItem="{Binding SelectedSave}" />
                 <TextBlock Text="{Binding SaveDetails}" Style="{StaticResource Note}" Margin="0,4,0,0" />
 
+                <TextBlock Text="Part data" Style="{StaticResource Field}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Read again" Command="{Binding ReadPartDataCommand}" Margin="6,0,0,0" MinWidth="72"
+                            ToolTip="Read part masses, engines, antennas and resource densities from this KSP folder" />
+                    <TextBlock Text="{Binding Parts.Summary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource Note}" Margin="0,4,0,0"
+                           Text="Read from GameData (ModuleManager's cache, so mod changes are included) and stored in the planner database. Read again automatically when your mods change." />
+
                 <CheckBox Content="Keep linked locations up to date while playing (watch the save file)" IsChecked="{Binding WatchSave}" Margin="0,16,0,0" />
                 <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"
                            Text="KSP writes the save when you return to the Space Center, Tracking Station or VAB, on launch and recovery, and on autosave (every few minutes) — not continuously during flight. Quicksaves (F5 in game) go to a different file." />

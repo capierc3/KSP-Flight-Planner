@@ -21,12 +21,15 @@ public partial class App : Application
             var maps = new DvMapRepository(database);
             var locations = new CustomLocationRepository(database);
             var events = new PlannerEvents();
+            var sync = new SaveSync(new SettingsRepository(database), bodies, locations,
+                new PartData(new PartCatalogRepository(database)), events);
             var viewModel = new MainViewModel(
                 new MissionBuilderViewModel(maps, new MissionRepository(database), locations, events),
                 new LocationsViewModel(bodies, maps, locations, events),
+                new VesselsViewModel(sync),
                 new TransferPlannerViewModel(bodies, locations, events),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
-                new SaveSync(new SettingsRepository(database), bodies, locations, events),
+                sync,
                 events);
             new MainWindow(viewModel).Show();
         }

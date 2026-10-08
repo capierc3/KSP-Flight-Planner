@@ -64,12 +64,19 @@ public sealed class PlannerDatabase
         ("saved_missions", []),
         ("saved_constellations", []),
         ("app_settings", []),
+        // Read from the KSP install rather than typed in, but kept so a rebuild doesn't need KSP to be there.
+        ("ksp_resources", []),
+        ("ksp_parts", []),
+        ("ksp_part_resources", []),
+        ("ksp_part_engines", []),
+        ("ksp_engine_propellants", []),
+        ("ksp_part_antennas", []),
     ];
 
     public void Initialize()
     {
         var fingerprint = Migrations.Fingerprint + BodySeeder.Fingerprint + DvMapSeeder.Fingerprint;
-        if (ResetOnSchemaChange && File.Exists(DatabasePath) && ReadFingerprint() != fingerprint)
+        if (ResetOnSchemaChange && File.Exists(DatabasePath) && (ReadFingerprint() != fingerprint || HasMissingTables()))
         {
             RebuildKeepingUserData(fingerprint);
             return;
@@ -168,6 +175,25 @@ public sealed class PlannerDatabase
     {
         SqliteConnection.ClearAllPools();
         File.Delete(DatabasePath);
+    }
+
+    /// <summary>Pre-release safety net: the fingerprint says current but a table is missing (e.g. an interrupted rebuild).</summary>
+    private bool HasMissingTables()
+    {
+        try
+        {
+            using var connection = Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table';";
+            using var reader = cmd.ExecuteReader();
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read()) existing.Add(reader.GetString(0));
+            return Migrations.Tables.Any(t => !existing.Contains(t));
+        }
+        catch (SqliteException)
+        {
+            return true;
+        }
     }
 
     private string? ReadFingerprint()

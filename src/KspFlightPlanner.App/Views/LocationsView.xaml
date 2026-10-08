@@ -11,22 +11,6 @@
             <Setter Property="MinHeight" Value="0" />
         </Style>
 
-        <!-- Label/value pairs; values are selectable so they can be copied. -->
-        <DataTemplate x:Key="FactRow" DataType="{x:Type vm:Fact}">
-            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" SharedSizeGroup="FactLabel" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Label}" Style="{StaticResource Label}" Margin="0,0,16,0" />
-                    <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                             FontFamily="Cascadia Mono, Consolas" FontSize="12"
-                             Padding="0" MinHeight="0" TextWrapping="Wrap" VerticalAlignment="Center" />
-                </Grid>
-            </Border>
-        </DataTemplate>
-
         <!-- Read-only body -->
         <DataTemplate DataType="{x:Type vm:BodyDetailViewModel}">
             <StackPanel Grid.IsSharedSizeScope="True" Margin="0,0,24,24">

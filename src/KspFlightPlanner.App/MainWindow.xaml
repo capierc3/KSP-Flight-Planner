@@ -14,6 +14,7 @@
     <Window.CommandBindings>
         <CommandBinding Command="{x:Static app:MainCommands.ImportVessels}" Executed="Import_Executed" CanExecute="HasSave_CanExecute" />
         <CommandBinding Command="{x:Static app:MainCommands.ReloadSave}" Executed="Reload_Executed" CanExecute="HasSaveChosen_CanExecute" />
+        <CommandBinding Command="{x:Static app:MainCommands.ReadPartData}" Executed="ReadPartData_Executed" CanExecute="HasSaveChosen_CanExecute" />
         <CommandBinding Command="{x:Static app:MainCommands.OpenDataFolder}" Executed="OpenDataFolder_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.Settings}" Executed="Settings_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.ShowTab}" Executed="ShowTab_Executed" />
@@ -26,7 +27,8 @@
         <KeyBinding Key="D3" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="2" />
         <KeyBinding Key="D4" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="3" />
         <KeyBinding Key="D5" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" />
-        <KeyBinding Key="F1" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" />
+        <KeyBinding Key="D6" Modifiers="Control" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="5" />
+        <KeyBinding Key="F1" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="5" />
     </Window.InputBindings>
 
     <DockPanel>
@@ -43,15 +45,19 @@
             <MenuItem Header="_View">
                 <MenuItem Header="_Mission Builder" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="0" InputGestureText="Ctrl+1" />
                 <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="1" InputGestureText="Ctrl+2" />
-                <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="2" InputGestureText="Ctrl+3" />
-                <MenuItem Header="_Resonant Orbits" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="3" InputGestureText="Ctrl+4" />
-                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" InputGestureText="Ctrl+5" />
+                <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="2" InputGestureText="Ctrl+3" />
+                <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="3" InputGestureText="Ctrl+4" />
+                <MenuItem Header="_Resonant Orbits" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" InputGestureText="Ctrl+5" />
+                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="5" InputGestureText="Ctrl+6" />
             </MenuItem>
             <MenuItem Header="_Tools">
+                <MenuItem Header="Read _Part Data Again" Command="{x:Static app:MainCommands.ReadPartData}"
+                          ToolTip="Read part masses, engines and antennas from the KSP folder again" />
+                <Separator />
                 <MenuItem Header="_Settings…" Command="{x:Static app:MainCommands.Settings}" />
             </MenuItem>
             <MenuItem Header="_Help">
-                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="4" InputGestureText="F1" />
+                <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowTab}" CommandParameter="5" InputGestureText="F1" />
                 <Separator />
                 <MenuItem Header="_About KSP Flight Planner" Command="{x:Static app:MainCommands.About}" />
             </MenuItem>
@@ -80,6 +86,9 @@
             </TabItem>
             <TabItem Header="Locations">
                 <views:LocationsView DataContext="{Binding Locations}" />
+            </TabItem>
+            <TabItem Header="Vessels">
+                <views:VesselsView DataContext="{Binding Vessels}" />
             </TabItem>
             <TabItem Header="Transfer Planner">
                 <views:TransferPlannerView DataContext="{Binding Transfer}" />

@@ -23,6 +23,10 @@ internal static class Units
 
     public static string Dv(double metresPerSecond) => metresPerSecond.ToString("#,0", Culture) + " m/s";
 
+    /// <summary>"0.497 t", "12.4 t", "1,250 t".</summary>
+    public static string Tonnes(double tonnes) =>
+        tonnes.ToString(Math.Abs(tonnes) < 10 ? "0.###" : Math.Abs(tonnes) < 1000 ? "#,0.#" : "#,0", Culture) + " t";
+
     public static string Degrees(double deg) => deg.ToString("0.###", Culture) + "°";
 
     /// <summary>Kerbin-calendar duration plus seconds, e.g. "1y 375d 3h 50m  (17,315,400 s)".</summary>

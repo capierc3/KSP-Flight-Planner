@@ -13,17 +13,24 @@ public sealed class SettingsViewModel : ObservableObject
     private KspSaveFolder? _selectedSave;
     private bool _watchSave;
 
-    public SettingsViewModel(AppSettings settings)
+    public SettingsViewModel(AppSettings settings, PartData parts)
     {
+        Parts = parts;
         _installPath = settings.KspInstallPath ?? KspInstallLocator.FindSteamInstall() ?? "";
         _watchSave = settings.WatchSave;
         BrowseCommand = new RelayCommand(Browse);
         DetectCommand = new RelayCommand(Detect);
+        ReadPartDataCommand = new RelayCommand(async () => await parts.ReadAsync(InstallPath.Trim()),
+            () => !parts.IsReading && InstallProblem is null && InstallPath.Trim().Length > 0);
         LoadSaves(settings.KspSaveName);
     }
 
     public RelayCommand BrowseCommand { get; }
     public RelayCommand DetectCommand { get; }
+    public RelayCommand ReadPartDataCommand { get; }
+
+    /// <summary>Part masses, engines and antennas read from this install (shown with a button to read them again).</summary>
+    public PartData Parts { get; }
 
     /// <summary>Lets the user pick a folder; the view supplies the dialog. Returns null when cancelled.</summary>
     public Func<string?, string?> PickFolder { get; set; } = _ => null;

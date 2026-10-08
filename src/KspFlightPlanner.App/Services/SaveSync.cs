@@ -18,6 +18,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
     private readonly BodyRepository _bodies;
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
+    private readonly PartData _parts;
     private readonly DispatcherTimer _debounce;
     private FileSystemWatcher? _watcher;
     private int _readVersion;
@@ -28,8 +29,10 @@ public sealed class SaveSync : ObservableObject, IDisposable
     private string? _problem;
     private int _newVessels;
 
-    public SaveSync(SettingsRepository settings, BodyRepository bodies, CustomLocationRepository locations, PlannerEvents events)
+    public SaveSync(SettingsRepository settings, BodyRepository bodies, CustomLocationRepository locations, PartData parts,
+        PlannerEvents events)
     {
+        _parts = parts;
         _settingsRepository = settings;
         _bodies = bodies;
         _locations = locations;
@@ -42,6 +45,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
     }
 
     public AppSettings Settings => _settings;
+
+    /// <summary>Part data from the same KSP install; read again when the install or its mods change.</summary>
+    public PartData Parts => _parts;
 
     /// <summary>The last save read, or null if none is configured or it couldn't be read.</summary>
     public KspSave? Save { get => _save; private set { if (SetProperty(ref _save, value)) OnPropertyChanged(nameof(HasSave)); } }
@@ -176,7 +182,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
         Status = string.Join(" · ", parts);
     }
 
-    private Dictionary<string, CelestialBody> StockBodies()
+    public Dictionary<string, CelestialBody> StockBodies()
     {
         var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock");
         return system is null ? [] : _bodies.GetBodies(system.Id).ToDictionary(b => b.Name);
@@ -197,6 +203,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
             _watcher.Renamed += (_, _) => Dispatch();
             _watcher.EnableRaisingEvents = true;
         }
+        _ = _parts.EnsureCurrentAsync(_settings.KspInstallPath);
         _ = ReloadAsync();
     }
 

@@ -14,12 +14,13 @@ public sealed class MainViewModel : ObservableObject
     public const int LocationsTab = 1;
     private int _selectedTab;
 
-    public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, TransferPlannerViewModel transfer,
+    public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         ResonantOrbitViewModel resonant, SaveSync sync, PlannerEvents events)
     {
         Sync = sync;
         Mission = mission;
         Locations = locations;
+        Vessels = vessels;
         Transfer = transfer;
         Resonant = resonant;
         events.OpenLocationRequested += id =>
@@ -31,6 +32,7 @@ public sealed class MainViewModel : ObservableObject
 
     public MissionBuilderViewModel Mission { get; }
     public LocationsViewModel Locations { get; }
+    public VesselsViewModel Vessels { get; }
     public TransferPlannerViewModel Transfer { get; }
     public ResonantOrbitViewModel Resonant { get; }
     public SaveSync Sync { get; }
@@ -48,6 +50,7 @@ public static class MainCommands
     public static readonly RoutedUICommand ImportVessels = new("Import Vessels from Save…", nameof(ImportVessels), typeof(MainCommands),
         [new KeyGesture(Key.I, ModifierKeys.Control)]);
     public static readonly RoutedUICommand ReloadSave = new("Reload Save", nameof(ReloadSave), typeof(MainCommands), [new KeyGesture(Key.F5)]);
+    public static readonly RoutedUICommand ReadPartData = new("Read Part Data Again", nameof(ReadPartData), typeof(MainCommands));
     public static readonly RoutedUICommand OpenDataFolder = new("Open Data Folder", nameof(OpenDataFolder), typeof(MainCommands));
     public static readonly RoutedUICommand Settings = new("Settings…", nameof(Settings), typeof(MainCommands),
         [new KeyGesture(Key.OemComma, ModifierKeys.Control, "Ctrl+,")]);
@@ -73,7 +76,7 @@ public partial class MainWindow : Window
 
     private void Settings_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        var settings = new SettingsViewModel(_viewModel.Sync.Settings);
+        var settings = new SettingsViewModel(_viewModel.Sync.Settings, _viewModel.Sync.Parts);
         if (new SettingsWindow(settings) { Owner = this }.ShowDialog() == true) _viewModel.Sync.Apply(settings.Result);
     }
 
@@ -89,6 +92,11 @@ public partial class MainWindow : Window
             _viewModel.SelectedTab = MainViewModel.LocationsTab;
             _viewModel.Locations.SelectLocation(import.ImportedIds[0]);
         }
+    }
+
+    private async void ReadPartData_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_viewModel.Sync.Settings.KspInstallPath is { } install) await _viewModel.Sync.Parts.ReadAsync(install);
     }
 
     private void OpenDataFolder_Executed(object sender, ExecutedRoutedEventArgs e) =>

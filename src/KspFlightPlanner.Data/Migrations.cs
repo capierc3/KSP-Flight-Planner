@@ -132,6 +132,61 @@ internal static class Migrations
             value  TEXT NOT NULL
         );
 
+        -- Part data read from the user's KSP install (GameData, after mod patches), refreshed when it changes.
+        -- Names use '.' as KSP's saves and craft files do (microEngine.v2).
+        CREATE TABLE ksp_resources (
+            name          TEXT PRIMARY KEY,
+            display_name  TEXT NOT NULL,
+            density_t     REAL NOT NULL,     -- tonnes per unit
+            unit_cost     REAL NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE ksp_parts (
+            name           TEXT PRIMARY KEY,
+            title          TEXT NOT NULL,
+            category       TEXT,
+            manufacturer   TEXT,
+            mass_t         REAL NOT NULL,    -- dry
+            cost           REAL NOT NULL DEFAULT 0,
+            crew_capacity  INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE ksp_part_resources (      -- what a new part holds (full tanks)
+            part_name      TEXT NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
+            resource_name  TEXT NOT NULL,
+            amount         REAL NOT NULL,
+            max_amount     REAL NOT NULL,
+            PRIMARY KEY (part_name, resource_name)
+        );
+
+        CREATE TABLE ksp_part_engines (        -- one row per engine module (multi-mode engines have several)
+            id               INTEGER PRIMARY KEY,
+            part_name        TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
+            module_index     INTEGER NOT NULL,
+            engine_id        TEXT,
+            max_thrust_kn    REAL    NOT NULL,
+            isp_vacuum_s     REAL    NOT NULL,
+            isp_sea_level_s  REAL    NOT NULL,
+            UNIQUE (part_name, module_index)
+        );
+
+        CREATE TABLE ksp_engine_propellants (
+            engine_id      INTEGER NOT NULL REFERENCES ksp_part_engines(id) ON DELETE CASCADE,
+            resource_name  TEXT    NOT NULL,
+            ratio          REAL    NOT NULL,   -- by volume, e.g. LiquidFuel 0.9 : Oxidizer 1.1
+            PRIMARY KEY (engine_id, resource_name)
+        );
+
+        CREATE TABLE ksp_part_antennas (
+            part_name            TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
+            module_index         INTEGER NOT NULL,
+            antenna_type         TEXT    NOT NULL,   -- DIRECT / RELAY / INTERNAL
+            power                REAL    NOT NULL,   -- range rating in metres
+            combinable           INTEGER NOT NULL,
+            combinable_exponent  REAL    NOT NULL,
+            PRIMARY KEY (part_name, module_index)
+        );
+
         CREATE TABLE saved_missions (
             id               INTEGER PRIMARY KEY,
             name             TEXT    NOT NULL,
@@ -154,6 +209,11 @@ internal static class Migrations
     ];
 
     public static int LatestVersion => Scripts.Length;
+
+    /// <summary>Every table the scripts create; a database missing one of them is incomplete.</summary>
+    public static IReadOnlyList<string> Tables { get; } = Scripts
+        .SelectMany(s => System.Text.RegularExpressions.Regex.Matches(s, @"CREATE TABLE (\w+)"))
+        .Select(m => m.Groups[1].Value).ToList();
 
     /// <summary>Hash of all schema scripts; changes whenever the schema text changes.</summary>
     public static string Fingerprint { get; } = Hashing.Sha256(string.Join("\n", Scripts));

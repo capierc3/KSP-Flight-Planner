@@ -372,18 +372,33 @@ Known simplifications:
 - Code: `DeltaVMap.Route`, `MissionPlanner.Summarize`
 - Source: [KSP Δv map 1.0.4 by /u/swashlebucky](https://www.reddit.com/r/KerbalSpaceProgram/) (based on Kowgan's map; CC BY-NC-SA 4.0)
 
-## 16. Coming next: the rocket equation
+## 16. A vessel's remaining Δv (rocket equation)
 
-When parts are added, each phase's actual Δv will come from the Tsiolkovsky rocket equation:
+The Vessels tab works out what a vessel in your save can still do from **its parts and what's left in its tanks**. The save gives each part's dry mass, the resources in it and each engine's thrust limiter; the part data read from your KSP folder (ModuleManager's cache, so mod patches are included) gives each engine's thrust, Isp and propellant mix, and each resource's density.
 
 ```
-Δv  = Isp · g₀ · ln(m_full / m_empty)
-TWR = thrust / (m · g)
+m_dry = Σ part masses                       m_wet = m_dry + Σ units × density
+ṁ_i   = F_i / (Isp_i · g₀)                  (mass flow of engine i; F with its thrust limiter applied)
+Isp   = Σ F_i / (g₀ · Σ ṁ_i)                (all engines firing together)
+Δv    = Isp · g₀ · ln(m_wet / m_burnout)    (Tsiolkovsky rocket equation, vacuum Isp)
+t     = m_burned / Σ ṁ_i                    (burn time)
+TWR   = F / (m · g)
 ```
 
-Worked example — a Terrier (Isp 345 s vacuum) stage that is half fuel by mass: Δv = 345 × 9.80665 × ln 2 = **2,345 m/s**.
+**Propellant mix.** An engine burns its propellants in a fixed volume ratio — liquid-fuel engines use LiquidFuel 0.9 : Oxidizer 1.1. Each engine's mass flow is split across its propellants by `ratio × density`, giving units per second of each; the burn ends when the **first** propellant runs out, so leftover oxidizer (or fuel) doesn't count. Electric charge never limits a burn (solar panels recharge it), and jet engines are left out (no air in a vacuum).
 
-- Source: [Tsiolkovsky rocket equation (Wikipedia)](https://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation); part stats from the KSP wiki
+**Assumptions.** Every tank feeds every engine at once — no staging, no fuel lines — which matches most vessels already in orbit. The thrust limiter changes the burn time, not the Δv (unless engines with different Isp are mixed, where it changes the blend).
+
+Worked example — the relay "KerbLink Mk2 A" (14 parts: HECS probe core, RA-2 relay antenna, 2 × Oscar-B tanks, 3 × Ant engines at 6 % thrust, …):
+
+1. Dry mass = 0.1 + 0.15 + 0.01 + 2 × 0.025 + 3 × 0.02 + 3 × 0.0175 + 3 × 0.001 = **0.4255 t**
+2. Left in the tanks: 6.4427 LiquidFuel + 7.8745 Oxidizer = 14.3172 units × 0.005 t = **0.07159 t** → wet mass **0.49709 t**
+3. The Ants burn 0.9 : 1.1, and 6.4427 : 7.8745 is exactly that ratio, so both run out together
+4. Δv = 315 × 9.80665 × ln(0.49709 / 0.4255) = 3,089.1 × 0.15550 = **480.3 m/s**
+5. Thrust = 3 × 2 kN × 6 % = 0.36 kN → ṁ = 0.36 / (315 × 9.80665) = 0.0001165 t/s → burn time = 0.07159 / 0.0001165 = **614 s** (37 s at full thrust)
+
+- Code: `VesselAnalysis.Analyze`, `PartCatalogReader.Parse`; tested in `VesselAnalysisTests`
+- Source: [Tsiolkovsky rocket equation (Wikipedia)](https://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation); part and resource values from the game's own configs (ModuleManager.ConfigCache)
 
 ## Sources
 

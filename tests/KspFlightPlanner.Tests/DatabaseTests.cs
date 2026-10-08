@@ -102,6 +102,25 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Missing_table_with_current_fingerprint_is_rebuilt_keeping_user_data()
+    {
+        var locations = new CustomLocationRepository(_db);
+        locations.Add("Station Alpha", "Kerbin", 150_000);
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;";
+            cmd.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        _db.Initialize();
+
+        Assert.True(new PartCatalogRepository(_db).Load().IsEmpty); // all ksp tables readable again
+        Assert.Equal("Station Alpha", Assert.Single(locations.GetAll()).Name);
+    }
+
+    [Fact]
     public void Broken_database_with_current_fingerprint_is_rebuilt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");

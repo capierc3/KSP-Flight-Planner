@@ -40,7 +40,31 @@ public sealed record SavedOrbit(
 public sealed record SavedVessel(string Id, string Name, string Type, string Situation, SavedOrbit? Orbit)
 {
     public bool IsOrbiting => Situation == "ORBITING";
+
+    /// <summary>Every part as it is now: what's left in its tanks, engine settings, who is aboard.</summary>
+    public IReadOnlyList<SavedPart> Parts { get; init; } = [];
+
+    /// <summary>Game time of launch (lct).</summary>
+    public double LaunchUt { get; init; }
+
+    /// <summary>Mission elapsed time in seconds (met).</summary>
+    public double MissionTimeS { get; init; }
+
+    public IEnumerable<string> Crew => Parts.SelectMany(p => p.Crew);
 }
+
+/// <summary>A part of a vessel in the save. <see cref="Name"/> matches <see cref="KspPart.Name"/> in the part catalog.</summary>
+/// <param name="MassT">The part's dry mass in tonnes, as the save records it.</param>
+public sealed record SavedPart(string Name, double MassT, IReadOnlyList<PartResource> Resources, IReadOnlyList<SavedEngineState> Engines,
+    IReadOnlyList<string> Crew)
+{
+    /// <summary>Multi-mode engines (e.g. RAPIER): whether the first mode is running; null for other parts.</summary>
+    public bool? RunningPrimaryMode { get; init; }
+}
+
+/// <summary>An engine module's settings in the save, in the same order as the part's engines in the catalog.</summary>
+/// <param name="ThrustPercent">The thrust limiter (0–100).</param>
+public sealed record SavedEngineState(double ThrustPercent, bool IsIgnited, bool IsShutdown, bool IsFlameout);
 
 /// <summary>What the planner reads from a save file (persistent.sfs).</summary>
 /// <param name="Ut">Game time when the file was written, in seconds since Year 1, Day 1.</param>
@@ -127,8 +151,34 @@ public static class KspSaveReader
             int.TryParse(o.GetValue("REF"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ? index : -1,
             o.GetValue("IDENT"));
         return new SavedVessel(v.GetValue("pid") ?? v.GetValue("persistentId") ?? "", v.GetValue("name") ?? "(unnamed)",
-            v.GetValue("type") ?? "", v.GetValue("sit") ?? "", orbit);
+            v.GetValue("type") ?? "", v.GetValue("sit") ?? "", orbit)
+        {
+            Parts = v.GetNodes("PART").Select(ReadPart).ToList(),
+            LaunchUt = Number(v.GetValue("lct")),
+            MissionTimeS = Number(v.GetValue("met")),
+        };
     }
+
+    private static SavedPart ReadPart(ConfigNode p)
+    {
+        var modules = p.GetNodes("MODULE").ToList();
+        var engines = modules.Where(m => m.GetValue("name") is "ModuleEngines" or "ModuleEnginesFX" or "ModuleEnginesRF")
+            .Select(m => new SavedEngineState(
+                m.GetValue("thrustPercentage") is { } limit ? Number(limit) : 100,
+                Flag(m, "EngineIgnited"), Flag(m, "engineShutdown"), Flag(m, "flameout")))
+            .ToList();
+        var resources = p.GetNodes("RESOURCE")
+            .Select(r => new PartResource(r.GetValue("name") ?? "", Number(r.GetValue("amount")), Number(r.GetValue("maxAmount"))))
+            .Where(r => r.Name.Length > 0).ToList();
+        var multiMode = modules.FirstOrDefault(m => m.GetValue("name") == "MultiModeEngine");
+        return new SavedPart(p.GetValue("name") ?? "", Number(p.GetValue("mass")), resources, engines,
+            p.Values.Where(v => v.Key == "crew").Select(v => v.Value).ToList())
+        {
+            RunningPrimaryMode = multiMode is null ? null : !bool.TryParse(multiMode.GetValue("runningPrimary"), out var primary) || primary,
+        };
+    }
+
+    private static bool Flag(ConfigNode node, string key) => bool.TryParse(node.GetValue(key), out var value) && value;
 
     /// <summary>KSP writes invariant-culture numbers; "NaN" for orbits of landed vessels.</summary>
     private static double Number(string? text) =>
