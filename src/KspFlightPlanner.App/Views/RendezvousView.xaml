@@ -1,6 +1,7 @@
 <UserControl x:Class="KspFlightPlanner.App.Views.RendezvousView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:KspFlightPlanner.App"
              xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls"
              x:Name="Root">
     <UserControl.Resources>
@@ -67,156 +68,43 @@
 
     <Grid Margin="8,10,8,8">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="330" />
-            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="*" MinWidth="440" />
             <ColumnDefinition Width="10" />
             <ColumnDefinition Width="0.8*" MinWidth="320" />
         </Grid.ColumnDefinitions>
 
-        <!-- Inputs -->
-        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="0,0,18,0">
-                    <!-- Planning a mission leg: where it starts and what it meets come from the leg -->
-                    <Border Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,10" Padding="10,8"
-                            CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock Text="Rendezvous for the mission leg" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding LegTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
-                            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
-                                       Text="The plan shown is saved with the mission: change the start time, the launch, the phasing orbit or the porkchop point to plan it another way." />
-                            <Button Content="Stop editing the leg" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
-                                    ToolTip="Use the tab on its own again; the mission keeps this plan" />
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="Start from" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
-                    <StackPanel IsEnabled="{Binding IsRouteEditable}">
-                    <RadioButton Content="Launch from the KSC" IsChecked="{Binding StartFromLaunch}" GroupName="Start" />
-                    <RadioButton Content="A craft already in orbit" IsChecked="{Binding StartFromCraft}" GroupName="Start" Margin="0,2,0,0" />
-                    </StackPanel>
-
-                    <!-- Live game: what's being flown and targeted in KSP. -->
-                    <StackPanel Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0" IsEnabled="{Binding IsRouteEditable}">
-                        <TextBlock Text="{Binding GameText}" Style="{StaticResource Note}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <Button Content="Use the craft I'm flying" Command="{Binding UseActiveVesselCommand}" Padding="8,2"
-                                    ToolTip="Start from the craft you're flying in KSP, on its live orbit" />
-                            <Button Content="Add KSP's target" Command="{Binding AddGameTargetCommand}" Padding="8,2" Margin="6,0,0,0"
-                                    ToolTip="Add the craft targeted in KSP as the next target (it must orbit the same body)" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <StackPanel Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}">
-                        <Grid Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="Parking (km)" Style="{StaticResource Label}" />
-                                <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" IsEnabled="{Binding IsRouteEditable}"
-                                         ToolTip="For a mission leg, the low orbit of the leg's launch step" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Climb (min)" Style="{StaticResource Label}" />
-                                <TextBox Text="{Binding AscentMinutesText, UpdateSourceTrigger=PropertyChanged, Delay=400}"
-                                         ToolTip="Minutes from lift-off until you're in the parking orbit" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="4">
-                                <TextBlock Text="Range (°)" Style="{StaticResource Label}" />
-                                <TextBox Text="{Binding DownrangeText, UpdateSourceTrigger=PropertyChanged, Delay=400}"
-                                         ToolTip="How far around Kerbin from the pad you are when the parking orbit is complete" />
-                            </StackPanel>
-                        </Grid>
-                        <TextBlock Style="{StaticResource Note}" Margin="0,4,0,0"
-                                   Text="Tune climb time and downrange to your own ascents: note the time and how far around Kerbin you are when you circularize." />
-                    </StackPanel>
-
-                    <StackPanel Visibility="{Binding StartFromCraft, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="Craft" Style="{StaticResource Label}" />
-                        <ComboBox ItemsSource="{Binding Crafts}" SelectedItem="{Binding SelectedChaser}" DisplayMemberPath="Title" IsEnabled="{Binding IsRouteEditable}" />
-                    </StackPanel>
-
-                    <TextBlock Text="Targets, in order" Style="{StaticResource SectionHeader}" />
-                    <StackPanel IsEnabled="{Binding IsRouteEditable}">
-                    <ItemsControl ItemsSource="{Binding Targets}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <DockPanel Margin="0,2">
-                                    <Button DockPanel.Dock="Right" Content="✕" ToolTip="Remove" Padding="6,1" Margin="4,0,0,0"
-                                            Command="{Binding DataContext.RemoveTargetCommand, ElementName=Root}" CommandParameter="{Binding}" />
-                                    <Button DockPanel.Dock="Right" Content="↑" ToolTip="Visit earlier" Padding="6,1" Margin="4,0,0,0"
-                                            Command="{Binding DataContext.MoveTargetUpCommand, ElementName=Root}" CommandParameter="{Binding}" />
-                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}">
-                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" />
-                                        <LineBreak /><Run Text="{Binding Detail, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    </TextBlock>
-                                </DockPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <DockPanel Margin="0,6,0,0">
-                        <Button DockPanel.Dock="Right" Content="Add" Command="{Binding AddTargetCommand}" Margin="6,0,0,0" />
-                        <ComboBox ItemsSource="{Binding AvailableTargets}" SelectedItem="{Binding TargetToAdd}" DisplayMemberPath="Title" />
-                    </DockPanel>
-                    </StackPanel>
-
-                    <TextBlock Text="Timing" Style="{StaticResource SectionHeader}" />
-                    <CheckBox Content="Start from the game's current time" IsChecked="{Binding FollowSaveTime}" IsEnabled="{Binding IsRouteEditable}"
-                              ToolTip="The live game time while connected to KSP, else the time KSP last saved" />
-                    <TextBlock Text="{Binding SaveTimeText}" Style="{StaticResource Note}" Margin="0,2,0,0" />
-                    <Grid Visibility="{Binding FollowSaveTime, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="First burn no sooner than (min)" Style="{StaticResource Label}" />
-                        <TextBox Grid.Column="1" Text="{Binding LeadMinutes, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                    </Grid>
-                    <Grid Visibility="{Binding ManualStart, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Year" Style="{StaticResource Label}" />
-                            <TextBox Text="{Binding StartYear, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="Day" Style="{StaticResource Label}" />
-                            <TextBox Text="{Binding StartDay, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="4">
-                            <TextBlock Text="Time (h:mm)" Style="{StaticResource Label}" />
-                            <TextBox Text="{Binding StartTimeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                        </StackPanel>
-                    </Grid>
-                    <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Time at each target (min)" Style="{StaticResource Label}" />
-                        <TextBox Grid.Column="1" Text="{Binding StayMinutes, UpdateSourceTrigger=PropertyChanged, Delay=400}"
-                                 ToolTip="Repairs, refuelling, swapping parts… before heading to the next target" />
-                    </Grid>
-
-                    <TextBlock Text="Afterwards" Style="{StaticResource SectionHeader}" />
-                    <CheckBox Content="{Binding DeorbitLabel}" IsChecked="{Binding Deorbit}" IsEnabled="{Binding IsRouteEditable}" />
-                    <Grid Visibility="{Binding Deorbit, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Drop periapsis to (km)" Style="{StaticResource Label}" />
-                        <TextBox Grid.Column="1" Text="{Binding DeorbitAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
-                    </Grid>
-
-                    <TextBlock Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,10,0,0" />
-                </StackPanel>
-            </ScrollViewer>
-        </Border>
-
         <!-- The plan -->
-        <Border Grid.Column="2" Style="{StaticResource Panel}" Padding="16,12,8,12">
+        <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
             <DockPanel>
+                <!-- Planning a mission leg: where it starts and what it meets come from the leg -->
+                <Border DockPanel.Dock="Top" Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}" Margin="0,0,18,10" Padding="10,8"
+                        CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                    <StackPanel>
+                        <TextBlock Text="Rendezvous for the mission leg" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding LegTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
+                                   Text="The plan shown is saved with the mission: change the start time or launch in Calculators, or the phasing orbit or porkchop point here, to plan it another way." />
+                        <Button Content="Stop editing the leg" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
+                                ToolTip="Use the tab on its own again; the mission keeps this plan" />
+                    </StackPanel>
+                </Border>
+
+                <!-- What's being planned; its inputs live in the Calculators pane -->
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,18,10">
+                    <Button DockPanel.Dock="Right" Content="Change…" Padding="8,1" VerticalAlignment="Center"
+                            Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}"
+                            ToolTip="Edit the start, targets and timing in the Calculators pane" />
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                        <TextBlock Text="Launch from the KSC" FontWeight="SemiBold" Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Visibility="{Binding StartFromCraft, Converter={StaticResource BoolToVisibility}}">
+                            <Run Text="From " /><Run Text="{Binding SelectedChaser.Title, Mode=OneWay, TargetNullValue='a craft in orbit'}" />
+                        </TextBlock>
+                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="{Binding Targets.Count, Mode=OneWay}" /><Run Text=" target(s)" />
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="{Binding ErrorText}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,0,18,8" />
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,18,4">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <RadioButton Content="By feel" IsChecked="{Binding ShowFeel}" GroupName="Mode" Margin="0,0,12,0"
@@ -348,7 +236,7 @@
         </Border>
 
         <!-- One leg: its orbits from above, or the porkchop of its transfer -->
-        <Border Grid.Column="4" Style="{StaticResource Panel}">
+        <Border Grid.Column="2" Style="{StaticResource Panel}">
             <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                     <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding PlotLegs}" SelectedItem="{Binding SelectedPlotLeg}" DisplayMemberPath="Title"

@@ -120,19 +120,21 @@ public sealed class MainViewModel : ObservableObject
         {
             if (!SetProperty(ref _activeCalculator, value)) return;
             OnPropertyChanged(nameof(ShowsTransferInputs));
+            OnPropertyChanged(nameof(ShowsRendezvousInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
 
     public bool ShowsTransferInputs => ActiveCalculator == Panes.Transfer;
+    public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
     public void DocumentFocused(string id)
     {
-        if (id is Panes.Transfer or Panes.Resonant) ActiveCalculator = id;
+        if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
     }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
