@@ -274,52 +274,169 @@
             </TabControl>
         </Border>
 
-        <!-- Rocket diagram -->
+        <!-- Rocket diagram: the mission's phases, and optionally a saved design's stages beside them -->
         <Border Grid.Column="4" Style="{StaticResource Panel}">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Rocket" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,10"
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,8"
                            Text="Phases stacked in burn order — launch at the bottom. Height shows each phase's share of the Δv." />
 
-                <Border DockPanel.Dock="Bottom" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="#30808080">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition /><RowDefinition /><RowDefinition />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Legs need" Style="{StaticResource Label}" />
-                        <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
-                        <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
-                        <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
-                    </Grid>
+                <TextBlock DockPanel.Dock="Top" Text="Check a saved design" Style="{StaticResource Label}" Margin="0,0,0,3" />
+                <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding DesignChoices}" SelectedItem="{Binding SelectedDesign}"
+                          DisplayMemberPath="Title" ToolTip="Designs saved in the VAB/SPH of your linked KSP save" />
+                <TextBlock DockPanel.Dock="Top" Text="{Binding DesignHint}" Style="{StaticResource Note}" Margin="0,4,0,0" />
+
+                <!-- Totals and the check -->
+                <Border DockPanel.Dock="Bottom" Padding="0,10,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition /><RowDefinition /><RowDefinition />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Legs need" Style="{StaticResource Label}" />
+                            <TextBlock Grid.Column="1" Text="{Binding TotalRequiredText}" Style="{StaticResource Value}" />
+                            <TextBlock Grid.Row="1" Text="Margins" Style="{StaticResource Label}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalMarginText}" Style="{StaticResource Value}" />
+                            <TextBlock Grid.Row="2" Text="Mission total" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TotalText}" Style="{StaticResource Value}" FontWeight="Bold" FontSize="15" />
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}" Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition /><RowDefinition />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Design Δv (vacuum)" Style="{StaticResource Label}" />
+                                <TextBlock Grid.Column="1" Text="{Binding DesignDeltaVText}" Style="{StaticResource Value}" />
+                                <TextBlock Grid.Row="1" Text="Launch TWR" Style="{StaticResource Label}" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LaunchTwrText}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Value}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CanLiftOff}" Value="False">
+                                                    <Setter Property="Foreground" Value="#EF5350" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <!-- Verdict -->
+                            <Border Margin="0,8,0,6" Padding="10,6" CornerRadius="4" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="#99EF5350" />
+                                        <Setter Property="Background" Value="#1FEF5350" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DesignIsEnough}" Value="True">
+                                                <Setter Property="BorderBrush" Value="#9966BB6A" />
+                                                <Setter Property="Background" Value="#1F66BB6A" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding DesignVerdict}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            </Border>
+
+                            <!-- Each phase: covered by which stages, or how much is missing -->
+                            <ItemsControl ItemsSource="{Binding PhaseChecks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Mark}" FontWeight="Bold" VerticalAlignment="Top">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#EF5350" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCovered}" Value="True">
+                                                                <Setter Property="Foreground" Value="#66BB6A" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock><Run Text="■ " Foreground="{Binding Color, Mode=OneWay}" /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Needed}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Top" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                        <Path Data="M 0,40 L 30,0 L 60,40 Z" Fill="#90A4AE" HorizontalAlignment="Center" />
-                        <ItemsControl ItemsSource="{Binding PhasesTopDown}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Background="{Binding Color}" Width="{Binding BarWidth}" Height="{Binding BarHeight}"
-                                            CornerRadius="3" Margin="0,0,0,3" HorizontalAlignment="Center">
-                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" Foreground="#101418" FontWeight="SemiBold" HorizontalAlignment="Center"
-                                                       TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding TotalText}" Foreground="#101418" HorizontalAlignment="Center"
-                                                       FontFamily="Cascadia Mono, Consolas" FontSize="12" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
-                    </StackPanel>
-                </ScrollViewer>
+                <!-- Shrinks to fit the space left, so the whole rocket is always visible -->
+                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" VerticalAlignment="Bottom" Margin="0,8,0,0">
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- The mission's phases -->
+                        <StackPanel VerticalAlignment="Bottom">
+                            <TextBlock Text="Mission" Style="{StaticResource Note}" HorizontalAlignment="Center" Margin="0,0,0,4"
+                                       Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}" />
+                            <Path Data="M 0,40 L 30,0 L 60,40 Z" Fill="#90A4AE" HorizontalAlignment="Center" />
+                            <ItemsControl ItemsSource="{Binding PhasesTopDown}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding Color}" Width="{Binding BarWidth}" Height="{Binding BarHeight}"
+                                                CornerRadius="3" Margin="0,0,0,3" HorizontalAlignment="Center">
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" Foreground="#101418" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding TotalText}" Foreground="#101418" HorizontalAlignment="Center"
+                                                           FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- The chosen design's stages, same scale, coloured by the phase each mostly burns for -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="10,0,0,0"
+                                    Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Design" Style="{StaticResource Note}" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                            <Path Data="M 0,40 L 30,0 L 60,40 Z" Fill="#90A4AE" HorizontalAlignment="Center" />
+                            <ItemsControl ItemsSource="{Binding StageBlocksTopDown}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding Color}" Width="104" Height="{Binding BarHeight}" CornerRadius="3" Margin="0,0,0,3"
+                                                BorderThickness="1" BorderBrush="#40000000" ToolTip="{Binding ToolTip}">
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Label}" Foreground="#101418" FontWeight="SemiBold" FontSize="11"
+                                                           HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                                                <TextBlock Text="{Binding DeltaVText}" Foreground="#101418" HorizontalAlignment="Center"
+                                                           FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Path Data="M 15,0 L 45,0 L 55,22 L 5,22 Z" Fill="#78909C" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                </Viewbox>
             </DockPanel>
         </Border>
     </Grid>

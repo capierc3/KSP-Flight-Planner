@@ -35,15 +35,18 @@ public sealed class VesselTreeItem(string title, string subtitle, string glyph, 
 public sealed class VesselsViewModel : ObservableObject
 {
     private readonly SaveSync _sync;
+    private readonly DesignLibrary _designs;
     private object? _detail;
     private string? _selectedId;
     private bool _showAll;
 
-    public VesselsViewModel(SaveSync sync)
+    public VesselsViewModel(SaveSync sync, DesignLibrary designs)
     {
         _sync = sync;
+        _designs = designs;
         sync.PropertyChanged += OnSourceChanged;
         sync.Parts.PropertyChanged += OnSourceChanged;
+        designs.PropertyChanged += OnSourceChanged;
         Rebuild();
     }
 
@@ -69,7 +72,8 @@ public sealed class VesselsViewModel : ObservableObject
         if (item?.Craft is { } craft)
         {
             _selectedId = craft.Path;
-            Detail = DesignDetail(craft);
+            Detail = _designs.Entries.FirstOrDefault(d => d.File.Path == craft.Path) is { Report: { } report }
+                ? new DesignDetailViewModel(report, craft) : null;
             return;
         }
         if (item?.Vessel is not { } vessel) return;
@@ -80,14 +84,14 @@ public sealed class VesselsViewModel : ObservableObject
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SaveSync.Save) or nameof(SaveSync.Crafts) or nameof(PartData.Catalog)) Rebuild();
+        // Designs are rebuilt when the library has re-read them (it follows Crafts and the part catalog itself).
+        if (e.PropertyName is nameof(SaveSync.Save) or nameof(PartData.Catalog) or nameof(DesignLibrary.Entries)) Rebuild();
         if (e.PropertyName is nameof(PartData.Summary)) OnPropertyChanged(nameof(PartDataSummary));
     }
 
     private void Rebuild()
     {
         Tree.Clear();
-        _designs.Clear();
         var save = _sync.Save;
         var catalog = _sync.Parts.Catalog;
         if (save is not null)
@@ -108,18 +112,17 @@ public sealed class VesselsViewModel : ObservableObject
             if (inFlight.Children.Count > 0) Tree.Add(inFlight);
         }
 
-        if (_sync.Crafts.Count > 0)
+        if (_designs.Entries.Count > 0)
         {
             var designs = new VesselTreeItem("Saved designs", "Ships in the VAB and SPH", "");
-            foreach (var facility in _sync.Crafts.GroupBy(c => c.Facility).OrderBy(g => g.Key == "VAB" ? 0 : 1))
+            foreach (var facility in _designs.Entries.GroupBy(d => d.File.Facility))
             {
                 var building = new VesselTreeItem(facility.Key, facility.Key == "VAB" ? "Vehicle Assembly Building" : "Spaceplane Hangar", "●");
-                foreach (var info in facility.OrderBy(c => c.IsAutoSave ? 0 : 1).ThenBy(c => System.IO.Path.GetFileNameWithoutExtension(c.Path)))
+                foreach (var design in facility)
                 {
-                    if (Design(info) is not { } report) continue;
-                    var title = info.IsAutoSave ? $"{report.Name} (in the editor)" : report.Name;
+                    if (design.Report is not { } report) continue;
                     var dv = report.Stages.Count > 0 ? $"{Units.Dv(report.TotalDeltaVVacuum)} · {StageCount(report)} · " : "";
-                    building.Children.Add(new VesselTreeItem(title, $"{dv}{Units.Tonnes(report.LaunchMassT)}", "◇", craft: info));
+                    building.Children.Add(new VesselTreeItem(design.Title, $"{dv}{Units.Tonnes(report.LaunchMassT)}", "◇", craft: design.File));
                 }
                 if (building.Children.Count > 0) designs.Children.Add(building);
             }
@@ -138,27 +141,6 @@ public sealed class VesselsViewModel : ObservableObject
         OnPropertyChanged(nameof(Empty));
         OnPropertyChanged(nameof(PartDataSummary));
     }
-
-    private readonly Dictionary<string, DesignReport?> _designs = [];
-
-    /// <summary>Reads and flies a design once per rebuild; null if the file can't be read.</summary>
-    private DesignReport? Design(CraftFileInfo info)
-    {
-        if (_designs.TryGetValue(info.Path, out var cached)) return cached;
-        DesignReport? report;
-        try
-        {
-            report = StagingSimulation.Simulate(CraftReader.Read(info.Path), _sync.Parts.Catalog, _sync.HomeSurfaceGravity);
-        }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or FormatException)
-        {
-            report = null;
-        }
-        return _designs[info.Path] = report;
-    }
-
-    private DesignDetailViewModel? DesignDetail(CraftFileInfo info) =>
-        Design(info) is { } report ? new DesignDetailViewModel(report, info) : null;
 
     private static string StageCount(DesignReport report) => report.Stages.Count == 1 ? "1 stage" : $"{report.Stages.Count} stages";
 

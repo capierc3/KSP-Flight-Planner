@@ -434,6 +434,27 @@ Worked example 2 — boosters that burn out first: a core (1 t tank with 4 t of 
 - Code: `CraftReader.Parse`, `StagingSimulation.Simulate`; tested in `StagingSimulationTests`
 - Source: KSP 1.12 craft format and fuel-flow rules (resource flow modes, `fuelCrossFeed`, `CModuleFuelLine`); MechJeb's fuel-flow simulation for the staging approach; Tsiolkovsky rocket equation (§16)
 
+## 16c. Does a design have enough Δv for the mission?
+
+In the Mission Builder's Rocket pane you can pick a saved design. Its stages (§16b, vacuum Δv, in firing order) are poured into the mission's phases (§15, margins included, in burn order): the first stage fills the first phase; whatever it has left carries into the next phase; when a stage runs out part-way through a phase, the next stage takes over — as in flight.
+
+```
+for each stage, in firing order:
+    while the stage has Δv left and a phase still needs some:
+        use = min(stage Δv left, phase Δv still needed)
+spare = Δv left in the stages once every phase is covered     (short = phase Δv nothing was left for)
+```
+
+Vacuum Δv is right here because the Δv map's launch figure (3,400 m/s to low Kerbin orbit) already includes atmospheric and gravity losses. The pane also shows the first stage's sea-level TWR — below 1 the rocket can't leave the pad.
+
+Worked example — Beyonder Mk1 (stages 6: 2,040, 5: 3,322, 3: 1,793 m/s) against Kerbin → Mun surface → Kerbin with 10 % margins (Launch 3,740, Transfer 1,925, Lander 979 m/s):
+
+1. Launch: stage 6 gives 2,040, stage 5 the other 1,700 → covered by stages 6, 5
+2. Transfer: stage 5's remaining 1,622 + 303 of stage 3 → covered by stages 5, 3
+3. Lander: 979 of stage 3's remaining 1,490 → covered; **511 m/s to spare** (7,155 − 6,644)
+
+- Code: `DesignCheck.Check`; tested in `DesignCheckTests`
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

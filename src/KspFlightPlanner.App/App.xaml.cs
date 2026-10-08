@@ -23,10 +23,11 @@ public partial class App : Application
             var events = new PlannerEvents();
             var sync = new SaveSync(new SettingsRepository(database), bodies, locations,
                 new PartData(new PartCatalogRepository(database)), events);
+            var designs = new DesignLibrary(sync);
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, new MissionRepository(database), locations, events),
+                new MissionBuilderViewModel(maps, new MissionRepository(database), locations, events, designs),
                 new LocationsViewModel(bodies, maps, locations, events),
-                new VesselsViewModel(sync),
+                new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
                 sync,

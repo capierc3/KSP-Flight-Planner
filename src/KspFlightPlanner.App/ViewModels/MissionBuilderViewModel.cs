@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using KspFlightPlanner.App.Services;
 using KspFlightPlanner.Core;
+using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
@@ -60,16 +62,41 @@ public sealed class PhaseViewModel : ObservableObject
 
     public PhaseDefinition ToDefinition() => new(Name, MarginPercent, ExtraDv);
 
-    internal void Update(PhaseSummary summary, int index, int count, double missionTotal)
+    /// <param name="scaleTotal">Δv that fills the full diagram height: the mission total, or the design's if larger.</param>
+    /// <param name="sideBySide">A design is shown next to the phases, so the bars are narrower.</param>
+    internal void Update(PhaseSummary summary, int index, int count, double scaleTotal, bool sideBySide)
     {
         RequiredDv = summary.RequiredDv;
         MarginDv = summary.MarginDv;
-        BarHeight = 48 + 300 * (missionTotal > 0 ? TotalDv / missionTotal : 1.0 / count);
-        BarWidth = Math.Max(90, 190 - index * 26);
+        BarHeight = sideBySide ? RocketDiagram.Height(TotalDv, scaleTotal)
+            : 48 + 300 * (scaleTotal > 0 ? TotalDv / scaleTotal : 1.0 / count);
+        BarWidth = sideBySide ? 104 : Math.Max(90, 190 - index * 26);
         foreach (var p in new[] { nameof(RequiredDv), nameof(MarginDv), nameof(TotalDv), nameof(RequiredText),
                      nameof(MarginText), nameof(TotalText), nameof(BarHeight), nameof(BarWidth) })
             OnPropertyChanged(p);
     }
+}
+
+/// <summary>Sizes for the rocket diagram when a design is compared: both columns share one Δv scale.</summary>
+internal static class RocketDiagram
+{
+    public static double Height(double deltaV, double scaleTotal) => 30 + 200 * (scaleTotal > 0 ? deltaV / scaleTotal : 0);
+}
+
+/// <summary>A stage of the chosen design in the rocket diagram, coloured like the phase it mostly burns for.</summary>
+public sealed record StageBlock(string Label, string DeltaVText, string Color, double BarHeight, string ToolTip);
+
+/// <summary>One row of the design check: a phase, what it needs and whether the stages cover it.</summary>
+public sealed record PhaseCheckRow(string Name, string Color, string Needed, string Detail, bool IsCovered)
+{
+    public string Mark => IsCovered ? "✓" : "✗";
+}
+
+/// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
+public sealed record DesignChoice(DesignEntry? Design, string Title)
+{
+    public string Path => Design?.File.Path ?? "";
+    public override string ToString() => Title;
 }
 
 /// <summary>A stop in the route (like a Google Maps waypoint). Identified by map node key.</summary>
@@ -213,7 +240,10 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private readonly MissionRepository _missions;
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
+    private readonly DesignLibrary? _designs;
     private DeltaVMap? _map;
+    private DesignChoice? _selectedDesign;
+    private DesignCheckResult? _check;
 
     private string? _missionStatus;
 
@@ -224,8 +254,14 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private bool _suspend;
 
     public MissionBuilderViewModel(DvMapRepository maps, MissionRepository missions, CustomLocationRepository locations,
-        PlannerEvents events)
+        PlannerEvents events, DesignLibrary? designs = null)
     {
+        _designs = designs;
+        if (designs is not null) designs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DesignLibrary.Entries)) RefreshDesignChoices();
+        };
+        RefreshDesignChoices();
         _maps = maps;
         _missions = missions;
         _locations = locations;
@@ -390,6 +426,88 @@ public sealed class MissionBuilderViewModel : ObservableObject
 
     public string RouteSummary => _map is null ? "" : string.Join(" → ", Stops.Select(s => _map[s.NodeKey].DisplayName));
 
+    // ---------------- Checking a saved design ----------------
+
+    /// <summary>"No design" plus every saved design in the linked save.</summary>
+    public ObservableCollection<DesignChoice> DesignChoices { get; } = [];
+
+    /// <summary>The design to check against the mission; refreshed (by file) when KSP saves it again.</summary>
+    public DesignChoice? SelectedDesign
+    {
+        get => _selectedDesign;
+        set { if (SetProperty(ref _selectedDesign, value)) Recalculate(); }
+    }
+
+    public bool HasDesign => _check is not null;
+
+    /// <summary>Stage blocks for the design column, last stage on top (like the phases).</summary>
+    public IReadOnlyList<StageBlock> StageBlocksTopDown { get; private set; } = [];
+
+    public IReadOnlyList<PhaseCheckRow> PhaseChecks { get; private set; } = [];
+
+    public string DesignVerdict => _check is not { } c ? ""
+        : c.IsEnough ? $"Enough — {Format.Speed0(c.Surplus)} to spare" : $"Not enough — short by {Format.Speed0(-c.Surplus)}";
+
+    public bool DesignIsEnough => _check?.IsEnough == true;
+
+    public string DesignDeltaVText => _check is { } c ? Format.Speed0(c.DesignDeltaV) : "";
+
+    public string LaunchTwrText => _check is not { } c ? ""
+        : c.CanLiftOff ? $"{c.LaunchTwr:0.00}" : $"{c.LaunchTwr:0.00} — can't lift off";
+
+    public bool CanLiftOff => _check?.CanLiftOff != false;
+
+    public string DesignHint => _designs is null || DesignChoices.Count <= 1
+        ? "Link a KSP save (Tools › Settings) to check one of your saved designs."
+        : "Stages fill the phases in order; vacuum Δv (the Δv map already counts atmospheric losses).";
+
+    private void RefreshDesignChoices()
+    {
+        var keep = _selectedDesign?.Path;
+        DesignChoices.Clear();
+        DesignChoices.Add(new DesignChoice(null, "— No design —"));
+        foreach (var d in _designs?.Entries ?? [])
+            if (d.Report is { Stages.Count: > 0 }) DesignChoices.Add(new DesignChoice(d, d.Title));
+        // Same file again (KSP re-saved it): keep it selected with its new numbers.
+        _selectedDesign = DesignChoices.FirstOrDefault(c => c.Path == keep) ?? DesignChoices[0];
+        OnPropertyChanged(nameof(SelectedDesign));
+        OnPropertyChanged(nameof(DesignHint));
+        if (Phases.Count > 0) Recalculate();
+    }
+
+    private void CheckDesign(double missionTotal)
+    {
+        _check = SelectedDesign?.Design?.Report is { } report
+            ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.TotalDv)).ToList(), report)
+            : null;
+
+        if (_check is { } c && SelectedDesign?.Design?.Report is { } design)
+        {
+            var scale = Math.Max(missionTotal, c.DesignDeltaV);
+            StageBlocksTopDown = c.Stages.Select(s =>
+            {
+                var main = s.Phases.OrderByDescending(p => p.DeltaV).Select(p => (int?)p.Phase).FirstOrDefault();
+                var label = s.Spare > 0.5 ? $"S{s.Stage} · spare {s.Spare:N0}" : $"Stage {s.Stage}";
+                var tip = string.Join("\n", s.Phases.Select(p => $"{Phases[p.Phase].Name}: {Format.Speed0(p.DeltaV)}")
+                    .Append(s.Spare > 0.5 ? $"Spare: {Format.Speed0(s.Spare)}" : null).OfType<string>());
+                return new StageBlock(label, Format.Speed0(s.DeltaV), main is { } m ? Phases[m].Color : "#90A4AE",
+                    RocketDiagram.Height(s.DeltaV, scale), tip);
+            }).Reverse().ToList();
+            PhaseChecks = c.Phases.Select((p, i) => new PhaseCheckRow(p.Name, Phases[i].Color, Format.Speed0(p.Needed),
+                p.Needed <= 0 ? "nothing needed"
+                : p.IsCovered ? $"stage{(p.Stages.Count == 1 ? "" : "s")} {string.Join(", ", p.Stages.Distinct())}"
+                : $"short {Format.Speed0(p.Shortfall)}", p.IsCovered)).ToList();
+        }
+        else
+        {
+            StageBlocksTopDown = [];
+            PhaseChecks = [];
+        }
+        foreach (var p in new[] { nameof(HasDesign), nameof(StageBlocksTopDown), nameof(PhaseChecks), nameof(DesignVerdict),
+                     nameof(DesignIsEnough), nameof(DesignDeltaVText), nameof(LaunchTwrText), nameof(CanLiftOff) })
+            OnPropertyChanged(p);
+    }
+
     public string TotalRequiredText => Format.Speed0(Phases.Sum(p => p.RequiredDv));
     public string TotalMarginText => "+" + Format.Speed0(Phases.Sum(p => p.MarginDv));
     public string TotalText => Format.Speed0(Phases.Sum(p => p.TotalDv));
@@ -520,7 +638,10 @@ public sealed class MissionBuilderViewModel : ObservableObject
         var settings = Legs.Select(l => l.Setting(Phases)).ToList();
         var summaries = MissionPlanner.Summarize(Phases.Select(p => p.ToDefinition()).ToList(), legs, settings);
         var missionTotal = summaries.Sum(s => s.TotalDv);
-        for (var i = 0; i < Phases.Count; i++) Phases[i].Update(summaries[i], i, Phases.Count, missionTotal);
+        var design = SelectedDesign?.Design?.Report;
+        var scale = design is null ? missionTotal : Math.Max(missionTotal, design.TotalDeltaVVacuum);
+        for (var i = 0; i < Phases.Count; i++) Phases[i].Update(summaries[i], i, Phases.Count, scale, design is not null);
+        CheckDesign(missionTotal);
 
         OnPropertyChanged(nameof(PhasesTopDown));
         OnPropertyChanged(nameof(TotalRequiredText));
