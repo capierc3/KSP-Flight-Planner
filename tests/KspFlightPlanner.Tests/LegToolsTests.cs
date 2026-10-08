@@ -138,11 +138,61 @@ public sealed class LegToolsTests : IDisposable
     }
 
     [Fact]
+    public void Three_relays_at_duna_1000_km_need_one_carrier_burn_at_the_end_of_the_mission()
+    {
+        var stop = _map[_relayOrbit];
+        var last = LegTools.EvaluateDeploy(stop, new DeployStep(3), _bodies, continues: false)!;
+        var direct = ResonantOrbitCalculator.Calculate(new ResonantOrbitRequest(_bodies["Duna"], 3, 1_000_000));
+
+        Assert.Equal(1_000_000, last.AltitudeM);
+        Assert.Equal(Math.Round(direct.InjectionDeltaV, 1), last.EnterDv);
+        Assert.Equal(0, last.ReturnDv);
+        Assert.Equal(direct.InjectionDeltaV, last.SatelliteDv);
+
+        // With more stops to come the carrier goes back to the circular orbit too.
+        var midway = LegTools.EvaluateDeploy(stop, new DeployStep(3), _bodies, continues: true)!;
+        Assert.Equal(2 * last.EnterDv, midway.CarrierDv);
+    }
+
+    [Theory]
+    [InlineData("kerbin.surface")]
+    [InlineData("duna.intercept")]
+    [InlineData("kerbin.soi")]
+    public void Constellations_are_only_released_in_orbit(string key) =>
+        Assert.False(LegTools.CanDeploy(_map[key], _bodies));
+
+    [Fact]
+    public void Deployment_counts_in_the_phase_it_is_charged_to()
+    {
+        var stops = new[] { "kerbin.surface", "kerbin.lo", _relayOrbit }.Select(k => _map[k]).ToList();
+        var segments = MissionPlanner.BuildRoute(_map, stops);
+        var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops);
+        var deploy = LegTools.EvaluateDeploy(_map[_relayOrbit], new DeployStep(3), _bodies, continues: false)!;
+
+        var without = MissionPlanner.Summarize(phases, MissionPlanner.AllLegs(segments), settings);
+        var with = MissionPlanner.Summarize(phases, MissionPlanner.AllLegs(segments), settings, [(1, deploy.CarrierDv)]);
+        Assert.Equal(without[1].RequiredDv + deploy.CarrierDv, with[1].RequiredDv);
+        Assert.Equal(without[0].RequiredDv, with[0].RequiredDv);
+    }
+
+    [Fact]
+    public void Mission_with_a_window_and_a_deployment_reopens_with_both()
+    {
+        var definition = new MissionDefinition(
+            [new("kerbin.surface"), new("kerbin.lo"), new(_relayOrbit, null, new TransferLeg(0, 4_987_091.8, 5_830_272), new DeployStep(3, PhaseIndex: 1))],
+            [new("Launch"), new("Transfer")], []);
+        var repo = new MissionRepository(_db);
+        var reopened = repo.Get(repo.Add("Duna relays", definition))!.Definition;
+        Assert.Equal(new DeployStep(3, PhaseIndex: 1), reopened.Stops[2].Deploy);
+        Assert.Equal(definition.Stops[2].Transfer, reopened.Stops[2].Transfer);
+    }
+
+    [Fact]
     public void Missions_saved_before_leg_tools_open_without_them()
     {
         var old = System.Text.Json.JsonSerializer.Deserialize<MissionDefinition>(
             """{"stops":[{"nodeKey":"kerbin.surface","note":null},{"nodeKey":"duna.lo","note":"Relays"}],"phases":[],"legs":[]}""",
             new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
-        Assert.All(old.Stops, s => Assert.Null(s.Transfer));
+        Assert.All(old.Stops, s => Assert.True(s.Transfer is null && s.Deploy is null));
     }
 }

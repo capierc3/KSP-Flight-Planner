@@ -97,6 +97,25 @@
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
+                                <Button Content="Deploy satellites here" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                        Visibility="{Binding OffersDeploy, Converter={StaticResource BoolToVisibility}}"
+                                        Command="{Binding DataContext.OpenDeployCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                        ToolTip="Release an evenly spaced constellation into this orbit from a resonant carrier orbit (Resonant Orbits). The carrier's burns count toward the rocket." />
+                                <Border Visibility="{Binding HasDeploy, Converter={StaticResource BoolToVisibility}}" Padding="8,5" CornerRadius="4" Margin="0,4,0,0"
+                                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                            <Button Content="Open" Style="{StaticResource SmallButton}" ToolTip="Show the deployment in Resonant Orbits"
+                                                    Command="{Binding DataContext.OpenDeployCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                            <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Remove the deployment"
+                                                    Command="{Binding DataContext.RemoveDeployCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Deploy constellation" FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="{Binding DeployText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
                             </StackPanel>
                         </Grid>
                     </DataTemplate>

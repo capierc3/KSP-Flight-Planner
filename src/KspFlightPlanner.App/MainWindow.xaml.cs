@@ -35,11 +35,23 @@ public sealed class MainViewModel : ObservableObject
             Transfer.EditLeg(link);
             RequestPane(Panes.Transfer);
         };
+        mission.DeployRequested += link =>
+        {
+            Resonant.EditDeploy(link);
+            RequestPane(Panes.Resonant);
+        };
         mission.RouteChanged += () =>
         {
-            if (Transfer.Leg is not { } open) return;
-            if (mission.TransferLinkFor(open.Owner) is not { } link) Transfer.StopEditingLeg();
-            else if (link.Span != open.Span) Transfer.EditLeg(link);
+            if (Transfer.Leg is { } transfer)
+            {
+                if (mission.TransferLinkFor(transfer.Owner) is not { } link) Transfer.StopEditingLeg();
+                else if (link.Span != transfer.Span) Transfer.EditLeg(link);
+            }
+            if (Resonant.Leg is { } deploy)
+            {
+                if (mission.DeployLinkFor(deploy.Owner) is not { } link) Resonant.StopEditingLeg();
+                else if (link.Body != deploy.Body || link.AltitudeM != deploy.AltitudeM) Resonant.EditDeploy(link);
+            }
         };
         events.OpenLocationRequested += id =>
         {

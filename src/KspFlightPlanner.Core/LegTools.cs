@@ -36,6 +36,24 @@ public sealed record TransferSpan(
 public sealed record TransferLegResult(TransferSpan Span, TransferWindow Window);
 
 /// <summary>
+/// Releasing <paramref name="SatelliteCount"/> satellites, evenly spaced, into the circular orbit of the stop, from a
+/// resonant (or dive) carrier orbit. <paramref name="PhaseIndex"/> is the rocket phase that flies the carrier's burns;
+/// null for the phase of the leg arriving at the stop.
+/// </summary>
+public sealed record DeployStep(int SatelliteCount, bool PreferDiveOrbit = false, bool UseOcclusion = false, int? PhaseIndex = null);
+
+/// <summary>
+/// A deployment worked out. The carrier burns <see cref="EnterDv"/> into the carrier orbit and, if the mission goes on,
+/// <see cref="ReturnDv"/> back to the circular orbit after the last release. Each satellite burns
+/// <see cref="SatelliteDv"/> itself to circularize; that comes from the satellites, not the rocket.
+/// </summary>
+public sealed record DeployResult(CelestialBody Body, double AltitudeM, ResonantOrbitResult Orbit, double EnterDv, double ReturnDv)
+{
+    public double CarrierDv => EnterDv + ReturnDv;
+    public double SatelliteDv => Orbit.InjectionDeltaV;
+}
+
+/// <summary>
 /// Tools that belong to a mission's legs. A tool replaces the Δv-map values of the steps it covers with its own result,
 /// keeping the steps themselves (so per-step choices such as aerobraking and phases stay where they were).
 /// See docs/MATH.md §19.
@@ -142,6 +160,35 @@ public static class LegTools
             s.ToStop < stops.Count && stops[s.ToStop].Transfer is { } choice && EvaluateTransfer(s.Legs, choice, bodies) is { } transfer
                 ? s with { Legs = ApplyTransfer(s.Legs, transfer) }
                 : s).ToList();
+
+    /// <summary>A constellation can be released at stops that are an orbit (not a surface, intercept or escape).</summary>
+    public static bool CanDeploy(DvMapNode stop, IReadOnlyDictionary<string, CelestialBody> bodies) =>
+        stop.Kind is "LowOrbit" or "Synchronous" or "Custom" && stop.AltitudeM is > 0 && bodies.ContainsKey(stop.BodyName);
+
+    /// <summary>
+    /// The carrier orbit for a deployment at <paramref name="stop"/> (§6). Entering it from the circular orbit and
+    /// leaving it again are the same size of burn as each satellite's circularization (all at the shared apsis).
+    /// Null if the stop can't host one or the orbit doesn't work (e.g. the carrier would leave the sphere of influence).
+    /// </summary>
+    /// <param name="continues">More stops follow, so the carrier returns to the circular orbit after the last release.</param>
+    public static DeployResult? EvaluateDeploy(DvMapNode stop, DeployStep step, IReadOnlyDictionary<string, CelestialBody> bodies,
+        bool continues)
+    {
+        if (!CanDeploy(stop, bodies)) return null;
+        var body = bodies[stop.BodyName];
+        var altitude = stop.AltitudeM!.Value;
+        try
+        {
+            var orbit = ResonantOrbitCalculator.Calculate(new ResonantOrbitRequest(
+                body, step.SatelliteCount, altitude, step.PreferDiveOrbit, new OcclusionSettings(step.UseOcclusion)));
+            var burn = Math.Round(orbit.InjectionDeltaV, 1);
+            return new DeployResult(body, altitude, orbit, burn, continues ? burn : 0);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
 
     private static bool AreSiblings(string a, string b, IReadOnlyDictionary<string, CelestialBody> bodies) =>
         a != b && bodies.TryGetValue(a, out var x) && bodies.TryGetValue(b, out var y)

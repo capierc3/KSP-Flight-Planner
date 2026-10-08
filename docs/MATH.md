@@ -746,6 +746,27 @@ Worked example: Kerbin low orbit (80 km) to Duna low orbit (60 km), best window 
 - Code: `LegTools.FindTransfer`, `LegTools.ApplyTransfer`, `MissionBuilderViewModel.ApplyTools`; tested in `LegToolsTests`
 - Source: §7 and §11 (Curtis §8.6–8.7, §5.3)
 
+### 19b. Deploy steps: a constellation released at a stop
+
+A stop that is a circular orbit (a low orbit, the synchronous orbit or a circular custom location) can release *n* evenly spaced satellites from a resonant or dive carrier orbit (§6, §18b). All of the burns happen at the shared apsis, where the circular speed and the carrier's speed differ by the same amount, so every burn is the same size:
+
+```
+burn  = | √(μ/r) − √(μ·(2/r − 1/a_carrier)) |
+carrier Δv    = burn (into the carrier orbit) + burn (back to circular, only if more stops follow)
+each satellite = burn (circularizes with its own engine; not counted in the rocket's phases)
+```
+
+The carrier Δv is added to the phase picked for the deployment in Legs & phases (by default, the phase of the leg arriving at the stop).
+
+Worked example: 3 relays at Duna 1,000 km, the last stop of the mission (μ = 3.0136×10¹¹, r = 1,320,000 m):
+
+1. Satellite period T = 2π·√(r³/μ) = **17,357.8 s**. The carrier period is T × 4/3 = **23,143.8 s**, so a = 1,599,066 m and its apoapsis is at **1,558.1 km**.
+2. √(μ/r) = 477.81 m/s and √(μ·(2/r − 1/a)) = 517.83 m/s, so the burn is **40.0 m/s**.
+3. Carrier: **40.0 m/s** (it doesn't return to circular, because this is the last stop). Each relay circularizes with **40.0 m/s** of its own.
+
+- Code: `LegTools.CanDeploy`, `LegTools.EvaluateDeploy`, `MissionPlanner.Summarize` (its `steps`); tested in `LegToolsTests`
+- Source: §6 (resonant carrier orbit), vis-viva (§3)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

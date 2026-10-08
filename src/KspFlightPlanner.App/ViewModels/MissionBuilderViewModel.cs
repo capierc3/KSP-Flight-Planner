@@ -114,6 +114,7 @@ public sealed class StopViewModel : ObservableObject
     private string _nodeKey;
     private string _note;
     private TransferLeg? _transfer;
+    private DeployStep? _deploy;
 
     /// <param name="changed">The stop moved somewhere else: the route changes.</param>
     /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
@@ -122,6 +123,7 @@ public sealed class StopViewModel : ObservableObject
         _nodeKey = stop.NodeKey;
         _note = stop.Note ?? "";
         _transfer = stop.Transfer;
+        _deploy = stop.Deploy;
         _changed = changed;
         _legsChanged = legsChanged;
     }
@@ -156,12 +158,44 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>"Depart Year 1, Day 231, arrive Year 2, Day 75 / Ejection 1,055 m/s, capture 652 m/s", or why the saved window isn't used.</summary>
     public string TransferText { get; private set; } = "";
 
+    /// <summary>A satellite constellation released at this stop; null if none.</summary>
+    public DeployStep? Deploy
+    {
+        get => _deploy;
+        set { if (SetProperty(ref _deploy, value)) _legsChanged(); }
+    }
+
+    /// <summary>Picks the phase flying the deployment without rebuilding the legs (the caller recalculates).</summary>
+    internal void SetDeployPhase(int phaseIndex)
+    {
+        if (_deploy is not null) _deploy = _deploy with { PhaseIndex = phaseIndex };
+    }
+
+    /// <summary>The stop is a circular orbit, so a constellation can be released here.</summary>
+    public bool CanDeploy { get; private set; }
+    public bool HasDeploy => _deploy is not null;
+    public bool OffersDeploy => CanDeploy && _deploy is null;
+
+    /// <summary>"3 satellites · carrier 108 m/s · each satellite 108 m/s", or why the deployment isn't used.</summary>
+    public string DeployText { get; private set; } = "";
+
+    internal void SetDeploy(bool canDeploy, DeployResult? deploy)
+    {
+        CanDeploy = canDeploy;
+        DeployText = _deploy is null ? ""
+            : deploy is not null ? $"{_deploy.SatelliteCount} satellites, {(deploy.Orbit.IsDiveOrbit ? "dive" : "resonant")} carrier orbit\n" +
+                                   $"Carrier {Format.Speed0(deploy.CarrierDv)} · each satellite {Format.Speed0(deploy.SatelliteDv)}"
+            : canDeploy ? "This orbit doesn't work for the deployment: open it to change it."
+            : "The stop is no longer a circular orbit, so the deployment isn't used.";
+        foreach (var name in new[] { nameof(CanDeploy), nameof(HasDeploy), nameof(OffersDeploy), nameof(DeployText) })
+            OnPropertyChanged(name);
+    }
+
     internal void SetTools(bool canHaveTransfer, TransferLegResult? transfer)
     {
         CanHaveTransfer = canHaveTransfer;
         TransferText = _transfer is null ? ""
-            : transfer is { Window: var w } ? $"Depart {GameCalendar.Kerbin.FormatDay(w.DepartureUt)}, arrive {GameCalendar.Kerbin.FormatDay(w.ArrivalUt)}
-" +
+            : transfer is { Window: var w } ? $"Depart {GameCalendar.Kerbin.FormatDay(w.DepartureUt)}, arrive {GameCalendar.Kerbin.FormatDay(w.ArrivalUt)}\n" +
                                              $"Ejection {Format.Speed0(w.EjectionDv)}" + (transfer.Span.Captures ? $", capture {Format.Speed0(w.CaptureDv)}" : "")
             : canHaveTransfer ? "No transfer solution for the saved window: open it to pick another."
             : "The leg here no longer crosses between planets, so the saved window isn't used.";
@@ -180,7 +214,38 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(Role));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer);
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy);
+}
+
+/// <summary>A constellation released at a stop, shown after the leg that arrives there, with the phase that flies it.</summary>
+public sealed class DeployRowViewModel : ObservableObject
+{
+    private readonly Action<int> _phaseChanged;
+    private PhaseViewModel _phase;
+
+    public DeployRowViewModel(string title, DeployResult result, PhaseViewModel phase, Action<int> phaseChanged, IList<PhaseViewModel> phases)
+    {
+        Title = title;
+        Result = result;
+        _phase = phase;
+        _phaseChanged = phaseChanged;
+        Phases = phases;
+    }
+
+    private IList<PhaseViewModel> Phases { get; }
+    public string Title { get; }
+    public DeployResult Result { get; }
+    public string DvText => Format.Speed0(Result.CarrierDv);
+
+    public string Detail => $"Into the carrier orbit {Format.Speed0(Result.EnterDv)}" +
+                            (Result.ReturnDv > 0 ? $", back to circular after the last release {Format.Speed0(Result.ReturnDv)}" : "") +
+                            $" · each satellite circularizes itself: {Format.Speed0(Result.SatelliteDv)}";
+
+    public PhaseViewModel Phase
+    {
+        get => _phase;
+        set { if (value is not null && SetProperty(ref _phase, value)) _phaseChanged(Phases.IndexOf(value)); }
+    }
 }
 
 /// <summary>One leg of the route with its phase and options.</summary>
@@ -207,6 +272,10 @@ public sealed class LegRowViewModel : ObservableObject
 
     public RouteLeg Leg { get; }
     public int Number { get; }
+
+    /// <summary>A constellation released at the stop this leg arrives at (last leg of a segment only).</summary>
+    public DeployRowViewModel? Deploy { get; internal set; }
+    public bool HasDeploy => Deploy is not null;
 
     /// <summary>"To stop 2: Kerbin — Low orbit (Dock at station)" on the first leg of each segment.</summary>
     public string? SectionHeader { get; }
@@ -331,6 +400,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         ResetMapEditsCommand = new RelayCommand(ResetMapEdits, () => EditedCount > 0);
         OpenTransferCommand = new RelayCommand<StopViewModel>(OpenTransfer, s => s is not null && s.CanHaveTransfer);
         RemoveTransferCommand = new RelayCommand<StopViewModel>(RemoveTransfer, s => s?.HasTransfer == true);
+        OpenDeployCommand = new RelayCommand<StopViewModel>(OpenDeploy, s => s is not null && s.CanDeploy);
+        RemoveDeployCommand = new RelayCommand<StopViewModel>(RemoveDeploy, s => s?.HasDeploy == true);
         NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
         SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
         SaveMissionAsCommand = new RelayCommand(SaveMissionAs, () => _missions is not null && _map is not null);
@@ -413,8 +484,14 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public RelayCommand<StopViewModel> OpenTransferCommand { get; }
     public RelayCommand<StopViewModel> RemoveTransferCommand { get; }
 
+    public RelayCommand<StopViewModel> OpenDeployCommand { get; }
+    public RelayCommand<StopViewModel> RemoveDeployCommand { get; }
+
     /// <summary>A stop's transfer leg should be opened in the Transfer Planner.</summary>
     public event Action<TransferLegLink>? TransferRequested;
+
+    /// <summary>A stop's constellation deployment should be opened in Resonant Orbits.</summary>
+    public event Action<DeployLink>? DeployRequested;
 
     /// <summary>The stops or the whole mission changed: tools open on a leg should check it's still there.</summary>
     public event Action? RouteChanged;
@@ -433,6 +510,35 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         return new TransferLegLink(stop, title, span, stop.Transfer, choice => stop.Transfer = choice);
     }
 
+    /// <summary>The Resonant Orbits link for the deployment at <paramref name="owner"/> (a stop), if it still has one.</summary>
+    public DeployLink? DeployLinkFor(object owner) =>
+        owner is StopViewModel { HasDeploy: true } stop && Stops.Contains(stop) ? DeployLink(stop) : null;
+
+    private DeployLink? DeployLink(StopViewModel stop)
+    {
+        var index = Stops.IndexOf(stop);
+        if (_map is null || index < 1 || !CanDeployAt(_map[stop.NodeKey])) return null;
+        var node = _map[stop.NodeKey];
+        return new DeployLink(stop, $"Stop {index + 1}: {node.DisplayName}", _bodies[node.BodyName], node.AltitudeM!.Value, stop.Deploy,
+            choice => stop.Deploy = choice with { PhaseIndex = stop.Deploy?.PhaseIndex });
+    }
+
+    /// <summary>A deployment needs a circular orbit to release into (custom locations can be elliptical).</summary>
+    private bool CanDeployAt(DvMapNode node) =>
+        LegTools.CanDeploy(node, _bodies)
+        && (node.CustomLocationId is not { } id || _locations.Get(id)?.IsCircular == true);
+
+    private void OpenDeploy(StopViewModel stop)
+    {
+        if (DeployLink(stop) is { } link) DeployRequested?.Invoke(link);
+    }
+
+    private void RemoveDeploy(StopViewModel stop)
+    {
+        stop.Deploy = null;
+        RouteChanged?.Invoke();
+    }
+
     private void OpenTransfer(StopViewModel stop)
     {
         if (TransferLink(stop) is { } link) TransferRequested?.Invoke(link);
@@ -444,11 +550,24 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         RouteChanged?.Invoke();
     }
 
+    /// <summary>The deployment at each stop worked out (null where there is none or it doesn't work), by stop index.</summary>
+    private DeployResult?[] _deploys = [];
+
     /// <summary>Each leg with its tools applied (segment i arrives at stop i + 1), and each stop told what its leg offers.</summary>
     private IReadOnlyList<RouteSegment> ApplyTools(IReadOnlyList<RouteSegment> segments)
     {
         _mapSegments = segments;
         Stops[0].SetTools(false, null);
+        _deploys = new DeployResult?[Stops.Count];
+        for (var i = 0; i < Stops.Count; i++)
+        {
+            var node = _map![Stops[i].NodeKey];
+            var canDeploy = i > 0 && CanDeployAt(node);
+            _deploys[i] = canDeploy && Stops[i].Deploy is { } step
+                ? LegTools.EvaluateDeploy(node, step, _bodies, continues: i < Stops.Count - 1)
+                : null;
+            Stops[i].SetDeploy(canDeploy, _deploys[i]);
+        }
         return segments.Select(segment =>
         {
             var stop = Stops[segment.ToStop];
@@ -611,6 +730,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                         to.Atmosphere?.SeaLevelPressureAtm ?? 0));
             }
             offset[phase] += dv;
+            if (row.Deploy is { } deploy && Phases.IndexOf(deploy.Phase) is var p and >= 0) offset[p] += deploy.Result.CarrierDv;
         }
         return events;
     }
@@ -807,8 +927,16 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                 var setting = number < settings.Count ? settings[number] : new LegSetting(0, UseAerobraking, IncludePlaneChanges);
                 var phase = Phases[Math.Clamp(setting.PhaseIndex, 0, Phases.Count - 1)];
                 // Edits rebuild the leg rows, so defer them until the editing TextBox has finished losing focus.
-                Legs.Add(new LegRowViewModel(segment.Legs[j], number + 1, header, phase, setting, Recalculate,
-                    (key, dv) => System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(() => EditEdge(key, dv))));
+                var row = new LegRowViewModel(segment.Legs[j], number + 1, header, phase, setting, Recalculate,
+                    (key, dv) => System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(() => EditEdge(key, dv)));
+                if (j == segment.Legs.Count - 1 && _deploys[segment.ToStop] is { } deploy && stop.Deploy is { } step)
+                {
+                    var deployPhase = step.PhaseIndex is { } p ? Phases[Math.Clamp(p, 0, Phases.Count - 1)] : phase;
+                    row.Deploy = new DeployRowViewModel(
+                        $"Deploy {step.SatelliteCount} satellites at {_map![stop.NodeKey].DisplayName}", deploy, deployPhase,
+                        index => { stop.SetDeployPhase(index); Recalculate(); }, Phases);
+                }
+                Legs.Add(row);
                 number++;
             }
         }
@@ -823,7 +951,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     {
         var legs = Legs.Select(l => l.Leg).ToList();
         var settings = Legs.Select(l => l.Setting(Phases)).ToList();
-        var summaries = MissionPlanner.Summarize(Phases.Select(p => p.ToDefinition()).ToList(), legs, settings);
+        var summaries = MissionPlanner.Summarize(Phases.Select(p => p.ToDefinition()).ToList(), legs, settings, DeploySteps());
         var missionTotal = summaries.Sum(s => s.TotalDv);
         var design = SelectedDesign?.Design?.Report;
         var scale = design is null ? missionTotal : Math.Max(missionTotal, design.TotalDeltaVVacuum);
@@ -837,6 +965,10 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         UpdateDirty();
     }
 
+    /// <summary>The carrier burns of each deployment, charged to the phase picked for it.</summary>
+    private IEnumerable<(int, double)> DeploySteps() =>
+        Legs.Where(l => l.Deploy is not null).Select(l => (Phases.IndexOf(l.Deploy!.Phase), l.Deploy!.Result.CarrierDv)).ToList();
+
     private void AddPhase()
     {
         Phases.Add(new PhaseViewModel(new PhaseDefinition($"Phase {Phases.Count + 1}"), Phases.Count, Recalculate));
@@ -849,6 +981,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (index < 0 || Phases.Count <= 1) return;
         var fallback = Phases[index > 0 ? index - 1 : 1];
         foreach (var leg in Legs.Where(l => l.Phase == phase)) leg.Phase = fallback;
+        foreach (var leg in Legs.Where(l => l.Deploy?.Phase == phase)) leg.Deploy!.Phase = fallback;
         Phases.Remove(phase);
         Recalculate();
     }

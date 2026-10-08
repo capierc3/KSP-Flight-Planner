@@ -75,6 +75,30 @@
                                               SelectedItem="{Binding Phase}" ItemTemplate="{StaticResource PhaseChoice}" />
                                 </Grid>
                             </Border>
+                            <!-- A constellation released at the stop this leg arrives at -->
+                            <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,10"
+                                    Visibility="{Binding HasDeploy, Converter={StaticResource BoolToVisibility}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28" />
+                                        <ColumnDefinition Width="*" MinWidth="190" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Eff" />
+                                        <ColumnDefinition Width="150" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="✦" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Deploy.Title}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Deploy.Detail}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="5" Text="{Binding Deploy.DvText}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="8,0" />
+                                    <ComboBox Grid.Column="6" VerticalAlignment="Center"
+                                              ItemsSource="{Binding DataContext.Phases, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              SelectedItem="{Binding Deploy.Phase}" ItemTemplate="{StaticResource PhaseChoice}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                         <DataTemplate.Triggers>
                             <DataTrigger Binding="{Binding IsFromTool}" Value="True">

@@ -9,8 +9,9 @@ public sealed record LegSetting(int PhaseIndex, bool UseAerobrake, bool IncludeP
 /// <summary>
 /// A place the mission visits, with an optional note ("Dock at station, pick up Jeb") and the tools of the leg that
 /// arrives here: <paramref name="Transfer"/> makes it a transfer leg flown in a chosen launch window.
+/// <paramref name="Deploy"/> is a step at the stop itself: releasing a satellite constellation from a resonant orbit.
 /// </summary>
-public sealed record MissionStop(string NodeKey, string? Note = null, TransferLeg? Transfer = null);
+public sealed record MissionStop(string NodeKey, string? Note = null, TransferLeg? Transfer = null, DeployStep? Deploy = null);
 
 /// <summary>
 /// A saved mission: ordered stops plus phase/leg choices, the route-wide options, the design checked against it
@@ -113,14 +114,18 @@ public static class MissionPlanner
         return index + 1 >= legs.Count || legs[index + 1].To.Kind == "Surface";
     }
 
+    /// <param name="steps">Δv of steps at stops (e.g. a constellation deployment), each charged to a phase.</param>
     public static IReadOnlyList<PhaseSummary> Summarize(
-        IReadOnlyList<PhaseDefinition> phases, IReadOnlyList<RouteLeg> legs, IReadOnlyList<LegSetting> settings)
+        IReadOnlyList<PhaseDefinition> phases, IReadOnlyList<RouteLeg> legs, IReadOnlyList<LegSetting> settings,
+        IEnumerable<(int PhaseIndex, double DeltaV)>? steps = null)
     {
         if (legs.Count != settings.Count) throw new ArgumentException("Each leg needs a setting.");
 
         var required = new double[phases.Count];
         for (var i = 0; i < legs.Count; i++)
             required[Math.Clamp(settings[i].PhaseIndex, 0, phases.Count - 1)] += EffectiveDv(legs[i], settings[i]);
+        foreach (var (phase, dv) in steps ?? [])
+            required[Math.Clamp(phase, 0, phases.Count - 1)] += dv;
 
         return phases.Select((p, i) =>
             new PhaseSummary(p, required[i], required[i] * p.MarginPercent / 100 + p.ExtraDv)).ToList();

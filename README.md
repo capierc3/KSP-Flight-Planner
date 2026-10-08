@@ -22,7 +22,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Leg tools** — a leg between planets (Kerbin → Duna) can be flown in a chosen launch window: *Plan a transfer
   window for this leg* under its stop opens the Transfer Planner locked to the leg. The window picked (best, or
   clicked on the porkchop plot) is saved with the mission, and its ejection and capture burns replace the Δv map's
-  values in Legs & phases and the Rocket totals.
+  values in Legs & phases and the Rocket totals. A stop in a circular orbit can *Deploy satellites here*: Resonant
+  Orbits opens locked to the stop's orbit, and the carrier's burns are added to a phase you pick (each satellite's own
+  circularize burn is shown, not added).
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
@@ -38,7 +40,8 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   plot, and the match-velocity burn (each leg also drawn from above: orbits, transfer arc and numbered burns); optionally a deorbit at the end. Every burn is shown by feel (which way, what to
   look for) or as exact maneuver-node values (UT, prograde / normal / radial), with a Δv budget checked against a saved
   design or the chosen vessel's remaining Δv.
-- **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations.
+- **Resonant orbits** — carrier orbit for deploying evenly spaced satellite constellations. Opened from a mission stop it plans
+  that stop's deployment.
 - **Vessels** — every vessel in the linked save, grouped by body, with its remaining Δv, thrust, burn time,
   fuel left per resource, engines, crew and parts. Part data (masses, engines, antennas, resource densities) is read
   from the KSP folder — ModuleManager's cache when present, so mod patches count — and stored in the database.

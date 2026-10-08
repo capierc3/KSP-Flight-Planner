@@ -13,20 +13,44 @@
         <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="0,0,18,0">
+                    <!-- Planning the deployment at a mission stop: body and orbit come from the stop -->
+                    <Border Margin="0,0,0,10" Padding="10,8" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEditingLeg}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="Deployment at a mission stop" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding LegTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
+                                       Text="The satellite count and orbit choices here are saved with the mission. The carrier's burns count toward the rocket; each satellite circularizes with its own engine." />
+                            <Button Content="Stop editing the stop" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
+                                    ToolTip="Use the calculator on its own again; the mission keeps this deployment" />
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="Parameters" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
 
+                    <StackPanel IsEnabled="{Binding IsOrbitEditable}">
                     <TextBlock Text="System" Style="{StaticResource Label}" />
                     <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
 
                     <TextBlock Text="Celestial body" Style="{StaticResource Label}" />
                     <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding SelectedBody}" />
+                    </StackPanel>
 
                     <TextBlock Text="Number of satellites" Style="{StaticResource Label}" />
                     <TextBox Text="{Binding SatelliteCount, UpdateSourceTrigger=PropertyChanged}" />
 
                     <TextBlock Text="Orbital altitude (m)" Style="{StaticResource Label}" />
-                    <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsOrbitEditable}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" IsEnabled="{Binding IsOrbitEditable}">
                         <Button Content="Use synchronous" Command="{Binding UseSynchronousAltitudeCommand}" Margin="0,0,8,0" />
                         <Button Content="Use min. line-of-sight" Command="{Binding UseMinimumLineOfSightCommand}" />
                     </StackPanel>
