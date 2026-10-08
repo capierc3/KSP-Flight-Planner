@@ -1,0 +1,84 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.CalculatorsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <!-- Inputs for the calculator documents (Transfer Planner…), so the documents can give their room to results -->
+    <ScrollViewer Padding="12,10,0,10" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,18,0">
+            <StackPanel DataContext="{Binding Transfer}">
+                <TextBlock Text="Transfer window" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}">
+                    <Run Text="Set by the mission leg " /><Run Text="{Binding LegTitle, Mode=OneWay}" /><Run Text=". Only the date and landing can change here." />
+                </TextBlock>
+
+                <StackPanel IsEnabled="{Binding IsTripEditable}">
+                    <TextBlock Text="System" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="From" Style="{StaticResource Label}" />
+                            <ComboBox ItemsSource="{Binding Origins}" SelectedItem="{Binding SelectedOrigin}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="To" Style="{StaticResource Label}" />
+                            <ComboBox ItemsSource="{Binding Destinations}" SelectedItem="{Binding SelectedDestination}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Parking orbit (km)" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsParkingAltitudeEnabled}"
+                                     ToolTip="Not used when leaving a custom location (you start in its orbit)" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Arrival orbit (km)" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding ArrivalAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsArrivalAltitudeEnabled}"
+                                     ToolTip="Not used when going to a custom location (you match its orbit)" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <TextBlock Text="Earliest departure" Style="{StaticResource Label}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Year" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                    <TextBox Grid.Column="1" Text="{Binding EarliestYear, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                    <TextBlock Grid.Column="3" Text="Day" Style="{StaticResource Label}" Margin="0,0,6,0" />
+                    <TextBox Grid.Column="4" Text="{Binding EarliestDay, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                    <Button Grid.Column="5" Content="Today" Command="{Binding UseGameDateCommand}" Margin="6,0,0,0" Padding="8,0"
+                            ToolTip="Today's date in the game: live while connected to KSP, else when KSP last saved" />
+                </Grid>
+
+                <TextBlock Text="At destination" Style="{StaticResource Label}" />
+                <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" IsEnabled="{Binding IsTripEditable}" />
+                <CheckBox Content="Include landing in budget" IsChecked="{Binding IncludeLanding}" Margin="0,8,0,0" />
+
+                <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" IsEnabled="{Binding IsTripEditable}"
+                          ToolTip="For a mission, plan the trip home as its own leg" />
+                <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding StayLabel}" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding MinimumStayDays, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                    <TextBlock Style="{StaticResource Label}">
+                        <Run Text="Arriving back at " /><Run Text="{Binding SelectedOrigin.Name, Mode=OneWay}" />
+                    </TextBlock>
+                    <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

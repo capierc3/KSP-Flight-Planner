@@ -100,8 +100,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
     public ObservableCollection<CelestialBody> Origins { get; } = [];
     public ObservableCollection<CelestialBody> Destinations { get; } = [];
     public ObservableCollection<BudgetLine> BudgetLines { get; } = [];
-    public ObservableCollection<Fact> OriginFacts { get; } = [];
-    public ObservableCollection<Fact> DestinationFacts { get; } = [];
     public IReadOnlyList<ArrivalMode> ArrivalModes { get; } = Enum.GetValues<ArrivalMode>();
     public IReadOnlyList<ArrivalMode> ReturnArrivalModes { get; } = [ArrivalMode.Aerobrake, ArrivalMode.Circularize];
 
@@ -200,7 +198,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsParkingAltitudeEnabled));
             }
             SelectedDestination = Destinations.FirstOrDefault(b => b.Name == "Duna") ?? Destinations.FirstOrDefault();
-            FillFacts(OriginFacts, value);
             _suspendRecalculate = false;
             Recalculate();
         }
@@ -219,7 +216,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
                     SelectedArrivalMode = ArrivalMode.Circularize;
                 OnPropertyChanged(nameof(IsArrivalAltitudeEnabled));
             }
-            FillFacts(DestinationFacts, value);
             OnPropertyChanged(nameof(StayLabel));
             Recalculate();
         }
@@ -624,61 +620,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
         nameof(CurrentPlot), nameof(CurrentPlotSelection), nameof(PlotTitle), nameof(AnyTimeNote), nameof(HasPlot), nameof(PorkchopStartLabel),
         nameof(PorkchopEndLabel), nameof(PorkchopMinFlightLabel), nameof(PorkchopMaxFlightLabel), nameof(PorkchopScaleLabel),
     ];
-
-    private void FillFacts(ObservableCollection<Fact> facts, CelestialBody? body)
-    {
-        facts.Clear();
-        if (body is null) return;
-        if (_custom.TryGetValue(body.Id, out var location))
-        {
-            FillCustomFacts(facts, location, body);
-            return;
-        }
-        var parent = body.ParentId is { } pid && _byId.TryGetValue(pid, out var p) ? p : null;
-
-        facts.Add(new("Type", body.BodyClass is null ? "—" : parent is null ? body.BodyClass : $"{body.BodyClass} of {parent.Name}"));
-        facts.Add(new("Radius", Format.Distance(body.EquatorialRadiusM)));
-        facts.Add(new("Surface gravity", $"{body.SurfaceGravity:0.00} m/s² ({body.SurfaceGravity / 9.80665:0.000} g)"));
-        facts.Add(new("Sidereal day", _calendar.FormatDuration(Math.Abs(body.RotationPeriodS))));
-        facts.Add(new("Sphere of influence", Format.Distance(body.SoiRadiusM)));
-        if (body.Orbit is { } o && parent is not null)
-        {
-            facts.Add(new("Orbit (semi-major axis)", Format.Distance(o.SemiMajorAxisM)));
-            facts.Add(new("Eccentricity / inclination", $"{o.Eccentricity:0.###} / {o.InclinationDeg:0.##}°"));
-            facts.Add(new("Orbital period", _calendar.FormatDuration(Kepler.OrbitalPeriod(o, parent.Mu))));
-        }
-        if (body.Atmosphere is { } atm)
-        {
-            facts.Add(new("Atmosphere height", Format.Distance(atm.HeightM)));
-            if (atm.SeaLevelPressureAtm is { } pAtm)
-                facts.Add(new("Sea-level pressure", $"{pAtm:0.###} atm ({pAtm * Atmosphere.KilopascalsPerAtm:0.##} kPa)"));
-            if (atm.ScaleHeightM is { } h) facts.Add(new("Scale height", Format.Distance(h)));
-            if (atm.MinTempC is { } tMin && atm.MaxTempC is { } tMax) facts.Add(new("Temperature", $"{tMin:0} to {tMax:0} °C"));
-            if (atm.HasOxygen is { } ox) facts.Add(new("Oxygen", ox ? "Yes (jet engines work)" : "No"));
-        }
-        else
-        {
-            facts.Add(new("Atmosphere", "None"));
-        }
-        facts.Add(new("Surface → low orbit Δv", body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Format.Speed(dv)}" : "—"));
-        facts.Add(new("Suggested low orbit", Format.Distance(body.DefaultParkingAltitudeM)));
-    }
-
-    private void FillCustomFacts(ObservableCollection<Fact> facts, CustomLocation location, CelestialBody stand)
-    {
-        var parent = _byId[stand.ParentId!.Value];
-        var o = stand.Orbit!;
-        facts.Add(new("Type", $"Custom location around {parent.Name}"));
-        facts.Add(new("Orbit", CustomLocations.AltitudeText(location) + (location.IsCircular ? " circular" : "")));
-        facts.Add(new("Eccentricity / inclination", $"{o.Eccentricity:0.###} / {o.InclinationDeg:0.##}°"));
-        facts.Add(new("Orbital period", _calendar.FormatDuration(Kepler.OrbitalPeriod(o, parent.Mu))));
-        facts.Add(new("Position", location.IsPlaced
-            ? location.Mode == PositionMode.PhaseAngle
-                ? $"Placed: {location.PhaseAngleDeg:0.#}° ahead of Kerbin on {_calendar.FormatDay(location.EpochUt)}"
-                : $"Placed: elements on {_calendar.FormatDay(location.EpochUt)}"
-            : "Planned — no fixed position yet"));
-        facts.Add(new("Gravity", "None — arriving is a straight speed match (rendezvous)"));
-    }
 
     private static string Km(double metres) => (metres / 1000).ToString("0.###", CultureInfo.CurrentCulture);
 

@@ -2,7 +2,7 @@
 
 Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 
-- **Window** — laid out like an IDE: tool panes at the sides (Mission, Locations, Vessels, Rocket, Flights), documents in
+- **Window** — laid out like an IDE: tool panes at the sides (Mission, Calculators, Saved missions, Locations, Vessels, Rocket, Flights), documents in
   the middle (Legs & phases, Δv map, Transfer Planner, Rendezvous, …). Drag any pane to another side, split a side top
   and bottom, tab panes together, pin them to the edge or float them; *View* reopens anything closed. Two modes, switched
   top right or with Ctrl+1 / Ctrl+2: **Plan** and **Fly**, each with its own arrangement, saved when the app closes
@@ -11,7 +11,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 
 - **Saved missions** — the mission is the document the app works on: name it at the top of the Mission pane and
   *File › Save Mission* (Ctrl+S) stores its stops, phases, per-leg choices, options, the design checked against it and
-  its notes (Notes pane). The Missions pane lists saved missions, most recent first: double-click to open, or New /
+  its notes (Notes pane). The Saved missions pane lists them, most recent first: double-click to open, or New /
   Delete. *Save Mission As* saves a copy and carries on with the copy. The title bar shows the open mission, with `*`
   for unsaved changes; you're asked before they'd be lost, and the last mission reopens at the next start.
 - **Mission builder** — plan a route as an ordered list of stops (add, reorder, remove, or click them on the
@@ -35,6 +35,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   and on the in-app Guide tab (same file, embedded at build time).
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
+  Its inputs (bodies, orbits, earliest departure…) sit in the Calculators pane so the document is all results.
   Opened from a mission leg it chooses that leg's window; on its own it's a free calculator.
 - **Rendezvous** — meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a KSC launch or
   a craft already in orbit. Targets come straight from the linked save (no import needed) or from placed custom

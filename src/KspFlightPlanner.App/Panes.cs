@@ -8,7 +8,7 @@ public enum WorkMode { Plan, Fly }
 
 /// <summary>
 /// One dockable piece of the main window. Any pane can be docked anywhere; <paramref name="IsDocument"/> panes start as
-/// tabs in the middle (Legs &amp; phases, Transfer Planner…), the rest at the side (Mission, Rocket…).
+/// tabs in the middle (Legs &amp; phases, Transfer Planner…), the rest at the side (Mission, Calculators, Rocket…).
 /// <paramref name="Modes"/> lists the modes it appears in; the first is its home.
 /// </summary>
 public sealed record PaneInfo(string Id, string Title, bool IsDocument, WorkMode[] Modes, Func<MainViewModel, FrameworkElement> Create)
@@ -23,6 +23,7 @@ public static class Panes
     // Tool panes
     public const string Mission = "mission";
     public const string Missions = "missions";
+    public const string Calculators = "calculators";
     public const string Notes = "notes";
     public const string Locations = "locations";
     public const string Vessels = "vessels";
@@ -47,7 +48,8 @@ public static class Panes
     public static readonly IReadOnlyList<PaneInfo> All =
     [
         new(Mission, "Mission", false, Plan, vm => new MissionStopsView { DataContext = vm.Mission }),
-        new(Missions, "Missions", false, Plan, vm => new MissionListView { DataContext = vm.Mission }),
+        new(Missions, "Saved missions", false, Plan, vm => new MissionListView { DataContext = vm.Mission }),
+        new(Calculators, "Calculators", false, Plan, vm => new CalculatorsView { DataContext = vm }),
         new(Notes, "Notes", false, Plan, vm => new MissionNotesView { DataContext = vm.Mission }) { OpensOnRight = true },
         new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
