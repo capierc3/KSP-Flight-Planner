@@ -86,10 +86,10 @@ internal static class RocketDiagram
 /// <summary>A stage of the chosen design in the rocket diagram, coloured like the phase it mostly burns for.</summary>
 public sealed record StageBlock(string Label, string DeltaVText, string Color, double BarHeight, string ToolTip);
 
-/// <summary>One row of the design check: a phase, what it needs and whether the stages cover it.</summary>
-public sealed record PhaseCheckRow(string Name, string Color, string Needed, string Detail, bool IsCovered)
+/// <summary>One row of the design check: a phase, what it needs and how well the stages cover it.</summary>
+public sealed record PhaseCheckRow(string Name, string Color, string Needed, string Detail, Coverage Status)
 {
-    public string Mark => IsCovered ? "✓" : "✗";
+    public string Mark => Status switch { Coverage.Comfortable => "✓", Coverage.InsideMargin => "✓", _ => "✗" };
 }
 
 /// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
@@ -237,7 +237,6 @@ public sealed class LegRowViewModel : ObservableObject
 public sealed class MissionBuilderViewModel : ObservableObject
 {
     private readonly DvMapRepository _maps;
-    private readonly MissionRepository _missions;
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
     private readonly DesignLibrary? _designs;
@@ -245,15 +244,11 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private DesignChoice? _selectedDesign;
     private DesignCheckResult? _check;
 
-    private string? _missionStatus;
-
     private bool _useAerobraking = true;
     private bool _includePlaneChanges;
-    private string _missionName = "";
-    private SavedMission? _selectedMission;
     private bool _suspend;
 
-    public MissionBuilderViewModel(DvMapRepository maps, MissionRepository missions, CustomLocationRepository locations,
+    public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
         PlannerEvents events, DesignLibrary? designs = null)
     {
         _designs = designs;
@@ -263,7 +258,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
         };
         RefreshDesignChoices();
         _maps = maps;
-        _missions = missions;
         _locations = locations;
         _events = events;
         _map = maps.GetMap();
@@ -280,30 +274,18 @@ public sealed class MissionBuilderViewModel : ObservableObject
         RemovePhaseCommand = new RelayCommand<PhaseViewModel>(RemovePhase, _ => Phases.Count > 1);
         ResetPhasesCommand = new RelayCommand(() => RebuildRoute(keepPhaseTuning: false));
         ResetMapEditsCommand = new RelayCommand(ResetMapEdits, () => EditedCount > 0);
-        SaveCommand = new RelayCommand(Save, () => !string.IsNullOrWhiteSpace(MissionName) && Stops.Count >= 2);
-        LoadCommand = new RelayCommand(Load, () => SelectedMission is not null);
-        DeleteCommand = new RelayCommand(Delete, () => SelectedMission is not null);
 
         if (_map is not null)
         {
             SyncNodes();
             SetStops([new("kerbin.surface"), new("mun.surface"), new("kerbin.surface")]);
         }
-        RefreshMissions();
     }
 
     public ObservableCollection<DvMapNode> Nodes { get; } = [];
     public ObservableCollection<StopViewModel> Stops { get; } = [];
     public ObservableCollection<PhaseViewModel> Phases { get; } = [];
     public ObservableCollection<LegRowViewModel> Legs { get; } = [];
-    public ObservableCollection<SavedMission> SavedMissions { get; } = [];
-
-    /// <summary>Feedback from loading/saving missions, e.g. a mission that uses a deleted location.</summary>
-    public string? MissionStatus
-    {
-        get => _missionStatus;
-        private set => SetProperty(ref _missionStatus, value);
-    }
 
     // ---------------- Custom locations (managed on the Locations tab) ----------------
 
@@ -356,9 +338,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
     public RelayCommand<PhaseViewModel> RemovePhaseCommand { get; }
     public RelayCommand ResetPhasesCommand { get; }
     public RelayCommand ResetMapEditsCommand { get; }
-    public RelayCommand SaveCommand { get; }
-    public RelayCommand LoadCommand { get; }
-    public RelayCommand DeleteCommand { get; }
 
     // ---------------- Map view bindings ----------------
 
@@ -412,18 +391,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
         }
     }
 
-    public string MissionName
-    {
-        get => _missionName;
-        set => SetProperty(ref _missionName, value);
-    }
-
-    public SavedMission? SelectedMission
-    {
-        get => _selectedMission;
-        set => SetProperty(ref _selectedMission, value);
-    }
-
     public string RouteSummary => _map is null ? "" : string.Join(" → ", Stops.Select(s => _map[s.NodeKey].DisplayName));
 
     // ---------------- Checking a saved design ----------------
@@ -445,10 +412,21 @@ public sealed class MissionBuilderViewModel : ObservableObject
 
     public IReadOnlyList<PhaseCheckRow> PhaseChecks { get; private set; } = [];
 
-    public string DesignVerdict => _check is not { } c ? ""
-        : c.IsEnough ? $"Enough — {Format.Speed0(c.Surplus)} to spare" : $"Not enough — short by {Format.Speed0(-c.Surplus)}";
+    /// <summary>
+    /// Margins are wiggle room, not a requirement: a design that flies the route but not every margin is still enough,
+    /// just with less room for error.
+    /// </summary>
+    public string DesignVerdict => _check switch
+    {
+        null => "",
+        { Status: Coverage.Comfortable } c => $"Enough — {Format.Speed0(c.SpareOverMargins)} to spare beyond your margins",
+        { Status: Coverage.InsideMargin } c =>
+            $"Enough — {Format.Speed0(c.SpareOverRequired)} to spare, inside your {Format.Speed0(c.MarginDeltaV)} of margins",
+        var c => $"Not enough — short by {Format.Speed0(c.Phases.Sum(p => p.Shortfall))} before any margin",
+    };
 
-    public bool DesignIsEnough => _check?.IsEnough == true;
+    /// <summary>Comfortable / InsideMargin / Short, for the verdict's colour.</summary>
+    public Coverage? DesignStatus => _check?.Status;
 
     public string DesignDeltaVText => _check is { } c ? Format.Speed0(c.DesignDeltaV) : "";
 
@@ -478,7 +456,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private void CheckDesign(double missionTotal)
     {
         _check = SelectedDesign?.Design?.Report is { } report
-            ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.TotalDv)).ToList(), report)
+            ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.RequiredDv, p.MarginDv)).ToList(), report)
             : null;
 
         if (_check is { } c && SelectedDesign?.Design?.Report is { } design)
@@ -493,10 +471,18 @@ public sealed class MissionBuilderViewModel : ObservableObject
                 return new StageBlock(label, Format.Speed0(s.DeltaV), main is { } m ? Phases[m].Color : "#90A4AE",
                     RocketDiagram.Height(s.DeltaV, scale), tip);
             }).Reverse().ToList();
-            PhaseChecks = c.Phases.Select((p, i) => new PhaseCheckRow(p.Name, Phases[i].Color, Format.Speed0(p.Needed),
-                p.Needed <= 0 ? "nothing needed"
-                : p.IsCovered ? $"stage{(p.Stages.Count == 1 ? "" : "s")} {string.Join(", ", p.Stages.Distinct())}"
-                : $"short {Format.Speed0(p.Shortfall)}", p.IsCovered)).ToList();
+            PhaseChecks = c.Phases.Select((p, i) =>
+            {
+                var stages = $"stage{(p.Stages.Distinct().Count() == 1 ? "" : "s")} {string.Join(", ", p.Stages.Distinct())}";
+                var detail = p.Required + p.Margin <= 0 ? "nothing needed"
+                    : p.Status switch
+                    {
+                        Coverage.Comfortable => stages,
+                        Coverage.InsideMargin => $"{stages} · uses part of its margin",
+                        _ => $"short {Format.Speed0(p.Shortfall)}",
+                    };
+                return new PhaseCheckRow(p.Name, Phases[i].Color, Format.Speed0(p.Required + p.Margin), detail, p.Status);
+            }).ToList();
         }
         else
         {
@@ -504,7 +490,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
             PhaseChecks = [];
         }
         foreach (var p in new[] { nameof(HasDesign), nameof(StageBlocksTopDown), nameof(PhaseChecks), nameof(DesignVerdict),
-                     nameof(DesignIsEnough), nameof(DesignDeltaVText), nameof(LaunchTwrText), nameof(CanLiftOff) })
+                     nameof(DesignStatus), nameof(DesignDeltaVText), nameof(LaunchTwrText), nameof(CanLiftOff) })
             OnPropertyChanged(p);
     }
 
@@ -669,58 +655,5 @@ public sealed class MissionBuilderViewModel : ObservableObject
     {
         _maps.ClearOverrides();
         ReloadMap();
-    }
-
-    // ---------------- Saved missions ----------------
-
-    private void Save()
-    {
-        var definition = new MissionDefinition(
-            Stops.Select(s => s.ToDefinition()).ToList(),
-            Phases.Select(p => p.ToDefinition()).ToList(),
-            Legs.Select(l => l.Setting(Phases)).ToList());
-        _missions.Add(MissionName.Trim(), definition);
-        MissionStatus = $"Saved \"{MissionName.Trim()}\".";
-        MissionName = "";
-        RefreshMissions();
-    }
-
-    private void Load()
-    {
-        if (_map is null || SelectedMission is not { } mission) return;
-        var d = mission.Definition;
-        var missing = d.Stops.Count(s => !_map.TryGet(s.NodeKey, out _));
-        if (missing > 0)
-        {
-            MissionStatus = $"Can't load \"{mission.Name}\": {missing} of its stops use a custom location that was deleted.";
-            return;
-        }
-        MissionStatus = null;
-
-        _suspend = true;
-        Stops.Clear();
-        foreach (var s in d.Stops) Stops.Add(new StopViewModel(s.NodeKey, s.Note, StopChanged, RefreshLegs));
-        for (var i = 0; i < Stops.Count; i++) Stops[i].SetPosition(i, Stops.Count);
-        _suspend = false;
-
-        var segments = MissionPlanner.BuildRoute(_map, Stops.Select(s => _map[s.NodeKey]).ToList());
-        if (MissionPlanner.AllLegs(segments).Count == d.Legs.Count && d.Phases.Count > 0)
-            Apply(segments, d.Phases, d.Legs);
-        else
-            RebuildRoute(keepPhaseTuning: false); // map changed since saving; fall back to defaults
-        MissionName = mission.Name;
-    }
-
-    private void Delete()
-    {
-        if (SelectedMission is not { } mission) return;
-        _missions.Delete(mission.Id);
-        RefreshMissions();
-    }
-
-    private void RefreshMissions()
-    {
-        SavedMissions.Clear();
-        foreach (var m in _missions.GetAll()) SavedMissions.Add(m);
     }
 }

@@ -99,19 +99,6 @@
                     <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
                     <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
                     <CheckBox Content="Include worst-case plane changes" IsChecked="{Binding IncludePlaneChanges}" Margin="0,6,0,0" />
-
-                    <TextBlock Text="Saved missions" Style="{StaticResource SectionHeader}" />
-                    <DockPanel>
-                        <Button DockPanel.Dock="Right" Content="Save" Command="{Binding SaveCommand}" Margin="8,0,0,0" />
-                        <TextBox Text="{Binding MissionName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Mission name" />
-                    </DockPanel>
-                    <ListBox ItemsSource="{Binding SavedMissions}" SelectedItem="{Binding SelectedMission}" Height="130" Margin="0,8,0,0"
-                             DisplayMemberPath="Name" />
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Button Content="Load" Command="{Binding LoadCommand}" Margin="0,0,8,0" />
-                        <Button Content="Delete" Command="{Binding DeleteCommand}" />
-                    </StackPanel>
-                    <TextBlock Text="{Binding MissionStatus}" Style="{StaticResource Note}" FontSize="12" Margin="0,6,0,0" Foreground="#FFB74D" />
                 </StackPanel>
             </ScrollViewer>
         </Border>
@@ -337,9 +324,13 @@
                                         <Setter Property="BorderBrush" Value="#99EF5350" />
                                         <Setter Property="Background" Value="#1FEF5350" />
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding DesignIsEnough}" Value="True">
+                                            <DataTrigger Binding="{Binding DesignStatus}" Value="Comfortable">
                                                 <Setter Property="BorderBrush" Value="#9966BB6A" />
                                                 <Setter Property="Background" Value="#1F66BB6A" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DesignStatus}" Value="InsideMargin">
+                                                <Setter Property="BorderBrush" Value="#99FFB300" />
+                                                <Setter Property="Background" Value="#1FFFB300" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -362,8 +353,11 @@
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Foreground" Value="#EF5350" />
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsCovered}" Value="True">
+                                                            <DataTrigger Binding="{Binding Status}" Value="Comfortable">
                                                                 <Setter Property="Foreground" Value="#66BB6A" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="InsideMargin">
+                                                                <Setter Property="Foreground" Value="#FFB300" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>

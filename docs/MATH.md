@@ -436,7 +436,17 @@ Worked example 2 — boosters that burn out first: a core (1 t tank with 4 t of 
 
 ## 16c. Does a design have enough Δv for the mission?
 
-In the Mission Builder's Rocket pane you can pick a saved design. Its stages (§16b, vacuum Δv, in firing order) are poured into the mission's phases (§15, margins included, in burn order): the first stage fills the first phase; whatever it has left carries into the next phase; when a stage runs out part-way through a phase, the next stage takes over — as in flight.
+In the Mission Builder's Rocket pane you can pick a saved design. Its stages (§16b, vacuum Δv, in firing order) are poured into the mission's phases (§15, in burn order): the first stage fills the first phase; whatever it has left carries into the next phase; when a stage runs out part-way through a phase, the next stage takes over — as in flight.
+
+Margins are wiggle room, not a requirement, so the stages are poured twice — once against each phase's Δv **with** its margin, once **without** — and each phase gets one of three verdicts:
+
+| Verdict | Meaning |
+|---|---|
+| ✓ Enough (green) | Covers the legs and the whole margin |
+| ✓ Enough, inside the margin (amber) | Covers the legs, but uses part of the margin |
+| ✗ Not enough (red) | Can't cover the legs themselves — the shortfall is shown before any margin |
+
+The mission's verdict is its worst phase's.
 
 ```
 for each stage, in firing order:
@@ -451,7 +461,12 @@ Worked example — Beyonder Mk1 (stages 6: 2,040, 5: 3,322, 3: 1,793 m/s) agains
 
 1. Launch: stage 6 gives 2,040, stage 5 the other 1,700 → covered by stages 6, 5
 2. Transfer: stage 5's remaining 1,622 + 303 of stage 3 → covered by stages 5, 3
-3. Lander: 979 of stage 3's remaining 1,490 → covered; **511 m/s to spare** (7,155 − 6,644)
+3. Lander: 979 of stage 3's remaining 1,490 → covered; **511 m/s to spare beyond the margins** (7,155 − 6,644)
+
+Worked example — KerbLink Mk2 (stages 2: 2,831, 0: 2,047 = 4,878 m/s) to keostationary orbit, which needs 4,515 m/s plus 452 m/s of margins (4,966):
+
+1. With margins it's 89 m/s short of 4,966 — but the margin is only wiggle room
+2. Without margins it covers the 4,515 with **363 m/s to spare**, so the verdict is "Enough — inside your margins" (amber). The real KerbLink Mk2 A reached its orbit with 480 m/s left.
 
 - Code: `DesignCheck.Check`; tested in `DesignCheckTests`
 
