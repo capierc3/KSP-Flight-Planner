@@ -14,7 +14,7 @@ namespace KspFlightPlanner.App;
 public sealed class DockWorkspace
 {
     // Bump when the default layout changes enough that old saved layouts should be dropped.
-    private const int LayoutVersion = 1;
+    private const int LayoutVersion = 2;
 
     private readonly DockingManager _dock;
     private readonly WorkMode _mode;
@@ -106,7 +106,7 @@ public sealed class DockWorkspace
     {
         if (info.IsDocument)
         {
-            var document = Document(info);
+            var tab = Anchorable(info);
             var pane = _dock.Layout.LastFocusedDocument?.Parent as LayoutDocumentPane
                        ?? _dock.Layout.Descendents().OfType<LayoutDocumentPane>().FirstOrDefault();
             if (pane is null)
@@ -114,8 +114,8 @@ public sealed class DockWorkspace
                 pane = new LayoutDocumentPane();
                 _dock.Layout.RootPanel.Children.Add(pane);
             }
-            pane.Children.Add(document);
-            return document;
+            pane.Children.Add(tab);
+            return tab;
         }
 
         var anchorable = Anchorable(info);
@@ -138,15 +138,15 @@ public sealed class DockWorkspace
     private LayoutDocumentPaneGroup Documents(params string[] ids)
     {
         var pane = new LayoutDocumentPane();
-        foreach (var id in ids) pane.Children.Add(Document(Panes.Find(id)!));
+        foreach (var id in ids) pane.Children.Add(Anchorable(Panes.Find(id)!));
         return new LayoutDocumentPaneGroup(pane);
     }
 
+    // Every pane is an anchorable, even the ones that start in the middle: AvalonDock only lets documents move around the
+    // middle, while an anchorable can dock on any side, tab with anything, or sit in the middle as a tab. Closing one
+    // hides it, so View brings it back where it was.
     private LayoutAnchorable Anchorable(PaneInfo info) =>
         new() { ContentId = info.Id, Title = info.Title, Content = View(info), CanClose = false, CanHide = true };
-
-    private LayoutDocument Document(PaneInfo info) =>
-        new() { ContentId = info.Id, Title = info.Title, Content = View(info) };
 
     // One view per pane per mode, kept for the life of the window so closing and reopening a pane keeps its scroll position etc.
     private FrameworkElement View(PaneInfo info)

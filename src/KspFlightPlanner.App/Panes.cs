@@ -7,8 +7,9 @@ namespace KspFlightPlanner.App;
 public enum WorkMode { Plan, Fly }
 
 /// <summary>
-/// One dockable piece of the main window: a tool pane at the side (Mission, Rocket…) or a document in the middle
-/// (Legs &amp; phases, Transfer Planner…). <paramref name="Modes"/> lists the modes it appears in; the first is its home.
+/// One dockable piece of the main window. Any pane can be docked anywhere; <paramref name="IsDocument"/> panes start as
+/// tabs in the middle (Legs &amp; phases, Transfer Planner…), the rest at the side (Mission, Rocket…).
+/// <paramref name="Modes"/> lists the modes it appears in; the first is its home.
 /// </summary>
 public sealed record PaneInfo(string Id, string Title, bool IsDocument, WorkMode[] Modes, Func<MainViewModel, FrameworkElement> Create)
 {
