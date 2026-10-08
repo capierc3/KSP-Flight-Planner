@@ -108,8 +108,42 @@ Check: put the orbit at Duna's distance and step 2 gives 122 m/s — the map's o
 
 Coming home, Kerbin's atmosphere can capture you (the map marks every interplanetary return as aerobrakeable), so only the 723 m/s burn to leave the custom orbit is charged when aerobraking.
 
-- Code: `CustomLocations.Place`, `CustomLocations.CreateStarOrbitNode`, `OrbitMath.HyperbolicBurnDv`
+- Code: `CustomLocations.Analyze` (star case), `OrbitMath.TransferToEllipse`, `OrbitMath.HyperbolicBurnDv`
 - Source: Curtis §8.2–8.7 (patched conics); same method as the Transfer Planner's Hohmann estimate (§8)
+
+## 4c. Elliptical custom orbits
+
+A custom location stores only its **independent** values — periapsis altitude, apoapsis altitude and inclination. Everything else is derived, so the data can't contradict itself:
+
+```
+rₚ = R + periapsis altitude,  rₐ = R + apoapsis altitude
+a  = (rₚ + rₐ) / 2                     semi-major axis
+e  = (rₐ − rₚ) / (rₐ + rₚ)              eccentricity
+T  = 2π · √(a³ / μ)                     period
+vₚ = √(μ · (2/rₚ − 1/a)),  vₐ = √(μ · (2/rₐ − 1/a))     speeds at periapsis / apoapsis
+```
+
+Getting there from a circular orbit r₀ takes two burns. Burn 1 at r₀ puts the far side of your orbit at one apsis of the target (a transfer orbit with a₁ = (r₀ + r_meet)/2); burn 2 there sets the target's other apsis:
+
+```
+burn 1 = | √(μ·(2/r₀ − 1/a₁)) − √(μ/r₀) |
+burn 2 = | √(μ·(2/r_meet − 1/a)) − √(μ·(2/r_meet − 1/a₁)) |
+```
+
+The app tries both orders (r_meet = rₐ, or r_meet = rₚ) and keeps the cheaper. When rₚ = rₐ this is exactly the Hohmann transfer of §4.
+
+Worked example — a 100 km × 2,000 km orbit of Kerbin, from the 80 km low orbit (r₀ = 680,000, rₚ = 700,000, rₐ = 2,600,000):
+
+1. a = 1,650,000 m, e = 0.5758, T = 7,086 s (1 h 58 m), vₚ = 2,819.6 m/s, vₐ = 759.1 m/s
+2. Apoapsis first: a₁ = 1,640,000 → burn 1 = **590.5 m/s**, burn 2 (raise periapsis from 80 to 100 km at apoapsis) = **8.6 m/s** → **599 m/s**
+3. Periapsis first: 16.5 + 589.8 = 606 m/s — so the app uses the apoapsis-first order
+
+**Inclination** is charged as a plane change (§14) at the target's apoapsis, where you are slowest. For the orbit above at 10°: 2 × 759.1 × sin 5° = **132 m/s** — doing the same 10° in the 80 km orbit would cost 397 m/s. The Mission Builder adds this when "Include worst-case plane changes" is on.
+
+**Validation** checks only the independent values: periapsis above the atmosphere (or the highest terrain on airless bodies), apoapsis inside the sphere of influence, apoapsis ≥ periapsis, inclination 0–180°.
+
+- Code: `OrbitShape`, `OrbitMath.TransferToEllipse`, `OrbitMath.PlaneChangeDv`, `CustomLocations.Analyze`, `CustomLocations.Validate`
+- Source: Curtis §6.2–6.4 (Hohmann and general coplanar transfers) and §6.10 (plane changes)
 
 ## 5. Synchronous (stationary) orbit
 
@@ -278,7 +312,7 @@ Known simplifications:
 
 - The map is a tree, so moon-to-moon trips go through low Kerbin orbit and are overstated.
 - Custom orbits around a planet hang off its low orbit, so arriving from another planet charges "capture to low orbit, then climb". Capturing straight into a high orbit would be cheaper.
-- Custom orbits are circular and in the body's equatorial plane (or the ecliptic for Kerbol); inclined orbits need an extra plane change (§14).
+- Custom orbit inclination is charged as a worst-case plane change at apoapsis (§4c); the real cost depends on where your ascending node is.
 - Atmospheric ascent values (3,400 for Kerbin) are typical, not exact — they depend on your rocket.
 - Map surface ↔ low orbit values are optimistic; many players budget more (e.g. 700 instead of 580 for the Mun). Edit them in the Δv map tab.
 

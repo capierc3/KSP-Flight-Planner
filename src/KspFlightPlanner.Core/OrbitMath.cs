@@ -7,6 +7,27 @@ public readonly record struct HohmannTransfer(double Dv1, double Dv2, double Tra
 }
 
 /// <summary>
+/// Transfer from a circular orbit to an ellipse. <see cref="DepartureDv"/> is the speed change at the start radius
+/// (for an interplanetary trip this is the v∞ to leave the home planet with); <see cref="ArrivalDv"/> is the burn
+/// at <see cref="ArrivalRadius"/>, the apsis of the target reached first.
+/// </summary>
+public readonly record struct EllipseTransfer(double DepartureDv, double ArrivalDv, double TransferTimeS, double ArrivalRadius)
+{
+    public double Total => DepartureDv + ArrivalDv;
+}
+
+/// <summary>Derived values of an orbit given by its periapsis and apoapsis radii (from the body's centre).</summary>
+public readonly record struct OrbitShape(double Mu, double PeriapsisRadius, double ApoapsisRadius)
+{
+    public double SemiMajorAxis => (PeriapsisRadius + ApoapsisRadius) / 2;
+    public double Eccentricity => OrbitMath.Eccentricity(PeriapsisRadius, ApoapsisRadius);
+    public double PeriodS => OrbitMath.Period(Mu, SemiMajorAxis);
+    public double PeriapsisSpeed => OrbitMath.VisViva(Mu, PeriapsisRadius, SemiMajorAxis);
+    public double ApoapsisSpeed => OrbitMath.VisViva(Mu, ApoapsisRadius, SemiMajorAxis);
+    public bool IsCircular => Math.Abs(ApoapsisRadius - PeriapsisRadius) < 1;
+}
+
+/// <summary>
 /// Two-body orbital mechanics helpers. Distances are metres measured from the body's
 /// centre (radii) unless the parameter name says altitude; times are seconds.
 /// </summary>
@@ -53,6 +74,32 @@ public static class OrbitMath
     /// </summary>
     public static double HyperbolicBurnDv(double mu, double orbitRadius, double vInf) =>
         Math.Sqrt(vInf * vInf + 2 * mu / orbitRadius) - Math.Sqrt(mu / orbitRadius);
+
+    /// <summary>
+    /// Two-burn transfer from a circular orbit of radius r₀ to an ellipse with periapsis rₚ and apoapsis rₐ
+    /// (same plane). Burn 1 at r₀ puts the far side of the orbit at one apsis of the target; burn 2 there sets
+    /// the other apsis. Both orders (reach rₐ first, or rₚ first) are tried and the cheaper is returned.
+    /// For a circular target (rₚ = rₐ) this is exactly <see cref="Hohmann"/>. See docs/MATH.md §4c.
+    /// </summary>
+    public static EllipseTransfer TransferToEllipse(double mu, double r0, double rp, double ra)
+    {
+        EllipseTransfer Via(double rMeet)
+        {
+            var aTransfer = (r0 + rMeet) / 2;
+            var aTarget = (rp + ra) / 2;
+            var burn1 = Math.Abs(VisViva(mu, r0, aTransfer) - CircularVelocity(mu, r0));
+            var burn2 = Math.Abs(VisViva(mu, rMeet, aTarget) - VisViva(mu, rMeet, aTransfer));
+            return new EllipseTransfer(burn1, burn2, Math.PI * Math.Sqrt(aTransfer * aTransfer * aTransfer / mu), rMeet);
+        }
+
+        var viaApoapsis = Via(ra);
+        var viaPeriapsis = Via(rp);
+        return viaPeriapsis.Total < viaApoapsis.Total ? viaPeriapsis : viaApoapsis;
+    }
+
+    /// <summary>Δv to change inclination by Δi at speed v: 2·v·sin(Δi/2). See docs/MATH.md §14.</summary>
+    public static double PlaneChangeDv(double speed, double deltaInclinationDeg) =>
+        2 * speed * Math.Sin(Math.Abs(deltaInclinationDeg) * Math.PI / 360);
 
     /// <summary>e = (rₐ − rₚ) / (rₐ + rₚ)</summary>
     public static double Eccentricity(double periapsisRadius, double apoapsisRadius) =>

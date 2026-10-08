@@ -101,23 +101,42 @@
 
                 <TextBlock Text="Custom locations" Style="{StaticResource SectionHeader}" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,0,0,6"
-                           Text="Circular orbits such as space stations. They appear in the stop list and on the map; the cost from the body's low orbit is a Hohmann transfer (see the Guide tab, §4)." />
+                           Text="Circular orbits such as space stations. They appear in the stop list and on the map. Around a planet or moon the cost is a Hohmann transfer from its low orbit; around Kerbol it's an interplanetary trip (Math guide §4, §4b)." />
                 <ItemsControl ItemsSource="{Binding SavedLocations}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <DockPanel Margin="0,0,0,6">
-                                <Button DockPanel.Dock="Right" Content="✕" Style="{StaticResource SmallButton}" VerticalAlignment="Top"
-                                        ToolTip="Delete location (stops using it move to the body's low orbit)"
-                                        Command="{Binding DataContext.DeleteLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button Content="✎" Style="{StaticResource SmallButton}" ToolTip="Open in the Locations tab to edit orbit, description and images"
+                                            Command="{Binding DataContext.EditLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Delete location"
+                                            Command="{Binding DataContext.DeleteLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Location.Name}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding Summary}" Style="{StaticResource Note}" />
+                                    <TextBlock Text="{Binding Location.Description}" FontStyle="Italic" TextTrimming="CharacterEllipsis" MaxHeight="30">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Location.Description}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </DockPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <Border BorderThickness="0,1,0,0" BorderBrush="#30808080" Padding="0,8,0,0" Margin="0,4,0,0">
+                    <TextBlock Text="Quick add (circular orbit — use the Locations tab for elliptical orbits, descriptions and images)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                </Border>
                 <Grid Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -153,6 +172,7 @@
                     <Button Content="Load" Command="{Binding LoadCommand}" Margin="0,0,8,0" />
                     <Button Content="Delete" Command="{Binding DeleteCommand}" />
                 </StackPanel>
+                <TextBlock Text="{Binding MissionStatus}" Style="{StaticResource Note}" FontSize="12" Margin="0,6,0,0" Foreground="#FFB74D" />
             </StackPanel>
         </ScrollViewer>
 

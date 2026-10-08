@@ -14,7 +14,7 @@
     { "key": "minmus.lo", "parent": "minmus.intercept", "body": "Minmus", "kind": "LowOrbit", "label": "Low orbit (10 km)", "altitudeKm": 10, "dv": 160 },
     { "key": "minmus.surface", "parent": "minmus.lo", "body": "Minmus", "kind": "Surface", "label": "Surface", "dv": 180 },
 
-    { "key": "kerbin.soi", "parent": "kerbin.lo", "body": "Kerbin", "kind": "Elliptical", "label": "Elliptical orbit to SOI edge", "dv": 950, "aeroUp": true },
+    { "key": "kerbin.soi", "parent": "kerbin.lo", "body": "Kerbin", "kind": "Elliptical", "label": "Escape (elliptical orbit to SOI edge)", "dv": 950, "aeroUp": true },
 
     { "key": "kerbol.intercept", "parent": "kerbin.soi", "body": "Kerbol", "kind": "Intercept", "label": "Intercept", "dv": 6000, "aeroUp": true },
     { "key": "kerbol.lo", "parent": "kerbol.intercept", "body": "Kerbol", "kind": "LowOrbit", "label": "Low orbit (610 km)", "altitudeKm": 610, "dv": 13700, "aeroDown": true },

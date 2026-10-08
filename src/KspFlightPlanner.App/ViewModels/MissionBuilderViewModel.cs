@@ -215,11 +215,13 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private readonly DvMapRepository _maps;
     private readonly MissionRepository _missions;
     private readonly CustomLocationRepository _locations;
+    private readonly PlannerEvents _events;
     private DeltaVMap? _map;
 
     private string _newLocationName = "";
     private CelestialBodyOption? _newLocationBody;
     private string _newLocationAltitudeKm = "150";
+    private string? _missionStatus;
 
     private bool _useAerobraking = true;
     private bool _includePlaneChanges;
@@ -227,17 +229,21 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private SavedMission? _selectedMission;
     private bool _suspend;
 
-    public MissionBuilderViewModel(DvMapRepository maps, MissionRepository missions, CustomLocationRepository locations)
+    public MissionBuilderViewModel(DvMapRepository maps, MissionRepository missions, CustomLocationRepository locations,
+        PlannerEvents events)
     {
         _maps = maps;
         _missions = missions;
         _locations = locations;
+        _events = events;
         _map = maps.GetMap();
 
         foreach (var b in maps.GetCustomLocationBodies()) LocationBodies.Add(b);
         _newLocationBody = LocationBodies.FirstOrDefault(b => b.Name == "Kerbin");
         AddLocationCommand = new RelayCommand(AddLocation, () => NewLocationNode() is not null);
         DeleteLocationCommand = new RelayCommand<CustomLocationRow>(DeleteLocation);
+        EditLocationCommand = new RelayCommand<CustomLocationRow>(row => _events.RequestOpenLocation(row.Location.Id));
+        _events.LocationsChanged += sender => { if (sender != this) OnLocationsChangedElsewhere(); };
         RefreshLocations();
 
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
@@ -270,9 +276,20 @@ public sealed class MissionBuilderViewModel : ObservableObject
     public ObservableCollection<CustomLocationRow> SavedLocations { get; } = [];
 
     public RelayCommand AddLocationCommand { get; }
+    public RelayCommand<CustomLocationRow> EditLocationCommand { get; }
     public RelayCommand<CustomLocationRow> DeleteLocationCommand { get; }
 
-    // ---------------- Custom locations ----------------
+    /// <summary>Asks the user a yes/no question; the view supplies a dialog. Defaults to yes (tests, no UI).</summary>
+    public Func<string, bool> Confirm { get; set; } = _ => true;
+
+    /// <summary>Feedback from loading/saving missions, e.g. a mission that uses a deleted location.</summary>
+    public string? MissionStatus
+    {
+        get => _missionStatus;
+        private set => SetProperty(ref _missionStatus, value);
+    }
+
+    // ---------------- Custom locations (quick add; full editing is on the Locations tab) ----------------
 
     public string NewLocationName
     {
@@ -293,26 +310,22 @@ public sealed class MissionBuilderViewModel : ObservableObject
         set { if (SetProperty(ref _newLocationAltitudeKm, value)) OnPropertyChanged(nameof(NewLocationPreview)); }
     }
 
-    /// <summary>Live Hohmann breakdown for the location being typed, or why it's invalid.</summary>
+    /// <summary>Live breakdown for the location being typed, or why it's invalid.</summary>
     public string NewLocationPreview
     {
         get
         {
-            if (NewLocationBody is not { } b) return "";
             if (!double.TryParse(NewLocationAltitudeKm, NumberStyles.Float, CultureInfo.CurrentCulture, out var km) || km <= 0)
                 return "Enter an altitude in km.";
             try
             {
-                var node = PlaceNew(km);
-                var parent = _map!.ParentOf(node)!;
-                if (parent.Kind != "LowOrbit")
-                    return $"Interplanetary: from {parent.DisplayName}, {node.DvFromParent - node.AerobrakeResidualDv:N0} m/s extra ejection " +
-                           $"+ {node.AerobrakeResidualDv:N0} m/s to circularize = {node.DvFromParent:N0} m/s, transfer ≈ {node.FlightTime}.";
-                var r1 = b.Body.EquatorialRadiusM + parent.AltitudeM!.Value;
-                var h = OrbitMath.Hohmann(b.Body.Mu, r1, b.Body.EquatorialRadiusM + km * 1000);
-                return $"From {parent.Label.ToLowerInvariant()}: {h.Dv1:N0} + {h.Dv2:N0} = {node.DvFromParent:N0} m/s (Hohmann), " +
-                       $"transfer ≈ {node.FlightTime}." +
-                       (b.Body.HasAtmosphere ? $" Re-entry from there needs a {node.AerobrakeResidualDv:N0} m/s deorbit burn." : "");
+                var a = AnalyzeNew(km);
+                return a.IsInterplanetary
+                    ? $"Interplanetary: from {a.AttachedTo.DisplayName}, {a.DepartureDv:N0} m/s extra ejection " +
+                      $"+ {a.ArrivalDv:N0} m/s to circularize = {a.Node.DvFromParent:N0} m/s, transfer ≈ {a.Node.FlightTime}."
+                    : $"From {a.AttachedTo.Label.ToLowerInvariant()}: {a.DepartureDv:N0} + {a.ArrivalDv:N0} = {a.Node.DvFromParent:N0} m/s " +
+                      $"(Hohmann), transfer ≈ {a.Node.FlightTime}." +
+                      (a.Node.AerobrakeUp ? $" Re-entry from there needs a {a.Node.AerobrakeResidualDv:N0} m/s deorbit burn." : "");
             }
             catch (ArgumentException ex)
             {
@@ -326,16 +339,16 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private DvMapNode? NewLocationNode()
     {
         if (!double.TryParse(NewLocationAltitudeKm, NumberStyles.Float, CultureInfo.CurrentCulture, out var km)) return null;
-        try { return PlaceNew(km); }
+        try { return AnalyzeNew(km).Node; }
         catch (ArgumentException) { return null; }
     }
 
-    /// <summary>Places the location being typed exactly as the map will (low orbit, or interplanetary for the star).</summary>
-    private DvMapNode PlaceNew(double km)
+    /// <summary>Analyzes the location being typed exactly as the map will (low orbit, or interplanetary for the star).</summary>
+    private CustomLocationAnalysis AnalyzeNew(double km)
     {
         if (_map is null || NewLocationBody is not { } b) throw new ArgumentException("Pick a body.");
         var bodies = LocationBodies.ToDictionary(o => o.Name, o => o.Body);
-        return KspFlightPlanner.Core.CustomLocations.Place(new CustomLocation(0, Name(), b.Name, km * 1000), _map, bodies);
+        return KspFlightPlanner.Core.CustomLocations.Analyze(CustomLocation.Circular(0, Name(), b.Name, km * 1000), _map, bodies);
     }
 
     private void AddLocation()
@@ -346,21 +359,44 @@ public sealed class MissionBuilderViewModel : ObservableObject
         NewLocationName = "";
         RefreshLocations();
         ReloadMap();
+        _events.RaiseLocationsChanged(this);
     }
 
     private void DeleteLocation(CustomLocationRow row)
     {
-        var key = row.Location.Key;
-        var fallback = _map is not null && _map.TryGet(key, out var node) ? _map.ParentOf(node)?.Key : null;
+        var usedBy = Stops.Count(s => s.NodeKey == row.Location.Key);
+        var message = $"Delete \"{row.Location.Name}\"?" +
+            (usedBy > 0 ? $"\n\nIt is used by {usedBy} stop(s) in the current route; they will move to the location's parent orbit." : "") +
+            "\n\nSaved missions that use it will no longer load.";
+        if (!Confirm(message)) return;
+
         _locations.Delete(row.Location.Id);
-
-        // Stops that used the location move to its low orbit.
-        _suspend = true;
-        foreach (var stop in Stops.Where(s => s.NodeKey == key)) stop.NodeKey = fallback ?? "kerbin.lo";
-        _suspend = false;
-
+        MoveStopsOffMissingLocations();
         RefreshLocations();
         ReloadMap();
+        _events.RaiseLocationsChanged(this);
+    }
+
+    /// <summary>Another screen changed custom locations: refresh the list, the map and any affected stops.</summary>
+    private void OnLocationsChangedElsewhere()
+    {
+        MoveStopsOffMissingLocations();
+        RefreshLocations();
+        ReloadMap();
+    }
+
+    /// <summary>Stops pointing at a deleted custom location move to the location's parent orbit.</summary>
+    private void MoveStopsOffMissingLocations()
+    {
+        if (_map is null) return;
+        var remaining = _locations.GetAll().Select(l => l.Key).ToHashSet();
+        _suspend = true;
+        foreach (var stop in Stops.Where(s => s.NodeKey.StartsWith("custom.") && !remaining.Contains(s.NodeKey)))
+        {
+            var fallback = _map.TryGet(stop.NodeKey, out var node) ? _map.ParentOf(node)?.Key : null;
+            stop.NodeKey = fallback ?? "kerbin.lo";
+        }
+        _suspend = false;
     }
 
     private void RefreshLocations()
@@ -369,10 +405,10 @@ public sealed class MissionBuilderViewModel : ObservableObject
         var map = _maps.GetMap();
         foreach (var location in _locations.GetAll())
         {
-            var altitude = (location.AltitudeM / 1000).ToString("#,0.#", CultureInfo.CurrentCulture) + " km";
+            var altitude = KspFlightPlanner.Core.CustomLocations.AltitudeText(location);
             var summary = map is not null && map.TryGet(location.Key, out var node)
                 ? $"{location.BodyName} · {altitude} · {node.DvFromParent:N0} m/s from {map.ParentOf(node)!.DisplayName}"
-                : $"{location.BodyName} · {altitude} · not placeable (inside the atmosphere or outside the SOI)";
+                : $"{location.BodyName} · {altitude} · not placeable — open it in Locations to fix";
             SavedLocations.Add(new CustomLocationRow(location, summary));
         }
     }
@@ -644,6 +680,7 @@ public sealed class MissionBuilderViewModel : ObservableObject
             Phases.Select(p => p.ToDefinition()).ToList(),
             Legs.Select(l => l.Setting(Phases)).ToList());
         _missions.Add(MissionName.Trim(), definition);
+        MissionStatus = $"Saved \"{MissionName.Trim()}\".";
         MissionName = "";
         RefreshMissions();
     }
@@ -652,7 +689,13 @@ public sealed class MissionBuilderViewModel : ObservableObject
     {
         if (_map is null || SelectedMission is not { } mission) return;
         var d = mission.Definition;
-        if (d.Stops.Any(s => !_map.TryGet(s.NodeKey, out _))) return;
+        var missing = d.Stops.Count(s => !_map.TryGet(s.NodeKey, out _));
+        if (missing > 0)
+        {
+            MissionStatus = $"Can't load \"{mission.Name}\": {missing} of its stops use a custom location that was deleted.";
+            return;
+        }
+        MissionStatus = null;
 
         _suspend = true;
         Stops.Clear();

@@ -93,14 +93,26 @@ internal static class Migrations
             updated_utc      TEXT    NOT NULL
         );
 
-        -- User-defined places: circular orbits such as a space station at 150 km.
+        -- User-defined places: orbits such as a space station. Only independent values are stored;
+        -- semi-major axis, eccentricity, period, speeds and Δv are derived (CustomLocations.Analyze).
         CREATE TABLE custom_locations (
-            id               INTEGER PRIMARY KEY,
-            name             TEXT    NOT NULL,
-            body_name        TEXT    NOT NULL,
-            altitude_m       REAL    NOT NULL,
-            note             TEXT,
-            created_utc      TEXT    NOT NULL
+            id                    INTEGER PRIMARY KEY,
+            name                  TEXT    NOT NULL,
+            body_name             TEXT    NOT NULL,
+            periapsis_altitude_m  REAL    NOT NULL,
+            apoapsis_altitude_m   REAL    NOT NULL,   -- equal to periapsis for a circular orbit
+            inclination_deg       REAL    NOT NULL DEFAULT 0,
+            description           TEXT,
+            created_utc           TEXT    NOT NULL,
+            updated_utc           TEXT
+        );
+
+        CREATE TABLE custom_location_images (
+            id           INTEGER PRIMARY KEY,
+            location_id  INTEGER NOT NULL REFERENCES custom_locations(id) ON DELETE CASCADE,
+            file_name    TEXT    NOT NULL,
+            image        BLOB    NOT NULL,
+            sort_order   INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE saved_missions (

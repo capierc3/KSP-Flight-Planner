@@ -5,9 +5,12 @@
         Title="KSP Flight Planner"
         Width="1480" Height="920" MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen">
-    <TabControl Margin="8,4,8,8">
+    <TabControl Margin="8,4,8,8" SelectedIndex="{Binding SelectedTab}">
         <TabItem Header="Mission builder">
             <views:MissionBuilderView DataContext="{Binding Mission}" />
+        </TabItem>
+        <TabItem Header="Locations">
+            <views:LocationsView DataContext="{Binding Locations}" />
         </TabItem>
         <TabItem Header="Transfer planner">
             <views:TransferPlannerView DataContext="{Binding Transfer}" />

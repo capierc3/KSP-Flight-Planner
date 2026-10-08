@@ -7,6 +7,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   toggle aerobraking and plane changes per leg, edit any map value (e.g. Mun landing 580 → 700; stored as a
   user override), add custom locations such as a space station at any altitude (Hohmann transfer from the
   body's low orbit), and save missions.
+- **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
+  derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
+  and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
 - **Math guide** — every formula the app uses with sources and worked examples, in [docs/MATH.md](docs/MATH.md)
   and on the in-app Guide tab (same file, embedded at build time).
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
@@ -46,11 +49,13 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
   modded systems currently have physical data only (no orbits, so no transfer planning).
 - `dv_map_nodes` — the Δv map as a tree rooted at Kerbin's surface (seeded from `Seed/dvmap.json`).
 - `dv_map_overrides` — user edits to map values, keyed by node key.
-- `custom_locations` — user-defined circular orbits (attached to the map under the body's low orbit).
+- `custom_locations`, `custom_location_images` — user-defined orbits (periapsis, apoapsis, inclination,
+  description) and their images (stored as BLOBs).
 - `saved_constellations`, `saved_missions` — user data.
-- **Pre-release:** the schema is a single v1 script that is still edited in place. After changing it,
-  delete the database file and it is rebuilt on next launch. Once user data must be preserved, freeze
-  shipped scripts and append new ones to `Migrations.Scripts` instead.
+- **Pre-release:** the schema is a single v1 script that is still edited in place. When the schema or seed
+  data changes, the database is rebuilt automatically and user tables are copied across
+  (`PlannerDatabase.UserTables`, with mappings for renamed columns). Before release, switch to appended
+  migrations in `Migrations.Scripts`.
 
 ## Data sources
 

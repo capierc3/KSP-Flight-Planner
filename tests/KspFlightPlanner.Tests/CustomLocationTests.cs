@@ -145,7 +145,7 @@ public sealed class CustomLocationTests : IDisposable
         var map = new DvMapRepository(_db).GetMap()!;
         var bodies = new BodyRepository(_db).GetBodies(new BodyRepository(_db).GetSystems()[0].Id).ToDictionary(b => b.Name);
         var kerbol = bodies["Kerbol"];
-        var atDuna = new CustomLocation(1, "Duna-ish", "Kerbol", bodies["Duna"].Orbit!.SemiMajorAxisM - kerbol.EquatorialRadiusM);
+        var atDuna = CustomLocation.Circular(1, "Duna-ish", "Kerbol", bodies["Duna"].Orbit!.SemiMajorAxisM - kerbol.EquatorialRadiusM);
 
         var node = CustomLocations.Place(atDuna, map, bodies);
         var extraEjection = node.DvFromParent - node.AerobrakeResidualDv;
@@ -179,6 +179,23 @@ public sealed class CustomLocationTests : IDisposable
 
         var jool = map.ChildrenOf(map["jool.elliptical"]).OrderBy(n => n.OrbitRadiusM).Select(n => n.Key);
         Assert.Equal(["jool.lo", "laythe.intercept", "vall.intercept", "tylo.intercept", "bop.intercept", "pol.intercept"], jool);
+    }
+
+    [Fact]
+    public void Editing_a_location_keeps_its_key_and_clears_manual_edits()
+    {
+        var locations = new CustomLocationRepository(_db);
+        var maps = new DvMapRepository(_db);
+        var id = locations.Add("Eye of Kerbin", "Kerbol", 10_000_000_000);
+        maps.SetOverride($"custom.{id}", 900);
+
+        locations.Update(CustomLocation.Circular(id, "Station Alpha", "Kerbin", 500_000, "Crew hub"));
+
+        var node = maps.GetMap()![$"custom.{id}"];
+        Assert.Equal("Kerbin — Station Alpha (500 km)", node.DisplayName);
+        Assert.Equal(480, node.DvFromParent); // recomputed Hohmann, the 900 edit is gone
+        Assert.False(node.IsOverridden);
+        Assert.Equal("Crew hub", Assert.Single(locations.GetAll()).Description);
     }
 
     [Fact]

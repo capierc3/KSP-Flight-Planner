@@ -17,11 +17,15 @@ public partial class App : Application
             database.Initialize();
 
             var bodies = new BodyRepository(database);
+            var maps = new DvMapRepository(database);
+            var locations = new CustomLocationRepository(database);
+            var events = new PlannerEvents();
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(new DvMapRepository(database), new MissionRepository(database),
-                    new CustomLocationRepository(database)),
+                new MissionBuilderViewModel(maps, new MissionRepository(database), locations, events),
+                new LocationsViewModel(bodies, maps, locations, events),
                 new TransferPlannerViewModel(bodies),
-                new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)));
+                new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
+                events);
             new MainWindow(viewModel).Show();
         }
         catch (Exception ex)
