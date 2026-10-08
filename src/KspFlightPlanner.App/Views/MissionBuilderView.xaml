@@ -20,18 +20,18 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="8">
+    <Grid Margin="28,20,28,24">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="320" />
-            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="310" />
+            <ColumnDefinition Width="36" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="16" />
-            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="36" />
+            <ColumnDefinition Width="240" />
         </Grid.ColumnDefinitions>
 
         <!-- Stops + options + saved missions -->
         <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,8,0">
+            <StackPanel Margin="0,0,18,0">
                 <DockPanel Margin="0,0,0,6">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
@@ -43,7 +43,7 @@
                 <ItemsControl ItemsSource="{Binding Stops}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="0,0,0,10">
+                            <Grid Margin="0,0,0,18">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="30" />
                                     <ColumnDefinition Width="*" />
@@ -99,68 +99,6 @@
                 <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
                 <CheckBox Content="Include worst-case plane changes" IsChecked="{Binding IncludePlaneChanges}" Margin="0,6,0,0" />
 
-                <TextBlock Text="Custom locations" Style="{StaticResource SectionHeader}" />
-                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,6"
-                           Text="Circular orbits such as space stations. They appear in the stop list and on the map. Around a planet or moon the cost is a Hohmann transfer from its low orbit; around Kerbol it's an interplanetary trip (Math guide §4, §4b)." />
-                <ItemsControl ItemsSource="{Binding SavedLocations}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <DockPanel Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                    <Button Content="✎" Style="{StaticResource SmallButton}" ToolTip="Open in the Locations tab to edit orbit, description and images"
-                                            Command="{Binding DataContext.EditLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}" />
-                                    <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Delete location"
-                                            Command="{Binding DataContext.DeleteLocationCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}" />
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Location.Name}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource Note}" />
-                                    <TextBlock Text="{Binding Location.Description}" FontStyle="Italic" TextTrimming="CharacterEllipsis" MaxHeight="30">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Location.Description}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                            </DockPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <Border BorderThickness="0,1,0,0" BorderBrush="#30808080" Padding="0,8,0,0" Margin="0,4,0,0">
-                    <TextBlock Text="Quick add (circular orbit — use the Locations tab for elliptical orbits, descriptions and images)" FontWeight="SemiBold" TextWrapping="Wrap" />
-                </Border>
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="70" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="Name" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding NewLocationName, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="Body" Style="{StaticResource Label}" />
-                        <ComboBox ItemsSource="{Binding LocationBodies}" SelectedItem="{Binding NewLocationBody}" DisplayMemberPath="Name" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="4">
-                        <TextBlock Text="Alt. (km)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding NewLocationAltitudeKm, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                </Grid>
-                <TextBlock Text="{Binding NewLocationPreview}" Style="{StaticResource Note}" Margin="0,6,0,6" />
-                <Button Content="＋ Add location" Command="{Binding AddLocationCommand}" HorizontalAlignment="Left" />
-
                 <TextBlock Text="Saved missions" Style="{StaticResource SectionHeader}" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Save" Command="{Binding SaveCommand}" Margin="8,0,0,0" />
@@ -180,14 +118,14 @@
         <TabControl Grid.Column="2">
             <TabItem Header="Legs &amp; phases">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,8,8,0" Grid.IsSharedSizeScope="True">
+                    <StackPanel Margin="0,14,18,0" Grid.IsSharedSizeScope="True">
                         <TextBlock Text="{Binding RouteSummary}" Style="{StaticResource Note}" Margin="0,0,0,8" />
 
                         <!-- Column headers -->
                         <Grid Margin="0,0,0,4" Opacity="0.6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="28" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" MinWidth="190" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
                                 <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
@@ -196,10 +134,10 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="#" />
                             <TextBlock Grid.Column="1" Text="Leg" />
-                            <TextBlock Grid.Column="2" Text="Map Δv (editable)" Margin="12,0" />
-                            <TextBlock Grid.Column="3" Text="Plane chg." Margin="12,0" />
-                            <TextBlock Grid.Column="4" Text="Aerobrake" Margin="12,0" />
-                            <TextBlock Grid.Column="5" Text="Δv needed" Margin="12,0" />
+                            <TextBlock Grid.Column="2" Text="Map Δv (editable)" Margin="8,0" />
+                            <TextBlock Grid.Column="3" Text="Plane chg." Margin="8,0" />
+                            <TextBlock Grid.Column="4" Text="Aerobrake" Margin="8,0" />
+                            <TextBlock Grid.Column="5" Text="Δv needed" Margin="8,0" />
                             <TextBlock Grid.Column="6" Text="Phase" />
                         </Grid>
 
@@ -209,11 +147,11 @@
                                     <StackPanel>
                                         <TextBlock Text="{Binding SectionHeader}" FontWeight="SemiBold" Opacity="0.85" Margin="0,10,0,4" TextWrapping="Wrap"
                                                    Visibility="{Binding HasSectionHeader, Converter={StaticResource BoolToVisibility}}" />
-                                        <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,5">
+                                        <Border BorderThickness="0,0,0,1" BorderBrush="#30808080" Padding="0,10">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="28" />
-                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" MinWidth="190" />
                                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Dv" />
                                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Plane" />
                                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Aero" />
@@ -228,16 +166,16 @@
                                                     </TextBlock>
                                                     <TextBlock Text="{Binding Notes}" Style="{StaticResource Note}" />
                                                 </StackPanel>
-                                                <TextBox x:Name="DvBox" Grid.Column="2" Text="{Binding DvText, Mode=TwoWay}" Width="80" Margin="12,0"
+                                                <TextBox x:Name="DvBox" Grid.Column="2" Text="{Binding DvText, Mode=TwoWay}" Width="72" Margin="8,0"
                                                          TextAlignment="Right" VerticalAlignment="Center" ToolTip="{Binding DvToolTip}"
                                                          FontFamily="Cascadia Mono, Consolas" />
                                                 <CheckBox Grid.Column="3" Content="{Binding PlaneChangeText}" IsChecked="{Binding IncludePlaneChange}"
                                                           Visibility="{Binding HasPlaneChange, Converter={StaticResource BoolToVisibility}}"
-                                                          Margin="12,0" VerticalAlignment="Center" ToolTip="Add the map's worst-case plane change for this leg" />
+                                                          Margin="8,0" VerticalAlignment="Center" ToolTip="Add the map's worst-case plane change for this leg" />
                                                 <CheckBox Grid.Column="4" IsChecked="{Binding UseAerobrake}"
                                                           Visibility="{Binding CanAerobrake, Converter={StaticResource BoolToVisibility}}"
-                                                          Margin="12,0" VerticalAlignment="Center" ToolTip="Use the atmosphere instead of a burn" />
-                                                <TextBlock Grid.Column="5" Text="{Binding EffectiveText}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="12,0" />
+                                                          Margin="8,0" VerticalAlignment="Center" ToolTip="Use the atmosphere instead of a burn" />
+                                                <TextBlock Grid.Column="5" Text="{Binding EffectiveText}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="8,0" />
                                                 <ComboBox Grid.Column="6" VerticalAlignment="Center"
                                                           ItemsSource="{Binding DataContext.Phases, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                           SelectedItem="{Binding Phase}" ItemTemplate="{StaticResource PhaseChoice}" />
@@ -285,7 +223,7 @@
                         <ItemsControl ItemsSource="{Binding Phases}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="0,3">
+                                    <Grid Margin="0,6">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="22" />
                                             <ColumnDefinition Width="*" />

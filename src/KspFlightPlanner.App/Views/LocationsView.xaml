@@ -13,7 +13,7 @@
 
         <!-- Label/value pairs; values are selectable so they can be copied. -->
         <DataTemplate x:Key="FactRow" DataType="{x:Type vm:Fact}">
-            <Grid Margin="0,2">
+            <Grid Margin="0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" SharedSizeGroup="FactLabel" />
                     <ColumnDefinition Width="*" />
@@ -26,7 +26,7 @@
 
         <!-- Read-only body -->
         <DataTemplate DataType="{x:Type vm:BodyDetailViewModel}">
-            <StackPanel Grid.IsSharedSizeScope="True" Margin="0,0,16,16">
+            <StackPanel Grid.IsSharedSizeScope="True" Margin="0,0,24,24">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse Width="34" Height="34" Fill="{Binding Color}" Margin="0,0,12,0" />
                     <StackPanel>
@@ -97,7 +97,7 @@
 
         <!-- Editable custom location -->
         <DataTemplate DataType="{x:Type vm:CustomLocationEditorViewModel}">
-            <Grid Margin="0,0,16,16">
+            <Grid Margin="0,0,24,24">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -196,10 +196,10 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="8">
+    <Grid Margin="28,20,28,24">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="290" />
-            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="36" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 

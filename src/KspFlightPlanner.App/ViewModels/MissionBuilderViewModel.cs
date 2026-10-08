@@ -207,9 +207,6 @@ public sealed class LegRowViewModel : ObservableObject
     }
 }
 
-/// <summary>A saved custom location as listed in the builder.</summary>
-public sealed record CustomLocationRow(CustomLocation Location, string Summary);
-
 public sealed class MissionBuilderViewModel : ObservableObject
 {
     private readonly DvMapRepository _maps;
@@ -218,9 +215,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
     private readonly PlannerEvents _events;
     private DeltaVMap? _map;
 
-    private string _newLocationName = "";
-    private CelestialBodyOption? _newLocationBody;
-    private string _newLocationAltitudeKm = "150";
     private string? _missionStatus;
 
     private bool _useAerobraking = true;
@@ -238,13 +232,8 @@ public sealed class MissionBuilderViewModel : ObservableObject
         _events = events;
         _map = maps.GetMap();
 
-        foreach (var b in maps.GetCustomLocationBodies()) LocationBodies.Add(b);
-        _newLocationBody = LocationBodies.FirstOrDefault(b => b.Name == "Kerbin");
-        AddLocationCommand = new RelayCommand(AddLocation, () => NewLocationNode() is not null);
-        DeleteLocationCommand = new RelayCommand<CustomLocationRow>(DeleteLocation);
-        EditLocationCommand = new RelayCommand<CustomLocationRow>(row => _events.RequestOpenLocation(row.Location.Id));
-        _events.LocationsChanged += sender => { if (sender != this) OnLocationsChangedElsewhere(); };
-        RefreshLocations();
+        // Custom locations are managed on the Locations tab; keep the stop pickers and map in step with it.
+        _events.LocationsChanged += _ => OnLocationsChanged();
 
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
         MoveStopUpCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, -1), s => Stops.IndexOf(s) > 0);
@@ -272,15 +261,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
     public ObservableCollection<PhaseViewModel> Phases { get; } = [];
     public ObservableCollection<LegRowViewModel> Legs { get; } = [];
     public ObservableCollection<SavedMission> SavedMissions { get; } = [];
-    public ObservableCollection<CelestialBodyOption> LocationBodies { get; } = [];
-    public ObservableCollection<CustomLocationRow> SavedLocations { get; } = [];
-
-    public RelayCommand AddLocationCommand { get; }
-    public RelayCommand<CustomLocationRow> EditLocationCommand { get; }
-    public RelayCommand<CustomLocationRow> DeleteLocationCommand { get; }
-
-    /// <summary>Asks the user a yes/no question; the view supplies a dialog. Defaults to yes (tests, no UI).</summary>
-    public Func<string, bool> Confirm { get; set; } = _ => true;
 
     /// <summary>Feedback from loading/saving missions, e.g. a mission that uses a deleted location.</summary>
     public string? MissionStatus
@@ -289,99 +269,12 @@ public sealed class MissionBuilderViewModel : ObservableObject
         private set => SetProperty(ref _missionStatus, value);
     }
 
-    // ---------------- Custom locations (quick add; full editing is on the Locations tab) ----------------
+    // ---------------- Custom locations (managed on the Locations tab) ----------------
 
-    public string NewLocationName
-    {
-        get => _newLocationName;
-        set { if (SetProperty(ref _newLocationName, value)) OnPropertyChanged(nameof(NewLocationPreview)); }
-    }
-
-    public CelestialBodyOption? NewLocationBody
-    {
-        get => _newLocationBody;
-        set { if (SetProperty(ref _newLocationBody, value)) OnPropertyChanged(nameof(NewLocationPreview)); }
-    }
-
-    /// <summary>Circular orbit altitude in km.</summary>
-    public string NewLocationAltitudeKm
-    {
-        get => _newLocationAltitudeKm;
-        set { if (SetProperty(ref _newLocationAltitudeKm, value)) OnPropertyChanged(nameof(NewLocationPreview)); }
-    }
-
-    /// <summary>Live breakdown for the location being typed, or why it's invalid.</summary>
-    public string NewLocationPreview
-    {
-        get
-        {
-            if (!double.TryParse(NewLocationAltitudeKm, NumberStyles.Float, CultureInfo.CurrentCulture, out var km) || km <= 0)
-                return "Enter an altitude in km.";
-            try
-            {
-                var a = AnalyzeNew(km);
-                return a.IsInterplanetary
-                    ? $"Interplanetary: from {a.AttachedTo.DisplayName}, {a.DepartureDv:N0} m/s extra ejection " +
-                      $"+ {a.ArrivalDv:N0} m/s to circularize = {a.Node.DvFromParent:N0} m/s, transfer ≈ {a.Node.FlightTime}."
-                    : $"From {a.AttachedTo.Label.ToLowerInvariant()}: {a.DepartureDv:N0} + {a.ArrivalDv:N0} = {a.Node.DvFromParent:N0} m/s " +
-                      $"(Hohmann), transfer ≈ {a.Node.FlightTime}." +
-                      (a.Node.AerobrakeUp ? $" Re-entry from there needs a {a.Node.AerobrakeResidualDv:N0} m/s deorbit burn." : "");
-            }
-            catch (ArgumentException ex)
-            {
-                return ex.Message;
-            }
-        }
-    }
-
-    private string Name() => string.IsNullOrWhiteSpace(NewLocationName) ? "New location" : NewLocationName.Trim();
-
-    private DvMapNode? NewLocationNode()
-    {
-        if (!double.TryParse(NewLocationAltitudeKm, NumberStyles.Float, CultureInfo.CurrentCulture, out var km)) return null;
-        try { return AnalyzeNew(km).Node; }
-        catch (ArgumentException) { return null; }
-    }
-
-    /// <summary>Analyzes the location being typed exactly as the map will (low orbit, or interplanetary for the star).</summary>
-    private CustomLocationAnalysis AnalyzeNew(double km)
-    {
-        if (_map is null || NewLocationBody is not { } b) throw new ArgumentException("Pick a body.");
-        var bodies = LocationBodies.ToDictionary(o => o.Name, o => o.Body);
-        return KspFlightPlanner.Core.CustomLocations.Analyze(CustomLocation.Circular(0, Name(), b.Name, km * 1000), _map, bodies);
-    }
-
-    private void AddLocation()
-    {
-        if (NewLocationBody is not { } b || NewLocationNode() is null) return;
-        var km = double.Parse(NewLocationAltitudeKm, NumberStyles.Float, CultureInfo.CurrentCulture);
-        _locations.Add(Name(), b.Name, km * 1000);
-        NewLocationName = "";
-        RefreshLocations();
-        ReloadMap();
-        _events.RaiseLocationsChanged(this);
-    }
-
-    private void DeleteLocation(CustomLocationRow row)
-    {
-        var usedBy = Stops.Count(s => s.NodeKey == row.Location.Key);
-        var message = $"Delete \"{row.Location.Name}\"?" +
-            (usedBy > 0 ? $"\n\nIt is used by {usedBy} stop(s) in the current route; they will move to the location's parent orbit." : "") +
-            "\n\nSaved missions that use it will no longer load.";
-        if (!Confirm(message)) return;
-
-        _locations.Delete(row.Location.Id);
-        MoveStopsOffMissingLocations();
-        RefreshLocations();
-        ReloadMap();
-        _events.RaiseLocationsChanged(this);
-    }
-
-    /// <summary>Another screen changed custom locations: refresh the list, the map and any affected stops.</summary>
-    private void OnLocationsChangedElsewhere()
+    /// <summary>Custom locations changed: refresh the map and stop pickers, and move stops off deleted locations.</summary>
+    private void OnLocationsChanged()
     {
         MoveStopsOffMissingLocations();
-        RefreshLocations();
         ReloadMap();
     }
 
@@ -397,20 +290,6 @@ public sealed class MissionBuilderViewModel : ObservableObject
             stop.NodeKey = fallback ?? "kerbin.lo";
         }
         _suspend = false;
-    }
-
-    private void RefreshLocations()
-    {
-        SavedLocations.Clear();
-        var map = _maps.GetMap();
-        foreach (var location in _locations.GetAll())
-        {
-            var altitude = KspFlightPlanner.Core.CustomLocations.AltitudeText(location);
-            var summary = map is not null && map.TryGet(location.Key, out var node)
-                ? $"{location.BodyName} · {altitude} · {node.DvFromParent:N0} m/s from {map.ParentOf(node)!.DisplayName}"
-                : $"{location.BodyName} · {altitude} · not placeable — open it in Locations to fix";
-            SavedLocations.Add(new CustomLocationRow(location, summary));
-        }
     }
 
     /// <summary>Keeps the stop-picker list in step with the map without clearing it (clearing would blank the pickers).</summary>

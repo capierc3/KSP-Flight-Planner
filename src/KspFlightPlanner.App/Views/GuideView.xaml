@@ -1,7 +1,7 @@
 <UserControl x:Class="KspFlightPlanner.App.Views.GuideView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <DockPanel Margin="8">
+    <DockPanel Margin="16,12,16,16">
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" FontSize="12" Margin="24,0,0,4"
                    Text="Every formula the app uses, with sources and worked examples. Ctrl+F to search. Same content as docs/MATH.md in the repository." />
         <FlowDocumentScrollViewer x:Name="Viewer" VerticalScrollBarVisibility="Auto" IsToolBarVisible="False" />
