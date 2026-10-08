@@ -83,6 +83,39 @@ public sealed class SaveSync : ObservableObject, IDisposable
     /// <summary>The game time and (in flight) orbits come from the running game rather than the save file.</summary>
     public bool IsLive => Live is not null;
 
+    /// <summary>Game time now: the live game's while connected, else when KSP last saved.</summary>
+    public double? Now => _link.Game?.Ut ?? Save?.Ut;
+
+    /// <summary>The vessel being flown in KSP (with its save id when it's in the save), or null when not flying one.</summary>
+    public FlightCraft? ActiveCraft =>
+        _link.Game?.Active is { } active ? new FlightCraft(active.Name, SaveIdOf(active)) : null;
+
+    /// <summary>The vessel targeted in KSP, or null.</summary>
+    public FlightCraft? TargetCraft =>
+        _link.Game?.Target is { } target ? new FlightCraft(target.Name, SaveIdOf(target)) : null;
+
+    /// <summary>
+    /// A craft's current orbit: live while connected and flying (from the save otherwise), found by save id, or by name
+    /// for a craft not in the save yet. Null if it isn't in orbit or can't be found.
+    /// </summary>
+    public SavedOrbit? OrbitOf(FlightCraft craft)
+    {
+        SavedOrbit? orbit = null;
+        if (craft.SaveVesselId is { } id) orbit = Save?.Vessels.FirstOrDefault(v => v.Id == id)?.Orbit;
+        else if (_link.Game?.Vessels is { } vessels) orbit = vessels.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true)?.Orbit;
+        return orbit is { IsClosed: true } ? orbit : null;
+    }
+
+    /// <summary>The save vessel a live vessel was matched to, or null when it's not in the save.</summary>
+    private string? SaveIdOf(LiveVessel vessel)
+    {
+        if (Live is not { } live) return null;
+        if (live.SaveIds.TryGetValue(vessel, out var id)) return id;
+        // Not the merge's own object (from an earlier poll): fall back to a unique name.
+        var byName = live.SaveIds.Where(p => p.Key.Name == vessel.Name && p.Key.Type == vessel.Type).Select(p => p.Value).ToList();
+        return byName.Count == 1 ? byName[0] : null;
+    }
+
     /// <summary>Saved ship designs (.craft) in the save's Ships/VAB and Ships/SPH folders, newest first.</summary>
     public IReadOnlyList<CraftFileInfo> Crafts { get => _crafts; private set => SetProperty(ref _crafts, value); }
 

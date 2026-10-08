@@ -9,6 +9,10 @@ public sealed class PlannerEvents
     /// <summary>A screen asked to show a custom location in the Locations tab.</summary>
     public event Action<long>? OpenLocationRequested;
 
+    /// <summary>A planning tab handed a plan to the Flight tab; the argument is the new flight's id.</summary>
+    public event Action<long>? OpenFlightRequested;
+
     public void RaiseLocationsChanged(object sender) => LocationsChanged?.Invoke(sender);
+    public void RequestOpenFlight(long flightId) => OpenFlightRequested?.Invoke(flightId);
     public void RequestOpenLocation(long locationId) => OpenLocationRequested?.Invoke(locationId);
 }

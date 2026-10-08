@@ -1,4 +1,5 @@
 using System.Globalization;
+using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Core.Ksp;
 
@@ -27,6 +28,13 @@ public sealed record SavedOrbit(
             return name == "Sun" ? "Kerbol" : name;
         }
     }
+
+    /// <summary>The same orbit as the planner's elements (epoch = EPH).</summary>
+    public OrbitalElements ToElements() =>
+        new(SemiMajorAxisM, Eccentricity, InclinationDeg, LanDeg, ArgumentOfPeriapsisDeg, MeanAnomalyRad, EpochUt);
+
+    /// <summary>A closed orbit the planner can fly from or to (escaping and NaN orbits aren't).</summary>
+    public bool IsClosed => double.IsFinite(SemiMajorAxisM) && SemiMajorAxisM > 0 && Eccentricity is >= 0 and < 1;
 
     /// <summary>KSP's flightGlobalsIndex for the stock system (the REF value).</summary>
     public static readonly string[] StockBodyOrder =

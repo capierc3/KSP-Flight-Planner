@@ -12,12 +12,18 @@ public sealed record LiveVessel(string Name, string Type, string Situation, Save
     public bool IsOrbiting => Situation == "ORBITING";
 }
 
+/// <summary>A maneuver node on the vessel being flown.</summary>
+public sealed record LiveNode(double Ut, double Prograde, double Normal, double Radial);
+
 /// <summary>What the running game reported at one moment.</summary>
 /// <param name="Ut">Game time, in seconds since Year 1, Day 1.</param>
 /// <param name="Vessels">Every vessel with its current orbit; null outside the flight scene, where kRPC can't list them.</param>
 /// <param name="TargetBody">The planet or moon set as target, if the target is a body.</param>
 public sealed record LiveGame(double Ut, IReadOnlyList<LiveVessel>? Vessels, string? TargetBody = null)
 {
+    /// <summary>Maneuver nodes on the vessel being flown (empty outside flight).</summary>
+    public IReadOnlyList<LiveNode> ActiveNodes { get; init; } = [];
+
     public LiveVessel? Active => Vessels?.FirstOrDefault(v => v.IsActive);
     public LiveVessel? Target => Vessels?.FirstOrDefault(v => v.IsTarget);
 }

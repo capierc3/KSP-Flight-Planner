@@ -626,7 +626,7 @@ normal   = (r × v) / |r × v|          "up" out of the orbit plane (purple tria
 radial   = prograde × normal          in the plane, at right angles to prograde, pointing away from the body (cyan)
 ```
 
-Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
+Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. On the Flight tab, **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
 
 - Code: `NodeBurn.From`; tested in `RendezvousTests`
 
@@ -665,6 +665,58 @@ Worked examples — from 80 km circular to a 30 km periapsis: √(3.5316×10¹²
 
 - Code: `Rendezvous.Deorbit`; tested in `RendezvousTests`
 - Source: vis-viva (§3)
+
+## 18. Flying a plan: how far off it you are
+
+The Flight tab keeps the orbit a plan starts from and its burns. Where the plan has the craft at time *t* is that start orbit with each of the craft's own burns before *t* applied in turn (§17d, the same step the planner uses). Satellites' burns are left out, because they don't move the carrier. The drift is the straight-line distance between where the plan has the craft and where its real orbit (live from the game, §8d) has it:
+
+```
+planned(t) = start orbit, then each own burn with time ≤ t applied (Rendezvous.OrbitAfter)
+drift(t)   = | r_real(t) − r_planned(t) |          (positions from Kepler's equation, §10)
+Re-plan lights up when drift > 1 km
+```
+
+A burn flown a little early, late, long or short shows up as a drift that grows with time. Being late along the same orbit shows up straight away, as distance along the track.
+
+Worked example: a craft on a 100 km circular Kerbin orbit (r = 700,000 m) that is 1 s behind where the plan has it:
+
+1. v = √(3.5317×10¹² / 700,000) = **2,246.2 m/s**, so n = v / r = 0.0032088 rad/s
+2. drift = 2r·sin(n·1 s / 2) = 2 × 700,000 × sin(0.0016044) = **2,246.2 m**: over 1 km, so Re-plan lights up
+
+- Code: `Flight.PlannedOrbitAt`, `Flight.DriftM`, `FlightViewModel.DriftThresholdM`; tested in `FlightTests`
+
+### 18a. Re-planning a rendezvous
+
+Re-plan runs the whole Rendezvous planner (§17) again with the craft's real orbit as the start, from a few minutes after now (the lead time). It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made on the Rendezvous tab can change. That's intended: the old choice was for an orbit you're no longer on.
+
+- Code: `FlightViewModel.ReplanRendezvousAsync`
+
+### 18b. Deploying a constellation: burn times and node values
+
+Resonant deployment (§6) needs the carrier to pass the shared apsis once per satellite. The *shared apsis* is the point at the deployment radius r: the carrier's periapsis for a resonant orbit, its apoapsis for a dive orbit. The Flight tab times every burn from the carrier's real orbit:
+
+```
+1. Enter the carrier orbit: if the craft isn't on it yet (period and shared-apsis radius both within 0.5%), burn at the
+   craft's apsis nearest r (any time, if its orbit is circular):
+       a′ = (|r_burn| + r_far) / 2      r_far = 2·a_carrier − r, the carrier's other apsis
+       v′ = √(μ·(2/|r_burn| − 1/a′))    horizontal, in the orbit's plane
+       Δv = v′·ĥ − v                      split into node axes (§17d)
+2. Release k (k = 1…n) at the k-th pass of the shared apsis after that:
+       t_k = t_first + (k − 1)·T_carrier
+       v_circ = √(μ / |r(t_k)|)          horizontal
+       Δv_k = v_circ·ĥ − v(t_k)          the satellite's node (it's flown by the satellite, not the carrier)
+```
+
+Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative). If the craft's apsis misses r by more than 1 km, the plan warns you: the satellites will end up at that apsis instead, and their spacing will be off.
+
+Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r = 3,463,334.1 m, μ = 3.5317×10¹² m³/s²), from a circular orbit at that altitude:
+
+1. Satellite period 21,549.1 s; carrier period × 4/3 = **28,732.1 s**, so a = 4,195,530.5 m and the far apsis is at **4,327.7 km**
+2. Enter: v = √(μ/r) = 1,009.82 m/s → v′ = √(μ·(2/r − 1/a)) = 1,094.40 m/s, so **+84.57 m/s prograde**
+3. Satellite k circularizes at the periapsis one, two and three carrier laps later (+28,732.1 s each): 1,009.82 − 1,094.40 = **−84.57 m/s (retrograde)**
+
+- Code: `ResonantDeployment.Plan`; tested in `FlightTests`
+- Source: vis-viva (§3); §6 for the carrier orbit
 
 ## Sources
 

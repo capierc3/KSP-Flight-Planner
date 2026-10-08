@@ -242,7 +242,10 @@ public sealed class KspLink : ObservableObject, IDisposable
                 var vessels = scene == GameScene.Flight && readVessels ? ReadVessels(space) : null;
                 string? targetBody = null;
                 if (vessels is not null && space.TargetBody is { } body) targetBody = BodyName(body.Name);
-                return (scene, new LiveGame(space.UT, vessels, targetBody));
+                var nodes = scene == GameScene.Flight && TryGet(() => space.ActiveVessel) is { } active
+                    ? active.Control.Nodes.Select(n => new LiveNode(n.UT, n.Prograde, n.Normal, n.Radial)).ToList()
+                    : [];
+                return (scene, new LiveGame(space.UT, vessels, targetBody) { ActiveNodes = nodes });
             });
 
             // Between full reads keep the vessels from the last one, so the game always has some while in flight.

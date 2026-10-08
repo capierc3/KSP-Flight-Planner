@@ -1,3 +1,4 @@
+using KspFlightPlanner.Core;
 using KspFlightPlanner.Core.Models;
 using KspFlightPlanner.Data;
 
@@ -136,6 +137,44 @@ public sealed class DatabaseTests : IDisposable
 
         Assert.True(new PartCatalogRepository(_db).Load().IsEmpty); // reads flow_mode again
         Assert.Equal("Protogen", new SettingsRepository(_db).Load().KspSaveName);
+    }
+
+    [Fact]
+    public void Flights_round_trip_and_survive_a_rebuild()
+    {
+        var flights = new FlightRepository(_db);
+        var flight = new Flight
+        {
+            Name = "Repair KerbLink",
+            Kind = FlightKind.Rendezvous,
+            BodyName = "Kerbin",
+            Craft = new FlightCraft("Fixer 1", "abc123"),
+            StartOrbit = new OrbitalElements(700_000, 0.001, 0.5, 30, 40, 1.2, 816_000),
+            Burns = [new FlightBurn("Transfer burn", 817_000, new NodeBurn(120.5, -3.25, 1.5)), new FlightBurn("Circularize satellite 1", 818_000, new NodeBurn(-84.6, 0, 0)) { ByReleasedCraft = true, Note = "Release first" }],
+            Targets = [new FlightTarget("KerbLink Mk2 A", "def456", new OrbitalElements(3_470_000, 0.0027, 0.56, 281.7, 160.8, 4.01, 816_532), 820_000)],
+            StayS = 3600,
+            DeorbitPeriapsisAltitudeM = 30_000,
+        };
+        var id = flights.Add(flight);
+        flights.Update(flights.GetAll().Single() with { Name = "Repair KerbLink Mk2 A" });
+
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
+            cmd.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        _db.Initialize();
+
+        var loaded = Assert.Single(new FlightRepository(_db).GetAll());
+        Assert.Equal(id, loaded.Id);
+        Assert.Equal("Repair KerbLink Mk2 A", loaded.Name);
+        Assert.Equal(flight.Craft, loaded.Craft);
+        Assert.Equal(flight.StartOrbit, loaded.StartOrbit);
+        Assert.Equal(flight.Burns, loaded.Burns);
+        Assert.Equal(flight.Targets, loaded.Targets);
+        Assert.Equal((FlightKind.Rendezvous, 3600.0, (double?)30_000), (loaded.Kind, loaded.StayS, loaded.DeorbitPeriapsisAltitudeM));
     }
 
     [Fact]

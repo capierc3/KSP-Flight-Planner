@@ -25,13 +25,15 @@ public partial class App : Application
             var link = new KspLink(() => settings.Load());
             var sync = new SaveSync(settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
             var designs = new DesignLibrary(sync);
+            var flights = new FlightRepository(database);
             var viewModel = new MainViewModel(
                 new MissionBuilderViewModel(maps, locations, events, designs, bodies),
                 new LocationsViewModel(bodies, maps, locations, events),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync),
-                new RendezvousViewModel(sync, locations, events, designs),
-                new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
+                new RendezvousViewModel(sync, locations, events, designs, flights),
+                new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
+                new FlightViewModel(flights, sync, events),
                 sync,
                 link,
                 events);

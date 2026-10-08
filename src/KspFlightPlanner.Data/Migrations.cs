@@ -196,6 +196,13 @@ internal static class Migrations
             created_utc      TEXT    NOT NULL
         );
 
+        CREATE TABLE flights (
+            id           INTEGER PRIMARY KEY,
+            name         TEXT    NOT NULL,
+            flight_json  TEXT    NOT NULL,   -- Flight (burns, start orbit, the plan's inputs)
+            created_utc  TEXT    NOT NULL
+        );
+
         CREATE TABLE saved_constellations (
             id                 INTEGER PRIMARY KEY,
             name               TEXT    NOT NULL,

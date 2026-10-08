@@ -26,12 +26,7 @@ public sealed record PhasingRow(PhasingChoice? Choice, string Title)
 }
 
 /// <summary>One burn (or the lift-off): what to do by feel, and the exact node values.</summary>
-/// <param name="Node">The burn, for sending to the game as a maneuver node; null for the lift-off.</param>
-public sealed record StepRow(string Number, string Title, string When, string Countdown, string DeltaV, string Feel, IReadOnlyList<Fact> Exact,
-    Maneuver? Node = null)
-{
-    public bool HasNode => Node is not null;
-}
+public sealed record StepRow(string Number, string Title, string When, string Countdown, string DeltaV, string Feel, IReadOnlyList<Fact> Exact);
 
 /// <summary>One leg of the route: the burns, the phasing picker and the rule-of-thumb summary.</summary>
 public sealed class LegRow : ObservableObject
@@ -87,6 +82,8 @@ public sealed class RendezvousViewModel : ObservableObject
     private readonly SaveSync _sync;
     private readonly CustomLocationRepository _locations;
     private readonly DesignLibrary? _designs;
+    private readonly FlightRepository? _flights;
+    private readonly PlannerEvents _events;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private readonly LaunchSite _site = LaunchSite.Ksc;
 
@@ -120,14 +117,15 @@ public sealed class RendezvousViewModel : ObservableObject
     private bool _suspend;
     private int _plotLeg;
     private bool _showDiagram = true;
-    private string? _sendStatus;
-    private bool _sending;
 
-    public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null)
+    public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
+        FlightRepository? flights = null)
     {
         _sync = sync;
         _locations = locations;
         _designs = designs;
+        _flights = flights;
+        _events = events;
         sync.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SaveSync.Save)) RebuildCrafts();
@@ -157,8 +155,7 @@ public sealed class RendezvousViewModel : ObservableObject
         ResetInterceptCommand = new RelayCommand(ResetIntercept, () => PlotLegPlan?.IsCustomIntercept == true);
         UseActiveVesselCommand = new RelayCommand(UseActiveVessel, () => CraftFor(ActiveKey) is not null);
         AddGameTargetCommand = new RelayCommand(AddGameTarget, () => AvailableTargets.Any(c => c.Key == TargetKey));
-        SendStepCommand = new RelayCommand<StepRow>(s => _ = SendAsync([s.Node!], all: false), s => s.Node is not null && CanSend);
-        SendAllCommand = new RelayCommand(() => _ = SendAsync(PlanManeuvers(), all: true), () => CanSend && PlanManeuvers().Count > 0);
+        FlyCommand = new RelayCommand(Fly, () => _plan is not null && _flights is not null);
 
         RefreshDesignChoices();
         RebuildCrafts();
@@ -181,11 +178,7 @@ public sealed class RendezvousViewModel : ObservableObject
     public RelayCommand ResetInterceptCommand { get; }
     public RelayCommand UseActiveVesselCommand { get; }
     public RelayCommand AddGameTargetCommand { get; }
-    public RelayCommand<StepRow> SendStepCommand { get; }
-    public RelayCommand SendAllCommand { get; }
-
-    /// <summary>Asks the user a yes/no question; the view supplies the dialog.</summary>
-    public Func<string, bool> Confirm { get; set; } = _ => true;
+    public RelayCommand FlyCommand { get; }
 
     public bool StartFromLaunch
     {
@@ -296,40 +289,28 @@ public sealed class RendezvousViewModel : ObservableObject
         {
             var link = _sync.Link;
             if (!link.IsConnected) return "";
-            if (!link.InFlight || link.Game?.Vessels is not { } vessels) return "In KSP: not flying a craft. Switch to one to use it here or send nodes.";
+            if (!link.InFlight || link.Game?.Vessels is not { } vessels) return "In KSP: not flying a craft. Switch to one to use it here.";
             var active = vessels.FirstOrDefault(v => v.IsActive)?.Name ?? "nothing";
             var target = vessels.FirstOrDefault(v => v.IsTarget)?.Name ?? link.Game.TargetBody;
             return $"In KSP: flying {active}" + (target is null ? " · no target set" : $" · target {target}");
         }
     }
 
-    /// <summary>Nodes can go to the game: connected, and the player is flying a craft.</summary>
-    public bool CanSend => _sync.Link.InFlight && !_sending;
-
-    /// <summary>What the last send did, or why it couldn't.</summary>
-    public string? SendStatus { get => _sendStatus; private set => SetProperty(ref _sendStatus, value); }
-
     /// <summary>The craft list's key for the vessel being flown in KSP (null when not flying one).</summary>
-    private string? ActiveKey => KeyFor(_sync.Link.Game?.Active);
+    private string? ActiveKey => KeyFor(_sync.ActiveCraft);
 
     /// <summary>The craft list's key for the vessel targeted in KSP.</summary>
-    private string? TargetKey => KeyFor(_sync.Link.Game?.Target);
+    private string? TargetKey => KeyFor(_sync.TargetCraft);
 
-    /// <summary>A live vessel's key: its save vessel's when matched, else by name (not in the save yet).</summary>
-    private string? KeyFor(LiveVessel? vessel)
-    {
-        if (vessel is null || _sync.Live is not { } live) return null;
-        if (live.SaveIds.TryGetValue(vessel, out var id)) return $"vessel:{id}";
-        // Not the merge's own object (it may come from an earlier poll): fall back to the name.
-        var byName = live.SaveIds.Where(p => p.Key.Name == vessel.Name && p.Key.Type == vessel.Type).Select(p => p.Value).ToList();
-        return byName.Count == 1 ? $"vessel:{byName[0]}" : $"live:{vessel.Name}";
-    }
+    /// <summary>A craft's key in the list: its save vessel's, or by name for one not in the save yet.</summary>
+    private static string? KeyFor(FlightCraft? craft) =>
+        craft is null ? null : craft.SaveVesselId is { } id ? $"vessel:{id}" : $"live:{craft.Name}";
 
     private CraftChoice? CraftFor(string? key) => key is null ? null : Crafts.FirstOrDefault(c => c.Key == key);
 
     private void LiveChanged()
     {
-        foreach (var name in new[] { nameof(IsLinked), nameof(GameText), nameof(CanSend), nameof(SaveTimeText) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(IsLinked), nameof(GameText), nameof(SaveTimeText) }) OnPropertyChanged(name);
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -353,59 +334,32 @@ public sealed class RendezvousViewModel : ObservableObject
         TargetsChanged();
     }
 
-    /// <summary>Every burn of the plan in order, deorbit included.</summary>
-    private List<Maneuver> PlanManeuvers()
+    /// <summary>Hands the plan to the Flight tab, where its burns are sent to the game and re-planned as it's flown.</summary>
+    private void Fly()
     {
-        if (_plan is not { } plan) return [];
-        var list = plan.Legs.SelectMany(l => l.Maneuvers).ToList();
-        if (plan.Deorbit is { } d) list.Add(d);
-        return list;
-    }
-
-    /// <summary>
-    /// Puts the burns on the craft being flown as maneuver nodes: one burn is added to its nodes; the whole plan replaces
-    /// them. Asks first when the craft flown isn't the one planned for, or when its own nodes would be removed.
-    /// </summary>
-    private async Task SendAsync(IReadOnlyList<Maneuver> burns, bool all)
-    {
-        if (burns.Count == 0) return;
-        _sending = true;
-        LiveChanged();
-        try
+        if (_request is not { } request || _plan is not { } plan) return;
+        FlightCraft? craft = null;
+        if (!StartFromLaunch && SelectedChaser is { } chaser)
+            craft = new FlightCraft(chaser.Name, chaser.Vessel?.Id);
+        var flight = new Flight
         {
-            if (await _sync.Link.ActiveVesselNodesAsync() is not var (vessel, nodes))
-            {
-                SendStatus = "Switch to the craft in KSP's flight view first.";
-                return;
-            }
-
-            var questions = new List<string>();
-            if (StartFromLaunch)
-                questions.Add("This plan starts with a launch, so its nodes assume the planned parking orbit. Once you're in orbit, " +
-                              "\"Use the craft I'm flying\" re-plans from your real orbit.");
-            else if (SelectedChaser is { } chaser && chaser.Key != ActiveKey)
-                questions.Add($"You're flying {vessel} in KSP, but this plan is for {chaser.Name}.");
-            if (all && nodes > 0) questions.Add($"{vessel}'s {(nodes == 1 ? "maneuver node" : $"{nodes} maneuver nodes")} will be replaced.");
-            var what = burns.Count == 1 ? "the node" : $"{burns.Count} nodes";
-            if (questions.Count > 0 && !Confirm(string.Join("\n\n", questions) + $"\n\nSend {what} to {vessel}?")) return;
-
-            var sent = await _sync.Link.SendNodesAsync(burns.Select(b => (b.Ut, b.Burn)).ToList(), replaceExisting: all);
-            SendStatus = (sent.Count == 1 ? $"Sent 1 node to {sent.Vessel}." : $"Sent {sent.Count} nodes to {sent.Vessel}.")
-                         + (sent.Skipped == 0 ? "" : $" {sent.Skipped} burn time{(sent.Skipped == 1 ? " has" : "s have")} already passed; re-plan for those.");
-        }
-        catch (Exception ex) when (ex is System.InvalidOperationException or KRPC.Client.RPCException)
-        {
-            SendStatus = ex.Message;
-        }
-        catch (Exception)
-        {
-            SendStatus = "Lost the connection to KSP.";
-        }
-        finally
-        {
-            _sending = false;
-            LiveChanged();
-        }
+            Name = $"Meet {string.Join(", ", Targets.Select(t => t.Name))}",
+            Kind = FlightKind.Rendezvous,
+            BodyName = request.Body.Name,
+            Craft = craft,
+            StartOrbit = plan.Launch?.ParkingOrbit ?? request.Chaser?.Orbit,
+            Burns = FlightViewModel.RendezvousBurns(plan),
+            PlannedUt = request.EarliestUt,
+            LeadS = LeadMinutes * 60,
+            Note = plan.Launch is { } launch
+                ? $"Starts with a launch at {_calendar.FormatDate(launch.LiftoffUt)}, heading {launch.HeadingDeg:0}°. Once in orbit, use the craft you're " +
+                  "flying to re-plan from its real orbit."
+                : null,
+            Targets = plan.Legs.Select((leg, i) => new FlightTarget(leg.Target.Name, Targets[i].Vessel?.Id, leg.Target.Orbit, leg.ArrivalUt)).ToList(),
+            StayS = StayMinutes * 60,
+            DeorbitPeriapsisAltitudeM = request.DeorbitPeriapsisAltitudeM,
+        };
+        _events.RequestOpenFlight(_flights!.Add(flight));
     }
 
     /// <summary>Time spent at each target (repairs, refuelling) before heading to the next.</summary>
@@ -592,7 +546,7 @@ public sealed class RendezvousViewModel : ObservableObject
             {
                 if (!v.IsOrbiting || v.Orbit is not { } o || o.BodyName is not { } name || !bodies.TryGetValue(name, out var body)) continue;
                 if (!double.IsFinite(o.SemiMajorAxisM) || o.SemiMajorAxisM <= 0 || o.Eccentricity is < 0 or >= 1) continue;
-                var orbit = Elements(o);
+                var orbit = o.ToElements();
                 inSave.Add(v.Id);
                 list.Add(new CraftChoice($"vessel:{v.Id}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)}", body, orbit, v));
             }
@@ -604,7 +558,7 @@ public sealed class RendezvousViewModel : ObservableObject
             if (!v.IsOrbiting || v.Orbit is not { } o || o.BodyName is not { } name || !bodies.TryGetValue(name, out var body)) continue;
             if (!double.IsFinite(o.SemiMajorAxisM) || o.SemiMajorAxisM <= 0 || o.Eccentricity is < 0 or >= 1) continue;
             if (list.Any(c => c.Key == $"live:{v.Name}")) continue;
-            var orbit = Elements(o);
+            var orbit = o.ToElements();
             list.Add(new CraftChoice($"live:{v.Name}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)} · not saved yet",
                 body, orbit, null));
         }
@@ -647,9 +601,6 @@ public sealed class RendezvousViewModel : ObservableObject
         OnPropertyChanged(nameof(CapacityHint));
         Recalculate();
     }
-
-    private static OrbitalElements Elements(SavedOrbit o) =>
-        new(o.SemiMajorAxisM, o.Eccentricity, o.InclinationDeg, o.LanDeg, o.ArgumentOfPeriapsisDeg, o.MeanAnomalyRad, o.EpochUt);
 
     /// <summary>Relays first (the usual reason to visit), then stations, probes, ships…, debris last.</summary>
     private static int TypeOrder(string? type) => type switch
@@ -960,7 +911,7 @@ public sealed class RendezvousViewModel : ObservableObject
             new("Orbit after", m.Kind == ManeuverKind.MatchVelocity ? $"{target}'s orbit" : after),
         };
         if (m.Kind == ManeuverKind.MatchVelocity && m.MissDistanceM > 1) exact.Add(new("Distance at meeting", Distance(m.MissDistanceM)));
-        return new StepRow($"{number}", title, _calendar.FormatDate(m.Ut), Wait(m.Ut - now), Format.Speed0(m.DeltaV), feel, exact, m);
+        return new StepRow($"{number}", title, _calendar.FormatDate(m.Ut), Wait(m.Ut - now), Format.Speed0(m.DeltaV), feel, exact);
     }
 
     // ---------------- Budget and capacity ----------------

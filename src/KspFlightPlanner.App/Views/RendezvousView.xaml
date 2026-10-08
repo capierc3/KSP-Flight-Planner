@@ -34,23 +34,6 @@
                     </Border>
                     <StackPanel Grid.Column="1">
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Send to KSP" Padding="8,1" Margin="10,0,0,0" FontSize="11" MinHeight="0" MinWidth="0"
-                                    Command="{Binding DataContext.SendStepCommand, ElementName=Root}" CommandParameter="{Binding}"
-                                    ToolTip="Add this burn as a maneuver node on the craft you're flying">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding DataContext.IsLinked, ElementName=Root}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding HasNode}" Value="False">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding DeltaV}" Style="{StaticResource Value}" FontWeight="SemiBold" Margin="0" />
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </DockPanel>
@@ -225,10 +208,10 @@
                     </StackPanel>
                     <TextBlock Text="Flight plan" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
                 </DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="0,0,18,6" Visibility="{Binding IsLinked, Converter={StaticResource BoolToVisibility}}">
-                    <Button DockPanel.Dock="Right" Content="Send all burns to KSP" Command="{Binding SendAllCommand}" Padding="10,2" VerticalAlignment="Top"
-                            ToolTip="Replace the maneuver nodes on the craft you're flying with every burn of this plan" />
-                    <TextBlock Text="{Binding SendStatus}" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,18,6" Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibility}}">
+                    <Button DockPanel.Dock="Right" Content="Fly this plan" Command="{Binding FlyCommand}" Padding="12,2" VerticalAlignment="Top"
+                            ToolTip="Open it on the Flight tab: send the burns to KSP as maneuver nodes and re-plan from your real orbit as you fly" />
+                    <TextBlock Text="Flying it? Hand it to the Flight tab to send the burns to KSP." Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0" />
                 </DockPanel>
                 <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3" Margin="0,0,18,4"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />

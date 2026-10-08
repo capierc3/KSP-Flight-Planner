@@ -350,14 +350,17 @@ public static class Rendezvous
     }
 
     /// <summary>The orbit you're on after flying <paramref name="burn"/> from <paramref name="before"/> (node axes as in <see cref="NodeBurn.From"/>).</summary>
-    public static OrbitalElements OrbitAfter(Maneuver burn, OrbitalElements before, double mu)
+    public static OrbitalElements OrbitAfter(Maneuver burn, OrbitalElements before, double mu) => OrbitAfter(burn.Ut, burn.Burn, before, mu);
+
+    /// <summary>The orbit you're on after burning <paramref name="burn"/> at <paramref name="ut"/>.</summary>
+    public static OrbitalElements OrbitAfter(double ut, NodeBurn burn, OrbitalElements before, double mu)
     {
-        var s = Kepler.StateAt(before, mu, burn.Ut);
+        var s = Kepler.StateAt(before, mu, ut);
         var prograde = s.Velocity.Normalized;
         var normal = Vector3d.Cross(s.Position, s.Velocity).Normalized;
         var radial = Vector3d.Cross(prograde, normal);
-        var v = s.Velocity + prograde * burn.Burn.Prograde + normal * burn.Burn.Normal + radial * burn.Burn.Radial;
-        return Kepler.ElementsFrom(new StateVector(s.Position, v), mu, burn.Ut);
+        var v = s.Velocity + prograde * burn.Prograde + normal * burn.Normal + radial * burn.Radial;
+        return Kepler.ElementsFrom(new StateVector(s.Position, v), mu, ut);
     }
 
     /// <summary>Angle between the two orbits' planes (angle between their angular-momentum vectors).</summary>

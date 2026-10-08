@@ -68,6 +68,9 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
+                    <Button Content="Fly this deployment" Command="{Binding FlyCommand}" HorizontalAlignment="Left" Margin="0,10,0,0" Padding="12,3"
+                            ToolTip="Open it on the Flight tab: the carrier's burn and each satellite's circularize burn, timed from your carrier's real orbit (KSP Stock bodies)" />
+
                     <TextBlock Text="Body data" Style="{StaticResource SectionHeader}" />
                     <Grid>
                         <Grid.ColumnDefinitions>

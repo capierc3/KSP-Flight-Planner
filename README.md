@@ -41,9 +41,13 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   be changed in *Tools › Settings › Live connection*. While connected:
   - the game's live time and (in flight) every vessel's live orbit are laid over the save, so the Rendezvous tab, Vessels
     tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
-  - the Rendezvous tab can start from **the craft you're flying**, add **the craft you've targeted**, and **send burns
-    to KSP** as maneuver nodes (one at a time, or the whole plan)
+  - the Rendezvous tab can start from **the craft you're flying** and add **the craft you've targeted**
   - the Transfer Planner's **Today** button sets the earliest departure to the game's date
+- **Flight tab** — the flying side. *Fly this plan* on the Rendezvous tab (or *Fly this deployment* on Resonant
+  Orbits) hands a plan over: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
+  burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the
+  rest from its real orbit. Resonant deployments time the carrier's burn and each satellite's circularize burn from
+  the carrier's real orbit. Flights are kept until you delete them.
 
 ## Layout
 
@@ -84,7 +88,7 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 - `ksp_parts`, `ksp_part_resources`, `ksp_part_engines`, `ksp_engine_propellants`, `ksp_part_antennas`, `ksp_resources` —
   the part catalog read from the KSP install (replaced as a whole when GameData changes).
 - `app_settings` — preferences as key/value text (KSP folder, chosen save, watch on/off, kRPC address and ports); see `SettingsRepository`.
-- `saved_constellations`, `saved_missions` — user data.
+- `saved_constellations`, `saved_missions`, `flights` — user data (a flight is stored as JSON: burns, start orbit and the plan's inputs).
 - **Pre-release:** the schema is a single v1 script that is still edited in place. When the schema or seed
   data changes, the database is rebuilt automatically and user tables are copied across
   (`PlannerDatabase.UserTables`, with mappings for renamed columns). Before release, switch to appended

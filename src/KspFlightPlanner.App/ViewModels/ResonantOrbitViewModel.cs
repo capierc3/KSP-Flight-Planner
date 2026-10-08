@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using KspFlightPlanner.App.Services;
 using KspFlightPlanner.Core;
 using KspFlightPlanner.Core.Models;
 using KspFlightPlanner.Data;
@@ -10,6 +11,9 @@ public sealed class ResonantOrbitViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
     private readonly ConstellationRepository _plans;
+    private readonly SaveSync? _sync;
+    private readonly FlightRepository? _flights;
+    private readonly PlannerEvents? _events;
 
     private StarSystem? _selectedSystem;
     private CelestialBody? _selectedBody;
@@ -23,10 +27,15 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     private string _planName = "";
     private SavedConstellation? _selectedPlan;
 
-    public ResonantOrbitViewModel(BodyRepository bodies, ConstellationRepository plans)
+    public ResonantOrbitViewModel(BodyRepository bodies, ConstellationRepository plans, SaveSync? sync = null, FlightRepository? flights = null,
+        PlannerEvents? events = null)
     {
         _bodies = bodies;
         _plans = plans;
+        _sync = sync;
+        _flights = flights;
+        _events = events;
+        FlyCommand = new RelayCommand(Fly, () => Result is not null && _flights is not null && SelectedSystem?.Name == StockSystem);
 
         UseSynchronousAltitudeCommand = new RelayCommand(
             () => SetAltitude(SelectedBody?.SynchronousAltitudeM), () => SelectedBody?.SynchronousAltitudeM is not null);
@@ -51,6 +60,9 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     public RelayCommand SavePlanCommand { get; }
     public RelayCommand LoadPlanCommand { get; }
     public RelayCommand DeletePlanCommand { get; }
+
+    /// <summary>Hands the deployment to the Flight tab, which times the burns from the carrier's real orbit.</summary>
+    public RelayCommand FlyCommand { get; }
 
     public StarSystem? SelectedSystem
     {
@@ -148,6 +160,42 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     public string CarrierApoapsisText => Result is { } r ? Format.Distance(r.CarrierApoapsisAltitudeM) : "—";
     public string CarrierPeriapsisText => Result is { } r ? Format.Distance(r.CarrierPeriapsisAltitudeM) : "—";
     public string InjectionDeltaVText => Result is { } r ? Format.Speed(r.InjectionDeltaV) : "—";
+
+    private const string StockSystem = "KSP Stock";
+
+    /// <summary>
+    /// Creates the flight. When the craft being flown in KSP orbits this body it becomes the carrier and the burns are
+    /// planned from its orbit straight away; otherwise the Flight tab asks for the carrier.
+    /// </summary>
+    private void Fly()
+    {
+        if (Result is not { } result || SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude)) return;
+        var flight = new Flight
+        {
+            Name = $"Deploy {SatelliteCount} satellites around {body.Name}",
+            Kind = FlightKind.Resonant,
+            BodyName = body.Name,
+            SatelliteCount = SatelliteCount,
+            AltitudeM = altitude,
+            PreferDiveOrbit = PreferDiveOrbit,
+            PlannedUt = _sync?.Now ?? 0,
+            Note = "Switch to the carrier in KSP, then click \"Use the craft I'm flying\" to plan its burns from its orbit.",
+        };
+        if (_sync is { ActiveCraft: { } craft, Now: { } now } && _sync.OrbitOf(craft) is { } orbit && orbit.BodyName == body.Name)
+        {
+            var plan = ResonantDeployment.Plan(body, result, orbit.ToElements(), SatelliteCount, now + flight.LeadS);
+            flight = flight with
+            {
+                Craft = craft,
+                StartOrbit = plan.StartOrbit,
+                Burns = plan.Burns,
+                PlannedUt = now,
+                Note = plan.Warnings.Count > 0 ? string.Join(" ", plan.Warnings) : null,
+            };
+        }
+        var id = _flights!.Add(flight);
+        _events?.RequestOpenFlight(id);
+    }
 
     private void SetAltitude(double? metres)
     {

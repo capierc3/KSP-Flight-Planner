@@ -12,10 +12,11 @@ namespace KspFlightPlanner.App;
 public sealed class MainViewModel : ObservableObject
 {
     public const int LocationsTab = 1;
+    public const int FlightTab = 6;
     private int _selectedTab;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
-        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, SaveSync sync, KspLink link, PlannerEvents events)
+        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, SaveSync sync, KspLink link, PlannerEvents events)
     {
         Sync = sync;
         Link = link;
@@ -25,6 +26,8 @@ public sealed class MainViewModel : ObservableObject
         Transfer = transfer;
         Rendezvous = rendezvous;
         Resonant = resonant;
+        Flight = flight;
+        events.OpenFlightRequested += _ => SelectedTab = FlightTab;
         events.OpenLocationRequested += id =>
         {
             SelectedTab = LocationsTab;
@@ -38,6 +41,9 @@ public sealed class MainViewModel : ObservableObject
     public TransferPlannerViewModel Transfer { get; }
     public RendezvousViewModel Rendezvous { get; }
     public ResonantOrbitViewModel Resonant { get; }
+
+    /// <summary>Flying the plans handed over from the planning tabs, against the live game.</summary>
+    public FlightViewModel Flight { get; }
     public SaveSync Sync { get; }
 
     /// <summary>Live connection to the running game (kRPC).</summary>
