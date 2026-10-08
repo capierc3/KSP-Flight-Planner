@@ -54,14 +54,17 @@ public static class MissionPlanner
         : leg.DeltaV + (setting.IncludePlaneChange ? leg.PlaneChangeDv : 0);
 
     /// <summary>
-    /// Default split:
+    /// Default split. A trip "heads home" when it has an intermediate stop and ends on the start body (its surface
+    /// or an orbit around it), e.g. Kerbin surface → Mun orbit → Kerbin surface:
     /// <list type="bullet">
-    /// <item>Launch — from a surface start until the first low orbit.</item>
-    /// <item>Lander — everything after the last intermediate stop on a surface (ascent and trip home);
-    /// for a one-way trip ending on a surface, just the final descent.</item>
-    /// <item>Return — if there is no landing, everything after the last intermediate stop.</item>
-    /// <item>Transfer — everything else (including the descent to a landing site).</item>
+    /// <item>Launch — from a surface start until the first low orbit (or a custom orbit around the same body).</item>
+    /// <item>Lander — heading home after landing at the last intermediate stop: everything after it (ascent and
+    /// trip home). On a one-way trip ending on a surface: just the final descent.</item>
+    /// <item>Return — heading home without that landing: everything after the last intermediate stop.</item>
+    /// <item>Transfer — everything else, so a one-way trip through stops (Kerbin surface → Kerbin LO → Duna orbit)
+    /// is Launch / Transfer.</item>
     /// </list>
+    /// Only phases that fly at least one leg are created (a route with no legs gets a single Transfer phase).
     /// </summary>
     public static (IReadOnlyList<PhaseDefinition> Phases, IReadOnlyList<LegSetting> Legs) DefaultPhases(
         IReadOnlyList<RouteSegment> segments, IReadOnlyList<DvMapNode> stops, bool useAerobraking = true)
@@ -76,33 +79,29 @@ public static class MissionPlanner
                 || (l.From.Kind == "LowOrbit" && l.To.Kind == "Custom" && l.To.BodyName == launchBody)).Count()
             : 0;
 
-        // Index of the first leg after the last intermediate stop (stops 1 .. n-2).
+        // The trip heads home when it ends on the start body (surface or orbit) after an intermediate stop;
+        // homewardStart is the first leg after the last intermediate stop (stops 1 .. n-2).
         var lastIntermediate = stops.Count > 2 ? stops.Count - 2 : -1;
-        var homewardStart = lastIntermediate > 0
+        var headsHome = lastIntermediate > 0 && stops[^1].BodyName == stops[0].BodyName;
+        var homewardStart = headsHome
             ? segments.Where(s => s.ToStop <= lastIntermediate).Sum(s => s.Legs.Count)
             : legs.Count;
-        var landedBeforeHome = lastIntermediate > 0 && stops[lastIntermediate].Kind == "Surface";
-        var oneWayLanding = stops.Count == 2 && stops[1].Kind == "Surface" && legs.Count > launchCount;
+        var landedBeforeHome = headsHome && stops[lastIntermediate].Kind == "Surface";
+        var finalLanding = !headsHome && stops.Count >= 2 && stops[^1].Kind == "Surface";
 
-        var phases = new List<PhaseDefinition>();
-        int Add(string name) { phases.Add(new PhaseDefinition(name)); return phases.Count - 1; }
+        var names = Enumerable.Range(0, legs.Count).Select(i =>
+            i < launchCount ? "Launch"
+            : finalLanding && i == legs.Count - 1 ? "Lander"
+            : i >= homewardStart ? (landedBeforeHome ? "Lander" : "Return")
+            : "Transfer").ToList();
 
-        var launch = launchCount > 0 ? Add("Launch") : -1;
-        var transfer = legs.Count > launchCount ? Add("Transfer") : -1;
-        var lander = landedBeforeHome || oneWayLanding ? Add("Lander") : -1;
-        var homeward = lastIntermediate > 0 && !landedBeforeHome && homewardStart < legs.Count ? Add("Return") : -1;
-        if (phases.Count == 0) Add("Transfer");
+        // Only the phases some leg flies, in burn order.
+        var phases = new[] { "Launch", "Transfer", "Lander", "Return" }
+            .Where(names.Contains).Select(n => new PhaseDefinition(n)).ToList();
+        if (phases.Count == 0) phases.Add(new PhaseDefinition("Transfer"));
 
-        var settings = new List<LegSetting>();
-        for (var i = 0; i < legs.Count; i++)
-        {
-            var phase = i < launchCount ? launch
-                : lander >= 0 && oneWayLanding && i == legs.Count - 1 ? lander
-                : i >= homewardStart && lander >= 0 && landedBeforeHome ? lander
-                : i >= homewardStart && homeward >= 0 ? homeward
-                : transfer >= 0 ? transfer : 0;
-            settings.Add(new LegSetting(phase, useAerobraking && AerobrakeByDefault(legs, i), false));
-        }
+        var settings = names.Select((name, i) => new LegSetting(
+            phases.FindIndex(p => p.Name == name), useAerobraking && AerobrakeByDefault(legs, i), false)).ToList();
         return (phases, settings);
     }
 

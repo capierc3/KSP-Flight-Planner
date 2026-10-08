@@ -112,6 +112,7 @@ public sealed class LegToolsTests : IDisposable
         var segments = MissionPlanner.BuildRoute(_map, stops);
         var choice = BestWindow(LegTools.FindTransfer(segments[1].Legs, _bodies)!);
         var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops);
+        Assert.Equal(["Launch", "Transfer"], phases.Select(p => p.Name));
         var definition = new MissionDefinition(
             [new("kerbin.surface"), new("kerbin.lo"), new(_relayOrbit, "Deploy relays", choice)], phases, settings);
 

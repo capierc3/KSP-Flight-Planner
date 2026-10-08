@@ -105,6 +105,35 @@ public sealed class MissionPlannerTests : IDisposable
     }
 
     [Fact]
+    public void Ending_in_orbit_of_the_start_body_still_counts_as_a_return()
+    {
+        var (phases, _) = Plan(_map, "kerbin.surface", "mun.lo", "kerbin.lo");
+        Assert.Equal(["Launch", "Transfer", "Return"], phases.Select(p => p.Name));
+    }
+
+    [Theory]
+    [InlineData("kerbin.lo")]   // park in low orbit first
+    [InlineData("kerbin.keo")]  // stop at a station higher up
+    public void One_way_trip_through_a_stop_is_launch_and_transfer(string stop)
+    {
+        var (phases, summary) = Plan(_map, "kerbin.surface", stop, "duna.lo");
+        Assert.Equal(["Launch", "Transfer"], phases.Select(p => p.Name));
+        Assert.All(summary, s => Assert.True(s.RequiredDv > 0));
+    }
+
+    [Fact]
+    public void One_way_landing_through_a_stop_keeps_the_descent_in_the_lander()
+    {
+        var stops = Stops("kerbin.surface", "kerbin.lo", "mun.surface");
+        var segments = MissionPlanner.BuildRoute(_map, stops);
+        var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops);
+        var summary = MissionPlanner.Summarize(phases, MissionPlanner.AllLegs(segments), settings);
+
+        Assert.Equal(["Launch", "Transfer", "Lander"], phases.Select(p => p.Name));
+        Assert.Equal([3400, 860 + 310, 580], summary.Select(s => s.RequiredDv));
+    }
+
+    [Fact]
     public void One_way_landing_gets_its_own_lander_phase()
     {
         var (phases, summary) = Plan(_map, "kerbin.surface", "duna.surface");
