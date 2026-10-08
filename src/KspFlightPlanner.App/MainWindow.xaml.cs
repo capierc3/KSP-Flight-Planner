@@ -28,6 +28,19 @@ public sealed class MainViewModel : ObservableObject
         Resonant = resonant;
         Flight = flight;
         events.OpenFlightRequested += _ => RequestPane(Panes.Flight);
+
+        // Leg tools: a mission leg's tool opens in its planner, locked to that leg.
+        mission.TransferRequested += link =>
+        {
+            Transfer.EditLeg(link);
+            RequestPane(Panes.Transfer);
+        };
+        mission.RouteChanged += () =>
+        {
+            if (Transfer.Leg is not { } open) return;
+            if (mission.TransferLinkFor(open.Owner) is not { } link) Transfer.StopEditingLeg();
+            else if (link.Span != open.Span) Transfer.EditLeg(link);
+        };
         events.OpenLocationRequested += id =>
         {
             Locations.SelectLocation(id);

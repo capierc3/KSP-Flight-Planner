@@ -39,6 +39,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <Border Width="22" Height="22" CornerRadius="11" Background="White" VerticalAlignment="Center" HorizontalAlignment="Left">
@@ -74,6 +75,29 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </Grid>
+
+                            <!-- Tools of the leg arriving at this stop -->
+                            <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,6,0,0">
+                                <Button Content="Plan a transfer window for this leg" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0"
+                                        Visibility="{Binding OffersTransfer, Converter={StaticResource BoolToVisibility}}"
+                                        Command="{Binding DataContext.OpenTransferCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                        ToolTip="The leg here crosses between planets: pick its launch window in the Transfer Planner. Its ejection and capture burns replace the Δv map's." />
+                                <Border Visibility="{Binding HasTransfer, Converter={StaticResource BoolToVisibility}}" Padding="8,5" CornerRadius="4"
+                                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                            <Button Content="Open" Style="{StaticResource SmallButton}" ToolTip="Show the window in the Transfer Planner"
+                                                    Command="{Binding DataContext.OpenTransferCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                            <Button Content="✕" Style="{StaticResource SmallButton}" ToolTip="Back to the Δv map's values for this leg"
+                                                    Command="{Binding DataContext.RemoveTransferCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="Transfer window" FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="{Binding TransferText}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

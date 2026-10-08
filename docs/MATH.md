@@ -718,6 +718,34 @@ Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r 
 - Code: `ResonantDeployment.Plan`; tested in `FlightTests`
 - Source: vis-viva (§3); §6 for the carrier orbit
 
+## 19. Leg tools: replacing map values with a planned leg
+
+A mission leg runs from one stop to the next and is made of Δv-map steps (§15). A leg tool works out part of the leg properly and puts its result in place of the map values for the steps it covers. The steps stay, so each one keeps its phase and aerobrake choice. A tool that no longer fits the leg (the stops changed) is ignored, and the map values come back.
+
+### 19a. Transfer legs: a chosen launch window
+
+A leg is a transfer leg when one of its steps goes between two bodies that orbit the same parent (Kerbin → Duna, Duna → Kerbin). The window comes from the Transfer Planner (§11), set up from the leg:
+
+```
+origin, destination  = the two bodies of that step (for Duna → Eve via Kerbin: the first and last body)
+parking orbit        = the origin's low orbit on the map, where the leg's climb out starts
+arrival orbit        = the destination's low orbit on the map, if the leg goes down to it (else a flyby)
+
+ejection steps  = from the parking orbit up to the crossing      first step = ejection Δv (§7), the rest 0
+capture steps   = from the crossing down to the arrival orbit    first step = capture Δv (§7), the rest 0
+```
+
+The Lambert solution already points the ejection out of the plane where it needs to (§11), so these steps get no plane-change extra. Capture steps keep their aerobrake option: aerobraking replaces the capture burn just as it replaces the map's. Steps after the arrival orbit (for example, Duna's low orbit up to a 1,000 km relay orbit) keep their map values. The mission saves only the earliest date, the departure time and the flight time, and works out the window again (one Lambert solve) when the mission opens.
+
+Worked example: Kerbin low orbit (80 km) to Duna low orbit (60 km), best window from Year 1, Day 1:
+
+1. The planner picks departure Year 1, Day 231 (UT 4,987,091.8 s) and a 269-day flight. The Lambert solution gives v∞ = **854.38 m/s** leaving Kerbin and **890.99 m/s** arriving at Duna.
+2. Ejection (§7, μ = 3.5316×10¹², r = 680,000 m): √(854.38² + 2μ/r) − √(μ/r) = 3,334.22 − 2,278.93 = **1,055.3 m/s**. This replaces the map's 950 + 130 = 1,080 for LKO → escape → Duna intercept.
+3. Capture (μ = 3.0136×10¹¹, r = 380,000 m): √(890.99² + 2μ/r) − √(μ/r) = 1,542.72 − 890.54 = **652.2 m/s**. This replaces the map's 250 + 360 = 610 for intercept → elliptical → low orbit (or 0 when aerobraking).
+
+- Code: `LegTools.FindTransfer`, `LegTools.ApplyTransfer`, `MissionBuilderViewModel.ApplyTools`; tested in `LegToolsTests`
+- Source: §7 and §11 (Curtis §8.6–8.7, §5.3)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

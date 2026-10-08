@@ -6,8 +6,11 @@ public sealed record PhaseDefinition(string Name, double MarginPercent = 10, dou
 /// <summary>Per-leg choices: which phase flies it and how.</summary>
 public sealed record LegSetting(int PhaseIndex, bool UseAerobrake, bool IncludePlaneChange);
 
-/// <summary>A place the mission visits, with an optional note ("Dock at station, pick up Jeb").</summary>
-public sealed record MissionStop(string NodeKey, string? Note = null);
+/// <summary>
+/// A place the mission visits, with an optional note ("Dock at station, pick up Jeb") and the tools of the leg that
+/// arrives here: <paramref name="Transfer"/> makes it a transfer leg flown in a chosen launch window.
+/// </summary>
+public sealed record MissionStop(string NodeKey, string? Note = null, TransferLeg? Transfer = null);
 
 /// <summary>
 /// A saved mission: ordered stops plus phase/leg choices, the route-wide options, the design checked against it

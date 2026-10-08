@@ -66,11 +66,14 @@ public sealed record DvMapNode
 /// <summary>One edge of a route, in the direction of travel.</summary>
 /// <param name="EdgeKey">Key of the child node that owns this edge; use it to edit the edge's Δv.</param>
 /// <param name="AerobrakeDv">Δv still needed on this leg when aerobraking (usually 0).</param>
+/// <param name="ToolNote">Set when a leg tool (e.g. a transfer window) supplies <see cref="DeltaV"/> instead of the map.</param>
 public sealed record RouteLeg(
     DvMapNode From, DvMapNode To, string EdgeKey, double DeltaV, double MapDeltaV,
-    double PlaneChangeDv, bool CanAerobrake, string? FlightTime, double AerobrakeDv = 0)
+    double PlaneChangeDv, bool CanAerobrake, string? FlightTime, double AerobrakeDv = 0, string? ToolNote = null)
 {
-    public bool IsOverridden => DeltaV != MapDeltaV;
+    /// <summary>The user edited the map value (a tool's value isn't an edit).</summary>
+    public bool IsOverridden => ToolNote is null && DeltaV != MapDeltaV;
+    public bool IsFromTool => ToolNote is not null;
     public override string ToString() => $"{From.DisplayName} → {To.DisplayName}";
 }
 

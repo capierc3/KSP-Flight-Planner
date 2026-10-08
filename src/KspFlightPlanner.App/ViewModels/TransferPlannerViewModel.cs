@@ -25,6 +25,13 @@ public sealed record LegSummary(
     string CaptureDv,
     string TransferDv);
 
+/// <summary>
+/// A mission leg the Transfer Planner is choosing the window for: the bodies and orbits come from the leg, and every
+/// window picked is saved back into the mission through <see cref="Save"/>.
+/// </summary>
+/// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
+public sealed record TransferLegLink(object Owner, string Title, TransferSpan Span, TransferLeg? Choice, Action<TransferLeg> Save);
+
 public sealed class TransferPlannerViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
@@ -61,6 +68,9 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private TransferPlan? _plan;
     private TransferWindow? _selectedWindow;
 
+    private TransferLegLink? _leg;
+    private TransferLeg? _pendingChoice;
+
     private TransferRequest? _returnRequest;
     private TransferPlan? _returnPlan;
     private TransferWindow? _returnWindow;
@@ -74,6 +84,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         events.LocationsChanged += _ => ReloadBodies();
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
         ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
+        StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
 
         // Only systems with orbital data can plan transfers.
         foreach (var system in bodies.GetSystems())
@@ -95,6 +106,63 @@ public sealed class TransferPlannerViewModel : ObservableObject
     /// <summary>Earliest departure = today in the game (live while connected to KSP, else the save's date).</summary>
     public RelayCommand UseGameDateCommand { get; }
     public RelayCommand ResetReturnToBestCommand { get; }
+    public RelayCommand StopEditingLegCommand { get; }
+
+    // ---------------- Leg mode ----------------
+
+    /// <summary>The mission leg whose window is being chosen; null when the planner is used on its own.</summary>
+    public TransferLegLink? Leg => _leg;
+
+    public bool IsEditingLeg => _leg is not null;
+
+    /// <summary>The trip (bodies, orbits, arrival, return) can be changed: not while it comes from a mission leg.</summary>
+    public bool IsTripEditable => _leg is null;
+
+    public string LegTitle => _leg?.Title ?? "";
+
+    /// <summary>
+    /// Chooses the window for a mission leg: sets the trip from the leg and shows its saved window (or picks the best one
+    /// and saves it). Every window picked afterwards, on the porkchop plot or by changing the earliest date, is saved too.
+    /// </summary>
+    public void EditLeg(TransferLegLink link)
+    {
+        var span = link.Span;
+        _leg = null; // don't save anything while the trip is being set up
+        if (Systems.FirstOrDefault(s => s.Id == span.Origin.SystemId) is { } system) SelectedSystem = system;
+        SelectedOrigin = Origins.FirstOrDefault(b => b.Id == span.Origin.Id);
+        _suspendRecalculate = true;
+        SelectedDestination = Destinations.FirstOrDefault(b => b.Id == span.Destination.Id);
+        ParkingAltitudeText = Km(span.ParkingAltitudeM);
+        ArrivalAltitudeText = Km(span.ArrivalAltitudeM ?? span.Destination.DefaultParkingAltitudeM);
+        SelectedArrivalMode = span.Captures ? ArrivalMode.Circularize : ArrivalMode.Flyby;
+        PlanReturn = false;
+        var earliest = link.Choice?.EarliestDepartureUt ?? (_sync?.Save is { } save ? save.Ut : _calendar.ToUniversalTime(EarliestYear, EarliestDay));
+        SetEarliest(earliest);
+        _suspendRecalculate = false;
+
+        _leg = link;
+        _pendingChoice = link.Choice;
+        foreach (var name in new[] { nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle) }) OnPropertyChanged(name);
+        Recalculate();
+    }
+
+    /// <summary>Back to using the planner on its own; the mission keeps the window last chosen.</summary>
+    public void StopEditingLeg()
+    {
+        _leg = null;
+        _pendingChoice = null;
+        foreach (var name in new[] { nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle) }) OnPropertyChanged(name);
+    }
+
+    private void SetEarliest(double ut)
+    {
+        var year = (int)Math.Floor(ut / _calendar.SecondsPerYear);
+        var day = (int)Math.Floor((ut - year * _calendar.SecondsPerYear) / _calendar.SecondsPerDay);
+        _earliestYear = year + 1;
+        _earliestDay = day + 1;
+        OnPropertyChanged(nameof(EarliestYear));
+        OnPropertyChanged(nameof(EarliestDay));
+    }
 
     // ---------------- Inputs ----------------
 
@@ -180,12 +248,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private void UseGameDate()
     {
         if (_sync?.Save is not { } save) return;
-        var year = (int)Math.Floor(save.Ut / _calendar.SecondsPerYear);
-        var day = (int)Math.Floor((save.Ut - year * _calendar.SecondsPerYear) / _calendar.SecondsPerDay);
-        _earliestYear = year + 1;
-        _earliestDay = day + 1;
-        OnPropertyChanged(nameof(EarliestYear));
-        OnPropertyChanged(nameof(EarliestDay));
+        SetEarliest(save.Ut);
         Recalculate();
     }
 
@@ -274,6 +337,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
             if (!SetProperty(ref _selectedWindow, value)) return;
             Outbound = value is null ? null : Summarize(_request!, value, IsCustomSelection ? "Selected outbound transfer" : "Best launch window",
                 "Wait from earliest", value.DepartureUt - _request!.EarliestDepartureUt);
+            if (value is not null && _leg is not null)
+                _leg.Save(new TransferLeg(_request!.EarliestDepartureUt, value.DepartureUt, value.FlightTimeS));
             OnPropertyChanged(nameof(IsCustomSelection));
             RefreshPlotOutputs();
             RefreshBudget();
@@ -422,7 +487,12 @@ public sealed class TransferPlannerViewModel : ObservableObject
             _plan = plan;
             RefreshHohmannOutputs();
             _selectedWindow = null; // force refresh even if the window is unchanged
-            SelectedWindow = plan.BestWindow;
+            // A mission leg reopened: show the window it was saved with, if it's still a window of this trip.
+            var saved = _pendingChoice is { } c && c.EarliestDepartureUt == request.EarliestDepartureUt
+                ? TransferPlanner.Evaluate(request, c.DepartureUt, c.FlightTimeS)
+                : null;
+            _pendingChoice = null;
+            SelectedWindow = saved ?? plan.BestWindow;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {

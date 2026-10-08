@@ -142,7 +142,7 @@ public sealed partial class MissionBuilderViewModel
         if (stops.Count < 2) stops = [new("kerbin.surface"), new("mun.surface"), new("kerbin.surface")];
         _suspend = true;
         Stops.Clear();
-        foreach (var s in stops) Stops.Add(new StopViewModel(s.NodeKey, s.Note, StopChanged, RefreshLegs));
+        foreach (var s in stops) Stops.Add(new StopViewModel(s, StopChanged, RefreshLegs));
         for (var i = 0; i < Stops.Count; i++) Stops[i].SetPosition(i, Stops.Count);
         _suspend = false;
 
@@ -160,6 +160,7 @@ public sealed partial class MissionBuilderViewModel
             OnPropertyChanged(property);
         MarkSaved();
         RefreshSavedMissions();
+        RouteChanged?.Invoke();
     }
 
     /// <summary>Saves over the open mission, or as a new one if it was never saved. False if there's nowhere to save.</summary>

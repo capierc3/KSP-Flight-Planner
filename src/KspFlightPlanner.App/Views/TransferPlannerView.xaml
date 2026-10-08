@@ -64,8 +64,22 @@
         <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="16,12,8,12">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="0,0,18,0" Grid.IsSharedSizeScope="True">
+                    <!-- Choosing the window for a mission leg: the trip comes from the leg -->
+                    <Border Visibility="{Binding IsEditingLeg, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,10" Padding="10,8"
+                            CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                        <StackPanel>
+                            <TextBlock Text="Transfer window for the mission leg" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding LegTitle}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
+                                       Text="The window shown is saved with the mission: change the earliest date or click the porkchop plot to pick another." />
+                            <Button Content="Stop editing the leg" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
+                                    ToolTip="Use the planner on its own again; the mission keeps this window" />
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="Trip" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
 
+                    <StackPanel IsEnabled="{Binding IsTripEditable}">
                     <TextBlock Text="System" Style="{StaticResource Label}" />
                     <ComboBox ItemsSource="{Binding Systems}" SelectedItem="{Binding SelectedSystem}" />
 
@@ -98,6 +112,7 @@
                                      ToolTip="Not used when going to a custom location (you match its orbit)" />
                         </StackPanel>
                     </Grid>
+                    </StackPanel>
 
                     <TextBlock Text="Earliest departure" Style="{StaticResource Label}" />
                     <Grid>
@@ -114,10 +129,11 @@
                     </Grid>
 
                     <TextBlock Text="At destination" Style="{StaticResource Label}" />
-                    <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" />
+                    <ComboBox ItemsSource="{Binding ArrivalModes}" SelectedItem="{Binding SelectedArrivalMode}" IsEnabled="{Binding IsTripEditable}" />
                     <CheckBox Content="Include landing in budget" IsChecked="{Binding IncludeLanding}" Margin="0,8,0,0" />
 
-                    <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" />
+                    <CheckBox Content="Plan return trip" IsChecked="{Binding PlanReturn}" Margin="0,4,0,0" IsEnabled="{Binding IsTripEditable}"
+                              ToolTip="For a mission, plan the trip home as its own leg" />
                     <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="{Binding StayLabel}" Style="{StaticResource Label}" />
                         <TextBox Text="{Binding MinimumStayDays, UpdateSourceTrigger=PropertyChanged, Delay=300}" />

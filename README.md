@@ -19,6 +19,10 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   toggle aerobraking and plane changes per leg, edit any map value (e.g. Mun landing 580 → 700; stored as a
   user override), add custom locations such as a space station at any altitude (Hohmann transfer from the
   body's low orbit).
+- **Leg tools** — a leg between planets (Kerbin → Duna) can be flown in a chosen launch window: *Plan a transfer
+  window for this leg* under its stop opens the Transfer Planner locked to the leg. The window picked (best, or
+  clicked on the porkchop plot) is saved with the mission, and its ejection and capture burns replace the Δv map's
+  values in Legs & phases and the Rocket totals.
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
@@ -26,6 +30,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   and on the in-app Guide tab (same file, embedded at build time).
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
+  Opened from a mission leg it chooses that leg's window; on its own it's a free calculator.
 - **Rendezvous** — meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a KSC launch or
   a craft already in orbit. Targets come straight from the linked save (no import needed) or from placed custom
   locations. Plans when to lift off and which heading flies straight into the target's plane, then per target:

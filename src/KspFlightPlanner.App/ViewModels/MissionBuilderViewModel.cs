@@ -110,16 +110,20 @@ public sealed record DesignChoice(DesignEntry? Design, string Title)
 public sealed class StopViewModel : ObservableObject
 {
     private readonly Action _changed;
-    private readonly Action _noteChanged;
+    private readonly Action _legsChanged;
     private string _nodeKey;
     private string _note;
+    private TransferLeg? _transfer;
 
-    public StopViewModel(string nodeKey, string? note, Action changed, Action noteChanged)
+    /// <param name="changed">The stop moved somewhere else: the route changes.</param>
+    /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
+    public StopViewModel(MissionStop stop, Action changed, Action legsChanged)
     {
-        _nodeKey = nodeKey;
-        _note = note ?? "";
+        _nodeKey = stop.NodeKey;
+        _note = stop.Note ?? "";
+        _transfer = stop.Transfer;
         _changed = changed;
-        _noteChanged = noteChanged;
+        _legsChanged = legsChanged;
     }
 
     public string NodeKey
@@ -132,7 +136,37 @@ public sealed class StopViewModel : ObservableObject
     public string Note
     {
         get => _note;
-        set { if (SetProperty(ref _note, value)) _noteChanged(); }
+        set { if (SetProperty(ref _note, value)) _legsChanged(); }
+    }
+
+    // ---------------- Tools of the leg arriving here ----------------
+
+    /// <summary>The launch window the leg arriving here is flown in (a transfer leg); null for a Δv-map leg.</summary>
+    public TransferLeg? Transfer
+    {
+        get => _transfer;
+        set { if (SetProperty(ref _transfer, value)) _legsChanged(); }
+    }
+
+    /// <summary>The leg arriving here crosses between planets, so a launch window can be chosen for it.</summary>
+    public bool CanHaveTransfer { get; private set; }
+    public bool HasTransfer => _transfer is not null;
+    public bool OffersTransfer => CanHaveTransfer && _transfer is null;
+
+    /// <summary>"Depart Year 1, Day 231, arrive Year 2, Day 75 / Ejection 1,055 m/s, capture 652 m/s", or why the saved window isn't used.</summary>
+    public string TransferText { get; private set; } = "";
+
+    internal void SetTools(bool canHaveTransfer, TransferLegResult? transfer)
+    {
+        CanHaveTransfer = canHaveTransfer;
+        TransferText = _transfer is null ? ""
+            : transfer is { Window: var w } ? $"Depart {GameCalendar.Kerbin.FormatDay(w.DepartureUt)}, arrive {GameCalendar.Kerbin.FormatDay(w.ArrivalUt)}
+" +
+                                             $"Ejection {Format.Speed0(w.EjectionDv)}" + (transfer.Span.Captures ? $", capture {Format.Speed0(w.CaptureDv)}" : "")
+            : canHaveTransfer ? "No transfer solution for the saved window: open it to pick another."
+            : "The leg here no longer crosses between planets, so the saved window isn't used.";
+        foreach (var name in new[] { nameof(CanHaveTransfer), nameof(HasTransfer), nameof(OffersTransfer), nameof(TransferText) })
+            OnPropertyChanged(name);
     }
 
     public int Number { get; private set; }
@@ -146,7 +180,7 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(Role));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim());
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer);
 }
 
 /// <summary>One leg of the route with its phase and options.</summary>
@@ -184,7 +218,11 @@ public sealed class LegRowViewModel : ObservableObject
     public string PlaneChangeText => $"+{Leg.PlaneChangeDv:N0}";
     public bool CanAerobrake => Leg.CanAerobrake;
     public bool IsEdited => Leg.IsOverridden;
-    public string DvToolTip => Leg.IsOverridden
+
+    /// <summary>A leg tool supplies this value, so it can't be typed over (change it in the tool).</summary>
+    public bool IsFromTool => Leg.IsFromTool;
+    public string DvToolTip => Leg.ToolNote is { } tool ? $"{tool} — change it in the leg's tool. Map value: {Leg.MapDeltaV:N0} m/s."
+        : Leg.IsOverridden
         ? $"Edited — map value is {Leg.MapDeltaV:N0} m/s. Clear to restore. Applies to all missions."
         : "Map value. Type a new value to adjust it for all missions.";
 
@@ -195,6 +233,7 @@ public sealed class LegRowViewModel : ObservableObject
         set
         {
             var text = value.Trim();
+            if (Leg.IsFromTool) return;
             if (text.Length == 0) { _editDv(Leg.EdgeKey, null); return; }
             if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out var dv)
                 && dv >= 0 && dv != Leg.DeltaV)
@@ -204,7 +243,8 @@ public sealed class LegRowViewModel : ObservableObject
 
     public string Notes => string.Join(" · ", new[]
     {
-        Leg.FlightTime is { } t ? $"Flight ≈ {t}" : null,
+        Leg.ToolNote,
+        Leg.IsFromTool ? null : Leg.FlightTime is { } t ? $"Flight ≈ {t}" : null,
         Leg.CanAerobrake && Leg.AerobrakeDv > 0 ? $"Aerobraking possible (still needs a {Leg.AerobrakeDv:N0} m/s deorbit burn)"
             : Leg.CanAerobrake ? "Aerobraking possible" : null,
         Leg.To.JetEnginesPossible ? "Jet engines work here" : null,
@@ -289,6 +329,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         RemovePhaseCommand = new RelayCommand<PhaseViewModel>(RemovePhase, _ => Phases.Count > 1);
         ResetPhasesCommand = new RelayCommand(() => RebuildRoute(keepPhaseTuning: false));
         ResetMapEditsCommand = new RelayCommand(ResetMapEdits, () => EditedCount > 0);
+        OpenTransferCommand = new RelayCommand<StopViewModel>(OpenTransfer, s => s is not null && s.CanHaveTransfer);
+        RemoveTransferCommand = new RelayCommand<StopViewModel>(RemoveTransfer, s => s?.HasTransfer == true);
         NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
         SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
         SaveMissionAsCommand = new RelayCommand(SaveMissionAs, () => _missions is not null && _map is not null);
@@ -363,6 +405,59 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public RelayCommand ResetPhasesCommand { get; }
     public RelayCommand ResetMapEditsCommand { get; }
 
+    // ---------------- Leg tools ----------------
+
+    /// <summary>The route as the Δv map gives it, before leg tools replace any values.</summary>
+    private IReadOnlyList<RouteSegment> _mapSegments = [];
+
+    public RelayCommand<StopViewModel> OpenTransferCommand { get; }
+    public RelayCommand<StopViewModel> RemoveTransferCommand { get; }
+
+    /// <summary>A stop's transfer leg should be opened in the Transfer Planner.</summary>
+    public event Action<TransferLegLink>? TransferRequested;
+
+    /// <summary>The stops or the whole mission changed: tools open on a leg should check it's still there.</summary>
+    public event Action? RouteChanged;
+
+    /// <summary>The Transfer Planner link for the leg arriving at <paramref name="owner"/> (a stop), if it still has a transfer.</summary>
+    public TransferLegLink? TransferLinkFor(object owner) =>
+        owner is StopViewModel { HasTransfer: true } stop && Stops.Contains(stop) ? TransferLink(stop) : null;
+
+    private TransferLegLink? TransferLink(StopViewModel stop)
+    {
+        var index = Stops.IndexOf(stop);
+        if (_map is null || index < 1 || index > _mapSegments.Count) return null;
+        var segment = _mapSegments[index - 1];
+        if (LegTools.FindTransfer(segment.Legs, _bodies) is not { } span) return null;
+        var title = $"Stop {index} → {index + 1}: {_map[Stops[index - 1].NodeKey].DisplayName} → {_map[stop.NodeKey].DisplayName}";
+        return new TransferLegLink(stop, title, span, stop.Transfer, choice => stop.Transfer = choice);
+    }
+
+    private void OpenTransfer(StopViewModel stop)
+    {
+        if (TransferLink(stop) is { } link) TransferRequested?.Invoke(link);
+    }
+
+    private void RemoveTransfer(StopViewModel stop)
+    {
+        stop.Transfer = null;
+        RouteChanged?.Invoke();
+    }
+
+    /// <summary>Each leg with its tools applied (segment i arrives at stop i + 1), and each stop told what its leg offers.</summary>
+    private IReadOnlyList<RouteSegment> ApplyTools(IReadOnlyList<RouteSegment> segments)
+    {
+        _mapSegments = segments;
+        Stops[0].SetTools(false, null);
+        return segments.Select(segment =>
+        {
+            var stop = Stops[segment.ToStop];
+            var transfer = stop.Transfer is { } choice ? LegTools.EvaluateTransfer(segment.Legs, choice, _bodies) : null;
+            stop.SetTools(LegTools.FindTransfer(segment.Legs, _bodies) is not null, transfer);
+            return transfer is null ? segment : segment with { Legs = LegTools.ApplyTransfer(segment.Legs, transfer) };
+        }).ToList();
+    }
+
     // ---------------- Map view bindings ----------------
 
     public DeltaVMap? Map => _map;
@@ -380,7 +475,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public void AddStopFromMap(DvMapNode node)
     {
         var insertAt = Math.Max(1, Stops.Count - 1);
-        Stops.Insert(insertAt, new StopViewModel(node.Key, null, StopChanged, RefreshLegs));
+        Stops.Insert(insertAt, new StopViewModel(new MissionStop(node.Key), StopChanged, RefreshLegs));
         StopChanged();
     }
 
@@ -609,7 +704,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _suspend = true;
         Stops.Clear();
         foreach (var s in stops)
-            if (_map.TryGet(s.NodeKey, out _)) Stops.Add(new StopViewModel(s.NodeKey, s.Note, StopChanged, RefreshLegs));
+            if (_map.TryGet(s.NodeKey, out _)) Stops.Add(new StopViewModel(s, StopChanged, RefreshLegs));
         _suspend = false;
         StopChanged();
     }
@@ -619,13 +714,14 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (_suspend) return;
         for (var i = 0; i < Stops.Count; i++) Stops[i].SetPosition(i, Stops.Count);
         RebuildRoute(keepPhaseTuning: true);
+        RouteChanged?.Invoke();
     }
 
     private void AddStop()
     {
         // Like adding a waypoint: goes before the final stop, starting at the previous stop's location.
         var insertAt = Math.Max(1, Stops.Count - 1);
-        Stops.Insert(insertAt, new StopViewModel(Stops[insertAt - 1].NodeKey, null, StopChanged, RefreshLegs));
+        Stops.Insert(insertAt, new StopViewModel(new MissionStop(Stops[insertAt - 1].NodeKey), StopChanged, RefreshLegs));
         StopChanged();
     }
 
@@ -647,7 +743,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     private void ReverseStops()
     {
-        var reversed = Stops.Reverse().Select(s => s.ToDefinition()).ToList();
+        // Each leg is flown the other way now, so the tools of the old legs don't apply.
+        var reversed = Stops.Reverse().Select(s => s.ToDefinition() with { Transfer = null }).ToList();
         SetStops(reversed);
     }
 
@@ -693,6 +790,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     private void Apply(IReadOnlyList<RouteSegment> segments, IReadOnlyList<PhaseDefinition> phases, IReadOnlyList<LegSetting> settings)
     {
+        segments = ApplyTools(segments);
         Phases.Clear();
         for (var i = 0; i < phases.Count; i++) Phases.Add(new PhaseViewModel(phases[i], i, Recalculate));
 
