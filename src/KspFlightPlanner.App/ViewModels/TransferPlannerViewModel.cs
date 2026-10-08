@@ -27,8 +27,12 @@ public sealed record LegSummary(
 public sealed class TransferPlannerViewModel : ObservableObject
 {
     private readonly BodyRepository _bodies;
+    private readonly CustomLocationRepository _locations;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private Dictionary<long, CelestialBody> _byId = [];
+
+    /// <summary>Custom locations by their stand-in body id (negative), to tell planned from placed.</summary>
+    private Dictionary<long, CustomLocation> _custom = [];
 
     private StarSystem? _selectedSystem;
     private CelestialBody? _selectedOrigin;
@@ -59,9 +63,11 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private TransferPlan? _returnPlan;
     private TransferWindow? _returnWindow;
 
-    public TransferPlannerViewModel(BodyRepository bodies)
+    public TransferPlannerViewModel(BodyRepository bodies, CustomLocationRepository locations, PlannerEvents events)
     {
         _bodies = bodies;
+        _locations = locations;
+        events.LocationsChanged += _ => ReloadBodies();
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
         ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
 
@@ -91,10 +97,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         set
         {
             if (!SetProperty(ref _selectedSystem, value) || value is null) return;
-            var all = _bodies.GetBodies(value.Id);
-            _byId = all.ToDictionary(b => b.Id);
-            Origins.Clear();
-            foreach (var b in all.Where(b => b.Orbit is not null && Siblings(b).Any())) Origins.Add(b);
+            LoadBodies(value);
             SelectedOrigin = Origins.FirstOrDefault(b => b.IsDefault) ?? Origins.FirstOrDefault();
         }
     }
@@ -110,8 +113,9 @@ public sealed class TransferPlannerViewModel : ObservableObject
             if (value is not null)
             {
                 foreach (var b in Siblings(value)) Destinations.Add(b);
-                ParkingAltitudeText = Km(value.DefaultParkingAltitudeM);
+                ParkingAltitudeText = value.IsCustomLocation ? "" : Km(value.DefaultParkingAltitudeM);
                 ReturnArrivalMode = value.HasAtmosphere ? ArrivalMode.Aerobrake : ArrivalMode.Circularize;
+                OnPropertyChanged(nameof(IsParkingAltitudeEnabled));
             }
             SelectedDestination = Destinations.FirstOrDefault(b => b.Name == "Duna") ?? Destinations.FirstOrDefault();
             FillFacts(OriginFacts, value);
@@ -128,14 +132,29 @@ public sealed class TransferPlannerViewModel : ObservableObject
             if (!SetProperty(ref _selectedDestination, value)) return;
             if (value is not null)
             {
-                ArrivalAltitudeText = Km(value.DefaultParkingAltitudeM);
-                if (_arrivalMode == ArrivalMode.Aerobrake && !value.HasAtmosphere) SelectedArrivalMode = ArrivalMode.Circularize;
+                ArrivalAltitudeText = value.IsCustomLocation ? "" : Km(value.DefaultParkingAltitudeM);
+                if (value.IsCustomLocation || (_arrivalMode == ArrivalMode.Aerobrake && !value.HasAtmosphere))
+                    SelectedArrivalMode = ArrivalMode.Circularize;
+                OnPropertyChanged(nameof(IsArrivalAltitudeEnabled));
             }
             FillFacts(DestinationFacts, value);
             OnPropertyChanged(nameof(StayLabel));
             Recalculate();
         }
     }
+
+    /// <summary>Custom locations are the orbit themselves: there is no parking or arrival orbit to choose.</summary>
+    public bool IsParkingAltitudeEnabled => SelectedOrigin is not { IsCustomLocation: true };
+    public bool IsArrivalAltitudeEnabled => SelectedDestination is not { IsCustomLocation: true };
+
+    /// <summary>Shown instead of the porkchop when there's no window to find.</summary>
+    public string? AnyTimeNote => CurrentPlotIsAnyTime && (ShowReturnPlot ? _returnRequest : _request) is { } r
+        ? $"No launch window to wait for: {(IsPlanned(r.Destination) ? r.Destination.Name : r.Origin.Name)} is planned, so it will be " +
+          "wherever you arrive. The plan departs at the earliest date on the ideal Hohmann transfer. Mark it as placed on the " +
+          "Locations tab (with its position) once it exists to get real launch windows."
+        : null;
+    public bool HasPlot => CurrentPlot is not null;
+    private bool CurrentPlotIsAnyTime => (ShowReturnPlot ? _returnPlan : _plan)?.IsAnyTime == true;
 
     /// <summary>Parking orbit altitude at the origin, in km.</summary>
     public string ParkingAltitudeText
@@ -302,6 +321,59 @@ public sealed class TransferPlannerViewModel : ObservableObject
 
     // ---------------- Logic ----------------
 
+    /// <summary>
+    /// Bodies of the system plus the user's custom locations as gravity-free stand-ins (CustomLocationOrbits.ToBody),
+    /// so they can be origins and destinations like any planet.
+    /// </summary>
+    private void LoadBodies(StarSystem system)
+    {
+        var all = _bodies.GetBodies(system.Id).ToList();
+        var byName = all.ToDictionary(b => b.Name);
+        var home = all.FirstOrDefault(b => b.IsDefault);
+        var star = home?.ParentId is { } sid ? all.FirstOrDefault(b => b.Id == sid) : null;
+        _custom = [];
+        foreach (var location in _locations.GetAll())
+        {
+            if (!byName.TryGetValue(location.BodyName, out var body)) continue;
+            try
+            {
+                var stand = CustomLocationOrbits.ToBody(location, body, home, star);
+                all.Add(stand);
+                _custom[stand.Id] = location;
+            }
+            catch (ArgumentException)
+            {
+                // Position inputs invalid; fix it on the Locations tab.
+            }
+        }
+        _byId = all.ToDictionary(b => b.Id);
+        Origins.Clear();
+        foreach (var b in all.Where(b => b.Orbit is not null && Siblings(b).Any())) Origins.Add(b);
+    }
+
+    /// <summary>Custom locations changed on the Locations tab: reload, keeping the current choices where they still exist.</summary>
+    private void ReloadBodies()
+    {
+        if (SelectedSystem is not { } system) return;
+        var originId = SelectedOrigin?.Id;
+        var destinationId = SelectedDestination?.Id;
+        _suspendRecalculate = true;
+        LoadBodies(system);
+        _selectedOrigin = null;
+        SelectedOrigin = Origins.FirstOrDefault(b => b.Id == originId) ?? Origins.FirstOrDefault(b => b.IsDefault) ?? Origins.FirstOrDefault();
+        if (Destinations.FirstOrDefault(b => b.Id == destinationId) is { } dest) SelectedDestination = dest;
+        _suspendRecalculate = false;
+        Recalculate();
+    }
+
+    /// <summary>A planned custom location has no fixed position yet, so any departure time works.</summary>
+    private bool IsPlanned(CelestialBody body) => _custom.TryGetValue(body.Id, out var l) && !l.IsPlaced;
+
+    private TransferPlan PlanFor(TransferRequest request) =>
+        IsPlanned(request.Origin) || IsPlanned(request.Destination)
+            ? TransferPlanner.PlanAnyTime(request)
+            : TransferPlanner.Plan(request);
+
     private IEnumerable<CelestialBody> Siblings(CelestialBody body) =>
         _byId.Values.Where(b => b.Id != body.Id && b.Orbit is not null && b.ParentId == body.ParentId && body.ParentId is not null);
 
@@ -325,7 +397,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         SetBusy(+1);
         try
         {
-            var plan = await Task.Run(() => TransferPlanner.Plan(request));
+            var plan = await Task.Run(() => PlanFor(request));
             if (version != _version) return;
             _request = request;
             _plan = plan;
@@ -363,7 +435,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         SetBusy(+1);
         try
         {
-            var plan = await Task.Run(() => TransferPlanner.Plan(request));
+            var plan = await Task.Run(() => PlanFor(request));
             if (version != _returnVersion) return;
             _returnRequest = request;
             _returnPlan = plan;
@@ -385,8 +457,11 @@ public sealed class TransferPlannerViewModel : ObservableObject
         error = null;
         if (SelectedOrigin is not { } origin || SelectedDestination is not { } dest) return null;
         if (origin.ParentId is not { } parentId || !_byId.TryGetValue(parentId, out var parent)) return null;
-        if (!TryKm(ParkingAltitudeText, out var parking)) { error = "Enter the parking orbit altitude in km."; return null; }
-        if (!TryKm(ArrivalAltitudeText, out var arrival)) { error = "Enter the arrival orbit altitude in km."; return null; }
+        // Custom locations have no gravity or parking orbit; a nominal 1 m keeps the formulas well-defined.
+        var parking = 1.0;
+        var arrival = 1.0;
+        if (!origin.IsCustomLocation && !TryKm(ParkingAltitudeText, out parking)) { error = "Enter the parking orbit altitude in km."; return null; }
+        if (!dest.IsCustomLocation && !TryKm(ArrivalAltitudeText, out arrival)) { error = "Enter the arrival orbit altitude in km."; return null; }
         if (parking >= origin.SoiAltitudeM) { error = $"Parking orbit is outside {origin.Name}'s sphere of influence."; return null; }
         if (arrival >= dest.SoiAltitudeM) { error = $"Arrival orbit is outside {dest.Name}'s sphere of influence."; return null; }
 
@@ -401,7 +476,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         Wait: _calendar.FormatDuration(waitS),
         Arrival: _calendar.FormatDate(w.ArrivalUt),
         FlightTime: _calendar.FormatDuration(w.FlightTimeS),
-        PhaseAngle: Deg(w.PhaseAngleDeg),
+        PhaseAngle: double.IsNaN(w.PhaseAngleDeg) ? "Any (planned location)" : Deg(w.PhaseAngleDeg),
         EjectionPoint: w.Ejection.ToString(),
         EjectionInclination: Deg(w.Ejection.InclinationDeg),
         EjectionDv: Format.Speed(w.EjectionDv),
@@ -450,7 +525,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
 
     private static readonly string[] PlotProperties =
     [
-        nameof(CurrentPlot), nameof(CurrentPlotSelection), nameof(PlotTitle), nameof(PorkchopStartLabel),
+        nameof(CurrentPlot), nameof(CurrentPlotSelection), nameof(PlotTitle), nameof(AnyTimeNote), nameof(HasPlot), nameof(PorkchopStartLabel),
         nameof(PorkchopEndLabel), nameof(PorkchopMinFlightLabel), nameof(PorkchopMaxFlightLabel), nameof(PorkchopScaleLabel),
     ];
 
@@ -458,6 +533,11 @@ public sealed class TransferPlannerViewModel : ObservableObject
     {
         facts.Clear();
         if (body is null) return;
+        if (_custom.TryGetValue(body.Id, out var location))
+        {
+            FillCustomFacts(facts, location, body);
+            return;
+        }
         var parent = body.ParentId is { } pid && _byId.TryGetValue(pid, out var p) ? p : null;
 
         facts.Add(new("Type", body.BodyClass is null ? "—" : parent is null ? body.BodyClass : $"{body.BodyClass} of {parent.Name}"));
@@ -486,6 +566,22 @@ public sealed class TransferPlannerViewModel : ObservableObject
         }
         facts.Add(new("Surface → low orbit Δv", body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Format.Speed(dv)}" : "—"));
         facts.Add(new("Suggested low orbit", Format.Distance(body.DefaultParkingAltitudeM)));
+    }
+
+    private void FillCustomFacts(ObservableCollection<Fact> facts, CustomLocation location, CelestialBody stand)
+    {
+        var parent = _byId[stand.ParentId!.Value];
+        var o = stand.Orbit!;
+        facts.Add(new("Type", $"Custom location around {parent.Name}"));
+        facts.Add(new("Orbit", CustomLocations.AltitudeText(location) + (location.IsCircular ? " circular" : "")));
+        facts.Add(new("Eccentricity / inclination", $"{o.Eccentricity:0.###} / {o.InclinationDeg:0.##}°"));
+        facts.Add(new("Orbital period", _calendar.FormatDuration(Kepler.OrbitalPeriod(o, parent.Mu))));
+        facts.Add(new("Position", location.IsPlaced
+            ? location.Mode == PositionMode.PhaseAngle
+                ? $"Placed: {location.PhaseAngleDeg:0.#}° ahead of Kerbin on {_calendar.FormatDay(location.EpochUt)}"
+                : $"Placed: elements on {_calendar.FormatDay(location.EpochUt)}"
+            : "Planned — no fixed position yet"));
+        facts.Add(new("Gravity", "None — arriving is a straight speed match (rendezvous)"));
     }
 
     private static string Km(double metres) => (metres / 1000).ToString("0.###", CultureInfo.CurrentCulture);

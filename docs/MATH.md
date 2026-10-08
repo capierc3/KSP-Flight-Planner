@@ -219,6 +219,33 @@ Worked example — Kerbin → Duna: r₁ = 13,599,840,256 m, r₂ = 20,726,155,2
 - Code: `TransferPlanner.Hohmann`
 - Source: Curtis §8.2–8.3; [Synodic period (Wikipedia)](https://en.wikipedia.org/wiki/Orbital_period#Synodic_period)
 
+## 8b. Transfers to custom locations
+
+A custom location can be an origin or destination in the Transfer Planner. It's treated like a tiny planet with **no gravity** (μ = 0), which changes two things:
+
+```
+arrival burn   = v∞ at arrival               (rendezvous: match its speed directly; √(v∞² + 2·0/r) − 0 = v∞)
+departure burn = v∞ at departure             (no Oberth effect when leaving it either)
+```
+
+**Planned or placed.** A *planned* location doesn't exist yet, so wherever you arrive becomes its position — every departure date is equally good and the planner uses the ideal Hohmann transfer (§8) from your earliest date. A *placed* location exists in your save; once its position is known it moves on its orbit like a planet, so the planner searches launch windows with the porkchop method (§11).
+
+**Entering a position.** Two ways:
+
+- **Orbital elements** at a date — longitude of ascending node Ω, argument of periapsis ω and mean anomaly M (Kerbal Engineer and MechJeb display all three for a vessel). The app stores M at that date and propagates with Kepler's equation (§10).
+- **Phase angle** at a date — "θ degrees ahead of Kerbin". For a circular orbit in Kerbin's plane (i = 0, Ω = 0, ω = 0) the mean anomaly equals the longitude, so `M(date) = λ_Kerbin(date) + θ`, where λ_Kerbin is Kerbin's longitude from its own orbital elements.
+
+The gap to Kerbin then changes by `(n_location − n_Kerbin)` per second, where `n = 2π / T`.
+
+Worked example — the 10,000,000 km "Eye of Kerbol" (r = 10,261,600,000 m), planned:
+
+1. Hohmann from Kerbin: 175 Kerbin days; ejection from 80 km **1,013.7 m/s**, arrival (rendezvous) **723.2 m/s** — the same numbers as the Δv map edge in §4b
+2. Its period is 6,032,218 s (279 days) against Kerbin's 9,203,545 s, so it pulls ahead of Kerbin by **0.444° per day**
+3. If it were placed, the ideal phase angle at launch would be 180° − 360° × 175.1 / 279.3 = **−45.7°** (45.7° *behind* Kerbin — it's an inner orbit, so it catches up during the trip), and windows would repeat every **810 days**
+
+- Code: `CustomLocationOrbits.ToElements`, `CustomLocationOrbits.ToBody`, `CustomLocationOrbits.PhaseAngleFromHome`, `TransferPlanner.PlanAnyTime`
+- Source: Curtis §3.4 (mean anomaly), §8.2 (phase angles), §8.3 (synodic period)
+
 ## 9. Ejection angle: where in your parking orbit to burn
 
 Your escape hyperbola bends by θ∞ between the burn (periapsis) and the direction you leave in:

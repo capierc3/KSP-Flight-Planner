@@ -88,11 +88,13 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Text="Parking orbit (km)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                        <TextBox Text="{Binding ParkingAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsParkingAltitudeEnabled}"
+                                 ToolTip="Not used when leaving a custom location (you start in its orbit)" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <TextBlock Text="Arrival orbit (km)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding ArrivalAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" />
+                        <TextBox Text="{Binding ArrivalAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding IsArrivalAltitudeEnabled}"
+                                 ToolTip="Not used when going to a custom location (you match its orbit)" />
                     </StackPanel>
                 </Grid>
 
@@ -237,9 +239,10 @@
                     <RadioButton Content="Outbound" IsChecked="{Binding ShowOutboundPlot}" GroupName="Leg" Margin="0,0,12,0" />
                     <RadioButton Content="Return" IsChecked="{Binding ShowReturnPlot}" GroupName="Leg" />
                 </StackPanel>
-                <TextBlock Text="{Binding PlotTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,0,2" />
+                <TextBlock Text="{Binding PlotTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,16,2" TextTrimming="CharacterEllipsis" />
             </DockPanel>
-            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Note}" Margin="0,0,0,8">
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Note}" Margin="0,0,0,8"
+                       Visibility="{Binding HasPlot, Converter={StaticResource BoolToVisibility}}">
                 Total transfer Δv by departure date (→) and flight time (↑). Blue is cheap, red is expensive
                 (<Run Text="{Binding PorkchopScaleLabel, Mode=OneWay}" />). Click or drag to inspect another departure.
                 The dotted ridge marks exact 180° transfers, which need a large plane change.
@@ -254,8 +257,12 @@
             </Grid>
 
             <Border Grid.Row="2" Grid.Column="1" CornerRadius="4" ClipToBounds="True">
-                <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding CurrentPlot}" Selected="{Binding CurrentPlotSelection}"
-                                           Cursor="Cross" />
+                <Grid>
+                    <controls:PorkchopPlotView x:Name="Porkchop" Plot="{Binding CurrentPlot}" Selected="{Binding CurrentPlotSelection}"
+                                               Cursor="Cross" />
+                    <TextBlock Text="{Binding AnyTimeNote}" Foreground="#E6E9F0" TextWrapping="Wrap" FontSize="14" Margin="40"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460" TextAlignment="Center" />
+                </Grid>
             </Border>
 
             <Grid Grid.Row="3" Grid.Column="1" Margin="0,4,0,0">

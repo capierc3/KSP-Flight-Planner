@@ -81,6 +81,67 @@ public sealed class CustomLocationTransferTests : IDisposable
         Assert.Contains(reason, ex.Message);
     }
 
+    // ---------------- Transfer planning ----------------
+
+    [Fact]
+    public void Planned_location_has_no_window_and_matches_the_dv_map()
+    {
+        var eye = Stand(CustomLocation.Circular(1, "Eye of Kerbol", "Kerbol", 10_000_000_000));
+        var plan = TransferPlanner.PlanAnyTime(ToLocation(eye, earliest: 123_456));
+        var w = plan.BestWindow;
+
+        Assert.True(plan.IsAnyTime);
+        Assert.Null(plan.Porkchop);
+        Assert.Equal(123_456, w.DepartureUt);
+        Assert.True(double.IsNaN(w.PhaseAngleDeg));
+        // Same Hohmann numbers as the Δv map (docs/MATH.md §4b): ejection 1,013.7 from 80 km, arrival 723.2.
+        Assert.Equal(1_013.7, w.EjectionDv, 0.1);
+        Assert.Equal(723.2, w.CaptureDv, 0.1);
+        Assert.InRange(w.FlightTimeS, 174 * 21_600.0, 176 * 21_600.0);
+    }
+
+    [Fact]
+    public void Placed_location_gets_a_real_window_and_a_rendezvous_arrival()
+    {
+        var eye = Stand(CustomLocation.Circular(1, "Eye of Kerbol", "Kerbol", 10_000_000_000) with
+        {
+            IsPlaced = true, Mode = PositionMode.PhaseAngle, PhaseAngleDeg = 0, EpochUt = 0,
+        });
+        var plan = TransferPlanner.Plan(ToLocation(eye));
+        var w = plan.BestWindow;
+
+        Assert.False(plan.IsAnyTime);
+        Assert.NotNull(plan.Porkchop);
+        Assert.InRange(w.DepartureUt, 0, plan.Hohmann.SynodicPeriodS * 1.1);
+        Assert.Equal(w.ArrivalVInf, w.CaptureDv, 1e-6);       // no gravity: arrival burn = relative speed
+        Assert.True(w.Ejection.InclinationDeg is > -1 and < 1);
+        Assert.InRange(w.TotalDv, 1_700, 2_000);              // close to the ideal 1,013.7 + 723.2
+    }
+
+    [Fact]
+    public void Leaving_a_custom_location_is_a_direct_burn()
+    {
+        var eye = Stand(CustomLocation.Circular(1, "Eye of Kerbol", "Kerbol", 10_000_000_000));
+        var home = new TransferRequest(eye, Kerbin, Kerbol, 1, 80_000, 0, ArrivalMode.Aerobrake);
+        var h = TransferPlanner.Hohmann(home);
+
+        Assert.True(h.Ejection.IsDirect);
+        Assert.Equal(h.DepartureVInf, h.EjectionDv, 1e-6);
+        Assert.Equal(723.2, h.EjectionDv, 0.1);
+    }
+
+    [Fact]
+    public void Budget_to_a_custom_location_has_a_rendezvous_and_no_landing()
+    {
+        var eye = Stand(CustomLocation.Circular(1, "Eye of Kerbol", "Kerbol", 10_000_000_000));
+        var request = ToLocation(eye);
+        var budget = MissionBudget.Build(request, TransferPlanner.PlanAnyTime(request).BestWindow, includeLanding: true);
+
+        Assert.Contains(budget, l => l.Stage == "Match orbit with Eye of Kerbol (rendezvous)");
+        Assert.DoesNotContain(budget, l => l.Stage.StartsWith("Landing"));
+        Assert.Contains(budget, l => l.Stage.StartsWith("Launch: Kerbin surface"));
+    }
+
     // ---------------- Storage ----------------
 
     [Fact]

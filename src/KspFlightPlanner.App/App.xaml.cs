@@ -23,7 +23,7 @@ public partial class App : Application
             var viewModel = new MainViewModel(
                 new MissionBuilderViewModel(maps, new MissionRepository(database), locations, events),
                 new LocationsViewModel(bodies, maps, locations, events),
-                new TransferPlannerViewModel(bodies),
+                new TransferPlannerViewModel(bodies, locations, events),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database)),
                 events);
             new MainWindow(viewModel).Show();

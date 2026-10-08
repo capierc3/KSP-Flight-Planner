@@ -14,12 +14,14 @@ public static class MissionBudget
     {
         var origin = outbound.Origin;
         var dest = outbound.Destination;
-        var landing = includeLanding && outbound.Arrival != ArrivalMode.Flyby;
+        // Custom locations have no surface: no launch from them, no landing on them.
+        var landing = includeLanding && outbound.Arrival != ArrivalMode.Flyby && !dest.IsCustomLocation;
         var lines = new List<BudgetLine>();
 
         if (returnLeg is not null) lines.Add(new BudgetLine($"Outbound: {origin.Name} → {dest.Name}", null, IsHeader: true));
-        lines.Add(new($"Launch: {origin.Name} surface → {outbound.ParkingAltitudeM / 1000:0} km orbit", origin.SurfaceToLowOrbitDv,
-            origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate; depends on your ascent"));
+        if (!origin.IsCustomLocation)
+            lines.Add(new($"Launch: {origin.Name} surface → {outbound.ParkingAltitudeM / 1000:0} km orbit", origin.SurfaceToLowOrbitDv,
+                origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate; depends on your ascent"));
         AddTransfer(lines, outbound, outboundWindow, "Transfer ejection burn");
 
         if (landing)
@@ -50,7 +52,7 @@ public static class MissionBudget
         var origin = request.Origin;
         var dest = request.Destination;
 
-        lines.Add(new(ejectionLabel, window.EjectionDv,
+        lines.Add(new(origin.IsCustomLocation ? $"Departure burn from {origin.Name}" : ejectionLabel, window.EjectionDv,
             Math.Abs(window.Ejection.InclinationDeg) > 0.5
                 ? $"Escape direction is {window.Ejection.InclinationDeg:0.0}° out of {origin.Name}'s orbital plane"
                 : null));
@@ -59,6 +61,8 @@ public static class MissionBudget
 
         lines.Add(request.Arrival switch
         {
+            ArrivalMode.Circularize when dest.IsCustomLocation => new BudgetLine($"Match orbit with {dest.Name} (rendezvous)", window.CaptureDv,
+                "No gravity well to help: the whole speed difference is burned directly"),
             ArrivalMode.Circularize => new BudgetLine($"Capture into {request.ArrivalAltitudeM / 1000:0} km {dest.Name} orbit", window.CaptureDv),
             ArrivalMode.Aerobrake => new BudgetLine($"Capture at {dest.Name} by aerobraking", 0,
                 dest.HasAtmosphere

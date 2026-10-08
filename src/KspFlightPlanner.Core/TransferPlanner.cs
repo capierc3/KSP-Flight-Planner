@@ -32,7 +32,10 @@ public sealed record TransferRequest(
 /// <summary>Where to perform the ejection burn, relative to the origin body's prograde/retrograde direction.</summary>
 public sealed record EjectionBurn(double AngleDeg, string Reference, double InclinationDeg)
 {
-    public override string ToString() => $"{AngleDeg:0.0}° before {Reference}";
+    /// <summary>Leaving a place with no gravity (a custom location): burn straight along the departure direction.</summary>
+    public bool IsDirect => double.IsNaN(AngleDeg);
+
+    public override string ToString() => IsDirect ? "direct (no gravity)" : $"{AngleDeg:0.0}° before {Reference}";
 }
 
 /// <summary>Idealised transfer between circular, coplanar orbits (uses each body's semi-major axis).</summary>
@@ -42,7 +45,9 @@ public sealed record HohmannEstimate(
     double SynodicPeriodS,
     double EjectionDv,
     double CaptureDv,
-    EjectionBurn Ejection);
+    EjectionBurn Ejection,
+    double DepartureVInf = 0,
+    double ArrivalVInf = 0);
 
 public sealed record TransferWindow(
     double DepartureUt,
@@ -73,7 +78,12 @@ public sealed record PorkchopPlot(
     public double this[int column, int row] => TotalDv[row * Columns + column];
 }
 
-public sealed record TransferPlan(HohmannEstimate Hohmann, TransferWindow BestWindow, PorkchopPlot Porkchop);
+/// <param name="Porkchop">Null when there is no window to search (a planned custom location: any departure works).</param>
+public sealed record TransferPlan(HohmannEstimate Hohmann, TransferWindow BestWindow, PorkchopPlot? Porkchop)
+{
+    /// <summary>True when the destination's position is free (planned), so every departure date is equally good.</summary>
+    public bool IsAnyTime => Porkchop is null;
+}
 
 /// <summary>
 /// Plans an interplanetary transfer between two bodies orbiting the same parent.
@@ -158,7 +168,28 @@ public static class TransferPlanner
             synodic,
             EjectionDv(request, vInfDep),
             CaptureDv(request, vInfArr),
-            EjectionBurnFor(request, vInfDep, outward ? 0 : Math.PI, 0));
+            EjectionBurnFor(request, vInfDep, outward ? 0 : Math.PI, 0),
+            vInfDep,
+            vInfArr);
+    }
+
+    /// <summary>
+    /// For a destination whose position is still free (a planned custom location): there is no launch window,
+    /// so depart at the earliest date on the ideal Hohmann transfer. See docs/MATH.md §8b.
+    /// </summary>
+    public static TransferPlan PlanAnyTime(TransferRequest request)
+    {
+        var h = Hohmann(request);
+        var window = new TransferWindow(
+            request.EarliestDepartureUt,
+            request.EarliestDepartureUt + h.TransferTimeS,
+            double.NaN,
+            h.DepartureVInf,
+            h.ArrivalVInf,
+            h.EjectionDv,
+            h.CaptureDv,
+            h.Ejection);
+        return new TransferPlan(h, window, null);
     }
 
     /// <summary>Full transfer details for a specific departure time and flight time.</summary>
@@ -214,6 +245,7 @@ public static class TransferPlanner
     /// </summary>
     private static EjectionBurn EjectionBurnFor(TransferRequest req, double vInf, double asymptoteAngleRad, double inclinationDeg)
     {
+        if (req.Origin.Mu <= 0) return new EjectionBurn(double.NaN, "", inclinationDeg);
         var rp = req.Origin.EquatorialRadiusM + req.ParkingAltitudeM;
         var e = 1 + rp * vInf * vInf / req.Origin.Mu;
         var thetaInf = Math.Acos(-1 / e);
