@@ -214,8 +214,53 @@ public sealed class LegToolsTests : IDisposable
         Assert.Equal((relay.Id, station.Id, 0), (hop.TargetLocationId, hop.ChaserLocationId!.Value, hop.Start));
 
         Assert.Null(Find("kerbin.surface", planned.Key)); // not placed: nothing to meet yet
-        Assert.Null(Find("kerbin.lo", station.Key));      // where you are in LKO isn't known
-        Assert.Null(Find("mun.surface", station.Key));    // another body
+    }
+
+    [Fact]
+    public void From_any_other_orbit_the_rendezvous_starts_in_the_target_bodys_low_orbit()
+    {
+        var (map, station, _, _) = KerbinCraft();
+        RendezvousSpan? Find(string from) =>
+            LegTools.FindRendezvous(map.Route(map[from], map[station.Key]), map[from], map[station.Key], _ => true);
+
+        // Already in LKO: the whole leg is the rendezvous, from anywhere on the 80 km orbit.
+        var fromLko = Find("kerbin.lo")!;
+        Assert.True(fromLko.FromParking && !fromLko.IsLaunch);
+        Assert.Equal((0, (long?)null), (fromLko.Start, fromLko.ChaserLocationId));
+
+        // Coming home from the Mun: the map flies Mun orbit → Kerbin orbit, then the rendezvous takes over.
+        var legs = map.Route(map["mun.lo"], map[station.Key]);
+        var fromMun = Find("mun.lo")!;
+        Assert.True(fromMun.FromParking);
+        Assert.Equal(legs.Count - 1, fromMun.Start);
+        Assert.Equal(("Kerbin", "LowOrbit"), (legs[fromMun.Start].From.BodyName, legs[fromMun.Start].From.Kind));
+    }
+
+    [Fact]
+    public void A_mission_keeps_its_own_places_off_the_locations_tab()
+    {
+        var kerbin = _bodies["Kerbin"];
+        var orbit = new OrbitalElements(kerbin.EquatorialRadiusM + 2_870_000, 0.002, 1.2, 350, 20, 4.0, 12_345);
+        var relay = CustomLocationOrbits.FromElements(CustomLocation.MissionPlaceIdBase + 1, "KerbLink Mk2 A", kerbin, orbit) with
+        {
+            KspSave = "Protogen", KspVesselId = "abc",
+        };
+        var back = CustomLocationOrbits.ToElements(relay, kerbin);
+        Assert.Equal(orbit.SemiMajorAxisM, back.SemiMajorAxisM, 3);
+        Assert.Equal(orbit.Eccentricity, back.Eccentricity, 9);
+        Assert.Equal(orbit.MeanAnomalyAtEpochRad, back.MeanAnomalyAtEpochRad, 9);
+        Assert.Equal(orbit.EpochS, back.EpochS);
+
+        Assert.False(_map.TryGet(relay.Key, out _));
+        var map = CustomLocations.WithPlaces(_map, [relay], _bodies);
+        Assert.Equal("kerbin.lo", map.ParentOf(map[relay.Key])!.Key);
+        Assert.NotNull(LegTools.FindRendezvous(map.Route(map["kerbin.surface"], map[relay.Key]), map["kerbin.surface"], map[relay.Key],
+            id => id == relay.Id));
+
+        var definition = new MissionDefinition([new("kerbin.surface"), new(relay.Key)], [new("Launch")], [], Places: [relay]);
+        var repo = new MissionRepository(_db);
+        Assert.Equal(relay, repo.Get(repo.Add("Relay repair", definition))!.Definition.Places!.Single());
+        Assert.DoesNotContain(new CustomLocationRepository(_db).GetAll(), l => l.Name == relay.Name);
     }
 
     [Fact]

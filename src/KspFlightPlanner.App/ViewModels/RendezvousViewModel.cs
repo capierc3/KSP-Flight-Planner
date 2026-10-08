@@ -84,6 +84,12 @@ public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpa
 {
     /// <summary>When the mission reaches the start of the leg, if known: a new plan starts then.</summary>
     public double? EarliestUt { get; init; }
+
+    /// <summary>The craft met (a custom location or one of the mission's own places).</summary>
+    public required CustomLocation Target { get; init; }
+
+    /// <summary>The craft the leg leaves from, when it starts at one.</summary>
+    public CustomLocation? Chaser { get; init; }
 }
 
 /// <summary>
@@ -131,6 +137,15 @@ public sealed class RendezvousViewModel : ObservableObject
     private int _plotLeg;
     private bool _showDiagram = true;
     private RendezvousLegLink? _leg;
+    private MissionBuilderViewModel? _mission;
+    private bool _startFromMission;
+    private RendezvousStart? _missionStart;
+
+    /// <summary>Crafts that aren't in the save or on the Locations tab: the mission's own places and parking orbits.</summary>
+    private readonly List<CraftChoice> _extraCrafts = [];
+
+    /// <summary>The custom location (or mission place) behind a craft in the list, by craft key.</summary>
+    private readonly Dictionary<string, CustomLocation> _craftLocations = [];
 
     public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
         FlightRepository? flights = null)
@@ -171,6 +186,7 @@ public sealed class RendezvousViewModel : ObservableObject
         AddGameTargetCommand = new RelayCommand(AddGameTarget, () => AvailableTargets.Any(c => c.Key == TargetKey));
         FlyCommand = new RelayCommand(Fly, () => _plan is not null && _flights is not null);
         StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
+        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         RefreshDesignChoices();
         RebuildCrafts();
@@ -201,10 +217,13 @@ public sealed class RendezvousViewModel : ObservableObject
         var choice = link.Choice is { } c && c.TargetLocationId == span.TargetLocationId ? c : null;
         _leg = null; // don't save anything while it's being set up
         _suspend = true;
+        _startFromMission = false;
+        _missionStart = null;
         _startFromLaunch = span.IsLaunch;
-        if (span.ChaserLocationId is { } chaser) _selectedChaser = CraftForLocation(chaser);
+        if (link.Chaser is { } chaser) _selectedChaser = CraftForLocation(chaser);
+        else if (span.FromParking) _selectedChaser = ParkingCraft(span.BodyName, link.ParkingAltitudeM);
         Targets.Clear();
-        if (CraftForLocation(span.TargetLocationId) is { } target) Targets.Add(target);
+        Targets.Add(CraftForLocation(link.Target));
         _deorbit = false;
         _parkingAltitudeText = Km(link.ParkingAltitudeM);
         _followSaveTime = false;
@@ -219,30 +238,68 @@ public sealed class RendezvousViewModel : ObservableObject
         _suspend = false;
 
         _leg = link;
-        foreach (var name in new[] { nameof(StartFromLaunch), nameof(StartFromCraft), nameof(SelectedChaser), nameof(Deorbit), nameof(ParkingAltitudeText),
-                     nameof(FollowSaveTime), nameof(ManualStart), nameof(DeorbitLabel), nameof(CapacityHint) })
+        foreach (var name in new[] { nameof(Deorbit), nameof(ParkingAltitudeText), nameof(FollowSaveTime), nameof(ManualStart) })
             OnPropertyChanged(name);
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        foreach (var name in LegProperties.Concat(StartProperties)) OnPropertyChanged(name);
         RefreshAvailableTargets();
-        if (Targets.Count == 0) ErrorText = "The craft this leg meets isn't in the list: check it's placed on the Locations tab (or in the linked save).";
-        else Recalculate();
+        Recalculate();
     }
 
     /// <summary>Back to using the tab on its own; the mission keeps the plan last made.</summary>
     public void StopEditingLeg()
     {
         _leg = null;
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        foreach (var name in LegProperties.Concat(StartProperties)) OnPropertyChanged(name);
     }
 
-    private static readonly string[] LegProperties = [nameof(Leg), nameof(IsEditingLeg), nameof(IsRouteEditable), nameof(LegTitle)];
+    private static readonly string[] LegProperties =
+        [nameof(Leg), nameof(IsEditingLeg), nameof(IsRouteEditable), nameof(LegTitle)];
 
-    /// <summary>A custom location in the craft list: the save's vessel while it's linked to this save, else the location itself.</summary>
-    private CraftChoice? CraftForLocation(long id)
+    private static readonly string[] StartProperties =
+    [
+        nameof(StartFromLaunch), nameof(StartFromCraft), nameof(PickLaunch), nameof(PickCraft), nameof(PickMission), nameof(SelectedChaser),
+        nameof(IsStartEditable), nameof(MissionStartText), nameof(CapacityHint), nameof(CanAddToMission), nameof(ShowsAddToMission),
+        nameof(AddToMissionText), nameof(DeorbitLabel),
+    ];
+
+    /// <summary>
+    /// A custom location (or mission place) in the craft list: the save's vessel while it's linked to this save, else
+    /// the location's own entry, added to the list if it isn't there (a mission's place isn't on the Locations tab).
+    /// </summary>
+    private CraftChoice CraftForLocation(CustomLocation location)
     {
-        var location = _locations.Get(id);
-        var vesselKey = location is { IsLinked: true } && location.KspSave == _sync.SaveName ? $"vessel:{location.KspVesselId}" : null;
-        return Crafts.FirstOrDefault(c => c.Key == vesselKey) ?? Crafts.FirstOrDefault(c => c.Key == $"location:{id}");
+        var vesselKey = location.IsLinked && location.KspSave == _sync.SaveName ? $"vessel:{location.KspVesselId}" : null;
+        if (Crafts.FirstOrDefault(c => c.Key == vesselKey || c.Key == $"location:{location.Id}") is { } listed) return listed;
+        var bodies = _sync.StockBodies();
+        var body = bodies[location.BodyName];
+        var home = bodies.Values.FirstOrDefault(b => b.IsDefault);
+        var star = home?.ParentId is { } sid ? bodies.Values.FirstOrDefault(b => b.Id == sid) : null;
+        var orbit = CustomLocationOrbits.ToElements(location, body, home, star);
+        var craft = new CraftChoice($"location:{location.Id}", location.Name,
+            $"{(location.IsMissionPlace ? "in this mission" : "custom location")}, {body.Name} {OrbitText(orbit, body)}", body, orbit, null);
+        _craftLocations[craft.Key] = location;
+        return AddExtraCraft(craft);
+    }
+
+    /// <summary>
+    /// The low orbit a mission arrives in, as a craft to start from. Where on the orbit isn't known, so it starts at
+    /// longitude 0; the phasing orbit absorbs the difference (it changes when you meet more than the Δv).
+    /// </summary>
+    private CraftChoice ParkingCraft(string bodyName, double altitudeM)
+    {
+        var body = _sync.StockBodies()[bodyName];
+        var orbit = new OrbitalElements(body.EquatorialRadiusM + altitudeM, 0, 0, 0, 0, 0);
+        return AddExtraCraft(new CraftChoice($"parking:{bodyName}:{altitudeM:0}", $"{bodyName} parking orbit",
+            $"{Km(altitudeM)} km, where the mission gets to", body, orbit, null));
+    }
+
+    private CraftChoice AddExtraCraft(CraftChoice craft)
+    {
+        if (Crafts.FirstOrDefault(c => c.Key == craft.Key) is { } listed) return listed;
+        _extraCrafts.RemoveAll(c => c.Key == craft.Key);
+        _extraCrafts.Add(craft);
+        Crafts.Add(craft);
+        return craft;
     }
 
     /// <summary>Saves the plan into the mission leg being planned (the first leg of the plan is the mission leg).</summary>
@@ -273,21 +330,153 @@ public sealed class RendezvousViewModel : ObservableObject
     public RelayCommand AddGameTargetCommand { get; }
     public RelayCommand FlyCommand { get; }
 
-    public bool StartFromLaunch
+    /// <summary>The plan starts with a launch from KSC (picked, or where the mission is).</summary>
+    public bool StartFromLaunch => _startFromLaunch;
+
+    /// <summary>The plan starts from a craft in orbit (picked, or where the mission is).</summary>
+    public bool StartFromCraft => !_startFromLaunch;
+
+    // The three start choices, as radio buttons.
+    public bool PickLaunch
     {
-        get => _startFromLaunch;
-        set
-        {
-            if (!SetProperty(ref _startFromLaunch, value)) return;
-            OnPropertyChanged(nameof(StartFromCraft));
-            StartChanged();
-        }
+        get => !_startFromMission && _startFromLaunch;
+        set { if (value) SetStart(mission: false, launch: true); }
     }
 
-    public bool StartFromCraft
+    public bool PickCraft
     {
-        get => !_startFromLaunch;
-        set => StartFromLaunch = !value;
+        get => !_startFromMission && !_startFromLaunch;
+        set { if (value) SetStart(mission: false, launch: false); }
+    }
+
+    /// <summary>Start where the mission is before its last stop: the plan can then be added to the mission.</summary>
+    public bool PickMission
+    {
+        get => _startFromMission;
+        set { if (value) SetStart(mission: true, launch: _startFromLaunch); }
+    }
+
+    /// <summary>A launch or a craft is picked by hand; where the mission is decides them otherwise.</summary>
+    public bool IsStartEditable => _leg is null && !_startFromMission;
+
+    public bool HasMission => _mission is not null;
+
+    /// <summary>"After stop 2: Kerbin — Low orbit: from Kerbin's 80 km orbit, where the mission gets to".</summary>
+    public string MissionStartText => _missionStart?.Text
+        ?? (_mission is null ? "" : Targets.Count == 0 ? $"After {_mission.AddAfterText}. Add a craft to meet to see how the mission gets to it."
+            : $"After {_mission.AddAfterText}: the mission can't get to {Targets[0].Body.Name}'s orbit.");
+
+    private void SetStart(bool mission, bool launch)
+    {
+        _startFromMission = mission && _mission is not null;
+        _startFromLaunch = launch;
+        if (_startFromMission) ResolveMissionStart();
+        else _missionStart = null;
+        foreach (var name in StartProperties) OnPropertyChanged(name);
+        StartChanged();
+    }
+
+    /// <summary>Plans a leg to add to the mission: starts where the mission is before its last stop, with no targets yet.</summary>
+    public void StartAdding()
+    {
+        StopEditingLeg();
+        _suspend = true;
+        Targets.Clear();
+        _deorbit = false;
+        _suspend = false;
+        OnPropertyChanged(nameof(Deorbit));
+        SetStart(mission: true, launch: _startFromLaunch);
+    }
+
+    /// <summary>The mission's start for the targets' body: sets the launch or craft and the parking orbit to match.</summary>
+    private void ResolveMissionStart()
+    {
+        _missionStart = _mission is not null && Targets.FirstOrDefault()?.Body.Name is { } body ? _mission.RendezvousStartFor(body) : null;
+        if (_missionStart is not { } start) return;
+        _startFromLaunch = start.Kind == RendezvousStartKind.Launch;
+        _parkingAltitudeText = Km(start.ParkingAltitudeM);
+        _selectedChaser = start.Kind switch
+        {
+            RendezvousStartKind.Craft => CraftForLocation(start.Chaser!),
+            RendezvousStartKind.Parking => ParkingCraft(start.BodyName, start.ParkingAltitudeM),
+            _ => _selectedChaser,
+        };
+        if (start.EarliestUt is { } arrival)
+        {
+            // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
+            _followSaveTime = false;
+            SetStartFields(Math.Ceiling(arrival / 60) * 60);
+            OnPropertyChanged(nameof(FollowSaveTime));
+            OnPropertyChanged(nameof(ManualStart));
+        }
+        OnPropertyChanged(nameof(ParkingAltitudeText));
+    }
+
+    /// <summary>Links the tab to the mission, so a plan can start where the mission is and be added to it.</summary>
+    public void AttachMission(MissionBuilderViewModel mission)
+    {
+        _mission = mission;
+        mission.RouteChanged += () =>
+        {
+            if (!_startFromMission || _leg is not null) return;
+            ResolveMissionStart();
+            foreach (var name in StartProperties) OnPropertyChanged(name);
+            RefreshAvailableTargets();
+            InputsChanged();
+        };
+        OnPropertyChanged(nameof(HasMission));
+    }
+
+    // ---------------- Adding to the mission ----------------
+
+    public RelayCommand AddToMissionCommand { get; }
+
+    /// <summary>The Add to mission card shows while planning from where the mission is.</summary>
+    public bool ShowsAddToMission => _startFromMission && _leg is null;
+
+    public bool CanAddToMission =>
+        ShowsAddToMission && _missionStart is not null && Targets.Count > 0 && _plan is { } plan && plan.Legs.Count == Targets.Count;
+
+    public string AddToMissionText => Targets.Count switch
+    {
+        0 => "Add the crafts to meet, then add the plan to the mission.",
+        1 => $"Adds a stop at {Targets[0].Name}, flown as this rendezvous.",
+        var n => $"Adds {n} stops ({string.Join(", ", Targets.Select(t => t.Name))}), each flown as its leg of this plan.",
+    };
+
+    /// <summary>The plan was added to the mission: the first new stop, whose leg the tab can now show.</summary>
+    public event Action<StopViewModel>? AddedToMission;
+
+    private void AddToMission()
+    {
+        if (!CanAddToMission || _request is not { } request || _plan is not { } plan) return;
+        var bodies = _sync.StockBodies();
+        var legs = Targets.Select((target, i) =>
+        {
+            var leg = plan.Legs[i];
+            var picks = i == 0
+                ? new RendezvousLeg(0, request.EarliestUt, leg.ArrivalUt, leg.TotalDv, _launchChoice, At(_phasing, 0), At(_intercepts, 0))
+                : new RendezvousLeg(0, leg.StartUt, leg.ArrivalUt, leg.TotalDv, null, At(_phasing, i), At(_intercepts, i));
+            return new RendezvousStopToAdd(LocationFor(target, bodies), picks);
+        }).ToList();
+        if (_mission!.AddRendezvousStops(legs) is { } stop) AddedToMission?.Invoke(stop);
+    }
+
+    private static T? At<T>(List<T> list, int index) => index < list.Count ? list[index] : default;
+
+    /// <summary>
+    /// The craft as a place the mission can stop at: its location on the Locations tab if it has one, else a new place
+    /// for the mission from its orbit (linked to the save's vessel, so it's the same craft next time).
+    /// </summary>
+    private CustomLocation LocationFor(CraftChoice craft, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (_craftLocations.TryGetValue(craft.Key, out var known)) return known;
+        if (craft.Vessel is { } vessel && _sync.SaveName is { } save)
+        {
+            if (_locations.GetAll().FirstOrDefault(l => l.KspSave == save && l.KspVesselId == vessel.Id) is { } linked) return linked;
+            if (SaveImport.Convert(vessel, save, bodies).Location is { } imported) return imported with { Description = null };
+        }
+        return CustomLocationOrbits.FromElements(0, craft.Name, craft.Body, craft.Orbit);
     }
 
     public CraftChoice? SelectedChaser
@@ -414,9 +603,7 @@ public sealed class RendezvousViewModel : ObservableObject
         _suspend = true;
         _selectedChaser = craft;
         _suspend = false;
-        OnPropertyChanged(nameof(SelectedChaser));
-        if (StartFromLaunch) StartFromLaunch = false; // re-plans
-        else StartChanged();
+        SetStart(mission: false, launch: false); // re-plans
     }
 
     /// <summary>Adds the craft targeted in KSP as the next target.</summary>
@@ -664,6 +851,7 @@ public sealed class RendezvousViewModel : ObservableObject
             {
                 var orbit = CustomLocationOrbits.ToElements(location, body, home, star);
                 list.Add(new CraftChoice($"location:{location.Id}", location.Name, $"custom location, {body.Name} {OrbitText(orbit, body)}", body, orbit, null));
+                _craftLocations[$"location:{location.Id}"] = location;
             }
             catch (ArgumentException)
             {
@@ -672,7 +860,8 @@ public sealed class RendezvousViewModel : ObservableObject
         }
 
         var ordered = list.OrderBy(c => c.Body.IsDefault ? 0 : 1).ThenBy(c => c.Body.Name)
-            .ThenBy(c => TypeOrder(c.Vessel?.Type)).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            .ThenBy(c => TypeOrder(c.Vessel?.Type)).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Concat(_extraCrafts.Where(e => list.All(c => c.Key != e.Key))).ToList();
 
         _suspend = true;
         var chaserKey = _selectedChaser?.Key;
@@ -702,16 +891,25 @@ public sealed class RendezvousViewModel : ObservableObject
         "Debris" => 7, "SpaceObject" => 8, _ => 6,
     };
 
-    /// <summary>The body the route happens at: Kerbin for a launch, else the starting craft's.</summary>
-    private string? RouteBody => StartFromLaunch ? _site.BodyName : SelectedChaser?.Body.Name;
+    /// <summary>
+    /// The body the route happens at: Kerbin for a launch, else the starting craft's. From where the mission is, the
+    /// first target's (the mission flies there first); null until there is one.
+    /// </summary>
+    private string? RouteBody => _startFromMission ? Targets.FirstOrDefault()?.Body.Name
+        : StartFromLaunch ? _site.BodyName : SelectedChaser?.Body.Name;
 
     private void RefreshAvailableTargets()
     {
         var keep = TargetToAdd?.Key;
         AvailableTargets.Clear();
         foreach (var c in Crafts)
-            if (c.Body.Name == RouteBody && (StartFromLaunch || c.Key != SelectedChaser?.Key) && !Targets.Contains(c))
-                AvailableTargets.Add(c);
+        {
+            if (Targets.Contains(c) || c.Key.StartsWith("parking:")) continue;
+            var fits = _startFromMission && RouteBody is null
+                ? _mission?.RendezvousStartFor(c.Body.Name) is { } start && start.Chaser?.Name != c.Name
+                : c.Body.Name == RouteBody && (StartFromLaunch || c.Key != SelectedChaser?.Key);
+            if (fits) AvailableTargets.Add(c);
+        }
         TargetToAdd = AvailableTargets.FirstOrDefault(c => c.Key == keep) ?? AvailableTargets.FirstOrDefault();
     }
 
@@ -741,8 +939,14 @@ public sealed class RendezvousViewModel : ObservableObject
 
     private void TargetsChanged()
     {
+        if (_startFromMission && _leg is null)
+        {
+            ResolveMissionStart();
+            foreach (var name in StartProperties) OnPropertyChanged(name);
+        }
         RefreshAvailableTargets();
         OnPropertyChanged(nameof(DeorbitLabel));
+        OnPropertyChanged(nameof(AddToMissionText));
         // A new body: suggest a periapsis deep enough in its atmosphere (30 km on Kerbin), or the ground if it has none.
         if (Targets.FirstOrDefault()?.Body is { } body && body.Name != _deorbitBody)
         {
@@ -824,6 +1028,7 @@ public sealed class RendezvousViewModel : ObservableObject
         if (Targets.Count == 0) return null;
         var bodies = _sync.StockBodies();
         if (RouteBody is not { } bodyName || !bodies.TryGetValue(bodyName, out var body)) { error = "Pick where to start from."; return null; }
+        if (_startFromMission && _leg is null && _missionStart is null) { error = MissionStartText; return null; }
 
         double start;
         if (FollowSaveTime) start = _sync.Save!.Ut + LeadMinutes * 60;
@@ -892,6 +1097,7 @@ public sealed class RendezvousViewModel : ObservableObject
     private static readonly string[] PlanProperties =
     [
         nameof(HasPlan), nameof(HasNoPlan), nameof(EmptyText), nameof(HasLaunch), nameof(LaunchIndex), nameof(LaunchStep), nameof(DeorbitStep), nameof(HasDeorbit),
+        nameof(CanAddToMission),
     ];
 
     private void RefreshPlot()

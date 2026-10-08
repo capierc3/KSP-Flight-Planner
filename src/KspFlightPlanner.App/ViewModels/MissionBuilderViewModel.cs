@@ -412,7 +412,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _maps = maps;
         _locations = locations;
         _events = events;
-        _map = maps.GetMap();
+        _baseMap = maps.GetMap();
+        _map = MapWithPlaces();
 
         // Custom locations are managed on the Locations tab; keep the stop pickers and map in step with it.
         _events.LocationsChanged += _ => OnLocationsChanged();
@@ -438,6 +439,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         OpenMissionCommand = new RelayCommand<SavedMissionItem>(item => { if (ConfirmDiscard()) OpenMission(item.Mission); },
             item => item is not null && item.Mission.Id != MissionId);
         DeleteMissionCommand = new RelayCommand<SavedMissionItem>(DeleteMission, item => item is not null);
+        InitAdding();
 
         if (_map is not null)
         {
@@ -469,7 +471,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (_map is null) return;
         var remaining = _locations.GetAll().Select(l => l.Key).ToHashSet();
         _suspend = true;
-        foreach (var stop in Stops.Where(s => s.NodeKey.StartsWith("custom.") && !remaining.Contains(s.NodeKey)))
+        foreach (var stop in Stops.Where(s => s.NodeKey.StartsWith("custom.") && !remaining.Contains(s.NodeKey) && !IsPlaceKey(s.NodeKey)))
         {
             var fallback = _map.TryGet(stop.NodeKey, out var node) ? _map.ParentOf(node)?.Key : null;
             stop.NodeKey = fallback ?? "kerbin.lo";
@@ -538,16 +540,23 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         var index = Stops.IndexOf(stop);
         if (_map is null || index < 1 || index > _mapSegments.Count) return null;
         var legs = _mapSegments[index - 1].Legs;
-        if (FindRendezvous(legs, Stops[index - 1], stop, PlacedLocations()) is not { } span) return null;
+        if (FindRendezvous(legs, Stops[index - 1], stop, PlacedLocations()) is not { } span
+            || Location(span.TargetLocationId) is not { } target) return null;
         var title = $"Stop {index} → {index + 1}: {_map[Stops[index - 1].NodeKey].DisplayName} → {_map[stop.NodeKey].DisplayName}";
         return new RendezvousLegLink(stop, title, span, legs[span.Start].From.AltitudeM ?? 80_000, stop.Rendezvous,
-            plan => stop.Rendezvous = plan) { EarliestUt = ArrivalAt(index - 1) };
+            plan => stop.Rendezvous = plan)
+        {
+            EarliestUt = ArrivalAt(index - 1),
+            Target = target,
+            Chaser = span.ChaserLocationId is { } chaser ? Location(chaser) : null,
+        };
     }
 
     private RendezvousSpan? FindRendezvous(IReadOnlyList<RouteLeg> legs, StopViewModel from, StopViewModel to, HashSet<long> placed) =>
         LegTools.FindRendezvous(legs, _map![from.NodeKey], _map[to.NodeKey], placed.Contains);
 
-    private HashSet<long> PlacedLocations() => _locations.GetAll().Where(l => l.IsPlaced).Select(l => l.Id).ToHashSet();
+    private HashSet<long> PlacedLocations() =>
+        _locations.GetAll().Concat(_places.Values).Where(l => l.IsPlaced).Select(l => l.Id).ToHashSet();
 
     private void OpenRendezvous(StopViewModel stop)
     {
@@ -593,7 +602,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     /// <summary>A deployment needs a circular orbit to release into (custom locations can be elliptical).</summary>
     private bool CanDeployAt(DvMapNode node) =>
         LegTools.CanDeploy(node, _bodies)
-        && (node.CustomLocationId is not { } id || _locations.Get(id)?.IsCircular == true);
+        && (node.CustomLocationId is not { } id || Location(id)?.IsCircular == true);
 
     private void OpenDeploy(StopViewModel stop)
     {
@@ -971,7 +980,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     /// <summary>Reloads map values (after an edit) without touching the user's phase and leg choices.</summary>
     private void ReloadMap()
     {
-        _map = _maps.GetMap();
+        _baseMap = _maps.GetMap();
+        _map = MapWithPlaces();
         SyncNodes();
         RefreshLegs();
         OnPropertyChanged(nameof(Map));
@@ -1023,6 +1033,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(RouteSummary));
+        OnPropertyChanged(nameof(AddAfterText));
         OnPropertyChanged(nameof(RouteEdgeKeys));
         OnPropertyChanged(nameof(StopKeys));
         Recalculate();

@@ -35,6 +35,14 @@ public sealed record CustomLocation(
     double EpochUt = 0)
 {
     public string Key => $"custom.{Id}";
+
+    /// <summary>
+    /// Ids from here up are places a mission keeps itself (a craft met, a constellation's orbit) rather than locations
+    /// on the Locations tab, so the two never collide.
+    /// </summary>
+    public const long MissionPlaceIdBase = 1L << 40;
+
+    public bool IsMissionPlace => Id >= MissionPlaceIdBase;
     public bool IsCircular => Math.Abs(ApoapsisAltitudeM - PeriapsisAltitudeM) < 1;
 
     /// <summary>Imported from a KSP save: the save folder's name. The orbit follows the vessel while linked.</summary>
@@ -83,6 +91,22 @@ public static class CustomLocations
     /// <summary>Picks the attachment point for a location and builds its node. Throws ArgumentException if it can't be placed.</summary>
     public static DvMapNode Place(CustomLocation location, DeltaVMap map, IReadOnlyDictionary<string, CelestialBody> bodies) =>
         Analyze(location, map, bodies).Node;
+
+    /// <summary>
+    /// The map with a mission's own places (<see cref="CustomLocation.IsMissionPlace"/>) attached like custom locations.
+    /// Places that can't be placed (e.g. a craft that dipped into the atmosphere) are left off.
+    /// </summary>
+    public static DeltaVMap WithPlaces(DeltaVMap map, IEnumerable<CustomLocation> places, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        var added = new List<DvMapNode>();
+        foreach (var place in places)
+        {
+            if (map.TryGet(place.Key, out _)) continue;
+            try { added.Add(Place(place, map, bodies)); }
+            catch (ArgumentException) { }
+        }
+        return added.Count == 0 ? map : new DeltaVMap(map.Nodes.Concat(added));
+    }
 
     /// <summary>Full breakdown for the editor. Throws ArgumentException (with a user-facing message) if invalid.</summary>
     public static CustomLocationAnalysis Analyze(CustomLocation location, DeltaVMap map, IReadOnlyDictionary<string, CelestialBody> bodies)

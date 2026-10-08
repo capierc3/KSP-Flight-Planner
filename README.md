@@ -22,10 +22,12 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
 - **Leg tools** — a leg between planets (Kerbin → Duna) can be flown in a chosen launch window: *Plan a transfer
   window for this leg* under its stop opens the Transfer Planner locked to the leg. The window picked (best, or
   clicked on the porkchop plot) is saved with the mission, and its ejection and capture burns replace the Δv map's
-  values in Legs & phases and the Rocket totals. A leg to a placed craft (a placed custom location or imported vessel),
-  from a KSC launch or from another placed craft around the same body, can *Plan the rendezvous*: the Rendezvous tab
-  opens locked to the leg, and the plan's burns replace the map's orbital values (the plan is kept as made, since craft
-  move). A new tool on the next leg starts when the previous leg's tool arrives. A stop in a circular orbit can
+  values in Legs & phases and the Rocket totals. *＋ Rendezvous* in the Mission pane plans meeting crafts from the
+  save (relays, stations, debris, without importing them) from where the mission is before its last stop: from a
+  KSC launch, from a craft it's at, or from the low orbit the Δv map's steps reach (e.g. home from the Mun). *Add to
+  mission* adds a stop per craft; the crafts are kept with the mission, not on the Locations tab. Any leg to a placed
+  craft can *Plan the rendezvous*: the Rendezvous tab opens locked to the leg, and the plan's burns replace the map's
+  orbital values (the plan is kept as made, since craft move). A new tool on the next leg starts when the previous leg's tool arrives. A stop in a circular orbit can
   *Deploy satellites here*: Resonant Orbits opens locked to the stop's orbit, and the carrier's burns are added to a
   phase you pick (each satellite's own circularize burn is shown, not added).
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,

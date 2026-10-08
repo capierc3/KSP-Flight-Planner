@@ -46,6 +46,18 @@ public sealed class MainViewModel : ObservableObject
             Resonant.EditDeploy(link);
             RequestPane(Panes.Resonant);
         };
+        // Adding a leg: its planner starts where the mission is, with its inputs in the Calculators pane; once added, it
+        // shows the new leg.
+        Rendezvous.AttachMission(mission);
+        mission.AddRendezvousRequested += () =>
+        {
+            Rendezvous.StartAdding();
+            ShowCalculator(Panes.Rendezvous);
+        };
+        Rendezvous.AddedToMission += stop =>
+        {
+            if (mission.RendezvousLinkFor(stop) is { } link) Rendezvous.EditLeg(link);
+        };
         mission.RouteChanged += () =>
         {
             if (Transfer.Leg is { } transfer)
@@ -130,6 +142,14 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
     public bool ShowsNoCalculator => ActiveCalculator is null;
+
+    /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
+    private void ShowCalculator(string id)
+    {
+        ActiveCalculator = id;
+        RequestPane(id);
+        RequestPane(Panes.Calculators);
+    }
 
     /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
     public void DocumentFocused(string id)

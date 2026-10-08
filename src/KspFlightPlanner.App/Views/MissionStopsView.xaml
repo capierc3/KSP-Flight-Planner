@@ -140,9 +140,16 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Content="＋ Add stop" Command="{Binding AddStopCommand}" HorizontalAlignment="Left" />
-            <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                       Text="New stops go before the last one. You can also click a stop on the Δv map to add it." />
+            <!-- Adding to the route: a place on the map, or a leg planned in a calculator from where the mission is -->
+            <WrapPanel>
+                <Button Content="＋ Stop" Command="{Binding AddStopCommand}" Margin="0,0,6,6"
+                        ToolTip="A place on the Δv map. You can also click a stop on the Δv map to add it." />
+                <Button Content="＋ Rendezvous" Command="{Binding AddRendezvousCommand}" Margin="0,0,6,6"
+                        ToolTip="Meet crafts in orbit (relays, stations, debris): plan it in the Calculators pane, then Add to mission" />
+            </WrapPanel>
+            <TextBlock Style="{StaticResource Note}" Margin="0,0,0,0" TextWrapping="Wrap">
+                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=", before the last one. Rendezvous opens its calculator set up from there; the steps to get there come from the Δv map." />
+            </TextBlock>
 
             <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
             <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />

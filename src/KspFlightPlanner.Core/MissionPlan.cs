@@ -17,7 +17,8 @@ public sealed record MissionStop(string NodeKey, string? Note = null, TransferLe
 
 /// <summary>
 /// A saved mission: ordered stops plus phase/leg choices, the route-wide options, the design checked against it
-/// (by .craft file path) and free-form notes. Serialised to the database as JSON; added fields need defaults so older
+/// (by .craft file path) and free-form notes. <paramref name="Places"/> are the mission's own places its stops can be
+/// at (crafts met, constellation orbits), kept here rather than on the Locations tab. Serialised to the database as JSON; added fields need defaults so older
 /// missions still read.
 /// </summary>
 public sealed record MissionDefinition(
@@ -27,7 +28,8 @@ public sealed record MissionDefinition(
     bool UseAerobraking = true,
     bool IncludePlaneChanges = false,
     string? DesignPath = null,
-    string? Notes = null);
+    string? Notes = null,
+    IReadOnlyList<CustomLocation>? Places = null);
 
 /// <summary>The legs flown to reach stop <see cref="ToStop"/> from the previous stop.</summary>
 public sealed record RouteSegment(int ToStop, IReadOnlyList<RouteLeg> Legs);

@@ -52,12 +52,14 @@ public sealed record RendezvousLeg(
     InterceptPoint? Intercept = null);
 
 /// <summary>
-/// Where a rendezvous fits in a leg's Δv-map steps: steps from <see cref="Start"/> on are the orbital part (the launch
-/// before it stays the map's). <see cref="ChaserLocationId"/> is the craft it starts from; null for a launch from KSC.
+/// Where a rendezvous fits in a leg's Δv-map steps: steps from <see cref="Start"/> on are the orbital part (the steps
+/// before it, a launch or the trip over from another body, stay the map's). <see cref="ChaserLocationId"/> is the craft
+/// it starts from; null for a launch from KSC or, with <see cref="FromParking"/>, a low orbit the mission arrives in
+/// (its position there isn't known, so the plan starts anywhere on it).
 /// </summary>
-public sealed record RendezvousSpan(string BodyName, long TargetLocationId, long? ChaserLocationId, int Start)
+public sealed record RendezvousSpan(string BodyName, long TargetLocationId, long? ChaserLocationId, int Start, bool FromParking = false)
 {
-    public bool IsLaunch => ChaserLocationId is null;
+    public bool IsLaunch => ChaserLocationId is null && !FromParking;
 }
 
 /// <summary>
@@ -188,20 +190,25 @@ public static class LegTools
 
     /// <summary>
     /// A leg can be a rendezvous when it arrives at a placed custom location (its position is known, so there is a craft
-    /// to meet) and starts either on the surface of the body it orbits, where there is a launch site (KSC), or at another
-    /// placed location around the same body. Null otherwise.
+    /// to meet). It starts from another placed location around the same body, with a launch from the surface where
+    /// there is a launch site (KSC), or otherwise from the low orbit of the target's body the map's steps arrive in
+    /// (from that body's other orbits, its surface, or another body altogether). Null otherwise.
     /// </summary>
     /// <param name="isPlaced">Whether a custom location (by id) is placed.</param>
     public static RendezvousSpan? FindRendezvous(IReadOnlyList<RouteLeg> legs, DvMapNode from, DvMapNode to, Func<long, bool> isPlaced)
     {
-        if (legs.Count == 0 || to.CustomLocationId is not { } target || !isPlaced(target) || from.BodyName != to.BodyName) return null;
-        if (from.Kind == "Surface" && from.BodyName == LaunchSite.Ksc.BodyName)
+        if (legs.Count == 0 || to.CustomLocationId is not { } target || !isPlaced(target)) return null;
+        if (from.BodyName == to.BodyName && from.CustomLocationId is { } chaser && chaser != target && isPlaced(chaser))
+            return new RendezvousSpan(to.BodyName, target, chaser, 0);
+        if (from.BodyName == to.BodyName && from.Kind == "Surface" && from.BodyName == LaunchSite.Ksc.BodyName)
         {
             var start = legs.TakeWhile(l => l.From.Kind == "Surface").Count();
             return start < legs.Count ? new RendezvousSpan(to.BodyName, target, null, start) : null;
         }
-        return from.CustomLocationId is { } chaser && chaser != target && isPlaced(chaser)
-            ? new RendezvousSpan(to.BodyName, target, chaser, 0)
+        // The map reaches a craft around a planet or moon from that body's low orbit: the last step leaves it.
+        var last = legs[^1].From;
+        return last.Kind == "LowOrbit" && !last.IsCustom && last.BodyName == to.BodyName && last.AltitudeM is > 0
+            ? new RendezvousSpan(to.BodyName, target, null, legs.Count - 1, FromParking: true)
             : null;
     }
 

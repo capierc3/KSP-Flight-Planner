@@ -39,6 +39,22 @@ public static class CustomLocationOrbits
         return new OrbitalElements(a, 0, 0, 0, 0, homeLongitude + location.PhaseAngleDeg * DegToRad, location.EpochUt);
     }
 
+    /// <summary>
+    /// A placed location on <paramref name="orbit"/> around <paramref name="body"/> (a craft from the save or the live
+    /// game): the reverse of <see cref="ToElements"/> for elements entry, angles wrapped to 0–360°.
+    /// </summary>
+    public static CustomLocation FromElements(long id, string name, CelestialBody body, OrbitalElements orbit)
+    {
+        var rp = orbit.SemiMajorAxisM * (1 - orbit.Eccentricity);
+        var ra = orbit.SemiMajorAxisM * (1 + orbit.Eccentricity);
+        return new CustomLocation(id, name, body.Name, rp - body.EquatorialRadiusM, ra - body.EquatorialRadiusM, orbit.InclinationDeg,
+            IsPlaced: true, Mode: PositionMode.Elements, LanDeg: Wrap(orbit.LongitudeOfAscendingNodeDeg),
+            ArgumentOfPeriapsisDeg: Wrap(orbit.ArgumentOfPeriapsisDeg), MeanAnomalyDeg: Wrap(orbit.MeanAnomalyAtEpochRad / DegToRad),
+            EpochUt: Math.Max(0, orbit.EpochS));
+    }
+
+    private static double Wrap(double degrees) => (degrees % 360 + 360) % 360;
+
     /// <summary>Checks the position inputs of a placed location.</summary>
     public static void ValidatePosition(CustomLocation location, CelestialBody body, CelestialBody? home)
     {

@@ -96,7 +96,8 @@ public sealed partial class MissionBuilderViewModel
         UseAerobraking,
         IncludePlaneChanges,
         _designPath,
-        string.IsNullOrWhiteSpace(_notes) ? null : _notes.TrimEnd());
+        string.IsNullOrWhiteSpace(_notes) ? null : _notes.TrimEnd(),
+        UsedPlaces());
 
     /// <summary>
     /// Before something replaces the open mission (New, Open, closing the app): offers to save unsaved changes.
@@ -136,6 +137,7 @@ public sealed partial class MissionBuilderViewModel
         _includePlaneChanges = definition.IncludePlaneChanges;
         _designPath = definition.DesignPath;
         _selectedDesign = SelectDesign(_designPath);
+        SetPlaces(definition.Places ?? []);
 
         // Stops on locations deleted since the mission was saved are dropped; too few left and it starts over.
         var stops = definition.Stops.Where(s => _map.TryGet(s.NodeKey, out _)).ToList();
