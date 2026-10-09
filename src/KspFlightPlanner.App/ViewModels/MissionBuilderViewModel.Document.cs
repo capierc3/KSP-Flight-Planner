@@ -114,6 +114,14 @@ public sealed partial class MissionBuilderViewModel
         }
     }
 
+    /// <summary>Picks up where the user left off in this save; otherwise a fresh mission on Kerbin.</summary>
+    private void OpenLastMission()
+    {
+        if (_map is null) return;
+        if (_settings?.LoadLastMissionId() is { } lastId && _missions?.Get(lastId) is { } last) OpenMission(last);
+        else NewMission();
+    }
+
     /// <summary>A fresh, unsaved mission: a clean slate on Kerbin's surface, waiting for its first stop.</summary>
     private void NewMission()
     {

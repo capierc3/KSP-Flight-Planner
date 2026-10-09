@@ -75,6 +75,7 @@ public sealed class FlightViewModel : ObservableObject
             Reload();
             SelectedFlight = Flights.FirstOrDefault(f => f.Id == id);
         };
+        events.SaveChanged += Reload; // the open flight closes if it belongs to the last save
         sync.Link.GameUpdated += _ => RefreshLive();
         sync.Link.PropertyChanged += (_, e) =>
         {

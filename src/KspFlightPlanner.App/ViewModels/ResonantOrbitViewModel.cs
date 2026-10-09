@@ -58,6 +58,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         foreach (var system in _bodies.GetSystems()) Systems.Add(system);
         SelectedSystem = Systems.FirstOrDefault();
         RefreshPlans();
+        if (events is not null) events.SaveChanged += RefreshPlans;
     }
 
     public ObservableCollection<StarSystem> Systems { get; } = [];

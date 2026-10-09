@@ -161,6 +161,7 @@ public sealed class DvMapRepository(PlannerDatabase database)
     }
 }
 
+/// <summary>Saved missions of the active save (<see cref="PlannerDatabase.ActiveSave"/>) and shared ones.</summary>
 public sealed class MissionRepository(PlannerDatabase database)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -175,9 +176,10 @@ public sealed class MissionRepository(PlannerDatabase database)
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO saved_missions (name, definition_json, created_utc, updated_utc)
-            VALUES ($name, $json, $now, $now) RETURNING id;
+            INSERT INTO saved_missions (name, definition_json, ksp_save, created_utc, updated_utc)
+            VALUES ($name, $json, $active_save, $now, $now) RETURNING id;
             """;
+        database.AddSave(cmd);
         cmd.Parameters.AddWithValue("$name", name);
         cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(definition, Json));
         cmd.Parameters.AddWithValue("$now", Now());
@@ -214,7 +216,8 @@ public sealed class MissionRepository(PlannerDatabase database)
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT id, name, definition_json, created_utc, updated_utc FROM saved_missions" +
-                          (id is null ? "" : " WHERE id = $id") + " ORDER BY updated_utc DESC, id DESC;";
+                          $" WHERE {PlannerDatabase.InActiveSave()}" + (id is null ? "" : " AND id = $id") + " ORDER BY updated_utc DESC, id DESC;";
+        database.AddSave(cmd);
         if (id is { } value) cmd.Parameters.AddWithValue("$id", value);
         using var reader = cmd.ExecuteReader();
         var list = new List<SavedMission>();

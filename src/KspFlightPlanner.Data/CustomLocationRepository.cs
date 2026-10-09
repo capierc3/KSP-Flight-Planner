@@ -15,18 +15,23 @@ public sealed record CelestialBodyOption(CelestialBody Body, DvMapNode LowOrbit)
 /// <summary>An image attached to a custom location (stored in the database).</summary>
 public sealed record LocationImage(long Id, long LocationId, string FileName, byte[] Data);
 
+/// <summary>Custom locations of the active save (<see cref="PlannerDatabase.ActiveSave"/>) and shared ones.</summary>
 public sealed class CustomLocationRepository(PlannerDatabase database)
 {
+    /// <summary>The save new locations are added to; null when none is chosen (they're shared).</summary>
+    public string? ActiveSave => database.ActiveSave;
+
     public IReadOnlyList<CustomLocation> GetAll()
     {
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT id, name, body_name, periapsis_altitude_m, apoapsis_altitude_m, inclination_deg, description,
                    is_placed, position_mode, lan_deg, arg_periapsis_deg, mean_anomaly_deg, phase_angle_deg, epoch_ut,
                    ksp_save, ksp_vessel_id
-            FROM custom_locations ORDER BY body_name, periapsis_altitude_m, name;
+            FROM custom_locations WHERE {PlannerDatabase.InActiveSave()} ORDER BY body_name, periapsis_altitude_m, name;
             """;
+        database.AddSave(cmd);
         using var reader = cmd.ExecuteReader();
         var list = new List<CustomLocation>();
         while (reader.Read())
@@ -52,7 +57,7 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
     public long Add(string name, string bodyName, double altitudeM, string? description = null) =>
         Add(CustomLocation.Circular(0, name, bodyName, altitudeM, description));
 
-    /// <summary>Inserts the location (its Id is ignored) and returns the new id.</summary>
+    /// <summary>Inserts the location (its Id is ignored) into its save, or the active save when it has none; returns the new id.</summary>
     public long Add(CustomLocation location)
     {
         using var connection = database.Open();
@@ -66,7 +71,7 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
                     $save, $vessel, $now) RETURNING id;
             """;
         AddValues(cmd, location);
-        cmd.Parameters.AddWithValue("$save", (object?)location.KspSave ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$save", (object?)location.KspSave ?? (object?)database.ActiveSave ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$vessel", (object?)location.KspVesselId ?? DBNull.Value);
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
@@ -94,14 +99,33 @@ public sealed class CustomLocationRepository(PlannerDatabase database)
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Stops a location following its vessel in a KSP save; it keeps its last orbit.</summary>
+    /// <summary>Stops a location following its vessel in a KSP save; it keeps its last orbit and stays in that save.</summary>
     public void Unlink(long id)
     {
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE custom_locations SET ksp_save = NULL, ksp_vessel_id = NULL, updated_utc = $now WHERE id = $id;";
+        cmd.CommandText = "UPDATE custom_locations SET ksp_vessel_id = NULL, updated_utc = $now WHERE id = $id;";
         cmd.Parameters.AddWithValue("$id", id);
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Shares a location with every save, or moves a shared one into the active save. Locations linked to a vessel
+    /// always stay in their save.
+    /// </summary>
+    public void SetShared(long id, bool shared)
+    {
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            UPDATE custom_locations SET ksp_save = CASE WHEN $shared THEN NULL ELSE $active_save END, updated_utc = $now
+            WHERE id = $id AND ksp_vessel_id IS NULL;
+            """;
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$shared", shared ? 1 : 0);
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        database.AddSave(cmd);
         cmd.ExecuteNonQuery();
     }
 

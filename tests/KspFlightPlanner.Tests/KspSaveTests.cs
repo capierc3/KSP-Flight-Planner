@@ -130,6 +130,7 @@ public sealed class KspSaveTests : IDisposable
     [Fact]
     public void Linked_locations_keep_their_link_and_refresh_only_the_orbit()
     {
+        _db.ActiveSave = "Protogen";
         var locations = new CustomLocationRepository(_db);
         var imported = SaveImport.Convert(KspSaveReader.Parse(SampleSave).Vessels[0], "Protogen", _bodies).Location!;
         var id = locations.Add(imported);
@@ -160,6 +161,7 @@ public sealed class KspSaveTests : IDisposable
         Assert.Null(settings.Load().KspInstallPath);
 
         settings.Save(new AppSettings { KspInstallPath = @"E:\KSP", KspSaveName = "Protogen", WatchSave = false });
+        _db.ActiveSave = "Protogen";
         var locations = new CustomLocationRepository(_db);
         var id = locations.Add(SaveImport.Convert(KspSaveReader.Parse(SampleSave).Vessels[0], "Protogen", _bodies).Location!);
 

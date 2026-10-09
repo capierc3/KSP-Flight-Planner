@@ -36,6 +36,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     private string _apoapsisKm = "";
     private string _inclination = "0";
     private string _description = "";
+    private bool _isShared;
     private string? _error;
 
     private bool _isPlaced;
@@ -132,6 +133,19 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
 
     public string Description { get => _description; set { if (SetProperty(ref _description, value)) OnPropertyChanged(nameof(IsDirty)); } }
 
+    /// <summary>Shown in every KSP save, not just the one it was made in.</summary>
+    public bool IsShared { get => _isShared; set { if (SetProperty(ref _isShared, value)) OnPropertyChanged(nameof(IsDirty)); } }
+
+    /// <summary>A save's own vessels always stay in that save.</summary>
+    public bool ShowShare => !IsLinked;
+
+    /// <summary>Only with a save chosen: otherwise everything is shared.</summary>
+    public bool CanShare => _repository.ActiveSave is not null;
+
+    public string ShareText => _repository.ActiveSave is { } save
+        ? $"Shared across all saves (otherwise only in \"{save}\")"
+        : "Shared across all saves (choose a KSP save in Settings to keep locations to one save)";
+
     // ---------------- Position (placed locations) ----------------
 
     /// <summary>False: planned (doesn't exist yet, no fixed position). True: placed (exists in your save).</summary>
@@ -165,7 +179,10 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
     /// <summary>Why the current values can't be saved, or null when they're valid.</summary>
     public string? Error { get => _error; private set => SetProperty(ref _error, value); }
 
-    public bool IsDirty => IsNew || Current() is not { } c || c != _loaded;
+    public bool IsDirty => IsNew || Current() is not { } c || c != _loaded || IsShared != IsSharedNow(_original);
+
+    private bool IsSharedNow(CustomLocation location) =>
+        location.KspSave is null && (location.Id != 0 || _repository.ActiveSave is null);
 
     // ---------------- Logic ----------------
 
@@ -178,6 +195,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         _apoapsisKm = Km(location.ApoapsisAltitudeM);
         _inclination = location.InclinationDeg.ToString("0.###", CultureInfo.CurrentCulture);
         _description = location.Description ?? "";
+        _isShared = IsSharedNow(location);
         _isPlaced = location.IsPlaced;
         _usePhaseAngle = location.Mode == PositionMode.PhaseAngle;
         _lan = Num(location.LanDeg);
@@ -191,7 +209,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         _epochDay = (day + 1).ToString(CultureInfo.CurrentCulture);
         _epochHour = Num(hour);
         foreach (var p in new[] { nameof(Name), nameof(Body), nameof(IsElliptical), nameof(PeriapsisKm), nameof(ApoapsisKm),
-                     nameof(Inclination), nameof(Description), nameof(PeriapsisLabel), nameof(Title), nameof(IsPlaced), nameof(IsPlanned),
+                     nameof(Inclination), nameof(Description), nameof(IsShared), nameof(PeriapsisLabel), nameof(Title), nameof(IsPlaced), nameof(IsPlanned),
                      nameof(UsePhaseAngle), nameof(UseElements), nameof(Lan), nameof(ArgumentOfPeriapsis), nameof(MeanAnomaly),
                      nameof(PhaseAngle), nameof(EpochYear), nameof(EpochDay), nameof(EpochHour) })
             OnPropertyChanged(p);
@@ -289,7 +307,8 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
             _repository.Update(location);
             id = location.Id;
         }
-        _original = _loaded = location with { Id = id };
+        if (IsShared != IsSharedNow(_original)) _repository.SetShared(id, IsShared);
+        _original = _loaded = location with { Id = id, KspSave = _repository.Get(id)?.KspSave };
         OnPropertyChanged(nameof(IsDirty));
         _saved(id);
     }

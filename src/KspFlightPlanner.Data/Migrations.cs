@@ -111,8 +111,9 @@ internal static class Migrations
             mean_anomaly_deg      REAL    NOT NULL DEFAULT 0,   -- at epoch_ut (Elements mode)
             phase_angle_deg       REAL    NOT NULL DEFAULT 0,   -- ahead of Kerbin at epoch_ut (PhaseAngle mode)
             epoch_ut              REAL    NOT NULL DEFAULT 0,   -- seconds since Year 1, Day 1
-            -- Imported from a KSP save: the orbit follows the vessel (save folder name + vessel pid). NULL = not linked.
+            -- The KSP save (folder name) it belongs to; NULL = shared by every save.
             ksp_save              TEXT,
+            -- Imported from that save: the orbit follows the vessel (its pid). NULL = not linked.
             ksp_vessel_id         TEXT,
             created_utc           TEXT    NOT NULL,
             updated_utc           TEXT
@@ -193,6 +194,7 @@ internal static class Migrations
             id               INTEGER PRIMARY KEY,
             name             TEXT    NOT NULL,
             definition_json  TEXT    NOT NULL,   -- MissionDefinition (stops as node keys, phases, leg choices, options, notes)
+            ksp_save         TEXT,               -- the KSP save it belongs to; NULL = shared by every save
             created_utc      TEXT    NOT NULL,
             updated_utc      TEXT    NOT NULL    -- last saved; the Missions list shows the most recent first
         );
@@ -201,6 +203,7 @@ internal static class Migrations
             id           INTEGER PRIMARY KEY,
             name         TEXT    NOT NULL,
             flight_json  TEXT    NOT NULL,   -- Flight (burns, start orbit, the plan's inputs)
+            ksp_save     TEXT,               -- the KSP save it belongs to; NULL = shared by every save
             created_utc  TEXT    NOT NULL
         );
 
@@ -213,6 +216,7 @@ internal static class Migrations
             prefer_dive_orbit  INTEGER NOT NULL DEFAULT 0,
             use_occlusion      INTEGER NOT NULL DEFAULT 0,
             notes              TEXT,
+            ksp_save           TEXT,               -- the KSP save it belongs to; NULL = shared by every save
             created_utc        TEXT    NOT NULL
         );
         """,

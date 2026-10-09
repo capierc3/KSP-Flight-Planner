@@ -59,6 +59,8 @@ public sealed class LocationsViewModel : ObservableObject
 
         NewLocationCommand = new RelayCommand(NewLocation, () => _map is not null);
         _events.LocationsChanged += sender => { if (sender != this) Reload(keepSelection: true); };
+        // The selected location may belong to the last save: start the tree over.
+        _events.SaveChanged += () => Reload(keepSelection: false);
         Reload(keepSelection: false);
     }
 
@@ -122,7 +124,8 @@ public sealed class LocationsViewModel : ObservableObject
             var item = new LocationTreeItem(body.Name, subtitle, body.Color, body: body);
             foreach (var child in byParent[body.Id].OrderBy(c => c.Orbit?.SemiMajorAxisM ?? 0)) item.Children.Add(Build(child));
             foreach (var l in custom.Where(l => l.BodyName == body.Name).OrderBy(l => l.PeriapsisAltitudeM))
-                item.Children.Add(new LocationTreeItem(l.Name, CustomLocations.AltitudeText(l) + (l.IsLinked ? " · from save" : ""),
+                item.Children.Add(new LocationTreeItem(l.Name, CustomLocations.AltitudeText(l)
+                    + (l.IsLinked ? " · from save" : l.KspSave is null && _locations.ActiveSave is not null ? " · all saves" : ""),
                     body.Color, location: l));
             return item;
         }

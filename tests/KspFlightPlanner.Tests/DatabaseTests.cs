@@ -313,4 +313,55 @@ public sealed class DatabaseTests : IDisposable
         repo.Delete(id);
         Assert.Empty(repo.GetAll());
     }
+
+    [Fact]
+    public void Planner_data_belongs_to_the_save_it_was_made_in()
+    {
+        var bodies = new BodyRepository(_db);
+        var kerbin = bodies.GetBodies(bodies.GetSystems()[0].Id).Single(b => b.Name == "Kerbin");
+        var locations = new CustomLocationRepository(_db);
+        var missions = new MissionRepository(_db);
+        var flights = new FlightRepository(_db);
+        var plans = new ConstellationRepository(_db);
+        var settings = new SettingsRepository(_db);
+        var route = new MissionDefinition([new("kerbin.surface"), new("mun.lo")], [new("Launch")], []);
+
+        _db.ActiveSave = "Protogen";
+        var station = locations.Add("Protogen station", "Kerbin", 250_000);
+        var relay = locations.Add(CustomLocation.Circular(0, "relay-1", "Kerbin", 800_000) with { KspSave = "Protogen", KspVesselId = "4021" });
+        var missionId = missions.Add("Mun base", route);
+        settings.SaveLastMissionId(missionId);
+        flights.Add(new Flight { Name = "Refuel", Kind = FlightKind.Rendezvous, BodyName = "Kerbin" });
+        plans.Add(new SavedConstellation { Name = "KommNet", BodyId = kerbin.Id, SatelliteCount = 3, AltitudeM = 2_863_334 });
+        var shared = locations.Add("Mun 100 km", "Mun", 100_000);
+        locations.SetShared(shared, true);
+        locations.SetShared(relay, true); // a save's own vessel can't be shared
+
+        _db.ActiveSave = "SandBox";
+        Assert.Equal(["Mun 100 km"], locations.GetAll().Select(l => l.Name));
+        Assert.Null(locations.Get(station));
+        Assert.Empty(missions.GetAll());
+        Assert.Null(missions.Get(missionId));
+        Assert.Null(settings.LoadLastMissionId());
+        Assert.Empty(flights.GetAll());
+        Assert.Empty(plans.GetAll());
+        Assert.Equal("SandBox", locations.Get(locations.Add("Minmus 50 km", "Minmus", 50_000))!.KspSave);
+
+        _db.ActiveSave = "Protogen";
+        Assert.Equal(["Mun 100 km", "Protogen station", "relay-1"], locations.GetAll().Select(l => l.Name).Order());
+        Assert.Equal("Protogen", locations.Get(relay)!.KspSave);
+        Assert.Equal(missionId, settings.LoadLastMissionId());
+        Assert.Single(missions.GetAll());
+        Assert.Single(flights.GetAll());
+        Assert.Single(plans.GetAll());
+
+        // Unlinking keeps it in its save.
+        locations.Unlink(relay);
+        Assert.Equal(("Protogen", (string?)null), (locations.Get(relay)!.KspSave, locations.Get(relay)!.KspVesselId));
+
+        // With no save chosen, only shared locations show, and new ones are shared.
+        _db.ActiveSave = null;
+        Assert.Equal(["Mun 100 km"], locations.GetAll().Select(l => l.Name));
+        Assert.Null(locations.Get(locations.Add("Eve 100 km", "Eve", 100_000))!.KspSave);
+    }
 }

@@ -71,13 +71,16 @@ public sealed class SettingsRepository(PlannerDatabase database)
     }
 
     /// <summary>
-    /// The mission open when the app last closed, reopened at the next start. Kept apart from <see cref="AppSettings"/>
-    /// because it isn't a preference the Settings window edits.
+    /// The mission open when the app last closed (or left this save), reopened at the next start or when switching
+    /// back. One per save (<see cref="PlannerDatabase.ActiveSave"/>). Kept apart from <see cref="AppSettings"/> because
+    /// it isn't a preference the Settings window edits.
     /// </summary>
     public long? LoadLastMissionId() =>
-        long.TryParse(ReadAll().GetValueOrDefault(LastMissionKey), NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
+        long.TryParse(ReadAll().GetValueOrDefault(LastMissionKeyForSave), NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
-    public void SaveLastMissionId(long? id) => Write(LastMissionKey, id?.ToString(CultureInfo.InvariantCulture));
+    public void SaveLastMissionId(long? id) => Write(LastMissionKeyForSave, id?.ToString(CultureInfo.InvariantCulture));
+
+    private string LastMissionKeyForSave => database.ActiveSave is { } save ? $"{LastMissionKey}.{save}" : LastMissionKey;
 
     /// <summary>A stored port number, or null if it's missing or out of range.</summary>
     private static int? Port(string? text) =>

@@ -525,6 +525,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
         // Custom locations are managed on the Locations tab; keep the stop pickers and map in step with it.
         _events.LocationsChanged += _ => OnLocationsChanged();
+        // Another save chosen (the window has offered to save this mission): carry on with that save's missions.
+        _events.SaveChanged += OpenLastMission;
 
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
         MoveStopUpCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, -1), s => Stops.IndexOf(s) > 0);
@@ -552,9 +554,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (_map is not null)
         {
             SyncNodes();
-            // Pick up where the user left off; otherwise a fresh mission on Kerbin.
-            if (settings?.LoadLastMissionId() is { } lastId && missions?.Get(lastId) is { } last) OpenMission(last);
-            else NewMission();
+            OpenLastMission();
         }
         RefreshSavedMissions();
     }

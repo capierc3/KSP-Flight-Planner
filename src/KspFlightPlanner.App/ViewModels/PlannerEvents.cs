@@ -9,10 +9,17 @@ public sealed class PlannerEvents
     /// <summary>A screen asked to show a custom location in the Locations tab.</summary>
     public event Action<long>? OpenLocationRequested;
 
+    /// <summary>
+    /// Another KSP save was chosen: its locations, missions, flights and constellations replace the last save's.
+    /// Raised after <see cref="LocationsChanged"/>.
+    /// </summary>
+    public event Action? SaveChanged;
+
     /// <summary>A planning tab handed a plan to the Flight tab; the argument is the new flight's id.</summary>
     public event Action<long>? OpenFlightRequested;
 
     public void RaiseLocationsChanged(object sender) => LocationsChanged?.Invoke(sender);
+    public void RaiseSaveChanged() => SaveChanged?.Invoke();
     public void RequestOpenFlight(long flightId) => OpenFlightRequested?.Invoke(flightId);
     public void RequestOpenLocation(long locationId) => OpenLocationRequested?.Invoke(locationId);
 }

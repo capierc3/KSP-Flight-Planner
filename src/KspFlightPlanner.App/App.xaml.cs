@@ -24,7 +24,7 @@ public partial class App : Application
             var events = new PlannerEvents();
             var settings = new SettingsRepository(database);
             var link = new KspLink(() => settings.Load());
-            var sync = new SaveSync(settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
+            var sync = new SaveSync(database, settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
             var designs = new DesignLibrary(sync);
             var flights = new FlightRepository(database);
             var viewModel = new MainViewModel(

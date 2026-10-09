@@ -3,20 +3,23 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Data;
 
+/// <summary>Saved constellation plans of the active save (<see cref="PlannerDatabase.ActiveSave"/>) and shared ones.</summary>
 public sealed class ConstellationRepository(PlannerDatabase database)
 {
     public IReadOnlyList<SavedConstellation> GetAll()
     {
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             SELECT c.id, c.name, c.body_id, c.satellite_count, c.altitude_m, c.prefer_dive_orbit,
                    c.use_occlusion, c.notes, c.created_utc, b.name, s.name
             FROM saved_constellations c
             JOIN celestial_bodies b ON b.id = c.body_id
             JOIN star_systems s ON s.id = b.system_id
+            WHERE {PlannerDatabase.InActiveSave("c.")}
             ORDER BY c.created_utc DESC;
             """;
+        database.AddSave(cmd);
         using var reader = cmd.ExecuteReader();
         var list = new List<SavedConstellation>();
         while (reader.Read())
@@ -46,10 +49,11 @@ public sealed class ConstellationRepository(PlannerDatabase database)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO saved_constellations
-                (name, body_id, satellite_count, altitude_m, prefer_dive_orbit, use_occlusion, notes, created_utc)
-            VALUES ($name, $body, $count, $alt, $dive, $occ, $notes, $created)
+                (name, body_id, satellite_count, altitude_m, prefer_dive_orbit, use_occlusion, notes, ksp_save, created_utc)
+            VALUES ($name, $body, $count, $alt, $dive, $occ, $notes, $active_save, $created)
             RETURNING id;
             """;
+        database.AddSave(cmd);
         cmd.Parameters.AddWithValue("$name", plan.Name);
         cmd.Parameters.AddWithValue("$body", plan.BodyId);
         cmd.Parameters.AddWithValue("$count", plan.SatelliteCount);

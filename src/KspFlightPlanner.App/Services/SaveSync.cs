@@ -13,9 +13,11 @@ namespace KspFlightPlanner.App.Services;
 /// persistent.sfs so they follow the game whenever KSP saves — on scene changes, launches and its autosave.
 /// While connected to the game (<see cref="KspLink"/>), its live time and orbits are laid over the save, so everything
 /// reading <see cref="Save"/> follows the game between saves too.
+/// The chosen save also scopes the planner's own data (<see cref="PlannerDatabase.ActiveSave"/>).
 /// </summary>
 public sealed class SaveSync : ObservableObject, IDisposable
 {
+    private readonly PlannerDatabase _database;
     private readonly SettingsRepository _settingsRepository;
     private readonly BodyRepository _bodies;
     private readonly CustomLocationRepository _locations;
@@ -41,9 +43,10 @@ public sealed class SaveSync : ObservableObject, IDisposable
     // A plan that starts "now" moves on this much game time before it's worth re-planning (orbit changes re-plan at once).
     private const double LiveTimeStepS = 60;
 
-    public SaveSync(SettingsRepository settings, BodyRepository bodies, CustomLocationRepository locations, PartData parts,
-        PlannerEvents events, KspLink link)
+    public SaveSync(PlannerDatabase database, SettingsRepository settings, BodyRepository bodies, CustomLocationRepository locations,
+        PartData parts, PlannerEvents events, KspLink link)
     {
+        _database = database;
         _parts = parts;
         _link = link;
         link.GameUpdated += _ => ApplyLive(fileChanged: false);
@@ -52,6 +55,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
         _locations = locations;
         _events = events;
         _settings = settings.Load();
+        database.ActiveSave = _settings.KspSaveName;
         // KSP can write the file in several steps; wait for it to settle before reading.
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         _debounce.Tick += (_, _) => { _debounce.Stop(); _ = ReloadAsync(); };
@@ -143,13 +147,23 @@ public sealed class SaveSync : ObservableObject, IDisposable
     public string? PersistentPath =>
         _settings.KspInstallPath is { } install && _settings.KspSaveName is { } save ? KspSaveReader.PersistentPath(install, save) : null;
 
-    /// <summary>Stores new settings and starts over with them.</summary>
+    /// <summary>
+    /// Stores new settings and starts over with them. Another save swaps in its locations, missions, flights and
+    /// constellations (offer to save the open mission first: it belongs to the old save).
+    /// </summary>
     public void Apply(AppSettings settings)
     {
         _settingsRepository.Save(settings);
         _settings = _settingsRepository.Load();
+        var saveChanged = _database.ActiveSave != _settings.KspSaveName;
+        _database.ActiveSave = _settings.KspSaveName;
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(SaveName));
+        if (saveChanged)
+        {
+            _events.RaiseLocationsChanged(this);
+            _events.RaiseSaveChanged();
+        }
         Restart();
     }
 

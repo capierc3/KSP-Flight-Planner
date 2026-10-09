@@ -22,6 +22,20 @@ public sealed class PlannerDatabase
 
     public string DatabasePath { get; }
 
+    /// <summary>
+    /// The KSP save (folder name) being planned for. Custom locations, missions, flights and constellations belong to
+    /// one save: only that save's rows (and shared ones, with no save) are read, and new rows are added to it.
+    /// Null when no save is chosen: only shared rows are read, and new rows are shared.
+    /// </summary>
+    public string? ActiveSave { get; set; }
+
+    /// <summary>SQL condition: the row (or alias.row) belongs to <see cref="ActiveSave"/> or is shared. Needs <see cref="AddSave"/>.</summary>
+    internal static string InActiveSave(string alias = "") =>
+        $"({alias}ksp_save IS NULL OR {alias}ksp_save = $active_save)";
+
+    /// <summary>Binds $active_save for <see cref="InActiveSave"/> and inserts.</summary>
+    internal void AddSave(SqliteCommand cmd) => cmd.Parameters.AddWithValue("$active_save", (object?)ActiveSave ?? DBNull.Value);
+
     /// <summary>Default location: %LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplanner.db</summary>
     public static string DefaultPath()
     {

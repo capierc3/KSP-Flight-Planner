@@ -5,7 +5,10 @@ using KspFlightPlanner.Core;
 
 namespace KspFlightPlanner.Data;
 
-/// <summary>Flights handed to the Flight tab, kept until the player deletes them (a mission can span many sessions).</summary>
+/// <summary>
+/// Flights handed to the Flight tab, kept until the player deletes them (a mission can span many sessions).
+/// Only the active save's flights (<see cref="PlannerDatabase.ActiveSave"/>) and shared ones are read.
+/// </summary>
 public sealed class FlightRepository(PlannerDatabase database)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
@@ -15,7 +18,8 @@ public sealed class FlightRepository(PlannerDatabase database)
     {
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, name, flight_json FROM flights ORDER BY created_utc DESC, id DESC;";
+        cmd.CommandText = $"SELECT id, name, flight_json FROM flights WHERE {PlannerDatabase.InActiveSave()} ORDER BY created_utc DESC, id DESC;";
+        database.AddSave(cmd);
         using var reader = cmd.ExecuteReader();
         var list = new List<Flight>();
         while (reader.Read())
@@ -33,9 +37,10 @@ public sealed class FlightRepository(PlannerDatabase database)
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO flights (name, flight_json, created_utc)
-            VALUES ($name, $json, $created) RETURNING id;
+            INSERT INTO flights (name, flight_json, ksp_save, created_utc)
+            VALUES ($name, $json, $active_save, $created) RETURNING id;
             """;
+        database.AddSave(cmd);
         cmd.Parameters.AddWithValue("$name", flight.Name);
         cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(flight with { Id = 0 }, Json));
         cmd.Parameters.AddWithValue("$created", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));

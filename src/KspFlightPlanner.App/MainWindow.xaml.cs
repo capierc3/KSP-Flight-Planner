@@ -283,7 +283,10 @@ public partial class MainWindow : Window
     private void Settings_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         var settings = new SettingsViewModel(_viewModel.Sync.Settings, _viewModel.Sync.Parts);
-        if (new SettingsWindow(settings) { Owner = this }.ShowDialog() == true) _viewModel.Sync.Apply(settings.Result);
+        if (new SettingsWindow(settings) { Owner = this }.ShowDialog() != true) return;
+        // The open mission belongs to the current save: offer to save it before another save's missions replace it.
+        if (settings.Result.KspSaveName != _viewModel.Sync.SaveName && !_viewModel.Mission.ConfirmDiscard()) return;
+        _viewModel.Sync.Apply(settings.Result);
     }
 
     private async void ConnectKsp_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Link.ToggleAsync();
