@@ -172,4 +172,76 @@ public sealed class SurfaceBakeTests : IDisposable
         Assert.Equal(1_500, flat.ApproachPeakM!.Value, 3);
         Assert.DoesNotContain(flat.Warnings, w => w.Contains("under the braking burn"));
     }
+
+    // ---------------- Wiki baseline vs the game (BakeMerge) ----------------
+
+    private static BakeSummary Summary(CelestialBody wiki, double? highest = null, double? seaLevelPa = null, double radiusFactor = 1) =>
+        new(wiki.Name, new DateTime(2026, 10, 9, 20, 0, 0, DateTimeKind.Utc), Math.Abs(wiki.RotationPeriodS), wiki.EquatorialRadiusM * radiusFactor,
+            wiki.Mu, highest, seaLevelPa is { } p ? [new AtmospherePoint(0, p, 1), new AtmospherePoint(1_000, p / 2, 0.5)] : []);
+
+    [Fact]
+    public void Game_values_within_the_threshold_replace_the_wiki()
+    {
+        // Your bake: Jool reads 5,066.25 kPa at 0 m. The wiki's pressure table says the same; its /Param page says 15 atm.
+        var jool = BakeMerge.Apply(_bodies["Jool"], Summary(_bodies["Jool"], seaLevelPa: 5_066_250));
+        Assert.Equal(50, jool.Atmosphere!.SeaLevelPressureAtm!.Value, 6);
+        Assert.Equal(2, jool.Atmosphere.PressureTable.Count);
+        var check = Assert.Single(jool.DataChecks, c => c.Value == "Pressure at 0 m");
+        Assert.True(check.UsesGame);
+        Assert.False(check.Flagged);
+        Assert.All(jool.DataChecks, c => Assert.False(c.Flagged));
+
+        // Laythe: the wiki has no highest point, so the game's is used.
+        var laythe = BakeMerge.Apply(_bodies["Laythe"], Summary(_bodies["Laythe"], highest: 5_736));
+        Assert.Equal(5_736, laythe.HighestElevationM);
+    }
+
+    [Fact]
+    public void Highest_point_takes_the_higher_value_within_the_threshold()
+    {
+        // Mun: the 1° grid tops out at 6,852 m, under the wiki's 7,061 m (−3%): the wiki's higher value stays, unflagged.
+        var mun = BakeMerge.Apply(_bodies["Mun"], Summary(_bodies["Mun"], highest: 6_852));
+        Assert.Equal(7_061.1416, mun.HighestElevationM);
+        var check = Assert.Single(mun.DataChecks, c => c.Value == "Highest point");
+        Assert.False(check.UsesGame);
+        Assert.False(check.Flagged);
+    }
+
+    [Fact]
+    public void Values_beyond_the_threshold_keep_the_wiki_and_are_flagged()
+    {
+        // Tylo: 12,695 m in the game vs 11,290 m on the wiki (+12.4%) is within 15%: the higher, game value is used.
+        var tylo = BakeMerge.Apply(_bodies["Tylo"], Summary(_bodies["Tylo"], highest: 12_695));
+        Assert.Equal(12_695, tylo.HighestElevationM);
+        Assert.Equal(0.1244, Assert.Single(tylo.DataChecks, c => c.Value == "Highest point").Difference!.Value, 4);
+
+        // Eeloo: 1,245 m vs 3,874 m (−68%): wiki kept, flagged.
+        var eeloo = BakeMerge.Apply(_bodies["Eeloo"], Summary(_bodies["Eeloo"], highest: 1_245));
+        Assert.Equal(3_874, eeloo.HighestElevationM);
+        Assert.True(Assert.Single(eeloo.DataChecks, c => c.Value == "Highest point").Flagged);
+
+        // A radius 10% off (a planet mod) is beyond the 5% for constants: wiki kept, flagged.
+        var big = BakeMerge.Apply(_bodies["Mun"], Summary(_bodies["Mun"], radiusFactor: 1.1));
+        Assert.Equal(200_000, big.EquatorialRadiusM);
+        Assert.True(Assert.Single(big.DataChecks, c => c.Value == "Radius").Flagged);
+    }
+
+    [Fact]
+    public void Stock_bodies_read_from_the_database_carry_the_bake()
+    {
+        var bodies = new BodyRepository(_db);
+        var stockId = bodies.GetSystems().Single(s => s.Name == "KSP Stock").Id;
+        Assert.Empty(bodies.GetBodies(stockId).Single(b => b.Name == "Mun").DataChecks);
+
+        new SurfaceBakeRepository(_db).Save(Bake(5, (lat, lon) => lat == 85 && lon == 30 ? 7_500 : 100));
+
+        var mun = bodies.GetBodies(stockId).Single(b => b.Name == "Mun");
+        Assert.Equal(7_500, mun.HighestElevationM); // +6% over the wiki: within 15%, higher wins
+        Assert.NotEmpty(mun.DataChecks);
+        Assert.NotNull(mun.BakedUtc);
+        Assert.NotEmpty(bodies.GetBody(mun.Id)!.DataChecks);
+        // Other systems' Mun keeps its shipped values.
+        var opm = bodies.GetBodies(bodies.GetSystems().Single(s => s.Name == "Outer Planets Mod").Id).Single(b => b.Name == "Mun");
+        Assert.Empty(opm.DataChecks);
+    }
 }

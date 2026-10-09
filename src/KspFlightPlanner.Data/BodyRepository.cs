@@ -1,3 +1,4 @@
+using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Core.Models;
 using Microsoft.Data.Sqlite;
 
@@ -23,7 +24,7 @@ public sealed class BodyRepository(PlannerDatabase database)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = SelectBodies + " WHERE system_id = $sys ORDER BY sort_order, name;";
         cmd.Parameters.AddWithValue("$sys", systemId);
-        return WithSurfaceData(connection, ReadBodies(cmd));
+        return WithGameData(connection, WithSurfaceData(connection, ReadBodies(cmd)));
     }
 
     public CelestialBody? GetBody(long bodyId)
@@ -32,7 +33,27 @@ public sealed class BodyRepository(PlannerDatabase database)
         using var cmd = connection.CreateCommand();
         cmd.CommandText = SelectBodies + " WHERE id = $id;";
         cmd.Parameters.AddWithValue("$id", bodyId);
-        return WithSurfaceData(connection, ReadBodies(cmd)).FirstOrDefault();
+        return WithGameData(connection, WithSurfaceData(connection, ReadBodies(cmd))).FirstOrDefault();
+    }
+
+    /// <summary>The system the player's game is (surface bakes are taken from it).</summary>
+    public const string BakedSystemName = "KSP Stock";
+
+    /// <summary>
+    /// Lays the player's surface bakes over the stock bodies' wiki values where they agree (<see cref="BakeMerge"/>).
+    /// Other systems keep their shipped values: the bakes are of the stock bodies.
+    /// </summary>
+    private static List<CelestialBody> WithGameData(SqliteConnection connection, List<CelestialBody> bodies)
+    {
+        if (bodies.Count == 0) return bodies;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT name FROM star_systems WHERE id = $id;";
+            cmd.Parameters.AddWithValue("$id", bodies[0].SystemId);
+            if (cmd.ExecuteScalar() as string != BakedSystemName) return bodies;
+        }
+        var bakes = SurfaceBakeRepository.ReadSummaries(connection);
+        return bakes.Count == 0 ? bodies : bodies.Select(b => BakeMerge.Apply(b, bakes.GetValueOrDefault(b.Name))).ToList();
     }
 
     private const string SelectBodies = """

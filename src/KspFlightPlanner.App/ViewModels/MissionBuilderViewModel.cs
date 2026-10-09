@@ -731,7 +731,12 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
     private readonly DesignLibrary? _designs;
-    private readonly IReadOnlyDictionary<string, CelestialBody> _bodies;
+    private IReadOnlyDictionary<string, CelestialBody> _bodies;
+
+    private static Dictionary<string, CelestialBody> StockBodies(BodyRepository? bodies) =>
+        bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
+            ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
+            : [];
     private DeltaVMap? _map;
     private DesignChoice? _selectedDesign;
     private DesignCheckResult? _check;
@@ -754,9 +759,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (sync is not null) sync.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SaveSync.Save)) RefreshLegs(); };
         _settings = settings;
         // Surface gravity and pressure for the lander TWR check (stock system, like the Δv map).
-        _bodies = bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
-            ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
-            : new Dictionary<string, CelestialBody>();
+        _bodies = StockBodies(bodies);
         _designs = designs;
         if (designs is not null) designs.PropertyChanged += (_, e) =>
         {
@@ -774,7 +777,12 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         // Another save chosen (the window has offered to save this mission): carry on with that save's missions.
         _events.SaveChanged += OpenLastMission;
         // A new bake gives landing spots ground heights and approach terrain.
-        _events.SurfaceDataChanged += _ => RefreshLegs();
+        // A new bake gives the bodies the game's values (BakeMerge).
+        _events.SurfaceDataChanged += _ =>
+        {
+            _bodies = StockBodies(bodies);
+            RefreshLegs();
+        };
 
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
         MoveStopUpCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, -1), s => Stops.IndexOf(s) > 0);

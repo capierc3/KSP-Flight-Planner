@@ -134,26 +134,35 @@ lift-off time for a launch rendezvous is off.
 
 Notes:
 
-## 10. Bake surface data (Tools › Bake Surface Data…)
+## 10. Bake surface data (Tools › Bake Surface Data…) ✅ baked 2026-10-09
 
-Do this early: Kerbin's bake replaces the assumed 90° rotation that section 9 depends on.
+Done: all 17 bodies baked at **1°** in about **22 minutes** (from the bake timestamps). Results, read from the
+planner's database:
 
-- [ ] Connected, in the **Space Center**: open the window, tick **Mun**, grid **5°**, **Start**. The bar moves row by
-      row with a time estimate, and the status bar clock keeps ticking while it runs
-- [ ] When done, the log line reads like "Mun: 5° grid in … · −… to ~7,000 m (wiki 7,061 m) · 17 biomes · rotated …° at UT 0".
-      ⚠ If it says heights "all read 0 m", the game won't give terrain outside flight: note the scene, go to **flight**
-      and try again
-- [ ] Note how long the 5° Mun took: ________ (a 1° grid is 25× as many points)
-- [ ] Bake **Kerbin** (5° is fine) → its log line's rotation at UT 0: ________° (the planner assumed **90°**)
-- [ ] Bake **Duna** or **Jool** → log shows "air … kPa at 0 m". **Jool**: is it ≈ 1,520 kPa (15 atm) or ≈ 5,066 kPa
-      (50 atm)? ________ (settles the wiki conflict)
-- [ ] Locations tab › Mun: a **"From your game (surface bake)"** group with rotation, day length (game vs planner
-      should match), highest/lowest point and biomes
+- [x] Bake runs and stores every body: heights, biomes (every point named), rotation, air
+- [x] Terrain comes back outside flight (no "all read 0 m"). Zeros only where expected: oceans on Kerbin, Eve and
+      Laythe, plus the Minmus flats; Eeloo is the exception (below)
+- [x] Total time for all bodies at 1°: **≈ 22 min**
+- [x] Kerbin's rotation at UT 0: **90°**, the value the planner assumed (section 9's lift-off times start from it)
+- [x] Jool at 0 m: **5,066.25 kPa (50 atm)**. The wiki's pressure table was right; its /Param page's 15 atm is the
+      10 km value. The planner now uses the game's value (docs/WIKI-COMPARISON.md conflict settled)
+- [x] Day length, radius and μ match the planner exactly for all 17 bodies
+- [x] Game vs wiki merge (docs/MATH.md §1.1): only **Eeloo's highest point** is beyond its threshold
+      (game 1,245 m vs wiki 3,874 m, −68%), so the wiki's is kept and flagged
+
+Still to look at in the planner and in game:
+
+- [ ] Locations tab › Mun: a **"From your game (surface bake)"** group: "Compared with the wiki", each value as
+      "Wiki … · game … · using game/wiki", highest/lowest grid point and biomes
+- [ ] Locations tab › Eeloo: its highest point is flagged ⚠. In game, fly over 27.95° N 24.34° E (the wiki's highest
+      point) and note the terrain height: ________ m (the bake reads about 260 m there; 22% of Eeloo read exactly 0 m)
 - [ ] Mission with a **Mun — Surface** landing on a wiki landmark (no height of its own): the landing text now says
       **"ground … m (surface bake)"** and shows "Highest terrain under the braking burn"
 - [ ] **Cancel** mid-bake stops within a row; closing the window also cancels; the body in progress stays "Not baked"
 - [ ] Disconnect from KSP mid-bake → it stops with a message, nothing freezes
-- [ ] Optional: bake all bodies at 1° and leave it running; note the total time ________
+
+Known limit: a 1° grid misses small features. The KSC pad reads 47 m (really about 68 m), the Island Airfield 0 m
+(its cell is mostly sea), and grid peaks run up to ~15% under the real summits. Flags carry their own height.
 
 Notes:
 
@@ -173,6 +182,8 @@ Notes:
 has no flight view yet. kRPC can't see the VAB craft you're building.
 
 **Not built yet:**
+- **Exact height of a spot** asked from the game when connected (one call per spot), so small features like the KSC
+  pad aren't averaged away by the 1° grid.
 - **Clickable surface map** drawn from the bake (hover for lat/lon/height/biome, click to set a landing spot).
 - **Timing a landing's deorbit burn** from the craft's orbit (§2.6 step 3). The bake now stores each body's rotation
   at UT 0, which it needs.

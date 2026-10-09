@@ -324,7 +324,10 @@ public sealed class BodyDetailViewModel
             if (atm.PoleTempC is { } pole) facts.Add(new("Sea level at the poles", $"{pole.Low:0.#} to {pole.High:0.#} °C"));
             if (atm.MolarMassGPerMol is { } molar) facts.Add(new("Molar mass of the air", $"{molar:0.####} g/mol"));
             if (atm.AdiabaticIndex is { } gamma) facts.Add(new("Adiabatic index γ", $"{gamma:0.##}"));
-            foreach (var row in atm.PressureTable)
+            var fromGame = body.DataChecks.Any(c => c.Value == "Pressure at 0 m" && c.UsesGame);
+            if (atm.PressureTable.Count > 0) facts.Add(new("Pressure table", fromGame ? "From your game (surface bake)" : "From the KSP wiki"));
+            // A baked table has a row every km: show every 5 km.
+            foreach (var row in atm.PressureTable.Where(r => atm.PressureTable.Count <= 20 || r.AltitudeM % 5_000 == 0))
                 facts.Add(new($"Pressure at {Units.Km(row.AltitudeM)}",
                     $"{row.PressurePa / 1000:0.####} kPa ({row.PressurePa / Atmosphere.PascalsPerAtm:0.####} atm)"
                     + (row.DensityKgM3 is { } rho ? $", {rho:0.###} kg/m³" : "")));
@@ -388,28 +391,39 @@ public sealed class BodyDetailViewModel
         CustomLocations = customHere.Select(l => new CustomLocationLink(l, () => openLocation(l.Id))).ToList();
     }
 
-    /// <summary>What the bake found, next to what the planner had, so differences stand out.</summary>
+    /// <summary>
+    /// What the bake found: each value next to the wiki's, which one the planner uses, and a ⚠ where they differ by more
+    /// than the threshold (the wiki value is kept then; BakeMerge).
+    /// </summary>
     private static List<Fact> BakeFacts(CelestialBody body, SurfaceBake bake)
     {
+        var flagged = body.DataChecks.Count(c => c.Flagged);
         var facts = new List<Fact>
         {
             new("Baked", $"{bake.BakedUtc.ToLocalTime():d MMM yyyy, HH:mm} · {bake.StepDeg:0.#}° grid" + (bake.IsComplete ? "" : " (incomplete)")),
-            new("Rotation at UT 0", $"{bake.InitialRotationDeg:0.###}°"),
-            new("Sidereal day (game / planner)", $"{bake.RotationPeriodS:#,0.###} s / {body.RotationPeriodS:#,0.###} s"),
-            new("Radius (game / planner)", $"{Units.Km(bake.RadiusM)} / {Units.Km(body.EquatorialRadiusM)}"),
+            new("Compared with the wiki", flagged == 0
+                ? "Game values in use (they agree with the wiki)"
+                : $"⚠ {flagged} value{(flagged == 1 ? "" : "s")} differ by more than the threshold: the wiki's kept"),
+            new("Rotation at UT 0", $"{bake.InitialRotationDeg:0.###}° (not on the wiki)"),
         };
+        foreach (var c in body.DataChecks)
+            facts.Add(new((c.Flagged ? "⚠ " : "") + c.Value, CheckText(c)));
         if (bake.Extremes() is { } x)
         {
-            facts.Add(new("Highest grid point", $"{x.Highest.H:#,0} m at {Units.LatLon(x.Highest.Lat, x.Highest.Lon)}" +
-                                                (body.HighestElevationM is { } peak ? $" (wiki {peak:#,0} m)" : "")));
+            facts.Add(new("Highest grid point", $"{x.Highest.H:#,0} m at {Units.LatLon(x.Highest.Lat, x.Highest.Lon)}"));
             facts.Add(new("Lowest grid point", $"{x.Lowest.H:#,0} m at {Units.LatLon(x.Lowest.Lat, x.Lowest.Lon)}"));
         }
         if (bake.BiomeNames.Count > 0) facts.Add(new($"Biomes ({bake.BiomeNames.Count})", string.Join(", ", bake.BiomeNames)));
-        foreach (var p in bake.Atmosphere.Where(p => p.AltitudeM % 5_000 == 0))
-            facts.Add(new($"Air at {Units.Km(p.AltitudeM)}",
-                $"{p.PressurePa / 1000:0.####} kPa ({p.PressurePa / Atmosphere.PascalsPerAtm:0.####} atm)" +
-                (p.DensityKgM3 is { } rho ? $", {rho:0.####} kg/m³" : "")));
         return facts;
+    }
+
+    /// <summary>"Wiki 11,290 m · game 12,695 m (+12.4%) · using wiki".</summary>
+    private static string CheckText(DataCheck c)
+    {
+        static string N(double? v) => v is { } x ? (Math.Abs(x) >= 1e6 ? x.ToString("0.#####E+0") : x.ToString("#,0.###")) : "—";
+        var diff = c.Difference is { } d && c.Wiki is { } w && c.Game is { } g
+            ? $" ({(g >= w ? "+" : "−")}{d * 100:0.#}%)" : "";
+        return $"Wiki {N(c.Wiki)} · game {N(c.Game)} {c.Unit}{diff} · using {c.UsedText}" + (c.Flagged ? " — check this one" : "");
     }
 
     public CelestialBody Body { get; }

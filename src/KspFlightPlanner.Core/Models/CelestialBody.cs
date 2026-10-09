@@ -123,6 +123,15 @@ public sealed record CelestialBody
 
     public ScienceMultipliers? Science { get; init; }
 
+    /// <summary>
+    /// When the player's game has been sampled (Tools › Bake Surface Data): each value compared with the wiki and which
+    /// one is used (see <see cref="Ksp.BakeMerge"/>). Empty without a bake.
+    /// </summary>
+    public IReadOnlyList<Ksp.DataCheck> DataChecks { get; init; } = [];
+
+    /// <summary>When the bake the values above came from was taken; null without one.</summary>
+    public DateTime? BakedUtc { get; init; }
+
     public string Color { get; init; } = "#666666";
     public bool IsDefault { get; init; }
 

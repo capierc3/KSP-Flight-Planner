@@ -21,6 +21,35 @@ public sealed class SurfaceBakeRepository(PlannerDatabase database)
         }
     }
 
+    // Summaries need the whole height grid (for its highest point); kept per database file and bake so it's read once.
+    private static readonly Dictionary<(string Database, string Body, string BakedUtc), BakeSummary> Summaries = [];
+
+    /// <summary>Every body's bake summary (constants, highest grid point, air), by body name.</summary>
+    internal static IReadOnlyDictionary<string, BakeSummary> ReadSummaries(SqliteConnection connection)
+    {
+        var current = new List<(string Database, string Body, string Utc)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT body_name, baked_utc FROM ksp_surface_bakes;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) current.Add((connection.DataSource, r.GetString(0), r.GetString(1)));
+        }
+        var result = new Dictionary<string, BakeSummary>(StringComparer.Ordinal);
+        foreach (var key in current)
+        {
+            BakeSummary? summary;
+            lock (Summaries) Summaries.TryGetValue(key, out summary);
+            if (summary is null)
+            {
+                if (Read(connection, key.Body) is not { } bake) continue;
+                summary = BakeSummary.From(bake);
+                lock (Summaries) Summaries[key] = summary;
+            }
+            result[key.Body] = summary;
+        }
+        return result;
+    }
+
     /// <summary>Bodies baked so far, with when and how finely.</summary>
     public IReadOnlyList<(string Body, double StepDeg, DateTime BakedUtc)> List()
     {
@@ -92,6 +121,11 @@ public sealed class SurfaceBakeRepository(PlannerDatabase database)
     private SurfaceBake? Read(string bodyName)
     {
         using var connection = database.Open();
+        return Read(connection, bodyName);
+    }
+
+    private static SurfaceBake? Read(SqliteConnection connection, string bodyName)
+    {
         SurfaceBake? bake;
         using (var cmd = connection.CreateCommand())
         {

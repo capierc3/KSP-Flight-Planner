@@ -55,6 +55,20 @@ Worked example — Kerbin: g = 1.00034160493135 × 9.80665 = 9.81 m/s², so μ =
 - Code: `BodySeeder` (μ from the wiki data), `CelestialBody.SurfaceGravity` (g = μ/R²)
 - Source: KSP wiki `<Body>/Param` pages; Eric Meyer's Resonant Orbit Calculator data (`systems.js`)
 
+**Your game's values over the wiki's.** The values above ship with the app (the wiki is the baseline). Once a body has been through Tools › Bake Surface Data, the stock body's values are compared with what your game reported, using the relative difference
+
+```
+difference = |game − wiki| / |wiki|
+```
+
+and the game's value is used when the difference is within a threshold: **5%** for constants the game defines exactly (sidereal day, radius, μ) and **15%** for sampled values (highest point, pressure at 0 m), since a 1° grid alone can be that far off. Beyond the threshold, the wiki value is kept and the Locations tab flags the difference (⚠). Two refinements:
+- **Highest point:** the grid steps over sharp summits, so it only ever reads low. Within the threshold the *higher* of the two is used, the safe side for parking orbits and terrain warnings.
+- **Pressure:** the wiki's baseline is its pressure table where there is one. When the game's value is used, its table (a row every km) replaces the wiki's.
+
+Worked examples (a real 1° bake): Tylo's grid peak is 12,695 m against the wiki's 11,290 m: |12,695 − 11,290| / 11,290 = **12.4%**, within 15%, so the higher 12,695 m is used. The Mun's 6,852 m vs 7,061 m is 3.0%, within, and the wiki's higher 7,061 m stays. Eeloo's 1,245 m vs 3,874 m is **67.9%**, beyond, so 3,874 m is kept and flagged. Jool's pressure at 0 m is 5,066.25 kPa in both the game and the wiki's table (0%), so the game's table is used.
+
+- Code: `BakeMerge.Apply` (applied to the stock system in `BodyRepository`); tested in `SurfaceBakeTests`
+
 ### 1.2 Circular orbits: speed and period
 
 ```
