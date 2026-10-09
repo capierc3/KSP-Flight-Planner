@@ -94,7 +94,7 @@ public sealed class CustomLocationTransferTests : IDisposable
         Assert.Null(plan.Porkchop);
         Assert.Equal(123_456, w.DepartureUt);
         Assert.True(double.IsNaN(w.PhaseAngleDeg));
-        // Same Hohmann numbers as the Δv map (docs/MATH.md §4b): ejection 1,013.7 from 80 km, arrival 723.2.
+        // Same Hohmann numbers as the Δv map (docs/MATH.md §3.5): ejection 1,013.7 from 80 km, arrival 723.2.
         Assert.Equal(1_013.7, w.EjectionDv, 0.1);
         Assert.Equal(723.2, w.CaptureDv, 0.1);
         Assert.InRange(w.FlightTimeS, 174 * 21_600.0, 176 * 21_600.0);

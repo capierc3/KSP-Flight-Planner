@@ -99,6 +99,12 @@ public sealed record SurfaceRow(string Title, string Detail, string Twr, TwrRati
     public string Mark => Rating switch { TwrRating.Good => "✓", TwrRating.Low => "✓", _ => "✗" };
 }
 
+/// <summary>An entry in the stop picker: a place on the Δv map, by node key.</summary>
+public sealed record StopChoice(string Key, string Text)
+{
+    public override string ToString() => Text;
+}
+
 /// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
 public sealed record DesignChoice(DesignEntry? Design, string Title)
 {
@@ -133,7 +139,30 @@ public sealed class StopViewModel : ObservableObject
     public string NodeKey
     {
         get => _nodeKey;
-        set { if (value is not null && SetProperty(ref _nodeKey, value)) _changed(); }
+        set
+        {
+            if (value is null || !SetProperty(ref _nodeKey, value)) return;
+            _pickerKey = null;
+            _changed();
+        }
+    }
+
+    private string? _pickerKey;
+
+    /// <summary>
+    /// The stop picker's entry: the stop itself, or its body's "Orbit" entry for any of that body's orbits (picking it
+    /// again keeps the height chosen; picking it from elsewhere starts at the low orbit).
+    /// </summary>
+    public string PickerKey
+    {
+        get => _pickerKey ?? _nodeKey;
+        set { if (value is not null && value != PickerKey) NodeKey = value; }
+    }
+
+    internal void SetPickerKey(string key)
+    {
+        _pickerKey = key;
+        OnPropertyChanged(nameof(PickerKey));
     }
 
     /// <summary>Free text such as "Dock at station, pick up Bob". Doesn't affect the route.</summary>
@@ -231,6 +260,73 @@ public sealed class StopViewModel : ObservableObject
             OnPropertyChanged(name);
     }
 
+    // ---------------- Orbit altitude ----------------
+
+    private Func<double, string?>? _setAltitude;
+    private string _altitudeKmText = "";
+    private string _altitudeError = "";
+
+    /// <summary>The stop is a circular orbit of a body, so its height can be picked (low, synchronous or any altitude).</summary>
+    public bool IsOrbit { get; private set; }
+
+    /// <summary>The orbit's altitude in km. Typing a new one moves the stop to that orbit (a place kept with the mission).</summary>
+    public string AltitudeKmText
+    {
+        get => _altitudeKmText;
+        set
+        {
+            if (!SetProperty(ref _altitudeKmText, value) || _setAltitude is null) return;
+            AltitudeError = double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out var km) && km > 0
+                ? _setAltitude(km * 1000) ?? ""
+                : "Enter the orbit's altitude in km.";
+        }
+    }
+
+    /// <summary>Why the typed altitude can't be flown (inside the atmosphere, outside the SOI); empty when it's fine.</summary>
+    public string AltitudeError
+    {
+        get => _altitudeError;
+        private set { if (SetProperty(ref _altitudeError, value)) OnPropertyChanged(nameof(HasAltitudeError)); }
+    }
+
+    public bool HasAltitudeError => AltitudeError.Length > 0;
+
+    /// <summary>"Low (80 km)": the body's low orbit on the Δv map.</summary>
+    public string LowOrbitText { get; private set; } = "";
+    public RelayCommand UseLowOrbitCommand { get; private set; } = new(() => { });
+
+    /// <summary>"Keostationary (2,868 km)", or empty when the body has no synchronous orbit.</summary>
+    public string SynchronousText { get; private set; } = "";
+    public bool HasSynchronous => SynchronousText.Length > 0;
+    public RelayCommand UseSynchronousCommand { get; private set; } = new(() => { });
+
+    /// <param name="altitudeM">The orbit's altitude, or null when the stop isn't a circular orbit.</param>
+    /// <param name="setAltitude">Moves the stop to an orbit at that altitude; returns why it can't, or null.</param>
+    internal void SetOrbit(double? altitudeM, double lowM, double? synchronousM, string synchronousName, Func<double, string?> setAltitude)
+    {
+        IsOrbit = altitudeM is not null;
+        _setAltitude = null; // showing the altitude isn't the user typing one
+        if (altitudeM is { } a) AltitudeKmText = Km(a);
+        _setAltitude = setAltitude;
+        AltitudeError = "";
+        LowOrbitText = $"Low ({Km(lowM)} km)";
+        UseLowOrbitCommand = new RelayCommand(() => AltitudeKmText = Km(lowM));
+        SynchronousText = synchronousM is { } s ? $"{synchronousName} ({Km(s)} km)" : "";
+        UseSynchronousCommand = new RelayCommand(() => { if (synchronousM is { } s) AltitudeKmText = Km(s); });
+        foreach (var name in new[] { nameof(IsOrbit), nameof(LowOrbitText), nameof(UseLowOrbitCommand), nameof(SynchronousText),
+                     nameof(HasSynchronous), nameof(UseSynchronousCommand) })
+            OnPropertyChanged(name);
+    }
+
+    internal void ClearOrbit()
+    {
+        _setAltitude = null;
+        IsOrbit = false;
+        OnPropertyChanged(nameof(IsOrbit));
+    }
+
+    private static string Km(double metres) => (metres / 1000).ToString("#,0.###", CultureInfo.CurrentCulture);
+
     public int Number { get; private set; }
     public string Role { get; private set; } = "";
 
@@ -318,7 +414,11 @@ public sealed class LegRowViewModel : ObservableObject
 
     /// <summary>A leg tool supplies this value, so it can't be typed over (change it in the tool).</summary>
     public bool IsFromTool => Leg.IsFromTool;
+
+    /// <summary>The value comes from a leg tool or adds up several map edges, so it isn't typed here.</summary>
+    public bool IsReadOnly => Leg.IsFromTool || Leg.IsCombined;
     public string DvToolTip => Leg.ToolNote is { } tool ? $"{tool} — change it in the leg's tool. Map value: {Leg.MapDeltaV:N0} m/s."
+        : Leg.Parts is { } parts ? string.Join(" + ", parts.Select(p => $"{p.To.DisplayName} {p.DeltaV:N0} m/s")) + ". Edit the steps on the Δv map."
         : Leg.IsOverridden
         ? $"Edited — map value is {Leg.MapDeltaV:N0} m/s. Clear to restore. Applies to all missions."
         : "Map value. Type a new value to adjust it for all missions.";
@@ -330,7 +430,7 @@ public sealed class LegRowViewModel : ObservableObject
         set
         {
             var text = value.Trim();
-            if (Leg.IsFromTool) return;
+            if (IsReadOnly) return;
             if (text.Length == 0) { _editDv(Leg.EdgeKey, null); return; }
             if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out var dv)
                 && dv >= 0 && dv != Leg.DeltaV)
@@ -341,6 +441,7 @@ public sealed class LegRowViewModel : ObservableObject
     public string Notes => string.Join(" · ", new[]
     {
         Leg.ToolNote,
+        Leg.Parts is { } parts ? $"Via {parts[0].To.Label}: {string.Join(" + ", parts.Select(p => p.DeltaV.ToString("N0", CultureInfo.CurrentCulture)))} m/s" : null,
         Leg.IsFromTool ? null : Leg.FlightTime is { } t ? $"Flight ≈ {t}" : null,
         Leg.CanAerobrake && Leg.AerobrakeDv > 0 ? $"Aerobraking possible (still needs a {Leg.AerobrakeDv:N0} m/s deorbit burn)"
             : Leg.CanAerobrake ? "Aerobraking possible" : null,
@@ -421,7 +522,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
         MoveStopUpCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, -1), s => Stops.IndexOf(s) > 0);
         MoveStopDownCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, +1), s => Stops.IndexOf(s) < Stops.Count - 1);
-        RemoveStopCommand = new RelayCommand<StopViewModel>(RemoveStop, _ => Stops.Count > 2);
+        RemoveStopCommand = new RelayCommand<StopViewModel>(RemoveStop, _ => Stops.Count > 1);
         ReverseStopsCommand = new RelayCommand(ReverseStops, () => Stops.Count > 1);
         AddPhaseCommand = new RelayCommand(AddPhase);
         RemovePhaseCommand = new RelayCommand<PhaseViewModel>(RemovePhase, _ => Phases.Count > 1);
@@ -444,14 +545,15 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         if (_map is not null)
         {
             SyncNodes();
-            // Pick up where the user left off; otherwise a fresh mission to the Mun and back.
+            // Pick up where the user left off; otherwise a fresh mission on Kerbin.
             if (settings?.LoadLastMissionId() is { } lastId && missions?.Get(lastId) is { } last) OpenMission(last);
             else NewMission();
         }
         RefreshSavedMissions();
     }
 
-    public ObservableCollection<DvMapNode> Nodes { get; } = [];
+    /// <summary>The stop picker's entries.</summary>
+    public ObservableCollection<StopChoice> Nodes { get; } = [];
     public ObservableCollection<StopViewModel> Stops { get; } = [];
     public ObservableCollection<PhaseViewModel> Phases { get; } = [];
     public ObservableCollection<LegRowViewModel> Legs { get; } = [];
@@ -479,20 +581,27 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _suspend = false;
     }
 
-    /// <summary>Keeps the stop-picker list in step with the map without clearing it (clearing would blank the pickers).</summary>
+    /// <summary>
+    /// Keeps the stop-picker list in step with the map without clearing it (clearing would blank the pickers). A planet's
+    /// or moon's orbits are one "Orbit" entry: its low orbit, whose height the stop then sets (see <see cref="ShowOrbit"/>).
+    /// </summary>
     private void SyncNodes()
     {
         if (_map is null) return;
-        var desired = new List<DvMapNode>();
+        var desired = new List<StopChoice>();
         foreach (var n in _map.Nodes.Where(n => !n.IsCustom))
         {
-            desired.Add(n);
-            desired.AddRange(_map.ChildrenOf(n).Where(c => c.IsCustom));
+            if (!FoldsIntoOrbit(n)) desired.Add(new StopChoice(n.Key, n.DisplayName));
+            else if (n.Kind == "LowOrbit") desired.Add(new StopChoice(n.Key, $"{n.BodyName} — Orbit"));
+            desired.AddRange(_map.ChildrenOf(n).Where(c => c.IsCustom && !FoldsIntoOrbit(c)).Select(c => new StopChoice(c.Key, c.DisplayName)));
         }
         var keys = desired.Select(n => n.Key).ToHashSet();
         foreach (var stale in Nodes.Where(n => !keys.Contains(n.Key)).ToList()) Nodes.Remove(stale);
         for (var i = 0; i < desired.Count; i++)
-            if (i >= Nodes.Count || Nodes[i].Key != desired[i].Key) Nodes.Insert(i, desired[i]);
+        {
+            if (i < Nodes.Count && Nodes[i].Key == desired[i].Key) { if (Nodes[i] != desired[i]) Nodes[i] = desired[i]; }
+            else Nodes.Insert(i, desired[i]);
+        }
     }
 
     /// <summary>Phases for the rocket diagram: last phase on top, launch at the bottom.</summary>
@@ -645,6 +754,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                 ? LegTools.EvaluateDeploy(node, step, _bodies, continues: i < Stops.Count - 1)
                 : null;
             Stops[i].SetDeploy(canDeploy, _deploys[i]);
+            ShowOrbit(Stops[i], node);
         }
         _arrivals = new double?[Stops.Count];
         return segments.Select(segment =>
@@ -670,7 +780,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     // ---------------- Map view bindings ----------------
 
     public DeltaVMap? Map => _map;
-    public IReadOnlyCollection<string> RouteEdgeKeys => Legs.Select(l => l.Leg.EdgeKey).ToHashSet();
+    public IReadOnlyCollection<string> RouteEdgeKeys => Legs.SelectMany(l => l.Leg.EdgeKeys).ToHashSet();
     public IReadOnlyList<string> StopKeys => Stops.Select(s => s.NodeKey).ToList();
     public int EditedCount => _map?.Nodes.Count(n => n.IsOverridden) ?? 0;
     public string EditedText => EditedCount switch
@@ -946,7 +1056,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     private void RemoveStop(StopViewModel stop)
     {
-        if (Stops.Count <= 2) return;
+        if (Stops.Count <= 1) return;
         Stops.Remove(stop);
         StopChanged();
     }
@@ -963,9 +1073,9 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     /// <summary>Recomputes legs from the stops with default phases. Keeps margins of phases whose names survive.</summary>
     private void RebuildRoute(bool keepPhaseTuning)
     {
-        if (_suspend || _map is null || Stops.Count < 2) return;
+        if (_suspend || _map is null || Stops.Count == 0) return;
         var stops = Stops.Select(s => _map[s.NodeKey]).ToList();
-        var segments = MissionPlanner.BuildRoute(_map, stops);
+        var segments = Route(stops);
         var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops, UseAerobraking);
 
         if (keepPhaseTuning)
@@ -992,10 +1102,10 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     /// <summary>Rebuilds the leg rows from the current stops and map, keeping phases and per-leg choices.</summary>
     private void RefreshLegs()
     {
-        if (_suspend || _map is null || Stops.Count < 2) return;
+        if (_suspend || _map is null || Stops.Count == 0) return;
         var phases = Phases.Select(p => p.ToDefinition()).ToList();
         var settings = Legs.Select(l => l.Setting(Phases)).ToList();
-        var segments = MissionPlanner.BuildRoute(_map, Stops.Select(s => _map[s.NodeKey]).ToList());
+        var segments = Route(Stops.Select(s => _map[s.NodeKey]).ToList());
         Apply(segments, phases, settings);
     }
 
@@ -1034,6 +1144,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
         OnPropertyChanged(nameof(RouteSummary));
         OnPropertyChanged(nameof(AddAfterText));
+        OnPropertyChanged(nameof(AddBeforeText));
         OnPropertyChanged(nameof(RouteEdgeKeys));
         OnPropertyChanged(nameof(StopKeys));
         Recalculate();

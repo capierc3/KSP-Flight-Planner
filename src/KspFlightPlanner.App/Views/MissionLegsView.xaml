@@ -61,7 +61,7 @@
                                         <TextBlock Text="{Binding Notes}" Style="{StaticResource Note}" />
                                     </StackPanel>
                                     <TextBox x:Name="DvBox" Grid.Column="2" Text="{Binding DvText, Mode=TwoWay}" Width="72" Margin="8,0"
-                                             TextAlignment="Right" VerticalAlignment="Center" ToolTip="{Binding DvToolTip}" IsReadOnly="{Binding IsFromTool, Mode=OneWay}"
+                                             TextAlignment="Right" VerticalAlignment="Center" ToolTip="{Binding DvToolTip}" IsReadOnly="{Binding IsReadOnly, Mode=OneWay}"
                                              FontFamily="Cascadia Mono, Consolas" />
                                     <CheckBox Grid.Column="3" Content="{Binding PlaneChangeText}" IsChecked="{Binding IncludePlaneChange}"
                                               Visibility="{Binding HasPlaneChange, Converter={StaticResource BoolToVisibility}}"

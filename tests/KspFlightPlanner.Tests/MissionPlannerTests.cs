@@ -34,6 +34,31 @@ public sealed class MissionPlannerTests : IDisposable
         return (phases, MissionPlanner.Summarize(phases, MissionPlanner.AllLegs(segments), settings));
     }
 
+    [Fact]
+    public void Launch_to_a_higher_orbit_is_one_leg_both_ways()
+    {
+        static bool IsOrbit(DvMapNode n) => n.Key == "kerbin.keo";
+        var up = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.surface", "kerbin.keo")), IsOrbit);
+        var leg = Assert.Single(up[0].Legs);
+        Assert.Equal("kerbin.surface", leg.From.Key);
+        Assert.Equal("kerbin.keo", leg.To.Key);
+        Assert.Equal(3400 + 1115, leg.DeltaV);
+        Assert.Equal(["kerbin.lo", "kerbin.keo"], leg.EdgeKeys);
+        Assert.Equal("Launch", MissionPlanner.DefaultPhases(up, Stops("kerbin.surface", "kerbin.keo")).Phases.Single().Name);
+
+        var down = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.keo", "kerbin.surface")), IsOrbit);
+        Assert.Equal(3400 + 1115, Assert.Single(down[0].Legs).DeltaV);
+    }
+
+    [Fact]
+    public void Climb_stays_two_legs_when_the_low_orbit_is_a_stop_or_the_orbit_isnt_picked()
+    {
+        var viaStop = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.surface", "kerbin.lo", "kerbin.keo")), _ => true);
+        Assert.All(viaStop, s => Assert.Single(s.Legs));
+        var notPicked = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.surface", "kerbin.keo")), _ => false);
+        Assert.Equal(2, notPicked[0].Legs.Count);
+    }
+
     // Totals printed on the Δv map under each destination (Kerbin surface → destination, no plane changes).
     [Theory]
     [InlineData("mun.surface", 5150)]

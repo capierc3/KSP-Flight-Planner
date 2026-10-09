@@ -24,7 +24,7 @@ public sealed class CustomLocationTests : IDisposable
         File.Delete(_path);
     }
 
-    // Worked examples used in docs/MATH.md §4.
+    // Worked examples used in docs/MATH.md §2.1.
     [Theory]
     [InlineData(150, 55.1, 53.8)]
     [InlineData(500, 254.6, 225.6)]
@@ -131,7 +131,7 @@ public sealed class CustomLocationTests : IDisposable
         Assert.Equal("Kerbol — Eye of Kerbol (10,000,000 km)", node.DisplayName);
         Assert.Equal("Eye of Kerbol", node.CustomName);           // map title is the location, not the body
         Assert.Equal("10,000,000 km", node.CustomOrbitText);
-        Assert.Equal(787, node.DvFromParent);          // 64 extra ejection + 723 circularization (docs/MATH.md §4b)
+        Assert.Equal(787, node.DvFromParent);          // 64 extra ejection + 723 circularization (docs/MATH.md §3.5)
         Assert.Equal(723, node.AerobrakeResidualDv);   // coming home, Kerbin's atmosphere does the capture
         Assert.Equal("175 days", node.FlightTime);
 

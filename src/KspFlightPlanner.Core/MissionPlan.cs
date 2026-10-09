@@ -47,6 +47,35 @@ public static class MissionPlanner
             .Select(i => new RouteSegment(i, map.Route(stops[i - 1], stops[i])))
             .ToList();
 
+    /// <summary>
+    /// Flies "surface → low orbit → higher orbit" as one leg (and the same down): a launch goes straight to the orbit
+    /// it wants rather than parking in the low orbit first. The Δv is the two map edges added (the low orbit's climb
+    /// plus the Hohmann raise), which is what the launch costs either way. Only orbits <paramref name="isOrbit"/> picks
+    /// are joined, and only where the low orbit isn't a stop and no leg tool supplies either edge.
+    /// </summary>
+    public static IReadOnlyList<RouteSegment> CombineClimbs(IReadOnlyList<RouteSegment> segments, Func<DvMapNode, bool> isOrbit) =>
+        segments.Select(segment =>
+        {
+            var legs = new List<RouteLeg>();
+            foreach (var leg in segment.Legs)
+            {
+                if (legs.Count > 0 && legs[^1] is { IsCombined: false, IsFromTool: false } previous && !leg.IsFromTool
+                    && previous.To.Kind == "LowOrbit" && leg.From == previous.To
+                    && (previous.From.Kind == "Surface" && isOrbit(leg.To) || isOrbit(previous.From) && leg.To.Kind == "Surface"))
+                    legs[^1] = Combine(previous, leg);
+                else legs.Add(leg);
+            }
+            return legs.Count == segment.Legs.Count ? segment : segment with { Legs = legs };
+        }).ToList();
+
+    private static RouteLeg Combine(RouteLeg a, RouteLeg b) => new(
+        a.From, b.To, a.EdgeKey, a.DeltaV + b.DeltaV, a.MapDeltaV + b.MapDeltaV, a.PlaneChangeDv + b.PlaneChangeDv,
+        CanAerobrake: a.CanAerobrake || b.CanAerobrake,
+        FlightTime: null,
+        // Aerobraking replaces what it can on each part; the rest is still burned.
+        AerobrakeDv: (a.CanAerobrake ? a.AerobrakeDv : a.DeltaV) + (b.CanAerobrake ? b.AerobrakeDv : b.DeltaV),
+        Parts: [a, b]);
+
     public static IReadOnlyList<RouteLeg> AllLegs(IReadOnlyList<RouteSegment> segments) =>
         segments.SelectMany(s => s.Legs).ToList();
 

@@ -182,7 +182,7 @@ public static class TransferPlanner
 
     /// <summary>
     /// For a destination whose position is still free (a planned custom location): there is no launch window,
-    /// so depart at the earliest date on the ideal Hohmann transfer. See docs/MATH.md §8b.
+    /// so depart at the earliest date on the ideal Hohmann transfer. See docs/MATH.md §3.6.
     /// </summary>
     public static TransferPlan PlanAnyTime(TransferRequest request)
     {

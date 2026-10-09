@@ -67,10 +67,18 @@ public sealed record DvMapNode
 /// <param name="EdgeKey">Key of the child node that owns this edge; use it to edit the edge's Δv.</param>
 /// <param name="AerobrakeDv">Δv still needed on this leg when aerobraking (usually 0).</param>
 /// <param name="ToolNote">Set when a leg tool (e.g. a transfer window) supplies <see cref="DeltaV"/> instead of the map.</param>
+/// <param name="Parts">The map edges flown as this one leg (see <see cref="MissionPlanner.CombineClimbs"/>); null for a single edge.</param>
 public sealed record RouteLeg(
     DvMapNode From, DvMapNode To, string EdgeKey, double DeltaV, double MapDeltaV,
-    double PlaneChangeDv, bool CanAerobrake, string? FlightTime, double AerobrakeDv = 0, string? ToolNote = null)
+    double PlaneChangeDv, bool CanAerobrake, string? FlightTime, double AerobrakeDv = 0, string? ToolNote = null,
+    IReadOnlyList<RouteLeg>? Parts = null)
 {
+    /// <summary>Several map edges flown as one (a launch straight to an orbit above the low one).</summary>
+    public bool IsCombined => Parts is not null;
+
+    /// <summary>The map edges this leg flies, to highlight the route on the map.</summary>
+    public IEnumerable<string> EdgeKeys => Parts?.Select(p => p.EdgeKey) ?? [EdgeKey];
+
     /// <summary>The user edited the map value (a tool's value isn't an edit).</summary>
     public bool IsOverridden => ToolNote is null && DeltaV != MapDeltaV;
     public bool IsFromTool => ToolNote is not null;

@@ -54,7 +54,7 @@ public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObjec
 /// </summary>
 public sealed class FlightViewModel : ObservableObject
 {
-    /// <summary>Further than this from the planned path lights up Re-plan. docs/MATH.md §18.</summary>
+    /// <summary>Further than this from the planned path lights up Re-plan. docs/MATH.md §8.3.</summary>
     public const double DriftThresholdM = 1_000;
 
     private readonly FlightRepository _flights;

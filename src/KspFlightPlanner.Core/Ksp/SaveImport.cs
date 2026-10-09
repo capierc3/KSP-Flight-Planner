@@ -9,7 +9,7 @@ public sealed record VesselImport(SavedVessel Vessel, CustomLocation? Location, 
 }
 
 /// <summary>
-/// Turns vessels in a KSP save into placed custom locations (docs/MATH.md §8c). KSP stores the same Keplerian
+/// Turns vessels in a KSP save into placed custom locations (docs/MATH.md §8.1). KSP stores the same Keplerian
 /// elements custom locations use, so the conversion is: periapsis/apoapsis altitude = a(1 ∓ e) − R, mean anomaly
 /// radians → degrees, angles wrapped to 0–360°, and the epoch is the save's EPH.
 /// </summary>

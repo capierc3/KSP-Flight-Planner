@@ -114,11 +114,10 @@ public sealed partial class MissionBuilderViewModel
         }
     }
 
-    /// <summary>A fresh, unsaved mission to the Mun and back.</summary>
+    /// <summary>A fresh, unsaved mission: a clean slate on Kerbin's surface, waiting for its first stop.</summary>
     private void NewMission()
     {
-        Load(null, DefaultName, new MissionDefinition(
-            [new("kerbin.surface"), new("mun.surface"), new("kerbin.surface")], [], []));
+        Load(null, DefaultName, new MissionDefinition([new("kerbin.surface")], [], []));
     }
 
     private void OpenMission(SavedMission mission)
@@ -139,9 +138,9 @@ public sealed partial class MissionBuilderViewModel
         _selectedDesign = SelectDesign(_designPath);
         SetPlaces(definition.Places ?? []);
 
-        // Stops on locations deleted since the mission was saved are dropped; too few left and it starts over.
+        // Stops on locations deleted since the mission was saved are dropped; none left and it starts over.
         var stops = definition.Stops.Where(s => _map.TryGet(s.NodeKey, out _)).ToList();
-        if (stops.Count < 2) stops = [new("kerbin.surface"), new("mun.surface"), new("kerbin.surface")];
+        if (stops.Count == 0) stops = [new("kerbin.surface")];
         _suspend = true;
         Stops.Clear();
         foreach (var s in stops) Stops.Add(new StopViewModel(s, StopChanged, RefreshLegs));
@@ -149,7 +148,7 @@ public sealed partial class MissionBuilderViewModel
         _suspend = false;
 
         var nodes = Stops.Select(s => _map[s.NodeKey]).ToList();
-        var segments = MissionPlanner.BuildRoute(_map, nodes);
+        var segments = Route(nodes);
         var defaults = MissionPlanner.DefaultPhases(segments, nodes, _useAerobraking);
         // A mission without saved phases (a new one) gets the default split, like a route change does.
         var (phases, settings) = definition.Phases.Count > 0

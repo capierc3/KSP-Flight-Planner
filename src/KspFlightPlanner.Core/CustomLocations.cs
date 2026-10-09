@@ -79,11 +79,11 @@ public sealed record CustomLocationAnalysis(
 /// Attaches custom orbits to the Δv map.
 /// <list type="bullet">
 /// <item>Around a planet or moon: child of that body's low-orbit node; the edge is a two-burn transfer from
-/// the low orbit (a Hohmann transfer when circular) — docs/MATH.md §4, §4c.</item>
+/// the low orbit (a Hohmann transfer when circular) — docs/MATH.md §2.1, §2.2.</item>
 /// <item>Around the star: an interplanetary destination, so a child of the home planet's escape node (next to the
-/// Duna/Eve/Moho intercepts); the edge is the extra ejection Δv plus the arrival burn — docs/MATH.md §4b.</item>
+/// Duna/Eve/Moho intercepts); the edge is the extra ejection Δv plus the arrival burn — docs/MATH.md §3.5.</item>
 /// </list>
-/// Inclination is charged as a worst-case plane change at the target's apoapsis (docs/MATH.md §14); the
+/// Inclination is charged as a worst-case plane change at the target's apoapsis (docs/MATH.md §2.3); the
 /// Mission Builder adds it when "Include worst-case plane changes" is on.
 /// </summary>
 public static class CustomLocations

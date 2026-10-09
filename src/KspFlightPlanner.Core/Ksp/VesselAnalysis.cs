@@ -10,7 +10,7 @@ public sealed record ResourceTotal(string Name, string DisplayName, double Amoun
 public sealed record EngineGroup(string Title, int Count, double MaxThrustKn, double ThrustLimitPercent, double IspVacuumS,
     double IspSeaLevelS, IReadOnlyList<Propellant> Propellants, bool CountedForDeltaV);
 
-/// <summary>Mass, fuel and Δv of a vessel as it is in the save (docs/MATH.md §16).</summary>
+/// <summary>Mass, fuel and Δv of a vessel as it is in the save (docs/MATH.md §7.1).</summary>
 public sealed record VesselReport(
     double DryMassT,
     double WetMassT,

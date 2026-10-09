@@ -44,7 +44,7 @@ public sealed class LocationDetailsTests : IDisposable
     [Fact]
     public void Elliptical_orbit_uses_the_cheaper_burn_order()
     {
-        // docs/MATH.md §4c: 80 km circular → 100 × 2,000 km. Reaching apoapsis first: 590.5 + 8.65 = 599.15 m/s;
+        // docs/MATH.md §2.2: 80 km circular → 100 × 2,000 km. Reaching apoapsis first: 590.5 + 8.65 = 599.15 m/s;
         // reaching periapsis first would cost 16.45 + 589.76 = 606.21 m/s.
         var t = OrbitMath.TransferToEllipse(KerbinMu, 680_000, 700_000, 2_600_000);
         Assert.Equal(2_600_000, t.ArrivalRadius);

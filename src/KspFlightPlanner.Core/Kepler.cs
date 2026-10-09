@@ -36,7 +36,7 @@ public static class Kepler
     /// <summary>
     /// The orbit through a position and velocity at <paramref name="ut"/> (the inverse of <see cref="StateAt"/>); its epoch
     /// is <paramref name="ut"/>. Circular orbits get ω = 0 (anomaly measured from the ascending node), equatorial ones
-    /// Ω = 0 (node line along +X). Closed orbits only. See docs/MATH.md §17.
+    /// Ω = 0 (node line along +X). Closed orbits only. See docs/MATH.md §1.5.
     /// </summary>
     public static OrbitalElements ElementsFrom(StateVector state, double parentMu, double ut)
     {

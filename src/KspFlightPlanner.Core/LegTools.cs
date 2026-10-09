@@ -99,7 +99,7 @@ public sealed record DeployResult(CelestialBody Body, double AltitudeM, Resonant
 /// <summary>
 /// Tools that belong to a mission's legs. A tool replaces the Δv-map values of the steps it covers with its own result,
 /// keeping the steps themselves (so per-step choices such as aerobraking and phases stay where they were).
-/// See docs/MATH.md §19.
+/// See docs/MATH.md §6.2.
 /// </summary>
 public static class LegTools
 {
@@ -249,7 +249,7 @@ public static class LegTools
     /// <summary>
     /// About how long the steps take: a Hohmann half-orbit for each step between a moon and its planet, from the moon's
     /// orbit to the planet's low orbit (or back). Time spent inside a sphere of influence is left out. Null when a step
-    /// crosses between planets (it waits for a window) or a body's orbit isn't known. See docs/MATH.md §19d.
+    /// crosses between planets (it waits for a window) or a body's orbit isn't known. See docs/MATH.md §4.6.
     /// </summary>
     public static double? TripTimeS(IReadOnlyList<RouteLeg> steps, IReadOnlyDictionary<string, CelestialBody> bodies)
     {
@@ -286,7 +286,7 @@ public static class LegTools
         stop.Kind is "LowOrbit" or "Synchronous" or "Custom" && stop.AltitudeM is > 0 && bodies.ContainsKey(stop.BodyName);
 
     /// <summary>
-    /// The carrier orbit for a deployment at <paramref name="stop"/> (§6). Entering it from the circular orbit and
+    /// The carrier orbit for a deployment at <paramref name="stop"/> (§5.1). Entering it from the circular orbit and
     /// leaving it again are the same size of burn as each satellite's circularization (all at the shared apsis).
     /// Null if the stop can't host one or the orbit doesn't work (e.g. the carrier would leave the sphere of influence).
     /// </summary>

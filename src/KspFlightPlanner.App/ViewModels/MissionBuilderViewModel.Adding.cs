@@ -103,13 +103,13 @@ public sealed partial class MissionBuilderViewModel
 
     private void InitAdding()
     {
-        AddRendezvousCommand = new RelayCommand(() => AddRendezvousRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
-        AddTransferCommand = new RelayCommand(() => AddTransferRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
-        AddDeployCommand = new RelayCommand(() => AddDeployRequested?.Invoke(), () => _map is not null && Stops.Count >= 2);
+        AddRendezvousCommand = new RelayCommand(() => AddRendezvousRequested?.Invoke(), () => _map is not null && Stops.Count > 0);
+        AddTransferCommand = new RelayCommand(() => AddTransferRequested?.Invoke(), () => _map is not null && Stops.Count > 0);
+        AddDeployCommand = new RelayCommand(() => AddDeployRequested?.Invoke(), () => _map is not null && Stops.Count > 0);
     }
 
     /// <summary>The body the mission is at (or around) before its last stop.</summary>
-    public string? AddAfterBody => _map is null || Stops.Count < 2 ? null : _map[Stops[AddAfterIndex].NodeKey].BodyName;
+    public string? AddAfterBody => _map is null || Stops.Count == 0 ? null : _map[Stops[AddAfterIndex].NodeKey].BodyName;
 
     /// <summary>
     /// The planet a transfer added before the last stop leaves from: the body the mission is at, or the planet its moon
@@ -159,6 +159,55 @@ public sealed partial class MissionBuilderViewModel
         return _map.TryGet(place.Key, out _) ? place.Key : null;
     }
 
+    // ---------------- A stop's orbit altitude ----------------
+
+    /// <summary>
+    /// A circular orbit of a planet or moon whose height a stop can pick: the map's low or synchronous orbit, or one of
+    /// the mission's own orbits (not a craft, whose orbit is where it is). The stop picker shows these as one "Orbit".
+    /// </summary>
+    private bool FoldsIntoOrbit(DvMapNode node) =>
+        (node.Kind is "LowOrbit" or "Synchronous"
+         || node.CustomLocationId is { } id && _places.TryGetValue(id, out var place) && place is { IsPlaced: false, IsCircular: true })
+        && node.AltitudeM is not null
+        && _bodies.TryGetValue(node.BodyName, out var body) && body.ParentId is not null
+        && LowOrbitOf(node.BodyName) is not null;
+
+    /// <summary>The legs between the stops, a launch to (or landing from) a stop's orbit above the low one flown as one leg.</summary>
+    private IReadOnlyList<RouteSegment> Route(IReadOnlyList<DvMapNode> stops) =>
+        MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map!, stops), n => n.Kind != "LowOrbit" && FoldsIntoOrbit(n));
+
+    private DvMapNode? LowOrbitOf(string bodyName) =>
+        _map?.Nodes.FirstOrDefault(n => n.BodyName == bodyName && n.Kind == "LowOrbit" && !n.IsCustom);
+
+    /// <summary>Offers the altitude picker on a stop that's one of a body's orbits, and points its picker at "Orbit".</summary>
+    private void ShowOrbit(StopViewModel stop, DvMapNode node)
+    {
+        if (_map is null || !FoldsIntoOrbit(node))
+        {
+            stop.ClearOrbit();
+            stop.SetPickerKey(node.Key);
+            return;
+        }
+        var body = _bodies[node.BodyName];
+        var low = LowOrbitOf(body.Name)!;
+        // The map's synchronous orbit where it has one (so picking it lands on that stop), else the body's own.
+        var synchronous = _map.Nodes.FirstOrDefault(n => n.BodyName == body.Name && n.Kind == "Synchronous" && !n.IsCustom)?.AltitudeM
+                          ?? body.SynchronousAltitudeM;
+        var synchronousName = body.Name == LaunchSite.Ksc.BodyName ? "Keostationary" : "Synchronous";
+        stop.SetOrbit(node.AltitudeM!.Value, low.AltitudeM!.Value, synchronous, synchronousName, metres => MoveToOrbit(stop, body, metres));
+        stop.SetPickerKey(low.Key);
+    }
+
+    /// <summary>Moves <paramref name="stop"/> to a circular orbit of <paramref name="body"/>; returns why it can't, or null.</summary>
+    private string? MoveToOrbit(StopViewModel stop, CelestialBody body, double altitudeM)
+    {
+        try { CustomLocations.Validate(CustomLocation.Circular(0, "Orbit", body.Name, altitudeM), body); }
+        catch (ArgumentException e) { return e.Message.Replace("Periapsis is", "That's").Replace("Periapsis must be", "The orbit must be").Replace("Apoapsis is", "That's"); }
+        if (OrbitStopKey(body.Name, altitudeM) is not { } key) return $"A {altitudeM / 1000:N0} km orbit of {body.Name} can't be reached on the Δv map.";
+        stop.NodeKey = key;
+        return null;
+    }
+
     private StopViewModel InsertStop(MissionStop definition)
     {
         var stop = new StopViewModel(definition, StopChanged, RefreshLegs);
@@ -171,8 +220,11 @@ public sealed partial class MissionBuilderViewModel
     private int AddAfterIndex => Math.Max(0, Stops.Count - 2);
 
     /// <summary>"stop 2: Kerbin — Low orbit (80 km)", the stop new legs are added after.</summary>
-    public string AddAfterText => _map is null || Stops.Count < 2 ? ""
+    public string AddAfterText => _map is null || Stops.Count == 0 ? ""
         : $"stop {AddAfterIndex + 1}: {_map[Stops[AddAfterIndex].NodeKey].DisplayName}";
+
+    /// <summary>", before the last one" once there is a last stop to go before; a lone start stop is simply followed.</summary>
+    public string AddBeforeText => Stops.Count > 1 ? ", before the last one" : "";
 
     /// <summary>
     /// Where a rendezvous with a craft around <paramref name="bodyName"/> starts if added before the last stop, by the
@@ -181,7 +233,7 @@ public sealed partial class MissionBuilderViewModel
     public RendezvousStart? RendezvousStartFor(string bodyName)
     {
         // Around the star, a craft is an interplanetary destination (see CustomLocations), not one to meet in orbit.
-        if (_map is null || Stops.Count < 2 || _bodies.GetValueOrDefault(bodyName)?.ParentId is null) return null;
+        if (_map is null || Stops.Count == 0 || _bodies.GetValueOrDefault(bodyName)?.ParentId is null) return null;
         var lowOrbit = _map.Nodes.FirstOrDefault(n => n.BodyName == bodyName && n.Kind == "LowOrbit" && !n.IsCustom);
         if (lowOrbit?.AltitudeM is not { } parking) return null;
         var index = AddAfterIndex;

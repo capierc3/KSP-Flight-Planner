@@ -9,7 +9,7 @@ public sealed class DesignCheckTests
         stages.Select(s => new StageResult(s.Stage, 10, 5, s.DeltaV, s.DeltaV, 60, 100, 90, launchTwr, launchTwr, [])).ToList(),
         [], [], [], []);
 
-    // Worked example in docs/MATH.md §16c: Beyonder Mk1's stages against a Mun landing and return, 10 % margins.
+    // Worked example in docs/MATH.md §7.3: Beyonder Mk1's stages against a Mun landing and return, 10 % margins.
     [Fact]
     public void Stages_pour_into_phases_in_order_and_carry_over()
     {
@@ -66,7 +66,7 @@ public sealed class DesignCheckTests
         Assert.Equal(Coverage.Comfortable, r.Status);
     }
 
-    // Worked example in docs/MATH.md §16d. Lower stage: 1,000 m/s, 10 → 6 t, 200 kN vacuum / 150 kN at sea level.
+    // Worked example in docs/MATH.md §7.4. Lower stage: 1,000 m/s, 10 → 6 t, 200 kN vacuum / 150 kN at sea level.
     // Lander: 2,000 m/s, 4 → 2 t, 30 kN vacuum / 10 kN at sea level.
     private static DesignReport TwoStage() => new("Lander test", "VAB", 10, 10, 2,
     [

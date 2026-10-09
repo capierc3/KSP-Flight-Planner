@@ -190,7 +190,7 @@ public sealed class VesselAnalysisTests : IDisposable
         Assert.Equal(0.004, _catalog.Density("MonoPropellant")); // not in this cache: stock value
     }
 
-    // Worked example in docs/MATH.md §16.
+    // Worked example in docs/MATH.md §7.1.
     [Fact]
     public void Relay_delta_v_from_whats_left_in_its_tanks()
     {

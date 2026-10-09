@@ -7,7 +7,7 @@ public readonly record struct NodeBurn(double Prograde, double Normal, double Ra
 {
     public double Total => Math.Sqrt(Prograde * Prograde + Normal * Normal + Radial * Radial);
 
-    /// <summary>The Δv vector <paramref name="dv"/> split into node axes for a craft at <paramref name="state"/>. See docs/MATH.md §17d.</summary>
+    /// <summary>The Δv vector <paramref name="dv"/> split into node axes for a craft at <paramref name="state"/>. See docs/MATH.md §1.8.</summary>
     public static NodeBurn From(StateVector state, Vector3d dv)
     {
         var prograde = state.Velocity.Normalized;
@@ -69,7 +69,7 @@ public readonly record struct PhasingChoice(int Orbits, bool Higher)
 
 /// <summary>
 /// A phasing orbit: burn at the start, fly <see cref="Orbits"/> laps (each <see cref="PeriodS"/> long) and you're back at
-/// the start point when the target is where the transfer needs it. See docs/MATH.md §17b.
+/// the start point when the target is where the transfer needs it. See docs/MATH.md §4.3.
 /// </summary>
 /// <param name="BurnDv">Prograde (+) or retrograde (−) Δv of the burn into the phasing orbit.</param>
 /// <param name="ExtraDv">Rough extra cost: the burn in, and the same again to undo it (folded into the transfer burn).</param>
@@ -124,7 +124,7 @@ public sealed record LaunchSite(string Name, string BodyName, double LatitudeDeg
 
     /// <summary>
     /// Where the site is in the fixed (inertial) frame orbits are measured in, as a longitude comparable with an orbit's
-    /// LAN: λ = longitude + initial rotation + 360°·UT / sidereal day. See docs/MATH.md §17e.
+    /// LAN: λ = longitude + initial rotation + 360°·UT / sidereal day. See docs/MATH.md §4.5.
     /// </summary>
     public double InertialLongitudeDeg(CelestialBody body, double ut) =>
         Rendezvous.Wrap360(LongitudeDeg + BodyInitialRotationDeg + 360 * ut / body.RotationPeriodS);
@@ -179,7 +179,7 @@ public sealed record RendezvousPlan(IReadOnlyList<LaunchOption> LaunchOptions, i
 /// <summary>
 /// Plans meeting craft in orbit around one body: match planes, phase (or wait), transfer, match velocity — for each
 /// target in turn — then optionally deorbit the last one. The transfer is a Lambert intercept searched around the
-/// Hohmann window, so it works for real (slightly eccentric, slightly tilted) orbits. See docs/MATH.md §17.
+/// Hohmann window, so it works for real (slightly eccentric, slightly tilted) orbits. See docs/MATH.md §4.1.
 /// </summary>
 public static class Rendezvous
 {
@@ -375,7 +375,7 @@ public static class Rendezvous
 
     /// <summary>
     /// The burn at a crossing of the two planes that turns your velocity into the target's plane, keeping its speed and
-    /// climb angle: Δv = 2·v_h·sin(Δi/2) for the horizontal part v_h. The cheaper of the next two crossings. docs/MATH.md §17a.
+    /// climb angle: Δv = 2·v_h·sin(Δi/2) for the horizontal part v_h. The cheaper of the next two crossings. docs/MATH.md §4.2.
     /// </summary>
     public static (Maneuver Burn, OrbitalElements After) MatchPlane(CelestialBody body, OrbitalElements chaser, OrbitalElements target, double afterUt)
     {
@@ -420,7 +420,7 @@ public static class Rendezvous
 
     /// <summary>
     /// Hohmann rule of thumb from your orbit's size a₁ to the target's a₂: transfer time t_H = π√(((a₁+a₂)/2)³/μ),
-    /// lead angle φ = 180° − n₂·t_H, and the wait until the target is φ ahead. See docs/MATH.md §17b.
+    /// lead angle φ = 180° − n₂·t_H, and the wait until the target is φ ahead. See docs/MATH.md §4.3.
     /// </summary>
     public static RendezvousGuide Guide(OrbitalElements chaser, OrbitalElements target, double mu, double ut)
     {
@@ -446,7 +446,7 @@ public static class Rendezvous
 
     /// <summary>
     /// Phasing orbits that bring the target to the lead angle after k laps (k = 1…6), one a little lower (faster) and one
-    /// a little higher (slower) than your orbit: T_p = (Δ + 2π·m)/(n₂·k) with Δ = (φ − θ₀) mod 2π. docs/MATH.md §17b.
+    /// a little higher (slower) than your orbit: T_p = (Δ + 2π·m)/(n₂·k) with Δ = (φ − θ₀) mod 2π. docs/MATH.md §4.3.
     /// Options that dip into the atmosphere or leave the sphere of influence are left out.
     /// </summary>
     public static IReadOnlyList<PhasingOption> PhasingOptions(CelestialBody body, OrbitalElements chaser, OrbitalElements target,
@@ -563,7 +563,7 @@ public static class Rendezvous
         return new InterceptPoint(bestDep, bestTof);
     }
 
-    /// <summary>The transfer burn and the match-velocity burn of a Lambert intercept. docs/MATH.md §17c.</summary>
+    /// <summary>The transfer burn and the match-velocity burn of a Lambert intercept. docs/MATH.md §4.4.</summary>
     public static (Maneuver Transfer, Maneuver Match) Intercept(CelestialBody body, OrbitalElements chaser, OrbitalElements target,
         double departureUt, double flightTimeS)
     {
@@ -590,7 +590,7 @@ public static class Rendezvous
 
     /// <summary>
     /// Lift-off opportunities in the next two sidereal days: each time the pad passes under the target's plane (straight into
-    /// it — heading from sin β = cos i), plus a due-east launch timed for the shortest wait in orbit. docs/MATH.md §17e.
+    /// it — heading from sin β = cos i), plus a due-east launch timed for the shortest wait in orbit. docs/MATH.md §4.5.
     /// </summary>
     public static IReadOnlyList<LaunchOption> LaunchOptions(LaunchSite site, CelestialBody body, AscentProfile ascent,
         OrbitalElements target, double earliestUt)
@@ -652,7 +652,7 @@ public static class Rendezvous
 
     /// <summary>
     /// A retrograde burn at the next apoapsis (right away for a circular orbit) that drops the periapsis to
-    /// <paramref name="periapsisAltitudeM"/>: Δv = v_a − √(2μ·r_p / (r_a·(r_a + r_p))). docs/MATH.md §17f.
+    /// <paramref name="periapsisAltitudeM"/>: Δv = v_a − √(2μ·r_p / (r_a·(r_a + r_p))). docs/MATH.md §2.5.
     /// </summary>
     public static Maneuver Deorbit(CelestialBody body, OrbitalElements orbit, double afterUt, double periapsisAltitudeM)
     {

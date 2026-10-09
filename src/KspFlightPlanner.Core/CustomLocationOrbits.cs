@@ -4,7 +4,7 @@ namespace KspFlightPlanner.Core;
 
 /// <summary>
 /// Turns custom locations into full orbits so the Transfer Planner can treat them like planets
-/// (docs/MATH.md §8b).
+/// (docs/MATH.md §3.6).
 /// </summary>
 public static class CustomLocationOrbits
 {

@@ -16,7 +16,7 @@ public sealed record StageResult(
     double TwrSeaLevel,
     IReadOnlyList<(string Title, int Count)> Engines);
 
-/// <summary>Everything worked out for a saved design (docs/MATH.md §16b).</summary>
+/// <summary>Everything worked out for a saved design (docs/MATH.md §7.2).</summary>
 /// <param name="LaunchMassT">Mass when the first stage lights (launch clamps excluded, as KSP does).</param>
 public sealed record DesignReport(
     string Name,

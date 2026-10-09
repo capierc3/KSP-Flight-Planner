@@ -57,7 +57,7 @@ public static class OrbitMath
     /// <summary>
     /// Hohmann transfer between circular, coplanar orbits of radius r1 and r2 (either direction).
     /// Δv₁ = |√(μ/r₁)·(√(2r₂/(r₁+r₂)) − 1)|, Δv₂ = |√(μ/r₂)·(1 − √(2r₁/(r₁+r₂)))|, t = π√(a³/μ).
-    /// See docs/MATH.md §4.
+    /// See docs/MATH.md §2.1.
     /// </summary>
     public static HohmannTransfer Hohmann(double mu, double r1, double r2)
     {
@@ -70,7 +70,7 @@ public static class OrbitMath
 
     /// <summary>
     /// Δv to go from a circular orbit of radius r to a hyperbolic escape with excess speed v∞ (or the reverse,
-    /// capturing into that orbit): √(v∞² + 2μ/r) − √(μ/r). See docs/MATH.md §7.
+    /// capturing into that orbit): √(v∞² + 2μ/r) − √(μ/r). See docs/MATH.md §3.1.
     /// </summary>
     public static double HyperbolicBurnDv(double mu, double orbitRadius, double vInf) =>
         Math.Sqrt(vInf * vInf + 2 * mu / orbitRadius) - Math.Sqrt(mu / orbitRadius);
@@ -79,7 +79,7 @@ public static class OrbitMath
     /// Two-burn transfer from a circular orbit of radius r₀ to an ellipse with periapsis rₚ and apoapsis rₐ
     /// (same plane). Burn 1 at r₀ puts the far side of the orbit at one apsis of the target; burn 2 there sets
     /// the other apsis. Both orders (reach rₐ first, or rₚ first) are tried and the cheaper is returned.
-    /// For a circular target (rₚ = rₐ) this is exactly <see cref="Hohmann"/>. See docs/MATH.md §4c.
+    /// For a circular target (rₚ = rₐ) this is exactly <see cref="Hohmann"/>. See docs/MATH.md §2.2.
     /// </summary>
     public static EllipseTransfer TransferToEllipse(double mu, double r0, double rp, double ra)
     {
@@ -97,7 +97,7 @@ public static class OrbitMath
         return viaPeriapsis.Total < viaApoapsis.Total ? viaPeriapsis : viaApoapsis;
     }
 
-    /// <summary>Δv to change inclination by Δi at speed v: 2·v·sin(Δi/2). See docs/MATH.md §14.</summary>
+    /// <summary>Δv to change inclination by Δi at speed v: 2·v·sin(Δi/2). See docs/MATH.md §2.3.</summary>
     public static double PlaneChangeDv(double speed, double deltaInclinationDeg) =>
         2 * speed * Math.Sin(Math.Abs(deltaInclinationDeg) * Math.PI / 360);
 

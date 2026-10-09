@@ -55,10 +55,29 @@
                                             Command="{Binding DataContext.RemoveStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
                                 </StackPanel>
                                 <ComboBox ItemsSource="{Binding DataContext.Nodes, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          SelectedValuePath="Key" SelectedValue="{Binding NodeKey}" DisplayMemberPath="DisplayName" />
+                                          SelectedValuePath="Key" SelectedValue="{Binding PickerKey}" DisplayMemberPath="Text" />
                             </DockPanel>
 
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
+                            <StackPanel Grid.Row="1" Grid.Column="1">
+                                <!-- An orbit stop's height: the low or synchronous orbit, or any altitude -->
+                                <StackPanel Visibility="{Binding IsOrbit, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
+                                    <WrapPanel>
+                                        <TextBlock Text="Altitude" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="2,0,6,0" />
+                                        <TextBox Text="{Binding AltitudeKmText, UpdateSourceTrigger=LostFocus}" Width="80" FontSize="12"
+                                                 KeyDown="AltitudeBox_KeyDown"
+                                                 ToolTip="Any altitude: the stop becomes a circular orbit at that height, reached from the low orbit. Press Enter to apply." />
+                                        <TextBlock Text="km" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="4,0,8,0" />
+                                        <Button Content="{Binding LowOrbitText}" Command="{Binding UseLowOrbitCommand}" Style="{StaticResource SmallButton}" Margin="0,0,4,0"
+                                                ToolTip="The body's low orbit on the Δv map" />
+                                        <Button Content="{Binding SynchronousText}" Command="{Binding UseSynchronousCommand}" Style="{StaticResource SmallButton}" Margin="0"
+                                                Visibility="{Binding HasSynchronous, Converter={StaticResource BoolToVisibility}}"
+                                                ToolTip="The orbit whose period matches the body's day, so it stays over one spot" />
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding AltitudeError}" Foreground="#EF5350" FontSize="12" TextWrapping="Wrap"
+                                               Margin="2,2,0,0" Visibility="{Binding HasAltitudeError, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
+                            </StackPanel>
                             <Grid Grid.Row="2" Grid.Column="1">
                                 <TextBox x:Name="NoteBox" Text="{Binding Note}" FontSize="12" />
                                 <TextBlock Text="Note, e.g. dock at station, pick up Bob" IsHitTestVisible="False" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
@@ -152,7 +171,7 @@
                         ToolTip="Release a satellite constellation into an orbit: plan it in Resonant Orbits, then Add to mission" />
             </WrapPanel>
             <TextBlock Style="{StaticResource Note}" Margin="0,0,0,0" TextWrapping="Wrap">
-                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=", before the last one. Rendezvous, Transfer and Deploy open their calculator set up from there; the steps to get there come from the Δv map." />
+                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text="{Binding AddBeforeText, Mode=OneWay}" /><Run Text=". Rendezvous, Transfer and Deploy open their calculator set up from there; the steps to get there come from the Δv map." />
             </TextBlock>
 
             <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />

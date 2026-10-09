@@ -188,7 +188,7 @@
                             <TextBox Grid.Column="7" Text="{Binding EpochHour, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                         </Grid>
                         <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                                   Text="Kerbal Engineer and MechJeb show LAN, Argument of Pe and Mean Anomaly for your vessel. Phase angle works for circular, 0° orbits around Kerbol: how far ahead of Kerbin it is (Math guide §8b)." />
+                                   Text="Kerbal Engineer and MechJeb show LAN, Argument of Pe and Mean Anomaly for your vessel. Phase angle works for circular, 0° orbits around Kerbol: how far ahead of Kerbin it is (Math guide §3.6)." />
                     </StackPanel>
 
                     <TextBlock Text="Description" Style="{StaticResource SectionHeader}" />
@@ -201,7 +201,7 @@
                     <TextBlock Text="Calculated" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
                     <ItemsControl ItemsSource="{Binding Derived}" ItemTemplate="{StaticResource FactRow}" />
                     <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0"
-                               Text="How these are worked out: Math guide §4 (Hohmann), §4b (orbits around Kerbol), §4c (elliptical orbits), §14 (plane changes)." />
+                               Text="How these are worked out: Math guide §2.1 (Hohmann), §2.2 (elliptical orbits), §2.3 (plane changes), §3.5 (orbits around Kerbol)." />
                 </StackPanel>
 
                 <!-- Images -->
