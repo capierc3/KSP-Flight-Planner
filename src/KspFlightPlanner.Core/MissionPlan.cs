@@ -155,6 +155,51 @@ public static class MissionPlanner
     }
 
     /// <summary>
+    /// Re-plans after the stops changed without losing the user's work on the build: every phase is kept as it is
+    /// (names, margins, phases they added), and a leg the old route also flew (same from → to, matched in order) keeps
+    /// its setting. Only new legs get the default split; their default phase is matched by name, and added at the end
+    /// when the user has no phase of that name.
+    /// </summary>
+    public static (IReadOnlyList<PhaseDefinition> Phases, IReadOnlyList<LegSetting> Legs) KeepPhases(
+        IReadOnlyList<PhaseDefinition> phases, IReadOnlyList<RouteLeg> oldLegs, IReadOnlyList<LegSetting> oldSettings,
+        IReadOnlyList<RouteSegment> segments, IReadOnlyList<DvMapNode> stops, bool useAerobraking = true, bool includePlaneChanges = false)
+    {
+        var defaults = DefaultPhases(segments, stops, useAerobraking);
+        if (phases.Count == 0) return defaults;
+
+        var old = new Dictionary<(string, string), Queue<LegSetting>>();
+        for (var i = 0; i < Math.Min(oldLegs.Count, oldSettings.Count); i++)
+        {
+            var key = (oldLegs[i].From.Key, oldLegs[i].To.Key);
+            if (!old.TryGetValue(key, out var queue)) old[key] = queue = new Queue<LegSetting>();
+            queue.Enqueue(oldSettings[i]);
+        }
+
+        var kept = phases.ToList();
+        var legs = AllLegs(segments);
+        var settings = new List<LegSetting>();
+        for (var i = 0; i < legs.Count; i++)
+        {
+            if (old.TryGetValue((legs[i].From.Key, legs[i].To.Key), out var queue) && queue.Count > 0)
+            {
+                var setting = queue.Dequeue();
+                settings.Add(setting with { PhaseIndex = Math.Clamp(setting.PhaseIndex, 0, kept.Count - 1) });
+                continue;
+            }
+            var fallback = defaults.Legs[i];
+            var name = defaults.Phases[fallback.PhaseIndex].Name;
+            var index = kept.FindIndex(p => p.Name == name);
+            if (index < 0)
+            {
+                kept.Add(new PhaseDefinition(name));
+                index = kept.Count - 1;
+            }
+            settings.Add(fallback with { PhaseIndex = index, IncludePlaneChange = includePlaneChanges });
+        }
+        return (kept, settings);
+    }
+
+    /// <summary>
     /// Aerobraking down to a low orbit only makes sense by default when the trip continues to the surface
     /// (re-entry). Dipping into the atmosphere to reach low orbit and then leaving it again is left to the user.
     /// </summary>

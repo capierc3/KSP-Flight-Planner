@@ -159,9 +159,11 @@ public sealed partial class MissionBuilderViewModel
         var segments = Route(nodes);
         var defaults = MissionPlanner.DefaultPhases(segments, nodes, _useAerobraking);
         // A mission without saved phases (a new one) gets the default split, like a route change does.
+        IReadOnlyList<LegSetting> defaultLegs = defaults.Legs.Select(s => s with { IncludePlaneChange = _includePlaneChanges }).ToList();
+        _defaultSplit = (defaults.Phases, defaultLegs);
         var (phases, settings) = definition.Phases.Count > 0
             ? (definition.Phases, definition.Legs)
-            : (defaults.Phases, defaults.Legs.Select(s => s with { IncludePlaneChange = _includePlaneChanges }).ToList());
+            : (defaults.Phases, defaultLegs);
         Apply(segments, phases, settings);
 
         foreach (var property in new[] { nameof(MissionId), nameof(MissionName), nameof(Notes), nameof(UseAerobraking),

@@ -1374,20 +1374,36 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     // ---------------- Route & phases ----------------
 
-    /// <summary>Recomputes legs from the stops with default phases. Keeps margins of phases whose names survive.</summary>
+    /// <summary>The default split last applied; while the phases still equal it, a route change re-splits them.</summary>
+    private (IReadOnlyList<PhaseDefinition> Phases, IReadOnlyList<LegSetting> Legs)? _defaultSplit;
+
+    /// <summary>
+    /// Recomputes legs from the stops. While the phases are still the default split they follow the new route's
+    /// defaults; once the user has changed them (<paramref name="keepPhaseTuning"/>) their phases and leg choices are
+    /// kept and only new legs get defaults. Reset to defaults passes false.
+    /// </summary>
     private void RebuildRoute(bool keepPhaseTuning)
     {
         if (_suspend || _map is null || Stops.Count == 0) return;
         var stops = Stops.Select(s => _map[s.NodeKey]).ToList();
         var segments = Route(stops);
-        var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops, UseAerobraking);
 
-        if (keepPhaseTuning)
+        var currentPhases = Phases.Select(p => p.ToDefinition()).ToList();
+        var currentSettings = Legs.Select(l => l.Setting(Phases)).ToList();
+        var untouched = _defaultSplit is { } split
+            && split.Phases.SequenceEqual(currentPhases) && split.Legs.SequenceEqual(currentSettings);
+        if (keepPhaseTuning && !untouched)
         {
-            var previous = Phases.ToDictionary(p => p.Name, p => p.ToDefinition());
-            phases = phases.Select(p => previous.TryGetValue(p.Name, out var old) ? p with { MarginPercent = old.MarginPercent, ExtraDv = old.ExtraDv } : p).ToList();
+            var (kept, keptSettings) = MissionPlanner.KeepPhases(currentPhases, Legs.Select(l => l.Leg).ToList(), currentSettings,
+                segments, stops, UseAerobraking, IncludePlaneChanges);
+            _defaultSplit = null;
+            Apply(segments, kept, keptSettings);
+            return;
         }
+
+        var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops, UseAerobraking);
         settings = settings.Select(s => s with { IncludePlaneChange = IncludePlaneChanges }).ToList();
+        _defaultSplit = (phases, settings);
         Apply(segments, phases, settings);
     }
 

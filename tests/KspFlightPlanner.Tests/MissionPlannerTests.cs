@@ -51,6 +51,26 @@ public sealed class MissionPlannerTests : IDisposable
     }
 
     [Fact]
+    public void Adding_a_stop_keeps_the_users_phases_and_leg_choices()
+    {
+        // The user renamed a phase, tuned its margin and moved the second leg onto it.
+        var before = Stops("kerbin.surface", "kerbin.keo");
+        var oldLegs = MissionPlanner.AllLegs(MissionPlanner.BuildRoute(_map, before));
+        PhaseDefinition[] phases = [new("Launch"), new("orbiter", MarginPercent: 20, ExtraDv: 50)];
+        LegSetting[] settings = [new(0, false, false), new(1, false, false)];
+
+        var after = Stops("kerbin.surface", "kerbin.keo", "kerbin.surface");
+        var segments = MissionPlanner.BuildRoute(_map, after);
+        var (kept, keptSettings) = MissionPlanner.KeepPhases(phases, oldLegs, settings, segments, after);
+
+        Assert.Equal(["Launch", "orbiter", "Return"], kept.Select(p => p.Name));
+        Assert.Equal(phases[1], kept[1]);
+        Assert.Equal(MissionPlanner.AllLegs(segments).Count, keptSettings.Count);
+        Assert.Equal([0, 1], keptSettings.Take(2).Select(s => s.PhaseIndex));
+        Assert.All(keptSettings.Skip(2), s => Assert.Equal(2, s.PhaseIndex));
+    }
+
+    [Fact]
     public void Climb_stays_two_legs_when_the_low_orbit_is_a_stop_or_the_orbit_isnt_picked()
     {
         var viaStop = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.surface", "kerbin.lo", "kerbin.keo")), _ => true);
