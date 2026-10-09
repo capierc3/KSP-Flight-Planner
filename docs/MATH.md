@@ -199,6 +199,26 @@ Worked example — on the Mun (R = 200,000 m), from the Armstrong memorial (0.70
 - Code: `Landing.SurfaceDistance`; tested in `LandingTests`
 - Source: [Haversine formula (Wikipedia)](https://en.wikipedia.org/wiki/Haversine_formula)
 
+**Heights from the surface bake.** Tools › Bake Surface Data asks the running game (kRPC `SurfaceHeight`, `BiomeAt`) for the terrain height and biome at every grid point: one row per step from 90° S to 90° N, columns from 180° W eastward, wrapping round at 180°. A spot between grid points takes its height from the four around it (bilinear interpolation). With the spot a fraction f_lon of the way east and f_lat of the way north inside its grid cell:
+
+```
+south = h_SW + f_lon · (h_SE − h_SW)
+north = h_NW + f_lon · (h_NE − h_NW)
+h     = south + f_lat · (north − south)
+```
+
+Worked example — grid points 1° apart: 1,000 m (SW, 10° N 20° E), 1,200 m (SE, 10° N 21° E), 1,100 m (NW, 11° N 20° E) and 1,500 m (NE). The spot 10.6° N 20.25° E has f_lon = 0.25 and f_lat = 0.6: south = 1,000 + 0.25 × 200 = 1,050, north = 1,100 + 0.25 × 400 = 1,200, h = 1,050 + 0.6 × 150 = **1,140 m**. A biome is taken from the nearest grid point instead, since biomes can't be averaged.
+
+To walk along the ground from a spot, the great-circle destination formula gives the point a distance d away on bearing θ (from north):
+
+```
+φ₂ = asin(sin φ₁ · cos(d/R) + cos φ₁ · sin(d/R) · cos θ)
+λ₂ = λ₁ + atan2(sin θ · sin(d/R) · cos φ₁, cos(d/R) − sin φ₁ · sin φ₂)
+```
+
+- Code: `SurfaceBake.HeightAt`, `SurfaceBake.BiomeAt`, `Landing.Destination`; tested in `SurfaceBakeTests`
+- Source: [Bilinear interpolation (Wikipedia)](https://en.wikipedia.org/wiki/Bilinear_interpolation); destination point: [Movable Type, "Calculate distance, bearing and more between latitude/longitude points"](https://www.movable-type.co.uk/scripts/latlong.html)
+
 ## 2. Changing your orbit around one body
 
 Raising, lowering, reshaping and tilting an orbit without leaving the body you're around — and coming back down.
@@ -313,7 +333,8 @@ Inputs: the site's latitude φ, longitude λ and ground height h_s (§1.9); the 
 
 The app's choices, where the method leaves one open:
 - The orbit's inclination is planned **1° above** the site's latitude, so the ground track crosses the latitude instead of just grazing it. Turning an equatorial orbit to it costs 2·v₀·sin(i/2) (§2.3). That goes in the leg's plane-change column, counted when plane changes are on.
-- The descent's low point is **1,000 m** above the site's ground. When the ground height isn't known (most wiki landmarks), the datum (0 m) is assumed and the plan says so. Flags and landed craft record their height (`alt` in the save).
+- The descent's low point is **1,000 m** above the site's ground. The ground height comes from the spot itself when it has one (flags and landed craft record it as `alt` in the save), otherwise from the surface bake (§1.9). Without either, the datum (0 m) is assumed and the plan says so.
+- **The approach.** With a surface bake, the app walks back from the site along the ground track over the braking distance d (step 5), every 500 m, and reads the terrain (§1.9). The northbound pass arrives on heading az = asin(cos H) east of north (cos H from step 5), the southbound one on 180° − az. The lower of the two is suggested, and the plan warns if that terrain reaches within 100 m of the descent's low point. Without a bake it can only compare the low point with the body's highest peak.
 - The lander's thrust is entered as its **TWR at the body's surface** (default 2), so a_T = TWR × μ/R².
 - r₀ is the low orbit the leg comes down from (the Δv map's, e.g. 14 km on the Mun).
 
@@ -373,9 +394,9 @@ Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to t
 - Step 5: v_p = 583.86 m/s, v_s = 8.96 m/s, cos H = cos 15° / cos 12.4508° = 0.9892, so v_rel = **574.99 m/s**. g = 1.581 m/s², a_h = √(5² − 1.581²) = 4.744 m/s². Braking takes t_b = **121.2 s** over d = **34.8 km**, costing Δv₂ = **606.1 m/s**. That is 31.1 m/s (5.4%) more than v_rel, because of the gravity loss.
 - Total from orbit: 16.9 + 606.1 = **623 m/s**. Compare the Δv map's 580 m/s from its 14 km low orbit, which assumes no particular spot.
 
-Still to come: ground heights for any spot and along the approach (the planned kRPC map bake), θ₀ from kRPC to time the deorbit burn, and a drag model for bodies with air.
+Still to come: timing the deorbit burn from the craft's orbit (step 3; the bake now stores θ₀), and a drag model for bodies with air.
 
-- Code: `Landing.Plan` (steps 1–5), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
+- Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
 - Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
 
 ### 2.7 Launching into an inclined orbit
@@ -648,7 +669,7 @@ The cheapest cell is refined by zooming in, and drawn as a small porkchop plot y
 
 ### 4.5 When and where to launch
 
-Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
+Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. That's the value the app assumes; once Kerbin has been through Tools › Bake Surface Data it uses the game's own (kRPC `CelestialBody.InitialRotation`). The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
 
 ```
 λ(t) = longitude + initial rotation + 360° · t / T_sidereal        KSC: longitude −74.5575°, latitude −0.0972°

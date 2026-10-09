@@ -236,6 +236,29 @@ internal static class Migrations
             PRIMARY KEY (part_name, module_index)
         );
 
+        -- Surface data sampled from the running game over kRPC ("baked"), per body of the user's install.
+        -- heights: float32 little-endian, row-major from 90° S / 180° W; biomes: one byte per point indexing biome_names.
+        CREATE TABLE ksp_surface_bakes (
+            body_name             TEXT PRIMARY KEY,
+            step_deg              REAL NOT NULL,
+            initial_rotation_deg  REAL NOT NULL,     -- rotation angle at UT 0
+            rotation_period_s     REAL NOT NULL,
+            radius_m              REAL NOT NULL,
+            mu                    REAL NOT NULL,
+            baked_utc             TEXT NOT NULL,
+            heights               BLOB NOT NULL,
+            biomes                BLOB NOT NULL,
+            biome_names           TEXT NOT NULL      -- JSON array
+        );
+
+        CREATE TABLE ksp_surface_bake_air (
+            body_name      TEXT NOT NULL REFERENCES ksp_surface_bakes(body_name) ON DELETE CASCADE,
+            altitude_m     REAL NOT NULL,
+            pressure_pa    REAL NOT NULL,
+            density_kg_m3  REAL,
+            PRIMARY KEY (body_name, altitude_m)
+        );
+
         CREATE TABLE saved_missions (
             id               INTEGER PRIMARY KEY,
             name             TEXT    NOT NULL,

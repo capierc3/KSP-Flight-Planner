@@ -15,10 +15,14 @@ public sealed class PlannerEvents
     /// </summary>
     public event Action? SaveChanged;
 
+    /// <summary>A body's surface bake was saved (Tools › Bake Surface Data); the argument is the body's name.</summary>
+    public event Action<string>? SurfaceDataChanged;
+
     /// <summary>A planning tab handed a plan to the Flight tab; the argument is the new flight's id.</summary>
     public event Action<long>? OpenFlightRequested;
 
     public void RaiseLocationsChanged(object sender) => LocationsChanged?.Invoke(sender);
+    public void RaiseSurfaceDataChanged(string bodyName) => SurfaceDataChanged?.Invoke(bodyName);
     public void RaiseSaveChanged() => SaveChanged?.Invoke();
     public void RequestOpenFlight(long flightId) => OpenFlightRequested?.Invoke(flightId);
     public void RequestOpenLocation(long locationId) => OpenLocationRequested?.Invoke(locationId);

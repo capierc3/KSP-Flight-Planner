@@ -112,7 +112,52 @@ Notes:
       (`celestialName`, `latitude`, `longitude` under `ScenarioCustomWaypoints`) are from memory, not yet seen in your save
 - [ ] Optional: land near a planned spot and compare where you came down (Vessels tab / flag position) with the target
 
-## 8. Other bits
+## 8. Launch into an inclination (no kRPC needed)
+
+- [ ] Mission: Kerbin — Surface → Kerbin — Low orbit (80 km), pick **Polar**. The launch leg shows about **+182 m/s**
+      and a heading (≈ 0°/360° north or ≈ 180° south)
+- [ ] Launch flying that heading. In map view, the orbit's **inclination ≈ 90°**, not doubled or mirrored
+- [ ] Optional: compare the Δv you actually used with an equatorial launch of the same rocket (should be ≈ 180 m/s more,
+      give or take your ascent)
+
+Notes:
+
+## 9. Launching from KSC to meet a craft (Rendezvous tab) ⚠ unverified constant
+
+The planner assumes Kerbin is **rotated 90° at UT 0** (`LaunchSite.Ksc`, docs/MATH.md §4.5). If that's wrong, every
+lift-off time for a launch rendezvous is off.
+
+- [ ] Rendezvous tab: start **from the launch pad**, target a craft in an inclined orbit (≥ 5°), choose the
+      ascending- or descending-pass launch
+- [ ] Wait until the planner's **lift-off time** and launch on its heading → once in orbit, the **relative inclination**
+      to the target is small (under ~1°). A large miss that grows with the time of day = wrong rotation constant
+
+Notes:
+
+## 10. Bake surface data (Tools › Bake Surface Data…)
+
+Do this early: Kerbin's bake replaces the assumed 90° rotation that section 9 depends on.
+
+- [ ] Connected, in the **Space Center**: open the window, tick **Mun**, grid **5°**, **Start**. The bar moves row by
+      row with a time estimate, and the status bar clock keeps ticking while it runs
+- [ ] When done, the log line reads like "Mun: 5° grid in … · −… to ~7,000 m (wiki 7,061 m) · 17 biomes · rotated …° at UT 0".
+      ⚠ If it says heights "all read 0 m", the game won't give terrain outside flight: note the scene, go to **flight**
+      and try again
+- [ ] Note how long the 5° Mun took: ________ (a 1° grid is 25× as many points)
+- [ ] Bake **Kerbin** (5° is fine) → its log line's rotation at UT 0: ________° (the planner assumed **90°**)
+- [ ] Bake **Duna** or **Jool** → log shows "air … kPa at 0 m". **Jool**: is it ≈ 1,520 kPa (15 atm) or ≈ 5,066 kPa
+      (50 atm)? ________ (settles the wiki conflict)
+- [ ] Locations tab › Mun: a **"From your game (surface bake)"** group with rotation, day length (game vs planner
+      should match), highest/lowest point and biomes
+- [ ] Mission with a **Mun — Surface** landing on a wiki landmark (no height of its own): the landing text now says
+      **"ground … m (surface bake)"** and shows "Highest terrain under the braking burn"
+- [ ] **Cancel** mid-bake stops within a row; closing the window also cancels; the body in progress stays "Not baked"
+- [ ] Disconnect from KSP mid-bake → it stops with a message, nothing freezes
+- [ ] Optional: bake all bodies at 1° and leave it running; note the total time ________
+
+Notes:
+
+## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date
 - [ ] **Vessels tab** still works while connected (it rebuilds when orbits change; your selection should stay)
@@ -126,3 +171,10 @@ Notes:
 
 **Known gaps (not bugs):** the Transfer Planner can't send nodes yet (needs ejection-node math). The Mission Builder
 has no flight view yet. kRPC can't see the VAB craft you're building.
+
+**Not built yet:**
+- **Clickable surface map** drawn from the bake (hover for lat/lon/height/biome, click to set a landing spot).
+- **Timing a landing's deorbit burn** from the craft's orbit (§2.6 step 3). The bake now stores each body's rotation
+  at UT 0, which it needs.
+- **Send a landing spot to the game** as a waypoint, so it shows on the navball.
+- **Drag model** for landings on bodies with air (they're marked as rough estimates until then).

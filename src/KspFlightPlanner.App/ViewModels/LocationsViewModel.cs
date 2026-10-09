@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using KspFlightPlanner.Core;
+using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Core.Models;
 using KspFlightPlanner.Data;
 
@@ -44,14 +45,17 @@ public sealed class LocationsViewModel : ObservableObject
     private readonly DvMapRepository _maps;
     private readonly CustomLocationRepository _locations;
     private readonly PlannerEvents _events;
+    private readonly SurfaceBakeRepository? _bakes;
     private object? _detail;
     private LocationTreeItem? _selected;
 
     private IReadOnlyList<CelestialBody> _stock = [];
     private DeltaVMap? _map;
 
-    public LocationsViewModel(BodyRepository bodies, DvMapRepository maps, CustomLocationRepository locations, PlannerEvents events)
+    public LocationsViewModel(BodyRepository bodies, DvMapRepository maps, CustomLocationRepository locations, PlannerEvents events,
+        SurfaceBakeRepository? bakes = null)
     {
+        _bakes = bakes;
         _bodies = bodies;
         _maps = maps;
         _locations = locations;
@@ -59,6 +63,7 @@ public sealed class LocationsViewModel : ObservableObject
 
         NewLocationCommand = new RelayCommand(NewLocation, () => _map is not null);
         _events.LocationsChanged += sender => { if (sender != this) Reload(keepSelection: true); };
+        _events.SurfaceDataChanged += _ => Reload(keepSelection: true);
         // The selected location may belong to the last save: start the tree over.
         _events.SaveChanged += () => Reload(keepSelection: false);
         Reload(keepSelection: false);
@@ -168,7 +173,8 @@ public sealed class LocationsViewModel : ObservableObject
     // ---------------- Detail panels ----------------
 
     private BodyDetailViewModel CreateBodyDetail(CelestialBody body) =>
-        new(body, _stock, _map, _locations.GetAll().Where(l => l.BodyName == body.Name).ToList(), id => SelectLocation(id));
+        new(body, _stock, _map, _locations.GetAll().Where(l => l.BodyName == body.Name).ToList(), id => SelectLocation(id),
+            _bakes?.Get(body.Name));
 
     private CustomLocationEditorViewModel CreateEditor(CustomLocation location) =>
         new(location, BodyOptions(), Analyze, PhaseFromHome, _locations, this, OnSaved, OnDeleted);
@@ -233,7 +239,7 @@ public sealed class BodyDetailViewModel
     private const double G0 = 9.80665;
 
     public BodyDetailViewModel(CelestialBody body, IReadOnlyList<CelestialBody> all, DeltaVMap? map,
-        IReadOnlyList<CustomLocation> customHere, Action<long> openLocation)
+        IReadOnlyList<CustomLocation> customHere, Action<long> openLocation, SurfaceBake? bake = null)
     {
         Body = body;
         var byId = all.ToDictionary(b => b.Id);
@@ -354,6 +360,11 @@ public sealed class BodyDetailViewModel
                 .Select(m => new Fact(m.Name, $"{Units.LatLon(m.LatitudeDeg, m.LongitudeDeg)} · {m.Kind}" + (m.Note is { } n ? $" · {n}" : "")))
                 .ToList()));
 
+        // Sampled from the player's game (Tools › Bake Surface Data)
+        groups.Add(new FactGroup("From your game (surface bake)", bake is null
+            ? [new("Not baked", "Connect to KSP, then Tools › Bake Surface Data")]
+            : BakeFacts(body, bake)));
+
         // Moons
         var moons = all.Where(b => b.ParentId == body.Id).OrderBy(b => b.Orbit?.SemiMajorAxisM ?? 0).ToList();
         if (moons.Count > 0)
@@ -375,6 +386,30 @@ public sealed class BodyDetailViewModel
             .ToList();
 
         CustomLocations = customHere.Select(l => new CustomLocationLink(l, () => openLocation(l.Id))).ToList();
+    }
+
+    /// <summary>What the bake found, next to what the planner had, so differences stand out.</summary>
+    private static List<Fact> BakeFacts(CelestialBody body, SurfaceBake bake)
+    {
+        var facts = new List<Fact>
+        {
+            new("Baked", $"{bake.BakedUtc.ToLocalTime():d MMM yyyy, HH:mm} · {bake.StepDeg:0.#}° grid" + (bake.IsComplete ? "" : " (incomplete)")),
+            new("Rotation at UT 0", $"{bake.InitialRotationDeg:0.###}°"),
+            new("Sidereal day (game / planner)", $"{bake.RotationPeriodS:#,0.###} s / {body.RotationPeriodS:#,0.###} s"),
+            new("Radius (game / planner)", $"{Units.Km(bake.RadiusM)} / {Units.Km(body.EquatorialRadiusM)}"),
+        };
+        if (bake.Extremes() is { } x)
+        {
+            facts.Add(new("Highest grid point", $"{x.Highest.H:#,0} m at {Units.LatLon(x.Highest.Lat, x.Highest.Lon)}" +
+                                                (body.HighestElevationM is { } peak ? $" (wiki {peak:#,0} m)" : "")));
+            facts.Add(new("Lowest grid point", $"{x.Lowest.H:#,0} m at {Units.LatLon(x.Lowest.Lat, x.Lowest.Lon)}"));
+        }
+        if (bake.BiomeNames.Count > 0) facts.Add(new($"Biomes ({bake.BiomeNames.Count})", string.Join(", ", bake.BiomeNames)));
+        foreach (var p in bake.Atmosphere.Where(p => p.AltitudeM % 5_000 == 0))
+            facts.Add(new($"Air at {Units.Km(p.AltitudeM)}",
+                $"{p.PressurePa / 1000:0.####} kPa ({p.PressurePa / Atmosphere.PascalsPerAtm:0.####} atm)" +
+                (p.DensityKgM3 is { } rho ? $", {rho:0.####} kg/m³" : "")));
+        return facts;
     }
 
     public CelestialBody Body { get; }

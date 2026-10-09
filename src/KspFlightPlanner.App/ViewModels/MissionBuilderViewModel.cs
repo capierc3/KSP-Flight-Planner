@@ -367,7 +367,8 @@ public sealed class StopViewModel : ObservableObject
     {
         var lines = new List<string>
         {
-            $"{Units.LatLon(p.Target.LatitudeDeg, p.Target.LongitudeDeg)} · from the {p.OrbitAltitudeM / 1000:0.#} km orbit",
+            $"{Units.LatLon(p.Target.LatitudeDeg, p.Target.LongitudeDeg)} · from the {p.OrbitAltitudeM / 1000:0.#} km orbit" +
+            (p.GroundHeightM is { } ground ? $" · ground {ground:#,0} m{(p.GroundFromBake ? " (surface bake)" : "")}" : ""),
             p.IsRoughEstimate
                 ? $"Rough estimate: deorbit {Format.Speed0(p.DeorbitDv)}, braking up to {Format.Speed0(p.BrakingDv)} without air (map value kept)"
                 : $"Deorbit {Format.Speed0(p.DeorbitDv)} + braking {Format.Speed0(p.BrakingDv)} = {Format.Speed0(p.TotalDv)}",
@@ -376,6 +377,8 @@ public sealed class StopViewModel : ObservableObject
             $"Start braking {p.BrakingDistanceM / 1000:0.#} km before it at {p.PeriapsisAltitudeM / 1000:0.#} km; burn {Units.BurnTime(p.BrakingTimeS)}",
             $"Ground track moves {p.TrackShiftPerOrbitDeg:0.##}° west each orbit",
         };
+        if (p.ApproachPeakM is { } approach)
+            lines.Add($"Highest terrain under the braking burn: {approach:#,0} m on the {(p.NorthboundPass == true ? "northbound" : "southbound")} pass (the lower one)");
         lines.AddRange(p.Warnings);
         return string.Join("\n", lines);
     }
@@ -737,11 +740,14 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private bool _includePlaneChanges;
     private bool _suspend;
     private readonly SaveSync? _sync;
+    private readonly SurfaceBakeRepository? _surfaceBakes;
 
     public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
         PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null,
-        MissionRepository? missions = null, SettingsRepository? settings = null, SaveSync? sync = null)
+        MissionRepository? missions = null, SettingsRepository? settings = null, SaveSync? sync = null,
+        SurfaceBakeRepository? bakes = null)
     {
+        _surfaceBakes = bakes;
         _missions = missions;
         // Flags, landed craft and waypoints in the save are landing spots: keep the pickers in step with the game.
         _sync = sync;
@@ -767,6 +773,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _events.LocationsChanged += _ => OnLocationsChanged();
         // Another save chosen (the window has offered to save this mission): carry on with that save's missions.
         _events.SaveChanged += OpenLastMission;
+        // A new bake gives landing spots ground heights and approach terrain.
+        _events.SurfaceDataChanged += _ => RefreshLegs();
 
         AddStopCommand = new RelayCommand(AddStop, () => _map is not null);
         MoveStopUpCommand = new RelayCommand<StopViewModel>(s => MoveStop(s, -1), s => Stops.IndexOf(s) > 0);
@@ -1031,7 +1039,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             _arrivals[segment.ToStop] = rendezvous?.ArrivalUt ?? transfer?.Window.ArrivalUt;
 
             var landingBody = LegTools.FindLanding(segment.Legs) >= 0 ? _bodies.GetValueOrDefault(segment.Legs[^1].To.BodyName) : null;
-            var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies) : null;
+            var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies, name => _surfaceBakes?.Get(name)) : null;
             stop.SetLanding(landingBody is not null, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save));
 
             var legs = rendezvous is not null ? LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest)

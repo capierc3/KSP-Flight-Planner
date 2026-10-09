@@ -86,6 +86,9 @@ public sealed class PlannerDatabase
         ("ksp_part_engines", []),
         ("ksp_engine_propellants", []),
         ("ksp_part_antennas", []),
+        // Sampled from the running game; baking again needs KSP and takes minutes.
+        ("ksp_surface_bakes", []),
+        ("ksp_surface_bake_air", []),
     ];
 
     public void Initialize()

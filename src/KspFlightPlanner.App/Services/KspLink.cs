@@ -8,6 +8,7 @@ using KspFlightPlanner.App.ViewModels;
 using KspFlightPlanner.Core;
 using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Data;
+using AtmospherePoint = KspFlightPlanner.Core.Models.AtmospherePoint;
 
 namespace KspFlightPlanner.App.Services;
 
@@ -15,6 +16,13 @@ public enum KspLinkState { Disconnected, Connecting, Connected }
 
 /// <summary>Maneuver nodes sent to the vessel being flown.</summary>
 public sealed record NodesSent(string Vessel, int Count, int Skipped);
+
+/// <summary>
+/// A body's constants as the running game has them, for a surface bake. Angles in degrees.
+/// <paramref name="AtmosphereDepthM"/> is 0 without air; <paramref name="Biomes"/> is empty without a solid surface.
+/// </summary>
+public sealed record BakeBodyInfo(string Name, double InitialRotationDeg, double RotationPeriodS, double RadiusM, double Mu,
+    bool HasSolidSurface, double AtmosphereDepthM, IReadOnlyList<string> Biomes);
 
 /// <summary>
 /// A live connection to the running game through the kRPC mod's server. While connected it reads the game time every
@@ -225,6 +233,73 @@ public sealed class KspLink : ObservableObject, IDisposable
         });
         await RefreshAsync();
         return sent;
+    }
+
+    // ---------------- Surface bake (Tools › Bake Surface Data) ----------------
+
+    /// <summary>The game's celestial bodies, by the planner's names (Kerbol, not Sun).</summary>
+    public Task<IReadOnlyList<string>> BodyNamesAsync() =>
+        CallAsync<IReadOnlyList<string>>(c => c.SpaceCenter().Bodies.Keys.Select(BodyName).ToList());
+
+    /// <summary>A body's constants and biome names as the game has them.</summary>
+    public Task<BakeBodyInfo> ReadBodyAsync(string bodyName) => CallAsync(c =>
+    {
+        var body = Body(c, bodyName);
+        var hasSurface = body.HasSolidSurface;
+        return new BakeBodyInfo(bodyName, body.InitialRotation * RadToDeg, body.RotationalPeriod, body.EquatorialRadius,
+            body.GravitationalParameter, hasSurface, body.HasAtmosphere ? body.AtmosphereDepth : 0,
+            hasSurface ? TryGetSet(() => body.Biomes).OrderBy(b => b, StringComparer.Ordinal).ToList() : []);
+    });
+
+    /// <summary>
+    /// Terrain height and biome along one latitude, every <paramref name="stepDeg"/> from 180° W eastward. One trip to the
+    /// game per row, so the clock and orbits keep updating between rows.
+    /// </summary>
+    public Task<(float[] Heights, string?[] Biomes)> SampleRowAsync(string bodyName, double latitudeDeg, double stepDeg, bool biomes) =>
+        CallAsync(c =>
+        {
+            var body = Body(c, bodyName);
+            var columns = SurfaceBake.GridColumns(stepDeg);
+            var heights = new float[columns];
+            var names = new string?[columns];
+            for (var i = 0; i < columns; i++)
+            {
+                var lon = SurfaceBake.ColumnLongitude(stepDeg, i);
+                heights[i] = (float)body.SurfaceHeight(latitudeDeg, lon);
+                if (biomes)
+                {
+                    try { names[i] = body.BiomeAt(latitudeDeg, lon); }
+                    catch (RPCException) { names[i] = null; }
+                }
+            }
+            return (heights, names);
+        });
+
+    /// <summary>Pressure and density every <paramref name="stepM"/> from the datum to the top of the atmosphere.</summary>
+    public Task<IReadOnlyList<AtmospherePoint>> SampleAirAsync(string bodyName, double depthM, double stepM) =>
+        CallAsync<IReadOnlyList<AtmospherePoint>>(c =>
+        {
+            var body = Body(c, bodyName);
+            var points = new List<AtmospherePoint>();
+            for (var alt = 0.0; alt <= depthM + 0.5; alt += stepM)
+            {
+                double? density;
+                try { density = body.DensityAt(alt); }
+                catch (RPCException) { density = null; }
+                points.Add(new AtmospherePoint(alt, body.PressureAt(alt), density));
+            }
+            return points;
+        });
+
+    private static CelestialBody Body(Connection c, string bodyName) =>
+        c.SpaceCenter().Bodies.TryGetValue(bodyName == "Kerbol" ? "Sun" : bodyName, out var body)
+            ? body
+            : throw new System.InvalidOperationException($"The game has no body called {bodyName}.");
+
+    private static IEnumerable<string> TryGetSet(Func<ISet<string>> get)
+    {
+        try { return get(); }
+        catch (RPCException) { return []; }
     }
 
     /// <summary>Reads the time and scene, and the vessels when due. Losing the game disconnects.</summary>

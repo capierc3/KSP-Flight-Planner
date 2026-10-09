@@ -1,3 +1,4 @@
+using KspFlightPlanner.Core.Ksp;
 using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Core;
@@ -316,10 +317,14 @@ public static class LegTools
                        && leg.From.AltitudeM is > 0
             ? legs.Count - 1 : -1;
 
-    /// <summary>The landing at <paramref name="landing"/>'s spot from the orbit the leg starts in (§2.6), or null when the leg doesn't land.</summary>
-    public static LandingPlan? EvaluateLanding(IReadOnlyList<RouteLeg> legs, LandingLeg landing, IReadOnlyDictionary<string, CelestialBody> bodies) =>
+    /// <summary>
+    /// The landing at <paramref name="landing"/>'s spot from the orbit the leg starts in (§2.6), or null when the leg doesn't land.
+    /// <paramref name="bakes"/> gives a body's surface bake, when there is one.
+    /// </summary>
+    public static LandingPlan? EvaluateLanding(IReadOnlyList<RouteLeg> legs, LandingLeg landing, IReadOnlyDictionary<string, CelestialBody> bodies,
+        Func<string, SurfaceBake?>? bakes = null) =>
         FindLanding(legs) is var i and >= 0 && bodies.TryGetValue(legs[i].To.BodyName, out var body)
-            ? Landing.Plan(body, legs[i].From.AltitudeM!.Value, landing)
+            ? Landing.Plan(body, legs[i].From.AltitudeM!.Value, landing, bake: bakes?.Invoke(body.Name))
             : null;
 
     /// <summary>

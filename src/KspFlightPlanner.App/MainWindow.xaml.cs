@@ -28,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
         Rendezvous = rendezvous;
         Resonant = resonant;
         Flight = flight;
+        Events = events;
         events.OpenFlightRequested += _ => RequestPane(Panes.Flight);
 
         // Leg tools: a mission leg's tool opens in its planner, locked to that leg.
@@ -117,6 +118,11 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Live connection to the running game (kRPC).</summary>
     public KspLink Link { get; }
 
+    public PlannerEvents Events { get; }
+
+    /// <summary>Makes the view model for a Tools › Bake Surface Data window.</summary>
+    public Func<SurfaceBakeViewModel>? NewSurfaceBake { get; init; }
+
     /// <summary>Planning or flying; each has its own window layout.</summary>
     public WorkMode Mode
     {
@@ -192,6 +198,7 @@ public static class MainCommands
     public static readonly RoutedUICommand ReadPartData = new("Read Part Data Again", nameof(ReadPartData), typeof(MainCommands));
     public static readonly RoutedUICommand OpenDataFolder = new("Open Data Folder", nameof(OpenDataFolder), typeof(MainCommands));
     public static readonly RoutedUICommand ConnectKsp = new("Connect to KSP", nameof(ConnectKsp), typeof(MainCommands));
+    public static readonly RoutedUICommand BakeSurface = new("Bake Surface Data…", nameof(BakeSurface), typeof(MainCommands));
     public static readonly RoutedUICommand Settings = new("Settings…", nameof(Settings), typeof(MainCommands),
         [new KeyGesture(Key.OemComma, ModifierKeys.Control, "Ctrl+,")]);
 
@@ -290,6 +297,22 @@ public partial class MainWindow : Window
     }
 
     private async void ConnectKsp_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Link.ToggleAsync();
+
+    private SurfaceBakeWindow? _bakeWindow;
+
+    /// <summary>Tools › Bake Surface Data: one window at a time, left open beside the planner.</summary>
+    private void BakeSurface_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_bakeWindow is { IsLoaded: true })
+        {
+            _bakeWindow.Activate();
+            return;
+        }
+        if (_viewModel.NewSurfaceBake is not { } create) return;
+        _bakeWindow = new SurfaceBakeWindow(create()) { Owner = this };
+        _bakeWindow.Closed += (_, _) => _bakeWindow = null;
+        _bakeWindow.Show();
+    }
 
     private async void Reload_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Sync.ReloadAsync();
 

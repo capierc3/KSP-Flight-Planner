@@ -29,17 +29,24 @@ public partial class App : Application
             var sync = new SaveSync(database, settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
             var designs = new DesignLibrary(sync);
             var flights = new FlightRepository(database);
+            var bakes = new SurfaceBakeRepository(database);
+            var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
+                ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
+                : [];
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync),
-                new LocationsViewModel(bodies, maps, locations, events),
+                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes),
+                new LocationsViewModel(bodies, maps, locations, events, bakes),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync),
-                new RendezvousViewModel(sync, locations, events, designs, flights, maps),
+                new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
                 new FlightViewModel(flights, sync, events),
                 sync,
                 link,
-                events);
+                events)
+            {
+                NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
+            };
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }

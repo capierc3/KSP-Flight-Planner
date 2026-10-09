@@ -105,7 +105,12 @@ public sealed class RendezvousViewModel : ObservableObject
     private readonly DvMapRepository? _maps;
     private readonly PlannerEvents _events;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
-    private readonly LaunchSite _site = LaunchSite.Ksc;
+    private readonly SurfaceBakeRepository? _surfaceBakes;
+
+    /// <summary>KSC, with its planet's rotation at UT 0 from the surface bake when there is one (else the assumed 90°).</summary>
+    private LaunchSite Site => _surfaceBakes?.Get(LaunchSite.Ksc.BodyName) is { } bake
+        ? LaunchSite.Ksc with { BodyInitialRotationDeg = bake.InitialRotationDeg }
+        : LaunchSite.Ksc;
 
     private bool _startFromLaunch = true;
     private CraftChoice? _selectedChaser;
@@ -151,8 +156,9 @@ public sealed class RendezvousViewModel : ObservableObject
     private readonly Dictionary<string, CustomLocation> _craftLocations = [];
 
     public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
-        FlightRepository? flights = null, DvMapRepository? maps = null)
+        FlightRepository? flights = null, DvMapRepository? maps = null, SurfaceBakeRepository? bakes = null)
     {
+        _surfaceBakes = bakes;
         _sync = sync;
         _maps = maps;
         _locations = locations;
@@ -940,7 +946,7 @@ public sealed class RendezvousViewModel : ObservableObject
     /// the first target's (the mission flies there first); null until there is one.
     /// </summary>
     private string? RouteBody => _startFromMission ? Targets.FirstOrDefault()?.Body.Name
-        : StartFromLaunch ? _site.BodyName : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
+        : StartFromLaunch ? Site.BodyName : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
 
     /// <summary>The Δv map's way from a craft around <paramref name="from"/> to a rendezvous around <paramref name="to"/>.</summary>
     private RendezvousApproach? Approach(string from, string to) =>
@@ -1118,7 +1124,7 @@ public sealed class RendezvousViewModel : ObservableObject
         if (!TryNumber(ParkingAltitudeText, out var parkingKm) || parkingKm <= 0) { error = "Enter the parking orbit altitude in km."; return null; }
         if (!TryNumber(AscentMinutesText, out var ascentMin) || ascentMin < 0) { error = "Enter how many minutes the climb to orbit takes."; return null; }
         if (!TryNumber(DownrangeText, out var downrange)) { error = "Enter how far around the planet you reach orbit, in degrees."; return null; }
-        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: _site,
+        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: Site,
             Ascent: new AscentProfile(parkingKm * 1000, ascentMin * 60, downrange), DeorbitPeriapsisAltitudeM: deorbit);
     }
 
@@ -1208,7 +1214,7 @@ public sealed class RendezvousViewModel : ObservableObject
             new("Parking orbit", $"{alt} km circular, inclination {o.ParkingOrbit.InclinationDeg:0.##}°"),
             new("In orbit by", _calendar.FormatDate(o.InsertionUt)),
         };
-        return new StepRow($"{number}", $"Launch from {_site.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
+        return new StepRow($"{number}", $"Launch from {Site.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
             request.Body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Format.Speed0(dv)}" : "", feel, exact);
     }
 

@@ -32,8 +32,9 @@ public sealed record LandingLeg(LandingTarget Target, double LanderTwr = Landing
 /// <param name="TrackShiftPerOrbitDeg">How far west the ground track moves each orbit.</param>
 /// <param name="DriftDeg">How far the body turns between the deorbit burn and periapsis.</param>
 /// <param name="IsRoughEstimate">The body has air: drag shortens the descent by an amount the planner doesn't model yet.</param>
+/// <param name="GroundHeightM">The site's ground height the plan used (null: unknown, the datum was assumed).</param>
 public sealed record LandingPlan(
-    LandingTarget Target, CelestialBody Body, double OrbitAltitudeM, double PeriapsisAltitudeM,
+    LandingTarget Target, CelestialBody Body, double OrbitAltitudeM, double? GroundHeightM, double PeriapsisAltitudeM,
     double MinInclinationDeg, double InclinationDeg, double PlaneChangeDv, double ArgumentOfLatitudeDeg,
     double OrbitPeriodS, double TrackShiftPerOrbitDeg,
     double DeorbitDv, double DescentTimeS, double DriftDeg, double DriftM,
@@ -41,6 +42,16 @@ public sealed record LandingPlan(
     double BrakingDv, double BrakingTimeS, double BrakingDistanceM,
     bool IsRoughEstimate, IReadOnlyList<string> Warnings)
 {
+    /// <summary>The ground height came from the surface bake rather than the spot itself.</summary>
+    public bool GroundFromBake { get; init; }
+
+    /// <summary>
+    /// With a surface bake: the highest terrain under the braking burn on the better of the two passes (§2.6), and
+    /// whether that is the northbound pass. Null without a bake.
+    /// </summary>
+    public double? ApproachPeakM { get; init; }
+    public bool? NorthboundPass { get; init; }
+
     /// <summary>Deorbit plus braking, without the plane change.</summary>
     public double TotalDv => DeorbitDv + BrakingDv;
 
@@ -64,8 +75,10 @@ public static class Landing
     /// <paramref name="inclinationDeg"/> overrides the planned inclination; <paramref name="clearanceM"/> the periapsis
     /// height above the site.
     /// </summary>
+    /// <param name="bake">The body's surface bake, when there is one: it gives the ground height of a spot without one and
+    /// the terrain along the approach.</param>
     public static LandingPlan Plan(CelestialBody body, double orbitAltitudeM, LandingLeg leg,
-        double? inclinationDeg = null, double clearanceM = ClearanceM)
+        double? inclinationDeg = null, double clearanceM = ClearanceM, SurfaceBake? bake = null)
     {
         var target = leg.Target;
         var mu = body.Mu;
@@ -90,13 +103,15 @@ public static class Landing
         var shift = Deg(omega * period);
 
         // Step 4: the deorbit burn, half an orbit before the site.
-        if (target.GroundHeightM is null)
+        var bakedGround = target.GroundHeightM is null ? bake?.HeightAt(target.LatitudeDeg, target.LongitudeDeg) : null;
+        var knownGround = target.GroundHeightM ?? bakedGround;
+        if (knownGround is null)
             warnings.Add("The ground height here isn't known; the plan assumes the datum (0 m). Enter it if you know it.");
-        var ground = Math.Max(0, target.GroundHeightM ?? 0);
+        var ground = Math.Max(0, knownGround ?? 0);
         var periapsisAlt = Math.Min(orbitAltitudeM, ground + clearanceM);
         if (periapsisAlt < ground + clearanceM)
             warnings.Add($"The orbit is only {orbitAltitudeM / 1000:0.#} km up, below the site plus {clearanceM:0} m clearance.");
-        if (body.HighestElevationM is { } peak && periapsisAlt < peak)
+        if (bake is null && body.HighestElevationM is { } peak && periapsisAlt < peak)
             warnings.Add($"The descent's low point ({periapsisAlt / 1000:0.#} km) is below {body.Name}'s highest peak " +
                          $"({peak / 1000:0.#} km): check the terrain along the approach.");
         var rp = radius + periapsisAlt;
@@ -116,15 +131,70 @@ public static class Landing
         var g = mu / (rp * rp);
         var aH = Math.Sqrt(Math.Max(1e-9, thrustAccel * thrustAccel - g * g));
         var brakingTime = vRel / aH;
+        var brakingDistance = vRel * vRel / (2 * aH);
+
+        // With a bake: the terrain under the braking burn, coming in on either pass (§2.6, "the approach").
+        double? approachPeak = null;
+        bool? northbound = null;
+        if (bake is not null)
+        {
+            var heading = Deg(Math.Asin(cosH));    // northbound pass: degrees east of north
+            var north = ApproachPeak(bake, target, heading, brakingDistance, radius);
+            var south = ApproachPeak(bake, target, 180 - heading, brakingDistance, radius);
+            if (north is not null || south is not null)
+            {
+                northbound = south is null || north is not null && north <= south;
+                approachPeak = northbound == true ? north : south;
+                if (approachPeak > periapsisAlt - 100)
+                    warnings.Add($"Terrain up to {approachPeak:#,0} m lies under the braking burn " +
+                                 $"({(northbound == true ? "northbound" : "southbound")} pass, the lower of the two), above or near " +
+                                 $"the descent's low point ({periapsisAlt:#,0} m). Brake higher or pick the other pass.");
+            }
+        }
 
         var rough = body.HasAtmosphere;
         if (rough)
             warnings.Insert(0, $"{body.Name} has air: drag shortens the descent, so where you come down is a rough estimate. " +
                                "Aerobraking and parachutes also make the burns smaller than shown.");
 
-        return new LandingPlan(target, body, orbitAltitudeM, periapsisAlt, minInc, inc, planeChange, u, period, shift,
+        return new LandingPlan(target, body, orbitAltitudeM, knownGround, periapsisAlt, minInc, inc, planeChange, u, period, shift,
             deorbit, descent, Deg(drift), drift * radius * Math.Cos(phi), vp, vRel, aH,
-            thrustAccel * brakingTime, brakingTime, vRel * vRel / (2 * aH), rough, warnings);
+            thrustAccel * brakingTime, brakingTime, brakingDistance, rough, warnings)
+        {
+            GroundFromBake = bakedGround is not null,
+            ApproachPeakM = approachPeak,
+            NorthboundPass = northbound,
+        };
+    }
+
+    /// <summary>
+    /// The highest baked terrain on the ground track over the last <paramref name="distanceM"/> before the site, for a
+    /// craft arriving on <paramref name="headingDeg"/> (degrees east of north). Sampled every 500 m.
+    /// </summary>
+    public static double? ApproachPeak(SurfaceBake bake, LandingTarget target, double headingDeg, double distanceM, double radius)
+    {
+        double? peak = null;
+        var steps = Math.Max(1, (int)Math.Ceiling(distanceM / 500));
+        for (var i = 0; i <= steps; i++)
+        {
+            var (lat, lon) = Destination(target.LatitudeDeg, target.LongitudeDeg, headingDeg + 180, distanceM * i / steps, radius);
+            if (bake.HeightAt(lat, lon) is { } h && (peak is null || h > peak)) peak = h;
+        }
+        return peak;
+    }
+
+    /// <summary>The spot <paramref name="distanceM"/> from a start point along a great circle leaving on <paramref name="bearingDeg"/>.</summary>
+    public static (double LatitudeDeg, double LongitudeDeg) Destination(double latitudeDeg, double longitudeDeg, double bearingDeg,
+        double distanceM, double radius)
+    {
+        var d = distanceM / radius;
+        var phi1 = Rad(latitudeDeg);
+        var theta = Rad(bearingDeg);
+        var phi2 = Math.Asin(Math.Clamp(Math.Sin(phi1) * Math.Cos(d) + Math.Cos(phi1) * Math.Sin(d) * Math.Cos(theta), -1, 1));
+        var lambda2 = Rad(longitudeDeg) + Math.Atan2(Math.Sin(theta) * Math.Sin(d) * Math.Cos(phi1),
+            Math.Cos(d) - Math.Sin(phi1) * Math.Sin(phi2));
+        var lon = Deg(lambda2);
+        return (Deg(phi2), (lon + 540) % 360 - 180);
     }
 
     /// <summary>

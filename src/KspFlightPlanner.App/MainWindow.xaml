@@ -24,6 +24,7 @@
         <CommandBinding Command="{x:Static app:MainCommands.ReadPartData}" Executed="ReadPartData_Executed" CanExecute="HasSaveChosen_CanExecute" />
         <CommandBinding Command="{x:Static app:MainCommands.OpenDataFolder}" Executed="OpenDataFolder_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.ConnectKsp}" Executed="ConnectKsp_Executed" />
+        <CommandBinding Command="{x:Static app:MainCommands.BakeSurface}" Executed="BakeSurface_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.Settings}" Executed="Settings_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.ShowPane}" Executed="ShowPane_Executed" />
         <CommandBinding Command="{x:Static app:MainCommands.SetMode}" Executed="SetMode_Executed" />
@@ -96,6 +97,8 @@
                 <MenuItem Header="_Tools">
                     <MenuItem Header="{Binding Link.MenuText}" Command="{x:Static app:MainCommands.ConnectKsp}"
                               ToolTip="Talk to the running game through the kRPC mod (address and ports in Settings › Live connection)" />
+                    <MenuItem Header="_Bake Surface Data…" Command="{x:Static app:MainCommands.BakeSurface}"
+                              ToolTip="Sample each body's terrain, biomes, rotation and air from the running game, for landing spots" />
                     <Separator />
                     <MenuItem Header="Read _Part Data Again" Command="{x:Static app:MainCommands.ReadPartData}"
                               ToolTip="Read part masses, engines and antennas from the KSP folder again" />
