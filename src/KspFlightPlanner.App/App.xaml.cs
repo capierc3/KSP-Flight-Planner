@@ -28,7 +28,7 @@ public partial class App : Application
             var designs = new DesignLibrary(sync);
             var flights = new FlightRepository(database);
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings),
+                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync),
                 new LocationsViewModel(bodies, maps, locations, events),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync),

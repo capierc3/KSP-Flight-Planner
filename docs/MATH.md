@@ -8,8 +8,8 @@ Each section has the formulas, a worked example, the code that implements them a
 
 ## Contents
 
-- **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting
+- **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot
 - **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
@@ -22,6 +22,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Raising, lowering or reshaping an orbit: §2.1, §2.2
 - A plane change or an inclined target: §2.3, §4.2
 - A trip to another planet, and its launch window: §3.2, §3.4
+- Landing at a crater, flag or waypoint: §2.6, §1.9
 - A rendezvous or docking: §4.1
 - A relay network / constellation: §5.1, §5.2
 - Why the Mission Builder shows a given Δv: §6.1, §6.2
@@ -131,16 +132,33 @@ Worked example — Mun: a = 12,000,000 m, μ ratio = 6.5138e10 / 3.5316e12 = 0.0
 
 ### 1.7 Atmosphere
 
-KSP's real pressure curves are custom, but the classic exponential model with the published scale height H is a good approximation:
+KSP's pressure curves are custom: the scale height changes with altitude. For the stock bodies with air (Kerbin, Eve, Duna, Jool, Laythe), the app stores the KSP wiki's pressure-vs-altitude table and reads between its rows. Pressure falls roughly exponentially between two rows, so the app interpolates the *logarithm* of pressure. The last row (top of the atmosphere) is 0 Pa, where a logarithm doesn't work, so that last step is a straight line:
+
+```
+between rows (h₁, p₁) and (h₂, p₂):
+f = (h − h₁) / (h₂ − h₁)
+p(h) = p₁ · (p₂ / p₁)^f          when both pressures are above 0
+p(h) = p₁ + f · (p₂ − p₁)        when one of them is 0 (the top of the atmosphere)
+```
+
+Without a table (non-stock systems), the classic exponential model with the published scale height H is used:
 
 ```
 p(h) = p₀ · e^(−h / H)
 ```
 
-Worked example — Kerbin at 10 km: p = 1 atm × e^(−10,000 / 5,600) = **0.168 atm**.
+Worked examples —
+- Duna at 6,250 m, halfway between the 5,000 m row (3,774 Pa) and the 7,500 m row (2,663 Pa): f = 0.5, p = 3,774 × (2,663 / 3,774)^0.5 = √(3,774 × 2,663) = **3,170.2 Pa = 0.03129 atm**. The scale-height model gives 0.0667 × e^(−6,250 / 5,700) = 0.0223 atm, almost 30% low.
+- Duna at 45 km, between 40 km (4.918 Pa) and 50 km (0 Pa): p = 4.918 + 0.5 × (0 − 4.918) = **2.459 Pa**.
+- Kerbin at 10 km: the table row says **0.177 atm**; the scale-height model gives 1 × e^(−10,000 / 5,600) = 0.168 atm.
 
-- Code: `Atmosphere.PressureAtmAt`
-- Source: KSP wiki `<Body>/Param` (sea-level pressure, scale height); [Scale height (Wikipedia)](https://en.wikipedia.org/wiki/Scale_height)
+The tables also give each air's molar mass M and adiabatic index γ (Kerbin: 28.9644 g/mol, 1.40). These are kept for the future descent simulation: density ρ = p·M / (R·T) with R = 8.314 J/(mol·K), and the speed of sound a = √(γ·R·T / M).
+
+- Code: `Atmosphere.PressureAtmAt`; tested in `DatabaseTests.Pressure_comes_from_the_wiki_table_when_present`
+- Data: `tools/wiki/scrape_wiki.py` pulls the tables; `docs/WIKI-COMPARISON.md` lists them
+- Source: KSP wiki body pages (pressure tables, molar mass, γ) and `<Body>/Param` (sea-level pressure, scale height); [Scale height (Wikipedia)](https://en.wikipedia.org/wiki/Scale_height)
+
+> **Known conflict:** Jool's wiki table says 50 atm at 0 m, but its `/Param` page says 15 atm. Both are kept until a reading from the live game (kRPC) settles it.
 
 ### 1.8 Maneuver-node axes
 
@@ -155,6 +173,30 @@ radial   = prograde × normal          in the plane, at right angles to prograde
 Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. On the Flight tab, **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
 
 - Code: `NodeBurn.From`; tested in `RendezvousTests`
+
+### 1.9 Surface positions: latitude, longitude and distance
+
+KSP gives surface positions as latitude φ (north positive) and longitude λ (east positive), in degrees. Landmarks from the wiki, flags in your save and KerbNet waypoints all use this form. Kerbin's launch pad, for example, is at φ = −0.1027°, λ = −74.5754°.
+
+As a direction from the body's centre, in the body's own (rotating) frame:
+
+```
+x = cos φ · cos λ
+y = cos φ · sin λ
+z = sin φ                (z = the north pole; multiply by R + altitude for the position)
+```
+
+Distance along the surface between two points (the great-circle or "haversine" formula), with Δφ = φ₂ − φ₁ and Δλ = λ₂ − λ₁:
+
+```
+h = sin²(Δφ / 2) + cos φ₁ · cos φ₂ · sin²(Δλ / 2)
+d = 2R · asin(√h)
+```
+
+Worked example — on the Mun (R = 200,000 m), from the Armstrong memorial (0.7017° N, 22.7460° E) to the Kerbol arch (12.4508° N, 39.1959° E): Δφ = 11.7491°, Δλ = 16.4499°. h = sin²(5.8746°) + cos 0.7017° × cos 12.4508° × sin²(8.2250°) = 0.010476 + 0.019983 = 0.030459, so d = 400,000 × asin(0.174525) = **70.17 km**. The same formula measures how far a landing ended up from its target.
+
+- Code: `Landing.SurfaceDistance`; tested in `LandingTests`
+- Source: [Haversine formula (Wikipedia)](https://en.wikipedia.org/wiki/Haversine_formula)
 
 ## 2. Changing your orbit around one body
 
@@ -261,6 +303,79 @@ Worked examples — from 80 km circular to a 30 km periapsis: √(3.5316×10¹²
 
 - Code: `Rendezvous.Deorbit`; tested in `RendezvousTests`
 - Source: vis-viva (§1.3)
+
+### 2.6 Landing at a chosen spot
+
+On the Mission pane, a surface stop reached from an orbit offers **Land at a spot**: a wiki landmark, a flag or landed craft from your save, a KerbNet waypoint, or a typed latitude/longitude. This section is how that landing is worked out. It is exact enough for **airless bodies**, where its deorbit and braking burns replace the Δv map's landing value. On bodies with air, drag shortens the descent by an amount that depends on the craft, so the map's value is kept and the spot is marked as a **rough estimate** until the app models drag.
+
+Inputs: the site's latitude φ, longitude λ and ground height h_s (§1.9); the craft's circular orbit radius r₀, inclination i and longitude of ascending node Ω; the body's μ, radius R, sidereal rotation period T_rot and its rotation angle θ₀ at UT 0. θ₀ is not on the wiki; it will come from the live game (kRPC `CelestialBody.InitialRotation`), so the app doesn't time the burn yet (step 3 below gives the method).
+
+The app's choices, where the method leaves one open:
+- The orbit's inclination is planned **1° above** the site's latitude, so the ground track crosses the latitude instead of just grazing it. Turning an equatorial orbit to it costs 2·v₀·sin(i/2) (§2.3). That goes in the leg's plane-change column, counted when plane changes are on.
+- The descent's low point is **1,000 m** above the site's ground. When the ground height isn't known (most wiki landmarks), the datum (0 m) is assumed and the plan says so. Flags and landed craft record their height (`alt` in the save).
+- The lander's thrust is entered as its **TWR at the body's surface** (default 2), so a_T = TWR × μ/R².
+- r₀ is the low orbit the leg comes down from (the Δv map's, e.g. 14 km on the Mun).
+
+**Step 1 — Can the orbit pass over the site?** A ground track never goes further north or south than the inclination, so the orbit must satisfy
+
+```
+|φ| ≤ i ≤ 180° − |φ|
+```
+
+If not, plane-change first (§2.3). An equatorial orbit only reaches sites near the equator. A site at 80° N needs a nearly polar orbit.
+
+**Step 2 — Where on the orbit is the site's latitude?** Measured from the ascending node (the "argument of latitude" u):
+
+```
+sin u = sin φ / sin i          u on the northbound pass, 180° − u on the southbound pass
+Δα = atan2(cos i · sin u, cos u)       how far east of the ascending node that point lies, in space
+```
+
+**Step 3 — When is the site under that point?** The body turns at ω = 360° / T_rot, so a surface longitude λ sits under the space direction α at time t when
+
+```
+λ = α − (θ₀ + ω · t)      (mod 360°), with α = Ω + Δα
+```
+
+The craft is at u once per orbit, every period P. Between passes the body turns ω·P, so **the ground track moves west by 360° · P / T_rot each orbit**. Pick the pass where the site is closest. It is never more than half a shift off, and a small normal burn on the way down removes the rest.
+
+**Step 4 — The deorbit burn.** Burn retrograde half an orbit before the site, so the new periapsis r_p = R + h_s + clearance is reached right over it (Hohmann, §2.1):
+
+```
+a      = (r₀ + r_p) / 2
+Δv₁    = √(μ / r₀) − √(μ · (2/r₀ − 1/a))
+t_desc = π · √(a³ / μ)                     time from the burn to periapsis
+```
+
+The site keeps moving east during the descent, by ω · t_desc. So aim at where the site will be when you arrive, not where it is when you burn. Keep the periapsis above the highest terrain along the last part of the path; the Mun's highest point is 7,061 m.
+
+**Step 5 — The braking burn.** At periapsis the craft moves at v_p = √(μ · (2/r_p − 1/a)). The ground under it moves east at v_s = ω · r_p · cos φ. The craft's velocity points cos H = cos i / cos φ of the way east, so the speed relative to the ground is
+
+```
+v_rel = √(v_p² − 2 · v_p · v_s · cos H + v_s²)
+```
+
+To brake without falling, part of the engine's acceleration a_T has to hold the craft up against gravity g = μ / r_p². That leaves a_h = √(a_T² − g²) to slow it down. (This is conservative: while still fast, the craft is partly "in orbit", so it needs less than g.) Braking takes
+
+```
+t_b = v_rel / a_h
+d   = v_rel² / (2 · a_h)        ground distance covered while braking: start this far before the site
+Δv₂ = a_T · t_b                 includes the gravity loss
+```
+
+Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to the Kerbol arch (12.4508° N, 39.1959° E), with periapsis 3 km above the datum and a lander accelerating at a_T = 5 m/s²:
+- Mun: μ = 6.5138 × 10¹⁰ m³/s², R = 200,000 m, T_rot = 138,984.4 s.
+- Step 1: 12.45° ≤ 15° ≤ 167.55°. The orbit reaches the site.
+- Step 2: sin u = sin 12.4508° / sin 15° = 0.8330, so u = **56.41°** (northbound) or 123.59° (southbound). Δα = atan2(cos 15° × sin 56.41°, cos 56.41°) = **55.49°** east of the ascending node.
+- Step 3: P = 2π √(230,000³ / μ) = 2,715.5 s. The track moves west **7.03° per orbit**, which is 24.6 km at the equator.
+- Step 4: r₀ = 230,000 m, r_p = 203,000 m, a = 216,500 m. Δv₁ = 532.18 − 515.32 = **16.86 m/s**. t_desc = **1,240 s**, during which the Mun turns 3.21°: about 10.9 km at this latitude.
+- Step 5: v_p = 583.86 m/s, v_s = 8.96 m/s, cos H = cos 15° / cos 12.4508° = 0.9892, so v_rel = **574.99 m/s**. g = 1.581 m/s², a_h = √(5² − 1.581²) = 4.744 m/s². Braking takes t_b = **121.2 s** over d = **34.8 km**, costing Δv₂ = **606.1 m/s**. That is 31.1 m/s (5.4%) more than v_rel, because of the gravity loss.
+- Total from orbit: 16.9 + 606.1 = **623 m/s**. Compare the Δv map's 580 m/s from its 14 km low orbit, which assumes no particular spot.
+
+Still to come: ground heights for any spot and along the approach (the planned kRPC map bake), θ₀ from kRPC to time the deorbit burn, and a drag model for bodies with air.
+
+- Code: `Landing.Plan` (steps 1–5), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
+- Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
 
 ## 3. Going to another planet
 
@@ -607,6 +722,8 @@ Known simplifications:
 
 A mission leg runs from one stop to the next and is made of Δv-map steps (§6.1). A leg tool works out part of the leg properly and puts its result in place of the map values for the steps it covers. The steps stay, so each one keeps its phase and aerobrake choice. A tool that no longer fits the leg (the stops changed) is ignored, and the map values come back.
 
+The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5) and landing at a chosen spot (§2.6). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies.
+
 ### 6.3 Transfer legs: a chosen launch window
 
 A leg is a transfer leg when one of its steps goes between two bodies that orbit the same parent (Kerbin → Duna, Duna → Kerbin). The window comes from the Transfer Planner (§3.4), set up from the leg:
@@ -901,7 +1018,7 @@ Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real or
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here
 - Bate, Mueller & White, *Fundamentals of Astrodynamics* (Dover) — alternative derivations
-- [KSP wiki](https://wiki.kerbalspaceprogram.com) — body data (`<Body>/Param` pages), part data
+- [KSP wiki](https://wiki.kerbalspaceprogram.com) — body data (`<Body>/Param` pages), pressure tables, biomes and landmark coordinates (body pages, *List of easter eggs*), part data
 - [Eric Meyer — Resonant Orbit Calculator](https://meyerweb.com/eric/ksp/resonant-orbits/) — body constants, resonant-orbit method (MIT License)
 - KSP Δv map 1.0.4 by /u/swashlebucky, based on Kowgan's map (CC BY-NC-SA 4.0) — mission leg values
 - [alexmoon — KSP Launch Window Planner](https://alexmoon.github.io/ksp/) — porkchop approach for KSP

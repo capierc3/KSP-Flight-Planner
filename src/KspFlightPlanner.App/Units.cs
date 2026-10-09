@@ -36,6 +36,11 @@ internal static class Units
 
     public static string Degrees(double deg) => deg.ToString("0.###", Culture) + "°";
 
+    /// <summary>"12.451° N, 39.196° E" (north and east positive).</summary>
+    public static string LatLon(double latitudeDeg, double longitudeDeg) =>
+        $"{Math.Abs(latitudeDeg).ToString("0.###", Culture)}° {(latitudeDeg < 0 ? "S" : "N")}, " +
+        $"{Math.Abs(longitudeDeg).ToString("0.###", Culture)}° {(longitudeDeg < 0 ? "W" : "E")}";
+
     /// <summary>Kerbin-calendar duration plus seconds, e.g. "1y 375d 3h 50m  (17,315,400 s)".</summary>
     public static string Duration(double seconds) =>
         $"{GameCalendar.Kerbin.FormatDuration(seconds)}  ({seconds.ToString("#,0", Culture)} s)";

@@ -156,6 +156,49 @@
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>
+                                <Button Content="Land at a spot" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                        Visibility="{Binding OffersLanding, Converter={StaticResource BoolToVisibility}}"
+                                        Command="{Binding DataContext.AddLandingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                        ToolTip="Pick where to land: a landmark, a flag or craft in your save, a KerbNet waypoint, or a latitude and longitude. On airless bodies its deorbit and braking burns replace the Δv map's landing value." />
+                                <Border Visibility="{Binding HasLanding, Converter={StaticResource BoolToVisibility}}" Padding="8,5" CornerRadius="4" Margin="0,4,0,0"
+                                        BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" VerticalAlignment="Top" Content="✕" Style="{StaticResource SmallButton}" ToolTip="Land anywhere: back to the Δv map's value for this leg"
+                                                Command="{Binding DataContext.RemoveLandingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        <StackPanel>
+                                            <TextBlock Text="Landing spot" FontWeight="SemiBold" FontSize="12" />
+                                            <ComboBox ItemsSource="{Binding LandingTargets}" SelectedItem="{Binding SelectedTarget}" Margin="0,4,8,0" FontSize="12"
+                                                      ToolTip="Landmarks from the KSP wiki, then flags, landed craft and KerbNet waypoints from your save. Type a position below for any other spot." />
+                                            <Grid Margin="0,4,8,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,4,4">
+                                                    <TextBlock Text="Latitude °" Style="{StaticResource Note}" />
+                                                    <TextBox Text="{Binding LatitudeText}" FontSize="12" ToolTip="North positive, −90 to 90" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,4">
+                                                    <TextBlock Text="Longitude °" Style="{StaticResource Note}" />
+                                                    <TextBox Text="{Binding LongitudeText}" FontSize="12" ToolTip="East positive, −180 to 180" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,4,0">
+                                                    <TextBlock Text="Ground height (m)" Style="{StaticResource Note}" />
+                                                    <TextBox Text="{Binding GroundHeightText}" FontSize="12" ToolTip="Height of the ground above the datum. Flags and landed craft know it; leave blank if unknown (0 m is assumed)." />
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="1">
+                                                    <TextBlock Text="Lander TWR" Style="{StaticResource Note}" />
+                                                    <TextBox Text="{Binding LanderTwrText}" FontSize="12" ToolTip="The lander's thrust-to-weight ratio at this body's surface. Lower TWR brakes longer and loses more to gravity." />
+                                                </StackPanel>
+                                            </Grid>
+                                            <TextBlock Text="{Binding LandingText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
                                 <Button Content="Deploy satellites here" Style="{StaticResource SmallButton}" HorizontalAlignment="Left" Margin="0,4,0,0"
                                         Visibility="{Binding OffersDeploy, Converter={StaticResource BoolToVisibility}}"
                                         Command="{Binding DataContext.OpenDeployCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"

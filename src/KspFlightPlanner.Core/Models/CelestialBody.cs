@@ -15,6 +15,9 @@ public sealed record OrbitalElements(
     double MeanAnomalyAtEpochRad,
     double EpochS = 0);
 
+/// <summary>One row of a body's pressure-vs-altitude table (KSP wiki). Density is only known for Kerbin.</summary>
+public sealed record AtmospherePoint(double AltitudeM, double PressurePa, double? DensityKgM3 = null);
+
 public sealed record Atmosphere(
     double HeightM,
     double? SeaLevelPressureAtm = null,
@@ -24,13 +27,57 @@ public sealed record Atmosphere(
     bool? HasOxygen = null)
 {
     public const double KilopascalsPerAtm = 101.325;
+    public const double PascalsPerAtm = 101_325;
 
-    /// <summary>Pressure at an altitude using the exponential scale-height model (approximation of KSP's curves).</summary>
-    public double? PressureAtmAt(double altitudeM) =>
-        altitudeM >= HeightM ? 0
-        : SeaLevelPressureAtm is { } p0 && ScaleHeightM is { } h ? p0 * Math.Exp(-altitudeM / h)
-        : null;
+    /// <summary>Average molar mass of the air (g/mol), when known.</summary>
+    public double? MolarMassGPerMol { get; init; }
+
+    /// <summary>Ratio of specific heats γ, used for the speed of sound, when known.</summary>
+    public double? AdiabaticIndex { get; init; }
+
+    /// <summary>Sea-level temperature at the equator: night low and day high (°C), when known.</summary>
+    public (double Night, double Day)? EquatorTempC { get; init; }
+
+    /// <summary>Sea-level temperature at the poles: low and high (°C), when known.</summary>
+    public (double Low, double High)? PoleTempC { get; init; }
+
+    /// <summary>Pressure at fixed altitudes, ascending. Empty when only the scale height is known.</summary>
+    public IReadOnlyList<AtmospherePoint> PressureTable { get; init; } = [];
+
+    /// <summary>
+    /// Pressure at an altitude. With a pressure table: log-linear between rows (linear into a 0 Pa row);
+    /// otherwise the exponential scale-height model. See docs/MATH.md, "Atmospheric pressure".
+    /// </summary>
+    public double? PressureAtmAt(double altitudeM)
+    {
+        if (altitudeM >= HeightM) return 0;
+        if (PressureTable.Count >= 2) return TablePressurePa(Math.Max(0, altitudeM)) / PascalsPerAtm;
+        return SeaLevelPressureAtm is { } p0 && ScaleHeightM is { } h ? p0 * Math.Exp(-altitudeM / h) : null;
+    }
+
+    private double TablePressurePa(double altitudeM)
+    {
+        var t = PressureTable;
+        var i = 1;
+        while (i < t.Count - 1 && t[i].AltitudeM < altitudeM) i++;
+        var (lo, hi) = (t[i - 1], t[i]);
+        var f = Math.Clamp((altitudeM - lo.AltitudeM) / (hi.AltitudeM - lo.AltitudeM), 0, 1);
+        if (lo.PressurePa <= 0 || hi.PressurePa <= 0) return lo.PressurePa + f * (hi.PressurePa - lo.PressurePa);
+        return lo.PressurePa * Math.Pow(hi.PressurePa / lo.PressurePa, f);
+    }
 }
+
+/// <summary>A named spot on a body's surface (launch site, anomaly, feature). Latitude north and longitude east positive.</summary>
+public sealed record Landmark(string Name, string Kind, double LatitudeDeg, double LongitudeDeg, string? Note = null, string? Source = null);
+
+/// <summary>
+/// The body's science multipliers per situation (KSP wiki), plus the altitudes where "flying high" and
+/// "in space high" begin. Null entries don't apply to the body (e.g. splashed on a body without oceans).
+/// </summary>
+public sealed record ScienceMultipliers(
+    double? Landed, double? Splashed, double? FlyingLow, double? FlyingHigh,
+    double? SpaceLow, double? SpaceHigh, double? Recovery,
+    double? FlyingHighFromM, double? SpaceHighFromM);
 
 /// <summary>
 /// Constant physical data for a body. Distances in metres, times in seconds.
@@ -67,6 +114,14 @@ public sealed record CelestialBody
     public OrbitalElements? Orbit { get; init; }
 
     public Atmosphere? Atmosphere { get; init; }
+
+    /// <summary>Biome names (stock bodies; from the KSP wiki).</summary>
+    public IReadOnlyList<string> Biomes { get; init; } = [];
+
+    /// <summary>Known surface spots: launch sites, anomalies, highest point (stock bodies; from the KSP wiki).</summary>
+    public IReadOnlyList<Landmark> Landmarks { get; init; } = [];
+
+    public ScienceMultipliers? Science { get; init; }
 
     public string Color { get; init; } = "#666666";
     public bool IsDefault { get; init; }

@@ -50,6 +50,50 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Stock_bodies_carry_wiki_biomes_landmarks_science_and_pressure_tables()
+    {
+        var repo = new BodyRepository(_db);
+        var stock = repo.GetBodies(repo.GetSystems()[0].Id).ToDictionary(b => b.Name);
+
+        var mun = stock["Mun"];
+        Assert.Contains("Twin Craters", mun.Biomes);
+        Assert.Equal(17, mun.Biomes.Count);
+        var arch = Assert.Single(mun.Landmarks, m => m.Name.StartsWith("Kerbol arch"));
+        Assert.Equal(12.4508, arch.LatitudeDeg);
+        Assert.Equal(39.1959, arch.LongitudeDeg);
+        Assert.Contains(mun.Landmarks, m => m.Name == "Highest point" && m.LatitudeDeg == -82.5183);
+        Assert.Equal(4, mun.Science!.Landed);
+        Assert.Equal(60_000, mun.Science.SpaceHighFromM);
+        Assert.Null(mun.Science.Splashed);
+
+        var kerbin = stock["Kerbin"];
+        Assert.Contains(kerbin.Landmarks, m => m.Name == "KSC Launch Pad" && m.Kind == "launch-site");
+        var atm = kerbin.Atmosphere!;
+        Assert.Equal(28.9644, atm.MolarMassGPerMol);
+        Assert.Equal((32.0, 41.0), atm.EquatorTempC);
+        Assert.Equal(13, atm.PressureTable.Count);
+        Assert.Equal(1.225, atm.PressureTable[0].DensityKgM3);
+
+        // Gap filled from the page text; Moho's parking default now clears its peaks instead of 10% of the radius.
+        Assert.Equal(6817, stock["Moho"].HighestElevationM);
+        Assert.Equal(["Lowlands", "Midlands", "Highlands"], stock["Gilly"].Biomes);
+        Assert.Single(repo.GetBody(mun.Id)!.Landmarks, m => m.Name == "Armstrong memorial");
+    }
+
+    [Fact]
+    public void Pressure_comes_from_the_wiki_table_when_present()
+    {
+        var repo = new BodyRepository(_db);
+        var duna = repo.GetBodies(repo.GetSystems()[0].Id).Single(b => b.Name == "Duna").Atmosphere!;
+        // Table rows: 5,000 m → 3,774 Pa; 7,500 m → 2,663 Pa. Halfway is the geometric mean √(3774·2663) = 3170.2 Pa.
+        Assert.Equal(3774 / 101_325.0, duna.PressureAtmAt(5_000)!.Value, 9);
+        Assert.Equal(Math.Sqrt(3774.0 * 2663) / 101_325, duna.PressureAtmAt(6_250)!.Value, 9);
+        // Last rows 40 km → 4.918 Pa and 50 km → 0 Pa: linear into the zero row.
+        Assert.Equal(4.918 / 2 / 101_325, duna.PressureAtmAt(45_000)!.Value, 12);
+        Assert.Equal(0, duna.PressureAtmAt(50_000));
+    }
+
+    [Fact]
     public void Non_stock_systems_have_no_orbits_but_keep_atmospheres()
     {
         var repo = new BodyRepository(_db);

@@ -58,6 +58,11 @@ public sealed record SavedVessel(string Id, string Name, string Type, string Sit
     /// <summary>Mission elapsed time in seconds (met).</summary>
     public double MissionTimeS { get; init; }
 
+    /// <summary>Where a landed or splashed vessel stands (lat, lon in degrees; alt = height above the datum). NaN in flight.</summary>
+    public double LatitudeDeg { get; init; } = double.NaN;
+    public double LongitudeDeg { get; init; } = double.NaN;
+    public double AltitudeM { get; init; } = double.NaN;
+
     public IEnumerable<string> Crew => Parts.SelectMany(p => p.Crew);
 }
 
@@ -76,7 +81,14 @@ public sealed record SavedEngineState(double ThrustPercent, bool IsIgnited, bool
 
 /// <summary>What the planner reads from a save file (persistent.sfs).</summary>
 /// <param name="Ut">Game time when the file was written, in seconds since Year 1, Day 1.</param>
-public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList<SavedVessel> Vessels);
+public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList<SavedVessel> Vessels)
+{
+    /// <summary>Waypoints the player placed (KerbNet or the map), from the ScenarioCustomWaypoints scenario.</summary>
+    public IReadOnlyList<SavedWaypoint> Waypoints { get; init; } = [];
+}
+
+/// <summary>A custom waypoint: a named spot on a body (degrees, north and east positive).</summary>
+public sealed record SavedWaypoint(string Name, string BodyName, double LatitudeDeg, double LongitudeDeg);
 
 /// <summary>A save folder under the KSP install (saves/&lt;name&gt;/persistent.sfs).</summary>
 public sealed record KspSaveFolder(string Name, string Title, string PersistentPath, DateTime LastWriteTime)
@@ -147,7 +159,13 @@ public static class KspSaveReader
         var flight = game.GetNode("FLIGHTSTATE");
         var title = game.GetValue("Title") ?? "";
         var vessels = flight?.GetNodes("VESSEL").Select(ReadVessel).ToList() ?? [];
-        return new KspSave(title, game.GetValue("Mode") ?? "", Number(flight?.GetValue("UT")), vessels);
+        var waypoints = game.GetNodes("SCENARIO").Where(n => n.GetValue("name") == "ScenarioCustomWaypoints")
+            .SelectMany(n => n.GetNodes("WAYPOINT"))
+            .Select(w => new SavedWaypoint(w.GetValue("name") ?? "Waypoint", w.GetValue("celestialName") ?? "",
+                Number(w.GetValue("latitude")), Number(w.GetValue("longitude"))))
+            .Where(w => w.BodyName.Length > 0 && double.IsFinite(w.LatitudeDeg) && double.IsFinite(w.LongitudeDeg))
+            .ToList();
+        return new KspSave(title, game.GetValue("Mode") ?? "", Number(flight?.GetValue("UT")), vessels) { Waypoints = waypoints };
     }
 
     private static SavedVessel ReadVessel(ConfigNode v)
@@ -164,6 +182,9 @@ public static class KspSaveReader
             Parts = v.GetNodes("PART").Select(ReadPart).ToList(),
             LaunchUt = Number(v.GetValue("lct")),
             MissionTimeS = Number(v.GetValue("met")),
+            LatitudeDeg = Number(v.GetValue("lat")),
+            LongitudeDeg = Number(v.GetValue("lon")),
+            AltitudeM = Number(v.GetValue("alt")),
         };
     }
 

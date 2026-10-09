@@ -5,7 +5,8 @@ namespace KspFlightPlanner.Data;
 
 /// <summary>
 /// Loads the built-in systems from the embedded Seed/bodies.json. Sources are listed in the file:
-/// Eric Meyer's Resonant Orbit Calculator (MIT) for all systems, the KSP wiki for stock orbit/atmosphere data.
+/// Eric Meyer's Resonant Orbit Calculator (MIT) for all systems, the KSP wiki for stock orbit/atmosphere data, biomes,
+/// landmarks and science multipliers (merged in by tools/wiki).
 /// </summary>
 internal static class BodySeeder
 {
@@ -19,12 +20,21 @@ internal static class BodySeeder
     private sealed record SeedBody(
         string Name, string Color, bool IsDefault, string? BodyClass, string? Parent,
         double Mu, double MassKg, double EquatorialRadiusM, double RotationPeriodS, double SoiRadiusM,
-        double? HighestElevationM, double? SurfaceToLowOrbitDv, SeedOrbit? Orbit, SeedAtmosphere? Atmosphere);
+        double? HighestElevationM, double? SurfaceToLowOrbitDv, SeedOrbit? Orbit, SeedAtmosphere? Atmosphere,
+        SeedScience? Science = null, List<string>? Biomes = null, List<SeedLandmark>? Landmarks = null);
     private sealed record SeedOrbit(
         double SemiMajorAxisM, double Eccentricity, double InclinationDeg, double LongitudeOfAscendingNodeDeg,
         double ArgumentOfPeriapsisDeg, double MeanAnomalyAtEpochRad);
     private sealed record SeedAtmosphere(
-        double HeightM, double? SeaLevelPressureAtm, double? ScaleHeightM, double? MinTempC, double? MaxTempC, bool? HasOxygen);
+        double HeightM, double? SeaLevelPressureAtm, double? ScaleHeightM, double? MinTempC, double? MaxTempC, bool? HasOxygen,
+        double? MolarMassGPerMol = null, double? AdiabaticIndex = null, SeedTempRange? EquatorTempC = null,
+        SeedTempRange? PoleTempC = null, List<SeedPressurePoint>? PressureTable = null);
+    private sealed record SeedTempRange(double? Night, double? Day, double? Low, double? High);
+    private sealed record SeedPressurePoint(double AltitudeM, double PressurePa, double? DensityKgM3);
+    private sealed record SeedScience(
+        double? Landed, double? Splashed, double? LowerAtmosphere, double? UpperAtmosphere, double? NearSpace,
+        double? OuterSpace, double? Recovery, double? FlyingHighAltitudeM, double? SpaceHighAltitudeM);
+    private sealed record SeedLandmark(string Name, string Kind, double LatitudeDeg, double LongitudeDeg, string? Note, string? Source);
 
     public static void SeedIfEmpty(SqliteConnection connection)
     {
@@ -80,12 +90,18 @@ internal static class BodySeeder
                 (system_id, name, body_class, color, is_default, sort_order, is_builtin,
                  mass_kg, mu, equatorial_radius_m, rotation_period_s, soi_radius_m, highest_elevation_m, surface_to_orbit_dv,
                  sma_m, eccentricity, inclination_deg, lan_deg, arg_periapsis_deg, mean_anomaly_epoch_rad, epoch_s,
-                 atmosphere_height_m, sea_level_pressure_atm, scale_height_m, min_temp_c, max_temp_c, has_oxygen)
+                 atmosphere_height_m, sea_level_pressure_atm, scale_height_m, min_temp_c, max_temp_c, has_oxygen,
+                 molar_mass_g_mol, adiabatic_index, equator_temp_night_c, equator_temp_day_c, pole_temp_low_c, pole_temp_high_c,
+                 sci_landed, sci_splashed, sci_flying_low, sci_flying_high, sci_space_low, sci_space_high, sci_recovery,
+                 sci_flying_high_from_m, sci_space_high_from_m)
             VALUES
                 ($sys, $name, $class, $color, $default, $order, 1,
                  $mass, $mu, $eqr, $rot, $soi, $highest, $dvOrbit,
                  $sma, $ecc, $inc, $lan, $argPe, $mean, $epoch,
-                 $atmHeight, $pressure, $scaleHeight, $minTemp, $maxTemp, $oxygen)
+                 $atmHeight, $pressure, $scaleHeight, $minTemp, $maxTemp, $oxygen,
+                 $molar, $gamma, $eqNight, $eqDay, $poleLow, $poleHigh,
+                 $sciLanded, $sciSplashed, $sciFlyLow, $sciFlyHigh, $sciSpaceLow, $sciSpaceHigh, $sciRecovery,
+                 $sciFlyHighFrom, $sciSpaceHighFrom)
             RETURNING id;
             """;
         var p = cmd.Parameters;
@@ -119,8 +135,56 @@ internal static class BodySeeder
         p.AddWithValue("$minTemp", Db(a?.MinTempC));
         p.AddWithValue("$maxTemp", Db(a?.MaxTempC));
         p.AddWithValue("$oxygen", a?.HasOxygen is { } ox ? (ox ? 1 : 0) : DBNull.Value);
+        p.AddWithValue("$molar", Db(a?.MolarMassGPerMol));
+        p.AddWithValue("$gamma", Db(a?.AdiabaticIndex));
+        p.AddWithValue("$eqNight", Db(a?.EquatorTempC?.Night));
+        p.AddWithValue("$eqDay", Db(a?.EquatorTempC?.Day));
+        p.AddWithValue("$poleLow", Db(a?.PoleTempC?.Low));
+        p.AddWithValue("$poleHigh", Db(a?.PoleTempC?.High));
 
-        return Convert.ToInt64(cmd.ExecuteScalar());
+        var sci = body.Science;
+        p.AddWithValue("$sciLanded", Db(sci?.Landed));
+        p.AddWithValue("$sciSplashed", Db(sci?.Splashed));
+        p.AddWithValue("$sciFlyLow", Db(sci?.LowerAtmosphere));
+        p.AddWithValue("$sciFlyHigh", Db(sci?.UpperAtmosphere));
+        p.AddWithValue("$sciSpaceLow", Db(sci?.NearSpace));
+        p.AddWithValue("$sciSpaceHigh", Db(sci?.OuterSpace));
+        p.AddWithValue("$sciRecovery", Db(sci?.Recovery));
+        p.AddWithValue("$sciFlyHighFrom", Db(sci?.FlyingHighAltitudeM));
+        p.AddWithValue("$sciSpaceHighFrom", Db(sci?.SpaceHighAltitudeM));
+
+        var id = Convert.ToInt64(cmd.ExecuteScalar());
+        InsertSurfaceData(connection, tx, id, body);
+        return id;
+    }
+
+    private static void InsertSurfaceData(SqliteConnection connection, SqliteTransaction tx, long bodyId, SeedBody body)
+    {
+        foreach (var point in body.Atmosphere?.PressureTable ?? [])
+            Insert(connection, tx, "INSERT INTO body_pressure_points (body_id, altitude_m, pressure_pa, density_kg_m3) VALUES ($b, $1, $2, $3);",
+                bodyId, point.AltitudeM, point.PressurePa, point.DensityKgM3);
+        var biomes = body.Biomes ?? [];
+        for (var i = 0; i < biomes.Count; i++)
+            Insert(connection, tx, "INSERT INTO body_biomes (body_id, sort_order, name) VALUES ($b, $1, $2);", bodyId, i, biomes[i]);
+        var landmarks = body.Landmarks ?? [];
+        for (var i = 0; i < landmarks.Count; i++)
+        {
+            var m = landmarks[i];
+            Insert(connection, tx, """
+                INSERT INTO body_landmarks (body_id, sort_order, name, kind, latitude_deg, longitude_deg, note, source)
+                VALUES ($b, $1, $2, $3, $4, $5, $6, $7);
+                """, bodyId, i, m.Name, m.Kind, m.LatitudeDeg, m.LongitudeDeg, m.Note, m.Source);
+        }
+    }
+
+    private static void Insert(SqliteConnection connection, SqliteTransaction tx, string sql, long bodyId, params object?[] values)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("$b", bodyId);
+        for (var i = 0; i < values.Length; i++) cmd.Parameters.AddWithValue($"${i + 1}", Db(values[i]));
+        cmd.ExecuteNonQuery();
     }
 
     private static object Db(object? value) => value ?? DBNull.Value;

@@ -129,6 +129,9 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 
 - All systems: Eric Meyer's [Resonant Orbit Calculator](https://meyerweb.com/eric/ksp/resonant-orbits/) (MIT License).
 - Stock orbits, atmosphere and gravity: the [KSP wiki](https://wiki.kerbalspaceprogram.com) `<Body>/Param` pages.
+  Biomes, landmark coordinates, science multipliers and pressure tables come from the wiki's body pages and
+  *List of easter eggs*, pulled by `tools/wiki/scrape_wiki.py` and merged by `tools/wiki/apply_wiki.py`
+  (facts only; see `docs/WIKI-COMPARISON.md`).
 - Surface-to-low-orbit Δv and the mission builder's route values: the community
   [KSP Δv map 1.0.4](https://www.reddit.com/r/KerbalSpaceProgram/) by /u/swashlebucky, based on Kowgan's map
   (CC BY-NC-SA 4.0).

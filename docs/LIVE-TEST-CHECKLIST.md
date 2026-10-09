@@ -102,7 +102,17 @@ Notes (node values in planner vs KSP):
 
 Notes:
 
-## 7. Other bits
+## 7. Landing spots (save file, no kRPC needed)
+
+- [ ] Mission pane: add a **Mun — Surface** stop → **Land at a spot**. The list shows the Mun's wiki landmarks, then
+      your flags and landed craft on the Mun from the save (e.g. **New Horizons 1 (Flag)** if it is on the Mun)
+- [ ] Picking a flag fills in its **ground height** (from the save's `alt`)
+- [ ] In game, open **KerbNet** on a probe orbiting the Mun, add a **custom waypoint**, then save (or quicksave) →
+      it appears in the list as **(KerbNet waypoint)** with the right latitude/longitude. ⚠ The waypoint field names
+      (`celestialName`, `latitude`, `longitude` under `ScenarioCustomWaypoints`) are from memory, not yet seen in your save
+- [ ] Optional: land near a planned spot and compare where you came down (Vessels tab / flag position) with the target
+
+## 8. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date
 - [ ] **Vessels tab** still works while connected (it rebuilds when orbits change; your selection should stay)

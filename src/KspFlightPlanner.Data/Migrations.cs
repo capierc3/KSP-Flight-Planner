@@ -61,8 +61,54 @@ internal static class Migrations
             min_temp_c               REAL,
             max_temp_c               REAL,
             has_oxygen               INTEGER,
+            molar_mass_g_mol         REAL,
+            adiabatic_index          REAL,
+            equator_temp_night_c     REAL,              -- sea level
+            equator_temp_day_c       REAL,
+            pole_temp_low_c          REAL,
+            pole_temp_high_c         REAL,
+
+            -- science multipliers (KSP wiki); NULL = situation doesn't apply
+            sci_landed               REAL,
+            sci_splashed             REAL,
+            sci_flying_low           REAL,
+            sci_flying_high          REAL,
+            sci_space_low            REAL,
+            sci_space_high           REAL,
+            sci_recovery             REAL,
+            sci_flying_high_from_m   REAL,              -- altitude where "flying high" begins
+            sci_space_high_from_m    REAL,              -- altitude where "in space high" begins
 
             UNIQUE (system_id, name)
+        );
+
+        -- Pressure-vs-altitude table (KSP wiki), used instead of the scale height when present.
+        CREATE TABLE body_pressure_points (
+            body_id          INTEGER NOT NULL REFERENCES celestial_bodies(id) ON DELETE CASCADE,
+            altitude_m       REAL    NOT NULL,
+            pressure_pa      REAL    NOT NULL,
+            density_kg_m3    REAL,
+            PRIMARY KEY (body_id, altitude_m)
+        );
+
+        CREATE TABLE body_biomes (
+            body_id          INTEGER NOT NULL REFERENCES celestial_bodies(id) ON DELETE CASCADE,
+            sort_order       INTEGER NOT NULL,
+            name             TEXT    NOT NULL,
+            PRIMARY KEY (body_id, sort_order)
+        );
+
+        -- Named surface spots (launch sites, anomalies, highest point); latitude north / longitude east positive.
+        CREATE TABLE body_landmarks (
+            id               INTEGER PRIMARY KEY,
+            body_id          INTEGER NOT NULL REFERENCES celestial_bodies(id) ON DELETE CASCADE,
+            sort_order       INTEGER NOT NULL,
+            name             TEXT    NOT NULL,
+            kind             TEXT    NOT NULL,      -- launch-site / anomaly / feature
+            latitude_deg     REAL    NOT NULL,
+            longitude_deg    REAL    NOT NULL,
+            note             TEXT,
+            source           TEXT
         );
 
         -- Community delta-v map as a tree rooted at Kerbin's surface; each node stores the edge to its parent.

@@ -314,12 +314,45 @@ public sealed class BodyDetailViewModel
             if (atm.ScaleHeightM is { } h) facts.Add(new("Scale height", Units.Km(h)));
             if (atm.MinTempC is { } tMin && atm.MaxTempC is { } tMax) facts.Add(new("Temperature", $"{tMin:0.#} to {tMax:0.#} °C"));
             if (atm.HasOxygen is { } ox) facts.Add(new("Oxygen", ox ? "Yes — jet engines work" : "No"));
+            if (atm.EquatorTempC is { } eq) facts.Add(new("Sea level at the equator", $"{eq.Night:0.#} °C night, {eq.Day:0.#} °C day"));
+            if (atm.PoleTempC is { } pole) facts.Add(new("Sea level at the poles", $"{pole.Low:0.#} to {pole.High:0.#} °C"));
+            if (atm.MolarMassGPerMol is { } molar) facts.Add(new("Molar mass of the air", $"{molar:0.####} g/mol"));
+            if (atm.AdiabaticIndex is { } gamma) facts.Add(new("Adiabatic index γ", $"{gamma:0.##}"));
+            foreach (var row in atm.PressureTable)
+                facts.Add(new($"Pressure at {Units.Km(row.AltitudeM)}",
+                    $"{row.PressurePa / 1000:0.####} kPa ({row.PressurePa / Atmosphere.PascalsPerAtm:0.####} atm)"
+                    + (row.DensityKgM3 is { } rho ? $", {rho:0.###} kg/m³" : "")));
             groups.Add(new FactGroup("Atmosphere", facts));
         }
         else
         {
             groups.Add(new FactGroup("Atmosphere", [new("Atmosphere", "None — no aerobraking or parachutes")]));
         }
+
+        // Science multipliers
+        if (body.Science is { } sci)
+        {
+            var facts = new List<Fact>();
+            void Add(string situation, double? value) { if (value is { } v) facts.Add(new(situation, $"× {v:0.##}")); }
+            Add("Landed", sci.Landed);
+            Add("Splashed down", sci.Splashed);
+            Add("Flying low", sci.FlyingLow);
+            Add("Flying high", sci.FlyingHigh);
+            Add("In space low", sci.SpaceLow);
+            Add("In space high", sci.SpaceHigh);
+            Add("Recovery", sci.Recovery);
+            if (sci.FlyingHighFromM is { } fh) facts.Add(new("Flying high starts at", Units.Km(fh)));
+            if (sci.SpaceHighFromM is { } sh) facts.Add(new("In space high starts at", Units.Km(sh)));
+            groups.Add(new FactGroup("Science multipliers", facts));
+        }
+
+        // Surface
+        if (body.Biomes.Count > 0)
+            groups.Add(new FactGroup($"Biomes ({body.Biomes.Count})", [new("Biomes", string.Join(", ", body.Biomes))]));
+        if (body.Landmarks.Count > 0)
+            groups.Add(new FactGroup("Landmarks", body.Landmarks
+                .Select(m => new Fact(m.Name, $"{Units.LatLon(m.LatitudeDeg, m.LongitudeDeg)} · {m.Kind}" + (m.Note is { } n ? $" · {n}" : "")))
+                .ToList()));
 
         // Moons
         var moons = all.Where(b => b.ParentId == body.Id).OrderBy(b => b.Orbit?.SemiMajorAxisM ?? 0).ToList();
@@ -352,7 +385,8 @@ public sealed class BodyDetailViewModel
     public IReadOnlyList<MapStopRow> MapStops { get; }
     public IReadOnlyList<CustomLocationLink> CustomLocations { get; }
     public bool HasCustomLocations => CustomLocations.Count > 0;
-    public string Sources => "Sources: KSP wiki <Body>/Param pages (orbit, atmosphere, gravity); Eric Meyer's Resonant Orbit " +
+    public string Sources => "Sources: KSP wiki <Body>/Param pages (orbit, atmosphere, gravity, science) and body pages " +
+                             "(biomes, pressure tables, landmarks; see docs/WIKI-COMPARISON.md); Eric Meyer's Resonant Orbit " +
                              "Calculator data (radius, SOI, day); community Δv map 1.0.4 (map stops). Derived values: see the Math guide.";
 }
 

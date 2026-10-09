@@ -207,9 +207,52 @@ public static class LegTools
     public static IReadOnlyList<RouteSegment> Apply(IReadOnlyList<RouteSegment> segments, IReadOnlyList<MissionStop> stops,
         IReadOnlyDictionary<string, CelestialBody> bodies) =>
         segments.Select(s =>
-            s.ToStop < stops.Count && stops[s.ToStop].Transfer is { } choice && EvaluateTransfer(s.Legs, choice, bodies) is { } transfer
-                ? s with { Legs = ApplyTransfer(s.Legs, transfer) }
-                : s).ToList();
+        {
+            if (s.ToStop >= stops.Count) return s;
+            var stop = stops[s.ToStop];
+            if (stop.Transfer is { } choice && EvaluateTransfer(s.Legs, choice, bodies) is { } transfer)
+                s = s with { Legs = ApplyTransfer(s.Legs, transfer) };
+            if (stop.Landing is { } landing && EvaluateLanding(s.Legs, landing, bodies) is { } plan)
+                s = s with { Legs = ApplyLanding(s.Legs, plan) };
+            return s;
+        }).ToList();
+
+    /// <summary>
+    /// The leg a landing tool works on: the last one, when it comes down from an orbit of a body to that body's surface.
+    /// Its index, or -1.
+    /// </summary>
+    public static int FindLanding(IReadOnlyList<RouteLeg> legs) =>
+        legs.Count > 0 && legs[^1] is { To.Kind: "Surface", IsCombined: false } leg && leg.From.BodyName == leg.To.BodyName
+                       && leg.From.AltitudeM is > 0
+            ? legs.Count - 1 : -1;
+
+    /// <summary>The landing at <paramref name="landing"/>'s spot from the orbit the leg starts in (§2.6), or null when the leg doesn't land.</summary>
+    public static LandingPlan? EvaluateLanding(IReadOnlyList<RouteLeg> legs, LandingLeg landing, IReadOnlyDictionary<string, CelestialBody> bodies) =>
+        FindLanding(legs) is var i and >= 0 && bodies.TryGetValue(legs[i].To.BodyName, out var body)
+            ? Landing.Plan(body, legs[i].From.AltitudeM!.Value, landing)
+            : null;
+
+    /// <summary>
+    /// Replaces the map's landing value with the planned deorbit and braking burns, and the worst-case plane change with
+    /// the one this spot needs. On a body with air the map's value stays (aerobraking and parachutes do much of the
+    /// work there); only the note changes.
+    /// </summary>
+    public static IReadOnlyList<RouteLeg> ApplyLanding(IReadOnlyList<RouteLeg> legs, LandingPlan plan)
+    {
+        var index = FindLanding(legs);
+        if (index < 0) return legs;
+        var name = plan.Target.Name;
+        return legs.Select((leg, i) => i != index ? leg
+            : plan.IsRoughEstimate ? leg with { ToolNote = $"Landing at {name}: map value kept ({leg.To.BodyName} has air, so the spot is a rough estimate)" }
+            : leg with
+            {
+                DeltaV = Math.Round(plan.TotalDv),
+                PlaneChangeDv = Math.Round(plan.PlaneChangeDv),
+                CanAerobrake = false,
+                AerobrakeDv = 0,
+                ToolNote = $"Landing at {name}: deorbit {plan.DeorbitDv:0} m/s + braking {plan.BrakingDv:0} m/s",
+            }).ToList();
+    }
 
     /// <summary>
     /// A leg can be a rendezvous when it arrives at a placed custom location (its position is known, so there is a craft

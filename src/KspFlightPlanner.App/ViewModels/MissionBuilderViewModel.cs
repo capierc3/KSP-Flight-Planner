@@ -122,6 +122,7 @@ public sealed class StopViewModel : ObservableObject
     private TransferLeg? _transfer;
     private DeployStep? _deploy;
     private RendezvousLeg? _rendezvous;
+    private LandingLeg? _landing;
 
     /// <param name="changed">The stop moved somewhere else: the route changes.</param>
     /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
@@ -132,6 +133,7 @@ public sealed class StopViewModel : ObservableObject
         _transfer = stop.Transfer;
         _deploy = stop.Deploy;
         _rendezvous = stop.Rendezvous;
+        _landing = stop.Landing;
         _changed = changed;
         _legsChanged = legsChanged;
     }
@@ -250,6 +252,126 @@ public sealed class StopViewModel : ObservableObject
             OnPropertyChanged(name);
     }
 
+    // ---------------- Landing at a chosen spot (surface stops) ----------------
+
+    /// <summary>Where on the surface the leg arriving here lands (§2.6); null for the map's "anywhere" landing.</summary>
+    public LandingLeg? Landing
+    {
+        get => _landing;
+        set
+        {
+            if (!SetProperty(ref _landing, value)) return;
+            foreach (var name in new[] { nameof(HasLanding), nameof(OffersLanding), nameof(SelectedTarget),
+                         nameof(LatitudeText), nameof(LongitudeText), nameof(GroundHeightText), nameof(LanderTwrText) })
+                OnPropertyChanged(name);
+            _legsChanged();
+        }
+    }
+
+    /// <summary>The leg arriving here comes down from an orbit to the surface, so it can land at a chosen spot.</summary>
+    public bool CanLand { get; private set; }
+    public bool HasLanding => _landing is not null;
+    public bool OffersLanding => CanLand && _landing is null;
+
+    /// <summary>Spots on this stop's body: wiki landmarks, and the save's flags, landed craft and KerbNet waypoints.</summary>
+    public IReadOnlyList<LandingTarget> LandingTargets { get; private set; } = [];
+
+    /// <summary>The picked spot, when it is one of <see cref="LandingTargets"/> (an entered spot shows none).</summary>
+    public LandingTarget? SelectedTarget
+    {
+        get => _landing?.Target is { } t && LandingTargets.Contains(t) ? t : null;
+        set { if (value is not null && _landing is { } l && value != l.Target) Landing = l with { Target = value }; }
+    }
+
+    public string LatitudeText
+    {
+        get => _landing is { } l ? l.Target.LatitudeDeg.ToString("0.####", CultureInfo.CurrentCulture) : "";
+        set => EnterSpot(value, null, null);
+    }
+
+    public string LongitudeText
+    {
+        get => _landing is { } l ? l.Target.LongitudeDeg.ToString("0.####", CultureInfo.CurrentCulture) : "";
+        set => EnterSpot(null, value, null);
+    }
+
+    /// <summary>The ground's height above the datum in metres; blank when unknown.</summary>
+    public string GroundHeightText
+    {
+        get => _landing?.Target.GroundHeightM is { } h ? h.ToString("#,0", CultureInfo.CurrentCulture) : "";
+        set => EnterSpot(null, null, value);
+    }
+
+    public string LanderTwrText
+    {
+        get => _landing is { } l ? l.LanderTwr.ToString("0.##", CultureInfo.CurrentCulture) : "";
+        set
+        {
+            if (_landing is { } l && double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out var twr) && twr > 1)
+                Landing = l with { LanderTwr = twr };
+            else OnPropertyChanged(nameof(LanderTwrText));
+        }
+    }
+
+    /// <summary>Typing a position or height makes the spot an entered one (latitude −90…90, longitude −180…180).</summary>
+    private void EnterSpot(string? latitude, string? longitude, string? height)
+    {
+        if (_landing is not { Target: var t } l) return;
+        static bool Parse(string? text, out double value) =>
+            double.TryParse((text ?? "").Trim().TrimEnd('°', 'm').Trim(), NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture, out value);
+        var lat = t.LatitudeDeg;
+        var lon = t.LongitudeDeg;
+        var ground = t.GroundHeightM;
+        var ok = latitude is null || Parse(latitude, out lat) && lat is >= -90 and <= 90;
+        ok &= longitude is null || Parse(longitude, out lon) && lon is >= -180 and <= 180;
+        if (height is not null)
+        {
+            if (string.IsNullOrWhiteSpace(height)) ground = null;
+            else if (Parse(height, out var h)) ground = h;
+            else ok = false;
+        }
+        var entered = new LandingTarget(t.Source == "Entered" ? t.Name : $"{t.Name} (edited)", "Entered", lat, lon, ground);
+        if (ok && entered with { Name = t.Name, Source = t.Source } != t) Landing = l with { Target = entered };
+        else foreach (var name in new[] { nameof(LatitudeText), nameof(LongitudeText), nameof(GroundHeightText) }) OnPropertyChanged(name);
+    }
+
+    /// <summary>"Deorbit 17 m/s + braking 606 m/s …", or why the landing isn't used.</summary>
+    public string LandingText { get; private set; } = "";
+
+    internal void SetLanding(bool canLand, LandingPlan? plan, IReadOnlyList<LandingTarget> targets)
+    {
+        CanLand = canLand;
+        if (!targets.SequenceEqual(LandingTargets))
+        {
+            LandingTargets = targets;
+            OnPropertyChanged(nameof(LandingTargets));
+            OnPropertyChanged(nameof(SelectedTarget));
+        }
+        LandingText = _landing is null ? ""
+            : plan is null ? "This stop is no longer reached by coming down from an orbit, so the landing spot isn't used."
+            : LandingSummary(plan);
+        foreach (var name in new[] { nameof(CanLand), nameof(HasLanding), nameof(OffersLanding), nameof(LandingText) })
+            OnPropertyChanged(name);
+    }
+
+    private static string LandingSummary(LandingPlan p)
+    {
+        var lines = new List<string>
+        {
+            $"{Units.LatLon(p.Target.LatitudeDeg, p.Target.LongitudeDeg)} · from the {p.OrbitAltitudeM / 1000:0.#} km orbit",
+            p.IsRoughEstimate
+                ? $"Rough estimate: deorbit {Format.Speed0(p.DeorbitDv)}, braking up to {Format.Speed0(p.BrakingDv)} without air (map value kept)"
+                : $"Deorbit {Format.Speed0(p.DeorbitDv)} + braking {Format.Speed0(p.BrakingDv)} = {Format.Speed0(p.TotalDv)}",
+            $"Orbit inclined at least {p.MinInclinationDeg:0.#}° (plan {p.InclinationDeg:0.#}°; from an equatorial orbit +{Format.Speed0(p.PlaneChangeDv)})",
+            $"Deorbit half an orbit before the spot, aiming {p.DriftM / 1000:0.#} km east of it ({p.DriftDeg:0.##}° of turning in {Units.BurnTime(p.DescentTimeS)})",
+            $"Start braking {p.BrakingDistanceM / 1000:0.#} km before it at {p.PeriapsisAltitudeM / 1000:0.#} km; burn {Units.BurnTime(p.BrakingTimeS)}",
+            $"Ground track moves {p.TrackShiftPerOrbitDeg:0.##}° west each orbit",
+        };
+        lines.AddRange(p.Warnings);
+        return string.Join("\n", lines);
+    }
+
     internal void SetTools(bool canHaveTransfer, TransferLegResult? transfer)
     {
         CanHaveTransfer = canHaveTransfer;
@@ -345,7 +467,7 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(IsLast));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous);
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous, _landing);
 }
 
 /// <summary>A constellation released at a stop, shown after the leg that arrives there, with the phase that flies it.</summary>
@@ -500,12 +622,16 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private bool _useAerobraking = true;
     private bool _includePlaneChanges;
     private bool _suspend;
+    private readonly SaveSync? _sync;
 
     public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
         PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null,
-        MissionRepository? missions = null, SettingsRepository? settings = null)
+        MissionRepository? missions = null, SettingsRepository? settings = null, SaveSync? sync = null)
     {
         _missions = missions;
+        // Flags, landed craft and waypoints in the save are landing spots: keep the pickers in step with the game.
+        _sync = sync;
+        if (sync is not null) sync.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SaveSync.Save)) RefreshLegs(); };
         _settings = settings;
         // Surface gravity and pressure for the lander TWR check (stock system, like the Δv map).
         _bodies = bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
@@ -543,6 +669,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         OpenRendezvousCommand = new RelayCommand<StopViewModel>(OpenRendezvous, s => s is not null && s.CanHaveRendezvous);
         RemoveRendezvousCommand = new RelayCommand<StopViewModel>(RemoveRendezvous, s => s?.HasRendezvous == true);
         RemoveDeployCommand = new RelayCommand<StopViewModel>(RemoveDeploy, s => s?.HasDeploy == true);
+        AddLandingCommand = new RelayCommand<StopViewModel>(AddLanding, s => s?.OffersLanding == true);
+        RemoveLandingCommand = new RelayCommand<StopViewModel>(s => s.Landing = null, s => s?.HasLanding == true);
         NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
         SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
         SaveMissionAsCommand = new RelayCommand(SaveMissionAs, () => _missions is not null && _map is not null);
@@ -634,6 +762,16 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     public RelayCommand<StopViewModel> OpenDeployCommand { get; }
     public RelayCommand<StopViewModel> RemoveDeployCommand { get; }
+    public RelayCommand<StopViewModel> AddLandingCommand { get; }
+    public RelayCommand<StopViewModel> RemoveLandingCommand { get; }
+
+    /// <summary>Starts a landing at a spot: the save's first flag if there is one, else the first landmark, else 0°, 0°.</summary>
+    private void AddLanding(StopViewModel stop)
+    {
+        var targets = stop.LandingTargets;
+        stop.Landing = new LandingLeg(targets.FirstOrDefault(t => t.Source == "Flag") ?? targets.FirstOrDefault()
+                                      ?? new LandingTarget("Entered spot", "Entered", 0, 0));
+    }
 
     /// <summary>A stop's transfer leg should be opened in the Transfer Planner.</summary>
     public event Action<TransferLegLink>? TransferRequested;
@@ -751,6 +889,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _mapSegments = segments;
         Stops[0].SetTools(false, null);
         Stops[0].SetRendezvous(false, false);
+        Stops[0].SetLanding(false, null, []);
         var placed = PlacedLocations();
         _deploys = new DeployResult?[Stops.Count];
         for (var i = 0; i < Stops.Count; i++)
@@ -774,8 +913,16 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             var earliest = ArrivalAt(segment.ToStop - 1);
             stop.SetRendezvous(rendezvousSpan is not null, rendezvous is not null, rendezvous?.StartsBefore(earliest) == true);
             _arrivals[segment.ToStop] = rendezvous?.ArrivalUt ?? transfer?.Window.ArrivalUt;
-            if (rendezvous is not null) return segment with { Legs = LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest) };
-            return transfer is null ? segment : segment with { Legs = LegTools.ApplyTransfer(segment.Legs, transfer) };
+
+            var landingBody = LegTools.FindLanding(segment.Legs) >= 0 ? _bodies.GetValueOrDefault(segment.Legs[^1].To.BodyName) : null;
+            var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies) : null;
+            stop.SetLanding(landingBody is not null, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save));
+
+            var legs = rendezvous is not null ? LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest)
+                : transfer is not null ? LegTools.ApplyTransfer(segment.Legs, transfer)
+                : segment.Legs;
+            if (landing is not null) legs = LegTools.ApplyLanding(legs, landing);
+            return ReferenceEquals(legs, segment.Legs) ? segment : segment with { Legs = legs };
         }).ToList();
     }
 
