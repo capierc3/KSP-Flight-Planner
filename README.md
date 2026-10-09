@@ -30,9 +30,12 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   orbit (or a flyby) flown in the window picked; *＋ Deploy* opens Resonant Orbits around the body the mission is at,
   and adds a stop in that orbit with the constellation. Orbits not on the Δv map are kept with the mission too. Any leg to a placed
   craft can *Plan the rendezvous*: the Rendezvous tab opens locked to the leg, and the plan's burns replace the map's
-  orbital values (the plan is kept as made, since craft move). A new tool on the next leg starts when the previous leg's tool arrives. A stop in a circular orbit can
-  *Deploy satellites here*: Resonant Orbits opens locked to the stop's orbit, and the carrier's burns are added to a
-  phase you pick (each satellite's own circularize burn is shown, not added).
+  orbital values (the plan is kept as made, since craft move). A new tool on the next leg starts when the previous leg's tool arrives. A deployment's
+  carrier burns are added to a phase you pick (each satellite's own circularize burn is shown, not added); *Open* on
+  the stop's deployment shows it in Resonant Orbits again. A stop a KSC launch arrives at has an
+  *Inclination* box next to its altitude (Equatorial by default; Polar, Retrograde or any angle): the launch's extra
+  over due east is added to the launch leg, the heading to fly is shown, and later Kerbin orbits' plane changes are
+  measured from it. The altitude and inclination each have a dropdown of quick picks that shows Custom for a typed value.
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.

@@ -9,7 +9,7 @@ Each section has the formulas, a worked example, the code that implements them a
 ## Contents
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit
 - **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
@@ -21,6 +21,7 @@ Each section has the formulas, a worked example, the code that implements them a
 
 - Raising, lowering or reshaping an orbit: §2.1, §2.2
 - A plane change or an inclined target: §2.3, §4.2
+- A polar or other inclined orbit straight from the launch pad: §2.7
 - A trip to another planet, and its launch window: §3.2, §3.4
 - Landing at a crater, flag or waypoint: §2.6, §1.9
 - A rendezvous or docking: §4.1
@@ -377,6 +378,74 @@ Still to come: ground heights for any spot and along the approach (the planned k
 - Code: `Landing.Plan` (steps 1–5), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
 - Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
 
+### 2.7 Launching into an inclined orbit
+
+On the Mission pane, a stop that a launch from KSC arrives at (Kerbin's low orbit, or an orbit above it reached straight from the pad) has an **Inclination** box under its altitude: type an inclination, or pick Equatorial (0°), Polar (90°) or Retrograde (180°) from the list next to it (it shows Custom for any other value). Equatorial is the default and keeps the Δv map's launch value as it is. The Δv map's launch value assumes you fly **due east**, so Kerbin's spin gives you a free 175 m/s. Any other heading gets less of that help, and this section works out how much more the launch costs. It also gives the heading to fly. Choosing the plane at launch is far cheaper than turning in orbit (§2.3): a polar orbit costs **+182 m/s** at launch, against **3,223 m/s** to turn an equatorial 80 km orbit to polar.
+
+**Inclination vs. heading.** The inclination i (0° to 180°) is the angle between the orbit's plane and the equator, with the direction of travel included. Below 90° the orbit goes east like Kerbin turns (prograde). 90° goes over the poles. Above 90° it goes west (retrograde), and 180° is the equator flown westward. The navball **heading** is a compass direction from the pad: 0° (= 360°) is north, 90° east, 180° south, 270° west. A polar orbit is flown at a heading near **0° or 180°**: heading north and heading south give the same orbit plane, just crossing the pad's latitude the other way. The two numbers are different scales: inclination 90° is heading 0° or 180°, and heading 90° (east) is inclination 0°.
+
+Inputs: the launch site's latitude φ (the wiki's **KSC Launch Pad** landmark, −0.1027°); Kerbin's μ, radius R and sidereal rotation period T_rot; the circular orbit radius r = R + altitude the launch goes into (the map's low orbit, 80 km); and the inclination i.
+
+**Step 1 — Can a launch reach it?** A launch from latitude φ goes straight into any inclination with
+
+```
+|φ| ≤ i ≤ 180° − |φ|
+```
+
+Lower or higher, launch as close as you can (due east or due west) and turn the rest in orbit at the orbit's speed: 2·v·sin(Δi/2) (§2.3). The app adds that turn to the launch too. From the KSC this only matters within 0.1027° of the equator and costs about 4 m/s.
+
+**Step 2 — Which way does the orbit point at the pad?** The launch azimuth az (from north, toward east) comes from spherical trigonometry:
+
+```
+sin(az) = cos i / cos φ        az on the northbound pass, 180° − az on the southbound pass
+```
+
+The orbit's velocity makes the angle β = 90° − az with east, so cos β = cos i / cos φ. For a retrograde orbit (i > 90°) cos i is negative, so az is negative: the orbit heads west of north (or west of south).
+
+**Step 3 — How much speed the rocket has to add.** The orbit needs speed v = √(μ / r) in the fixed (inertial) frame. Sitting on the pad, the rocket already moves east at the ground's speed v_rot = 2π·R·cos φ / T_rot. What the engines have to supply is the difference of the two velocities (law of cosines):
+
+```
+v_rel = √(v² + v_rot² − 2 · v · v_rot · cos β)
+```
+
+Due east (β = 0) this is v − v_rot, which is what the Δv map assumes. So the launch costs
+
+```
+extra Δv = v_rel − (v − v_rot)
+```
+
+on top of the map's value. Gravity and drag losses don't depend much on the heading, so they stay in the map's number.
+
+**Step 4 — The heading to fly.** Point the rocket along that difference, not along az. Split the orbit's velocity into east and north parts and take the spin off the east part:
+
+```
+heading = atan2(v · sin(az) − v_rot, v · cos(az))        (navball degrees, 0°–360°)
+```
+
+The spin pulls the heading a little west of the azimuth. That's why the polar heading is 355.6°, not 0°. At the lowest inclination the site reaches (|φ|, due east) and the highest (180° − |φ|, due west), the orbit only touches the pad's latitude, so northbound and southbound are the same launch: one heading, 90° or 270°.
+
+Worked example — a polar 80 km Kerbin orbit from the KSC Launch Pad:
+- Kerbin: μ = 3.5316 × 10¹² m³/s², R = 600,000 m, T_rot = 21,549.425 s; φ = −0.1027°.
+- Step 1: 0.1027° ≤ 90° ≤ 179.8973°. The launch reaches it directly.
+- Step 2: sin(az) = cos 90° / cos 0.1027° = 0, so az = **0°** (north) or 180° (south), and cos β = 0.
+- Step 3: v = √(3.5316 × 10¹² / 680,000) = **2,278.93 m/s**. v_rot = 2π × 600,000 × cos 0.1027° / 21,549.425 = **174.94 m/s**. v_rel = √(2,278.93² + 174.94²) = **2,285.64 m/s**. Due east needs 2,278.93 − 174.94 = 2,103.99 m/s, so the extra is 2,285.64 − 2,103.99 = **+181.6 m/s**.
+- Step 4: heading = atan2(−174.94, 2,278.93) = −4.39°, so fly **355.6°** going north, or **184.4°** going south.
+
+The same 80 km orbit at other inclinations, against turning an equatorial orbit in place (§2.3):
+
+| Inclination | Launch extra | Heading north / south | Turning in orbit instead |
+|---|---|---|---|
+| 28.5° | +22.8 m/s | 59.3° / 120.7° | 1,121.9 m/s |
+| 45° | +54.8 m/s | 41.7° / 138.3° | 1,744.2 m/s |
+| 90° (polar) | +181.6 m/s | 355.6° / 184.4° | 3,222.9 m/s |
+| 135° | +301.8 m/s | 312.1° / 227.9° | 4,210.9 m/s |
+| 180° (retrograde) | +349.9 m/s + 4.1 m/s turn | 270° (due west, one heading) | 4,557.9 m/s |
+
+**Later orbits around Kerbin.** A custom location's plane change (§2.3) is the worst case from the equator, 2·v_a·sin(i/2) at its apoapsis speed v_a. After an inclined launch the craft is already in an inclined plane, so the app measures each later custom orbit's plane change **from the orbit the craft is in**: 2·v_a·sin(|i_location − i_now|/2). A launch to 90° and then a stop at a 90° station charges no plane change. A relay at 100° next is a 10° turn. Arriving at a location puts the craft in its plane for the next one. This stops when the mission lands or leaves Kerbin. It assumes the planes also line up around the planet (same longitude of ascending node), which you get by timing the launch (§4.5). A rendezvous leg (§6.5) plans its own launch into the target's plane, so it doesn't use this tool.
+
+- Code: `LaunchInclination.Plan` (steps 1–4), `LegTools.FindLaunch`, `LegTools.ApplyLaunch` (adds the extra to the launch step), `LegTools.MeasurePlaneChanges` (later custom orbits); tested in `LaunchInclinationTests` (this worked example is `Polar_launch_matches_the_worked_example`, the table `Launching_into_the_plane_is_far_cheaper_than_turning_in_orbit`)
+- Source: launch azimuth sin(az) = cos i / cos φ and the rotating-launch-site velocity ([Braeunig, Orbital Mechanics](http://www.braeunig.us/space/orbmech.htm)); Curtis chapter 4 (orbits in three dimensions); KSC Launch Pad coordinates from the KSP wiki
+
 ## 3. Going to another planet
 
 Leaving one body's sphere of influence and arriving at another: the burns, when to make them, and where to point.
@@ -722,7 +791,7 @@ Known simplifications:
 
 A mission leg runs from one stop to the next and is made of Δv-map steps (§6.1). A leg tool works out part of the leg properly and puts its result in place of the map values for the steps it covers. The steps stay, so each one keeps its phase and aerobrake choice. A tool that no longer fits the leg (the stops changed) is ignored, and the map values come back.
 
-The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5) and landing at a chosen spot (§2.6). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies.
+The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5), landing at a chosen spot (§2.6) and launching into an inclined orbit (§2.7). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies. An inclined launch adds its extra over a due-east launch to the launch step, on top of the map's value, and measures later plane changes around the body from its inclination.
 
 ### 6.3 Transfer legs: a chosen launch window
 

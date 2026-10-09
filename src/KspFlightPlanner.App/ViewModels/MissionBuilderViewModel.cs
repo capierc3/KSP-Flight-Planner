@@ -105,6 +105,13 @@ public sealed record StopChoice(string Key, string Text)
     public override string ToString() => Text;
 }
 
+/// <summary>A quick pick for a number box (an orbit's altitude or inclination); <see cref="Custom"/> stands for any typed value.</summary>
+public sealed record ValuePreset(string Text, double? Value)
+{
+    public static readonly ValuePreset Custom = new("Custom", null);
+    public override string ToString() => Text;
+}
+
 /// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
 public sealed record DesignChoice(DesignEntry? Design, string Title)
 {
@@ -123,6 +130,7 @@ public sealed class StopViewModel : ObservableObject
     private DeployStep? _deploy;
     private RendezvousLeg? _rendezvous;
     private LandingLeg? _landing;
+    private LaunchLeg? _launch;
 
     /// <param name="changed">The stop moved somewhere else: the route changes.</param>
     /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
@@ -134,6 +142,7 @@ public sealed class StopViewModel : ObservableObject
         _deploy = stop.Deploy;
         _rendezvous = stop.Rendezvous;
         _landing = stop.Landing;
+        _launch = stop.Launch;
         _changed = changed;
         _legsChanged = legsChanged;
     }
@@ -235,7 +244,6 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>The stop is a circular orbit, so a constellation can be released here.</summary>
     public bool CanDeploy { get; private set; }
     public bool HasDeploy => _deploy is not null;
-    public bool OffersDeploy => CanDeploy && _deploy is null;
 
     /// <summary>"3 satellites · carrier 108 m/s · each satellite 108 m/s", or why the deployment isn't used.</summary>
     public string DeployText { get; private set; } = "";
@@ -248,7 +256,7 @@ public sealed class StopViewModel : ObservableObject
                                    $"Carrier {Format.Speed0(deploy.CarrierDv)} · each satellite {Format.Speed0(deploy.SatelliteDv)}"
             : canDeploy ? "This orbit doesn't work for the deployment: open it to change it."
             : "The stop is no longer a circular orbit, so the deployment isn't used.";
-        foreach (var name in new[] { nameof(CanDeploy), nameof(HasDeploy), nameof(OffersDeploy), nameof(DeployText) })
+        foreach (var name in new[] { nameof(CanDeploy), nameof(HasDeploy), nameof(DeployText) })
             OnPropertyChanged(name);
     }
 
@@ -372,6 +380,96 @@ public sealed class StopViewModel : ObservableObject
         return string.Join("\n", lines);
     }
 
+    // ---------------- Launch into an inclined orbit (stops a launch arrives at) ----------------
+
+    /// <summary>The inclination the launch arriving here flies into (§2.7); null for the map's due-east (equatorial) launch.</summary>
+    public LaunchLeg? Launch
+    {
+        get => _launch;
+        set
+        {
+            _customInclination = false;
+            if (!SetProperty(ref _launch, value))
+            {
+                OnPropertyChanged(nameof(InclinationText));
+                OnPropertyChanged(nameof(SelectedInclinationPreset));
+                return;
+            }
+            foreach (var name in new[] { nameof(InclinationText), nameof(SelectedInclinationPreset), nameof(ShowsLaunchText) })
+                OnPropertyChanged(name);
+            _legsChanged();
+        }
+    }
+
+    /// <summary>The leg arriving here launches from a launch site into an orbit, so its inclination can be picked.</summary>
+    public bool CanLaunch { get; private set; }
+    public bool ShowsLaunchText => CanLaunch && LaunchText.Length > 0;
+
+    /// <summary>The orbit's inclination in degrees, 0–180 (0° equatorial, 90° polar, 180° retrograde equatorial).</summary>
+    public string InclinationText
+    {
+        get => (_launch?.InclinationDeg ?? 0).ToString("0.###", CultureInfo.CurrentCulture);
+        set
+        {
+            if (double.TryParse((value ?? "").Trim().TrimEnd('°').Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var i)
+                && i is >= 0 and <= 180)
+                Launch = i == 0 ? null : new LaunchLeg(i);
+            else OnPropertyChanged(nameof(InclinationText));
+        }
+    }
+
+    /// <summary>Quick picks for the inclination; "Custom" is any other value typed in the box.</summary>
+    public IReadOnlyList<ValuePreset> InclinationPresets { get; } =
+    [
+        new("Equatorial", 0), new("Polar", 90), new("Retrograde", 180), ValuePreset.Custom,
+    ];
+
+    private bool _customInclination;
+
+    /// <summary>The preset matching the inclination, else "Custom".</summary>
+    public ValuePreset SelectedInclinationPreset
+    {
+        get => _customInclination ? ValuePreset.Custom
+            : InclinationPresets.FirstOrDefault(p => p.Value == (_launch?.InclinationDeg ?? 0)) ?? ValuePreset.Custom;
+        set
+        {
+            if (value is null) return;
+            if (value.Value is { } i) Launch = i == 0 ? null : new LaunchLeg(i);
+            else
+            {
+                _customInclination = true;
+                OnPropertyChanged(nameof(SelectedInclinationPreset));
+            }
+        }
+    }
+
+    /// <summary>"Fly heading 355.6° (north) or 184.4° (south) … / +182 m/s over a launch due east"; empty for due east.</summary>
+    public string LaunchText { get; private set; } = "";
+
+    /// <param name="measuresPlaneChanges">The mission goes on to custom orbits around the body, whose plane changes are measured from this one.</param>
+    internal void SetLaunch(bool canLaunch, LaunchPlan? plan, bool measuresPlaneChanges)
+    {
+        CanLaunch = canLaunch;
+        LaunchText = plan is null ? "" : LaunchSummary(plan, measuresPlaneChanges);
+        foreach (var name in new[] { nameof(CanLaunch), nameof(LaunchText), nameof(ShowsLaunchText) })
+            OnPropertyChanged(name);
+    }
+
+    private static string LaunchSummary(LaunchPlan p, bool measuresPlaneChanges)
+    {
+        var lines = new List<string>
+        {
+            $"Fly heading {p.HeadingText} from the {p.SiteName}",
+            $"+{Format.Speed0(p.LaunchDv)} over a launch due east, into the {p.OrbitAltitudeM / 1000:0.#} km low orbit",
+        };
+        if (!p.IsReachable)
+            lines.Add($"From {Math.Abs(p.SiteLatitudeDeg):0.###}° latitude a launch reaches {p.FlownInclinationDeg:0.###}° at best: " +
+                      $"+{Format.Speed0(p.TrimDv)} plane change in orbit for the rest");
+        if (measuresPlaneChanges)
+            lines.Add($"Plane changes to orbits around {p.Body.Name} after this are measured from {p.InclinationDeg:0.#}°");
+        return string.Join("\n", lines);
+    }
+
     internal void SetTools(bool canHaveTransfer, TransferLegResult? transfer)
     {
         CanHaveTransfer = canHaveTransfer;
@@ -399,7 +497,10 @@ public sealed class StopViewModel : ObservableObject
         get => _altitudeKmText;
         set
         {
-            if (!SetProperty(ref _altitudeKmText, value) || _setAltitude is null) return;
+            if (!SetProperty(ref _altitudeKmText, value)) return;
+            _customAltitude = false;
+            OnPropertyChanged(nameof(SelectedAltitudePreset));
+            if (_setAltitude is null) return;
             AltitudeError = double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out var km) && km > 0
                 ? _setAltitude(km * 1000) ?? ""
                 : "Enter the orbit's altitude in km.";
@@ -415,14 +516,24 @@ public sealed class StopViewModel : ObservableObject
 
     public bool HasAltitudeError => AltitudeError.Length > 0;
 
-    /// <summary>"Low (80 km)": the body's low orbit on the Δv map.</summary>
-    public string LowOrbitText { get; private set; } = "";
-    public RelayCommand UseLowOrbitCommand { get; private set; } = new(() => { });
+    /// <summary>Quick picks for the altitude: "Low" (the Δv map's low orbit), "Keostationary" where the body has one, and "Custom".</summary>
+    public IReadOnlyList<ValuePreset> AltitudePresets { get; private set; } = [];
 
-    /// <summary>"Keostationary (2,868 km)", or empty when the body has no synchronous orbit.</summary>
-    public string SynchronousText { get; private set; } = "";
-    public bool HasSynchronous => SynchronousText.Length > 0;
-    public RelayCommand UseSynchronousCommand { get; private set; } = new(() => { });
+    private bool _customAltitude;
+
+    /// <summary>The preset matching the altitude, else "Custom".</summary>
+    public ValuePreset SelectedAltitudePreset
+    {
+        get => _customAltitude ? ValuePreset.Custom
+            : AltitudePresets.FirstOrDefault(p => p.Value is { } m && Km(m) == _altitudeKmText) ?? ValuePreset.Custom;
+        set
+        {
+            if (value is null) return;
+            if (value.Value is { } m) AltitudeKmText = Km(m);
+            else _customAltitude = true;
+            OnPropertyChanged(nameof(SelectedAltitudePreset));
+        }
+    }
 
     /// <param name="altitudeM">The orbit's altitude, or null when the stop isn't a circular orbit.</param>
     /// <param name="setAltitude">Moves the stop to an orbit at that altitude; returns why it can't, or null.</param>
@@ -433,12 +544,15 @@ public sealed class StopViewModel : ObservableObject
         if (altitudeM is { } a) AltitudeKmText = Km(a);
         _setAltitude = setAltitude;
         AltitudeError = "";
-        LowOrbitText = $"Low ({Km(lowM)} km)";
-        UseLowOrbitCommand = new RelayCommand(() => AltitudeKmText = Km(lowM));
-        SynchronousText = synchronousM is { } s ? $"{synchronousName} ({Km(s)} km)" : "";
-        UseSynchronousCommand = new RelayCommand(() => { if (synchronousM is { } s) AltitudeKmText = Km(s); });
-        foreach (var name in new[] { nameof(IsOrbit), nameof(LowOrbitText), nameof(UseLowOrbitCommand), nameof(SynchronousText),
-                     nameof(HasSynchronous), nameof(UseSynchronousCommand) })
+        var presets = new List<ValuePreset> { new("Low", lowM) };
+        if (synchronousM is { } s) presets.Add(new(synchronousName, s));
+        presets.Add(ValuePreset.Custom);
+        if (!presets.SequenceEqual(AltitudePresets))
+        {
+            AltitudePresets = presets;
+            OnPropertyChanged(nameof(AltitudePresets));
+        }
+        foreach (var name in new[] { nameof(IsOrbit), nameof(SelectedAltitudePreset) })
             OnPropertyChanged(name);
     }
 
@@ -467,7 +581,7 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(IsLast));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous, _landing);
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous, _landing, _launch);
 }
 
 /// <summary>A constellation released at a stop, shown after the leg that arrives there, with the phase that flies it.</summary>
@@ -890,6 +1004,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         Stops[0].SetTools(false, null);
         Stops[0].SetRendezvous(false, false);
         Stops[0].SetLanding(false, null, []);
+        Stops[0].SetLaunch(false, null, false);
         var placed = PlacedLocations();
         _deploys = new DeployResult?[Stops.Count];
         for (var i = 0; i < Stops.Count; i++)
@@ -903,7 +1018,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             ShowOrbit(Stops[i], node);
         }
         _arrivals = new double?[Stops.Count];
-        return segments.Select(segment =>
+        var launches = new List<(int Segment, LaunchPlan Plan)>();
+        var applied = segments.Select((segment, index) =>
         {
             var stop = Stops[segment.ToStop];
             var transfer = stop.Transfer is { } choice ? LegTools.EvaluateTransfer(segment.Legs, choice, _bodies) : null;
@@ -922,9 +1038,28 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                 : transfer is not null ? LegTools.ApplyTransfer(segment.Legs, transfer)
                 : segment.Legs;
             if (landing is not null) legs = LegTools.ApplyLanding(legs, landing);
+
+            // A rendezvous from KSC picks its own launch into the target's plane.
+            var canLaunch = rendezvous is null && LegTools.FindLaunch(segment.Legs, _bodies) >= 0;
+            var launch = canLaunch && stop.Launch is { } inclined ? LegTools.EvaluateLaunch(segment.Legs, inclined, _bodies) : null;
+            if (launch is not null)
+            {
+                legs = LegTools.ApplyLaunch(legs, launch);
+                launches.Add((index, launch));
+            }
+            stop.SetLaunch(canLaunch, launch, launch is not null && MeasuresPlaneChanges(segments, index, launch.Body.Name));
             return ReferenceEquals(legs, segment.Legs) ? segment : segment with { Legs = legs };
         }).ToList();
+        foreach (var (index, plan) in launches)
+            applied = LegTools.MeasurePlaneChanges(applied, index, plan, Location).ToList();
+        return applied;
     }
+
+    /// <summary>The mission goes on (from segment <paramref name="index"/>) to a custom orbit around the body before landing or leaving it.</summary>
+    private static bool MeasuresPlaneChanges(IReadOnlyList<RouteSegment> segments, int index, string bodyName) =>
+        segments.Skip(index).SelectMany(s => s.Legs)
+            .TakeWhile(l => l.To.BodyName == bodyName && l.To.Kind != "Surface")
+            .Any(l => l.To.IsCustom);
 
     /// <summary>When each stop is reached, where a leg tool knows it (a transfer's or rendezvous's arrival), by stop index.</summary>
     private double?[] _arrivals = [];

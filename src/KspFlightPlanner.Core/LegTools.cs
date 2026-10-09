@@ -204,9 +204,13 @@ public static class LegTools
     /// Applies each stop's leg tools to the leg arriving there (segment i ends at stop i + 1). Tools that no longer fit
     /// the route (stops changed since) are left out, and the map values stay.
     /// </summary>
+    /// <param name="location">Looks up custom locations by id, so plane changes after an inclined launch are measured
+    /// from it (<see cref="MeasurePlaneChanges"/>); null leaves them as the map has them.</param>
     public static IReadOnlyList<RouteSegment> Apply(IReadOnlyList<RouteSegment> segments, IReadOnlyList<MissionStop> stops,
-        IReadOnlyDictionary<string, CelestialBody> bodies) =>
-        segments.Select(s =>
+        IReadOnlyDictionary<string, CelestialBody> bodies, Func<long, CustomLocation?>? location = null)
+    {
+        var launches = new List<(int Segment, LaunchPlan Plan)>();
+        var result = segments.Select((s, index) =>
         {
             if (s.ToStop >= stops.Count) return s;
             var stop = stops[s.ToStop];
@@ -214,8 +218,94 @@ public static class LegTools
                 s = s with { Legs = ApplyTransfer(s.Legs, transfer) };
             if (stop.Landing is { } landing && EvaluateLanding(s.Legs, landing, bodies) is { } plan)
                 s = s with { Legs = ApplyLanding(s.Legs, plan) };
+            if (stop.Launch is { } launch && EvaluateLaunch(s.Legs, launch, bodies) is { } launchPlan)
+            {
+                s = s with { Legs = ApplyLaunch(s.Legs, launchPlan) };
+                launches.Add((index, launchPlan));
+            }
             return s;
         }).ToList();
+        if (location is not null)
+            foreach (var (index, plan) in launches)
+                result = MeasurePlaneChanges(result, index, plan, location).ToList();
+        return result;
+    }
+
+    /// <summary>
+    /// The leg a launch tool works on: the first one, when it lifts off from the surface of a body with a launch site
+    /// (<see cref="LaunchInclination.Site"/>) into that body's low orbit (or straight on to a higher one), and the rest of
+    /// the leg stays in orbit around it. Its index, or -1.
+    /// </summary>
+    public static int FindLaunch(IReadOnlyList<RouteLeg> legs, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (legs.Count == 0 || legs[0].From.Kind != "Surface" || !bodies.TryGetValue(legs[0].From.BodyName, out var body)
+            || LaunchInclination.Site(body) is null) return -1;
+        var climb = legs[0].Parts?[0] ?? legs[0];
+        return climb.To is { Kind: "LowOrbit", AltitudeM: > 0 } && climb.To.BodyName == body.Name
+               && legs.All(l => l.To.BodyName == body.Name && l.To.Kind != "Surface")
+            ? 0 : -1;
+    }
+
+    /// <summary>The launch into <paramref name="launch"/>'s inclination at the low orbit the leg climbs to (§2.7), or null when the leg isn't a launch.</summary>
+    public static LaunchPlan? EvaluateLaunch(IReadOnlyList<RouteLeg> legs, LaunchLeg launch, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (FindLaunch(legs, bodies) is not (var i and >= 0)) return null;
+        var climb = legs[i].Parts?[0] ?? legs[i];
+        return LaunchInclination.Plan(bodies[climb.From.BodyName], climb.To.AltitudeM!.Value, Math.Clamp(launch.InclinationDeg, 0, 180));
+    }
+
+    /// <summary>
+    /// Adds the launch's extra Δv over a due-east launch (§2.7) to the launch step. The map's value (or your edit of it)
+    /// stays underneath: the extra is on top of it.
+    /// </summary>
+    public static IReadOnlyList<RouteLeg> ApplyLaunch(IReadOnlyList<RouteLeg> legs, LaunchPlan plan)
+    {
+        if (FindLaunch(legs, new Dictionary<string, CelestialBody> { [plan.Body.Name] = plan.Body }) is not (var index and >= 0)) return legs;
+        var note = $"Launch to {plan.InclinationDeg:0.#}° (heading {plan.HeadingText}): " +
+                   $"+{plan.LaunchDv:0} m/s over due east" +
+                   (plan.IsReachable ? "" : $", +{plan.TrimDv:0} m/s plane change in orbit for the last {Math.Abs(plan.InclinationDeg - plan.FlownInclinationDeg):0.##}°");
+        return legs.Select((leg, i) => i != index ? leg : leg with { DeltaV = leg.DeltaV + Math.Round(plan.ExtraDv), ToolNote = note }).ToList();
+    }
+
+    /// <summary>
+    /// After a launch into an inclined orbit (segment <paramref name="launchSegment"/>), the plane change to each custom
+    /// orbit around the same body is measured from the plane the craft is in, not from the equator: |i_location − i_now|
+    /// at the location's apoapsis speed (§2.3, §2.7). Arriving there puts the craft in that orbit's plane for the next one.
+    /// It stops where the mission lands or leaves the body. A rendezvous's own burns already match the plane.
+    /// </summary>
+    public static IReadOnlyList<RouteSegment> MeasurePlaneChanges(IReadOnlyList<RouteSegment> segments, int launchSegment, LaunchPlan plan,
+        Func<long, CustomLocation?> location)
+    {
+        var body = plan.Body;
+        var inclination = plan.InclinationDeg;
+        var result = segments.ToList();
+        for (var k = launchSegment; k < result.Count; k++)
+        {
+            var legs = result[k].Legs.ToList();
+            for (var i = 0; i < legs.Count; i++)
+            {
+                var leg = legs[i];
+                if (leg.To.BodyName != body.Name || leg.To.Kind == "Surface")
+                {
+                    result[k] = result[k] with { Legs = legs };
+                    return result;
+                }
+                if (leg.To.CustomLocationId is not { } id || location(id) is not { } place || place.BodyName != body.Name) continue;
+                var isLaunch = k == launchSegment && i == 0;
+                if (!leg.IsFromTool || isLaunch)
+                {
+                    var r = body.EquatorialRadiusM;
+                    var apoapsisSpeed = OrbitMath.VisViva(body.Mu, r + place.ApoapsisAltitudeM, r + (place.PeriapsisAltitudeM + place.ApoapsisAltitudeM) / 2);
+                    var mapPlaneChange = leg.Parts?[^1].PlaneChangeDv ?? leg.PlaneChangeDv;
+                    var planeChange = Math.Round(OrbitMath.PlaneChangeDv(apoapsisSpeed, place.InclinationDeg - inclination));
+                    legs[i] = leg with { PlaneChangeDv = leg.PlaneChangeDv - mapPlaneChange + planeChange };
+                }
+                inclination = place.InclinationDeg;
+            }
+            result[k] = result[k] with { Legs = legs };
+        }
+        return result;
+    }
 
     /// <summary>
     /// The leg a landing tool works on: the last one, when it comes down from an orbit of a body to that body's surface.

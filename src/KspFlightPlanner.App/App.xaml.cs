@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using KspFlightPlanner.App.Services;
 using KspFlightPlanner.App.ViewModels;
 using KspFlightPlanner.Data;
@@ -13,6 +14,7 @@ public partial class App : Application
     private void OnStartup(object sender, StartupEventArgs e)
     {
         SelectAllOnFocus();
+        HideClearButtons();
         try
         {
             var database = new PlannerDatabase(PlannerDatabase.DefaultPath());
@@ -75,5 +77,32 @@ public partial class App : Application
                 box.Focus();
                 e.Handled = true;
             }));
+    }
+
+    /// <summary>
+    /// Fluent text boxes show a ✕ to clear them while focused. It covers short number boxes (the inclination's "180"),
+    /// and select-all on focus already lets you type over or delete the value, so it's hidden everywhere.
+    /// </summary>
+    private static void HideClearButtons() =>
+        EventManager.RegisterClassHandler(typeof(TextBox), UIElement.GotKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler((s, _) =>
+            {
+                // The theme's visual states show it on focus (animations beat a local Visibility), so give it no room instead.
+                foreach (var clear in Descendants((TextBox)s).OfType<Button>().Where(b => b.Name == "DeleteButton"))
+                {
+                    clear.MinWidth = clear.Width = clear.MaxWidth = 0; // the button style's MinWidth would win over MaxWidth
+                    clear.Margin = new Thickness(0);
+                    clear.Focusable = false;
+                }
+            }));
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var below in Descendants(child)) yield return below;
+        }
     }
 }
