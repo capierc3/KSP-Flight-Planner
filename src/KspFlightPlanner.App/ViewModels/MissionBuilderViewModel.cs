@@ -332,12 +332,17 @@ public sealed class StopViewModel : ObservableObject
     public int Number { get; private set; }
     public string Role { get; private set; } = "";
 
+    /// <summary>The route's last stop: no connector runs on from it in the Stops pane.</summary>
+    public bool IsLast { get; private set; }
+
     internal void SetPosition(int index, int count)
     {
         Number = index + 1;
         Role = index == 0 ? "Start" : index == count - 1 ? "End" : "Stop";
+        IsLast = index == count - 1;
         OnPropertyChanged(nameof(Number));
         OnPropertyChanged(nameof(Role));
+        OnPropertyChanged(nameof(IsLast));
     }
 
     public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous);

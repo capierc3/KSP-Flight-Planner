@@ -12,4 +12,12 @@ public partial class MissionStopsView : UserControl
     {
         if (e.Key == Key.Enter && sender is TextBox box) box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
     }
+
+    /// <summary>"Fly to" drops its menu below it on a left click.</summary>
+    private void FlyToButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
 }

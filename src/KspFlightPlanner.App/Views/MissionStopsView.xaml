@@ -9,6 +9,13 @@
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Margin" Value="2,0,0,0" />
         </Style>
+        <!-- Borderless until hovered: the add row reads as part of the list, not a toolbar -->
+        <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Padding" Value="8,4" />
+        </Style>
     </UserControl.Resources>
 
     <!-- The mission's stops, in order, and route options -->
@@ -30,7 +37,7 @@
             <ItemsControl ItemsSource="{Binding Stops}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,0,0,18">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="30" />
                                 <ColumnDefinition Width="*" />
@@ -40,8 +47,22 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="18" />
                             </Grid.RowDefinitions>
 
+                            <!-- Dotted connector down to the next stop's number, as in a maps route -->
+                            <Line Grid.Row="1" Grid.RowSpan="4" X1="0" X2="0" Y1="0" Y2="1" Stretch="Fill" HorizontalAlignment="Left" Margin="10,4,0,4"
+                                  Stroke="{DynamicResource TextFillColorTertiaryBrush}" StrokeThickness="2" StrokeDashArray="0 2.5" StrokeDashCap="Round">
+                                <Line.Style>
+                                    <Style TargetType="Line">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsLast}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Line.Style>
+                            </Line>
                             <Border Width="22" Height="22" CornerRadius="11" Background="White" VerticalAlignment="Center" HorizontalAlignment="Left">
                                 <TextBlock Text="{Binding Number}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
@@ -159,20 +180,65 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <!-- Adding to the route: a place on the map, or a leg planned in a calculator from where the mission is -->
-            <WrapPanel>
-                <Button Content="＋ Stop" Command="{Binding AddStopCommand}" Margin="0,0,6,6"
-                        ToolTip="A place on the Δv map. You can also click a stop on the Δv map to add it." />
-                <Button Content="＋ Rendezvous" Command="{Binding AddRendezvousCommand}" Margin="0,0,6,6"
-                        ToolTip="Meet crafts in orbit (relays, stations, debris): plan it in the Calculators pane, then Add to mission" />
-                <Button Content="＋ Transfer" Command="{Binding AddTransferCommand}" Margin="0,0,6,6"
-                        ToolTip="Fly to another planet in a launch window: pick it in the Transfer Planner, then Add to mission" />
-                <Button Content="＋ Deploy" Command="{Binding AddDeployCommand}" Margin="0,0,6,6"
-                        ToolTip="Release a satellite constellation into an orbit: plan it in Resonant Orbits, then Add to mission" />
-            </WrapPanel>
-            <TextBlock Style="{StaticResource Note}" Margin="0,0,0,0" TextWrapping="Wrap">
-                <Run Text="New stops go after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=". Rendezvous, Transfer and Deploy open their calculator set up from there; the steps to get there come from the Δv map." />
-            </TextBlock>
+            <!-- Adding to the route, like a maps "Add destination" row: one button whose menu adds a place on the map, or a leg
+                 planned in a calculator from where the mission is -->
+            <Button Style="{StaticResource FlatButton}" Click="FlyToButton_Click" HorizontalAlignment="Left" Padding="0,4,10,4">
+                <Button.ToolTip>
+                    <TextBlock><Run Text="Add where the mission goes next, after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /></TextBlock>
+                </Button.ToolTip>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="22" Height="22" CornerRadius="11" BorderThickness="1.5" Margin="0,0,8,0" VerticalAlignment="Center"
+                            BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Fly to" VerticalAlignment="Center" />
+                    <TextBlock Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Margin="6,1,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button.ContextMenu>
+                    <ContextMenu Placement="Bottom">
+                        <MenuItem Command="{Binding AddStopCommand}">
+                            <MenuItem.Header>
+                                <StackPanel Margin="0,2">
+                                    <TextBlock Text="Stop" FontWeight="SemiBold" />
+                                    <TextBlock Text="A place on the &#916;v map (or click one on the map)" Style="{StaticResource Note}" />
+                                </StackPanel>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <MenuItem Command="{Binding AddRendezvousCommand}">
+                            <MenuItem.Header>
+                                <StackPanel Margin="0,2">
+                                    <TextBlock Text="Rendezvous" FontWeight="SemiBold" />
+                                    <TextBlock Text="Meet crafts in orbit: relays, stations, debris" Style="{StaticResource Note}" />
+                                </StackPanel>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <MenuItem Command="{Binding AddTransferCommand}">
+                            <MenuItem.Header>
+                                <StackPanel Margin="0,2">
+                                    <TextBlock Text="Transfer" FontWeight="SemiBold" />
+                                    <TextBlock Text="Fly to another planet in a launch window" Style="{StaticResource Note}" />
+                                </StackPanel>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <MenuItem Command="{Binding AddDeployCommand}">
+                            <MenuItem.Header>
+                                <StackPanel Margin="0,2">
+                                    <TextBlock Text="Deploy" FontWeight="SemiBold" />
+                                    <TextBlock Text="Release a satellite constellation into an orbit" Style="{StaticResource Note}" />
+                                </StackPanel>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem IsEnabled="False">
+                            <MenuItem.Header>
+                                <TextBlock Style="{StaticResource Note}" MaxWidth="260">
+                                    <Run Text="Goes after " /><Run Text="{Binding AddAfterText, Mode=OneWay}" /><Run Text=". Rendezvous, Transfer and Deploy open their calculator: set it up there, then Add to mission." />
+                                </TextBlock>
+                            </MenuItem.Header>
+                        </MenuItem>
+                    </ContextMenu>
+                </Button.ContextMenu>
+            </Button>
 
             <TextBlock Text="Options" Style="{StaticResource SectionHeader}" />
             <CheckBox Content="Aerobrake wherever possible" IsChecked="{Binding UseAerobraking}" />
