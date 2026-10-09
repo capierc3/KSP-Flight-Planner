@@ -84,7 +84,7 @@
                     </TextBlock>
                     <ComboBox ItemsSource="{Binding ReturnArrivalModes}" SelectedItem="{Binding ReturnArrivalMode}" />
                 </StackPanel>
-                <!-- Add the result to the mission, before its last stop -->
+                <!-- Add the result to the mission, after its last stop -->
                 <Border Visibility="{Binding ShowsAddToMission, Converter={StaticResource BoolToVisibility}}" Padding="10,8" CornerRadius="4" Margin="0,12,0,0"
                         BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
                     <StackPanel>
@@ -123,7 +123,7 @@
                 <CheckBox Content="Dive orbit (release at apoapsis)" IsChecked="{Binding PreferDiveOrbit}" Margin="0,10,0,0" />
                 <CheckBox Content="Occlusion modifiers (0.75 atm / 0.9 vacuum)" IsChecked="{Binding UseOcclusion}" Margin="0,4,0,0" />
                 <CheckBox Content="Show line-of-sight links" IsChecked="{Binding ShowLineOfSight}" Margin="0,4,0,0" />
-                <!-- Add the result to the mission, before its last stop -->
+                <!-- Add the result to the mission, after its last stop -->
                 <Border Visibility="{Binding ShowsAddToMission, Converter={StaticResource BoolToVisibility}}" Padding="10,8" CornerRadius="4" Margin="0,12,0,0"
                         BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
                     <StackPanel>
@@ -145,7 +145,7 @@
                 <StackPanel IsEnabled="{Binding IsRouteEditable}">
                 <RadioButton Content="Where the mission is" IsChecked="{Binding PickMission}" GroupName="Start"
                              Visibility="{Binding HasMission, Converter={StaticResource BoolToVisibility}}"
-                             ToolTip="Start where the mission is before its last stop, so the plan can be added to the mission" />
+                             ToolTip="Start where the mission is (its last stop), so the plan can be added to the mission" />
                 <TextBlock Text="{Binding MissionStartText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="28,0,0,4"
                            Visibility="{Binding PickMission, Converter={StaticResource BoolToVisibility}}" />
                 <RadioButton Content="Launch from the KSC" IsChecked="{Binding PickLaunch}" GroupName="Start" Margin="0,2,0,0" />

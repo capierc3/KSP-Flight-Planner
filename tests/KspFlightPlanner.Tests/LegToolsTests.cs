@@ -284,6 +284,53 @@ public sealed class LegToolsTests : IDisposable
     }
 
     [Fact]
+    public void Back_to_back_rendezvous_legs_add_up_to_the_plan_that_meets_both()
+    {
+        var (map, station, relay, _) = KerbinCraft();
+        var kerbin = _bodies["Kerbin"];
+        RendezvousTarget Target(CustomLocation l) => new(l.Name, CustomLocationOrbits.ToElements(l, kerbin, kerbin, _bodies["Kerbol"]));
+        var both = Rendezvous.Plan(new RendezvousRequest(kerbin, [Target(station), Target(relay)], 0, 0, Site: LaunchSite.Ksc,
+            Ascent: new AscentProfile(80_000)));
+
+        // The second leg planned on its own, from the station once the mission gets there, is the same leg.
+        var second = Rendezvous.Plan(new RendezvousRequest(kerbin, [Target(relay)], both.Legs[0].ArrivalUt + Rendezvous.MinimumLeadS, 0,
+            Chaser: Target(station))).Legs[0];
+        Assert.Equal(both.Legs[1].TotalDv, second.TotalDv, 6);
+        Assert.Equal(both.Legs[1].ArrivalUt, second.ArrivalUt, 6);
+
+        // In the mission: station → relay is one leg (the map's way through the low orbit isn't a stop), all rendezvous.
+        var placed = new[] { station.Id, relay.Id }.ToHashSet();
+        var stops = new[] { map["kerbin.surface"], map[station.Key], map[relay.Key] };
+        var segments = MissionPlanner.CombineCraftHops(MissionPlanner.BuildRoute(map, stops), n => n.CustomLocationId is { } id && placed.Contains(id));
+        Assert.Equal(2, segments[0].Legs.Count); // the launch, then the rendezvous
+        var hop = Assert.Single(segments[1].Legs);
+        Assert.Equal((station.Key, relay.Key), (hop.From.Key, hop.To.Key));
+        Assert.Equal([station.Key, relay.Key], hop.EdgeKeys); // both map edges highlighted
+        Assert.Equal(MissionPlanner.BuildRoute(map, stops)[1].Legs.Sum(l => l.DeltaV), hop.DeltaV);
+
+        var span = LegTools.FindRendezvous(segments[1].Legs, map[station.Key], map[relay.Key], placed.Contains)!;
+        var leg = new RendezvousLeg(relay.Id, second.StartUt, second.ArrivalUt, second.TotalDv);
+        var applied = Assert.Single(LegTools.ApplyRendezvous(segments[1].Legs, span, leg, both.Legs[0].ArrivalUt));
+        Assert.Equal(Math.Round(second.TotalDv), applied.DeltaV);
+        Assert.StartsWith("Rendezvous burns as planned", applied.ToolNote);
+    }
+
+    [Fact]
+    public void A_rendezvous_planned_to_start_before_the_mission_gets_there_says_so()
+    {
+        var (map, station, relay, _) = KerbinCraft();
+        var legs = map.Route(map[station.Key], map[relay.Key]);
+        var span = LegTools.FindRendezvous(legs, map[station.Key], map[relay.Key], _ => true)!;
+        var leg = new RendezvousLeg(relay.Id, StartUt: 1_000, ArrivalUt: 9_000, OrbitalDv: 55);
+
+        Assert.False(leg.StartsBefore(null));
+        Assert.False(leg.StartsBefore(1_000));
+        Assert.True(leg.StartsBefore(5_000)); // the leg before now arrives later (planned again since)
+        Assert.Contains("before the mission gets here", LegTools.ApplyRendezvous(legs, span, leg, 5_000)[0].ToolNote);
+        Assert.Equal(55, LegTools.ApplyRendezvous(legs, span, leg, 5_000)[0].DeltaV);
+    }
+
+    [Fact]
     public void Rendezvous_picks_survive_a_save()
     {
         var leg = new RendezvousLeg(7, 1_000, 9_000, 123.4, 2, new PhasingChoice(3, true), new InterceptPoint(5_000, 1_800));

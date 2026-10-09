@@ -222,7 +222,10 @@ public sealed class RendezvousViewModel : ObservableObject
     public void EditLeg(RendezvousLegLink link)
     {
         var span = link.Span;
-        var choice = link.Choice is { } c && c.TargetLocationId == span.TargetLocationId ? c : null;
+        // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
+        var earliest = link.EarliestUt is { } arrival ? Math.Ceiling(arrival / 60) * 60 : (double?)null;
+        // A plan starting before then (the leg before was planned again since) is made again from then, picks and all.
+        var choice = link.Choice is { } c && c.TargetLocationId == span.TargetLocationId && !c.StartsBefore(earliest) ? c : null;
         _leg = null; // don't save anything while it's being set up
         _suspend = true;
         _startFromMission = false;
@@ -235,8 +238,7 @@ public sealed class RendezvousViewModel : ObservableObject
         _deorbit = false;
         _parkingAltitudeText = Km(link.ParkingAltitudeM);
         _followSaveTime = false;
-        // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
-        SetStartFields(choice?.StartUt ?? (link.EarliestUt is { } arrival ? Math.Ceiling(arrival / 60) * 60 : (double?)null)
+        SetStartFields(choice?.StartUt ?? earliest
             ?? (_sync.Save is { } save ? save.Ut + _leadMinutes * 60 : _calendar.ToUniversalTime(StartYear, StartDay)));
         _launchChoice = choice?.LaunchIndex;
         _phasing.Clear();
@@ -360,7 +362,7 @@ public sealed class RendezvousViewModel : ObservableObject
         set { if (value) SetStart(mission: false, launch: false); }
     }
 
-    /// <summary>Start where the mission is before its last stop: the plan can then be added to the mission.</summary>
+    /// <summary>Start where the mission is (its last stop): the plan can then be added to the mission.</summary>
     public bool PickMission
     {
         get => _startFromMission;
@@ -387,7 +389,7 @@ public sealed class RendezvousViewModel : ObservableObject
         StartChanged();
     }
 
-    /// <summary>Plans a leg to add to the mission: starts where the mission is before its last stop, with no targets yet.</summary>
+    /// <summary>Plans a leg to add to the mission: starts where the mission is (its last stop), with no targets yet.</summary>
     public void StartAdding()
     {
         StopEditingLeg();

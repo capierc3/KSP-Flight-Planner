@@ -67,7 +67,7 @@ public sealed record DvMapNode
 /// <param name="EdgeKey">Key of the child node that owns this edge; use it to edit the edge's Δv.</param>
 /// <param name="AerobrakeDv">Δv still needed on this leg when aerobraking (usually 0).</param>
 /// <param name="ToolNote">Set when a leg tool (e.g. a transfer window) supplies <see cref="DeltaV"/> instead of the map.</param>
-/// <param name="Parts">The map edges flown as this one leg (see <see cref="MissionPlanner.CombineClimbs"/>); null for a single edge.</param>
+/// <param name="Parts">The map edges flown as this one leg (see <see cref="MissionPlanner.CombineClimbs"/> and <see cref="MissionPlanner.CombineCraftHops"/>); null for a single edge.</param>
 public sealed record RouteLeg(
     DvMapNode From, DvMapNode To, string EdgeKey, double DeltaV, double MapDeltaV,
     double PlaneChangeDv, bool CanAerobrake, string? FlightTime, double AerobrakeDv = 0, string? ToolNote = null,

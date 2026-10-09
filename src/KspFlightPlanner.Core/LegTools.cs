@@ -49,7 +49,14 @@ public sealed record RendezvousLeg(
     double OrbitalDv,
     int? LaunchIndex = null,
     PhasingChoice? Phasing = null,
-    InterceptPoint? Intercept = null);
+    InterceptPoint? Intercept = null)
+{
+    /// <summary>
+    /// The plan starts before the mission gets to the start of the leg (<paramref name="earliestUt"/>, the previous leg's
+    /// arrival; null when unknown). Where both craft are then isn't where they'll be, so the plan needs making again.
+    /// </summary>
+    public bool StartsBefore(double? earliestUt) => earliestUt is { } t && StartUt < t - 1;
+}
 
 /// <summary>
 /// Where a rendezvous fits in a leg's Δv-map steps: steps from <see cref="Start"/> on are the orbital part (the steps
@@ -269,16 +276,20 @@ public static class LegTools
 
     /// <summary>
     /// The leg's steps with the rendezvous in place of the map's orbital steps: the planned orbital Δv on the first of
-    /// them, nothing on the rest. The plan's burns already include any plane change, and can't be aerobraked.
+    /// them, nothing on the rest. The plan's burns already include any plane change, and can't be aerobraked. A plan that
+    /// starts before <paramref name="earliestUt"/> (when the mission gets there) is still used, with a note to plan it again.
     /// </summary>
-    public static IReadOnlyList<RouteLeg> ApplyRendezvous(IReadOnlyList<RouteLeg> legs, RendezvousSpan span, RendezvousLeg rendezvous) =>
+    public static IReadOnlyList<RouteLeg> ApplyRendezvous(IReadOnlyList<RouteLeg> legs, RendezvousSpan span, RendezvousLeg rendezvous,
+        double? earliestUt = null) =>
         legs.Select((leg, i) => i < span.Start ? leg : leg with
         {
             DeltaV = i == span.Start ? Math.Round(rendezvous.OrbitalDv) : 0,
             PlaneChangeDv = 0,
             CanAerobrake = false,
             AerobrakeDv = 0,
-            ToolNote = i == span.Start ? "Rendezvous burns as planned (plane match, phasing, transfer, match)" : "Part of the rendezvous",
+            ToolNote = i != span.Start ? "Part of the rendezvous"
+                : rendezvous.StartsBefore(earliestUt) ? "Rendezvous planned to start before the mission gets here: open the leg to plan it again"
+                : "Rendezvous burns as planned (plane match, phasing, transfer, match)",
         }).ToList();
 
     /// <summary>A constellation can be released at stops that are an orbit (not a surface, intercept or escape).</summary>

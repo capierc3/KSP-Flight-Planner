@@ -68,13 +68,30 @@ public static class MissionPlanner
             return legs.Count == segment.Legs.Count ? segment : segment with { Legs = legs };
         }).ToList();
 
-    private static RouteLeg Combine(RouteLeg a, RouteLeg b) => new(
-        a.From, b.To, a.EdgeKey, a.DeltaV + b.DeltaV, a.MapDeltaV + b.MapDeltaV, a.PlaneChangeDv + b.PlaneChangeDv,
-        CanAerobrake: a.CanAerobrake || b.CanAerobrake,
+    /// <summary>
+    /// Flies "craft → low orbit → craft" around one body as one leg. The map reaches a craft only through its body's low
+    /// orbit, but going from one craft to the next you never stop there: the leg is a rendezvous (§6.5), so a low orbit
+    /// in the middle would read like a stop the mission makes. <paramref name="isCraft"/> picks the craft.
+    /// </summary>
+    public static IReadOnlyList<RouteSegment> CombineCraftHops(IReadOnlyList<RouteSegment> segments, Func<DvMapNode, bool> isCraft) =>
+        segments.Select(segment =>
+        {
+            var legs = segment.Legs;
+            if (legs.Count < 2 || legs[0].From == legs[^1].To || !isCraft(legs[0].From) || !isCraft(legs[^1].To)
+                || legs.Any(l => l.IsFromTool || l.From.BodyName != legs[0].From.BodyName || l.To.BodyName != legs[0].From.BodyName))
+                return segment;
+            return segment with { Legs = [Combine(legs.SelectMany(l => l.Parts ?? [l]).ToList())] };
+        }).ToList();
+
+    private static RouteLeg Combine(RouteLeg a, RouteLeg b) => Combine([a, b]);
+
+    private static RouteLeg Combine(IReadOnlyList<RouteLeg> parts) => new(
+        parts[0].From, parts[^1].To, parts[0].EdgeKey, parts.Sum(p => p.DeltaV), parts.Sum(p => p.MapDeltaV), parts.Sum(p => p.PlaneChangeDv),
+        CanAerobrake: parts.Any(p => p.CanAerobrake),
         FlightTime: null,
         // Aerobraking replaces what it can on each part; the rest is still burned.
-        AerobrakeDv: (a.CanAerobrake ? a.AerobrakeDv : a.DeltaV) + (b.CanAerobrake ? b.AerobrakeDv : b.DeltaV),
-        Parts: [a, b]);
+        AerobrakeDv: parts.Sum(p => p.CanAerobrake ? p.AerobrakeDv : p.DeltaV),
+        Parts: parts);
 
     public static IReadOnlyList<RouteLeg> AllLegs(IReadOnlyList<RouteSegment> segments) =>
         segments.SelectMany(s => s.Legs).ToList();

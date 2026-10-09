@@ -23,7 +23,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   window for this leg* under its stop opens the Transfer Planner locked to the leg. The window picked (best, or
   clicked on the porkchop plot) is saved with the mission, and its ejection and capture burns replace the Δv map's
   values in Legs & phases and the Rocket totals. *＋ Rendezvous* in the Mission pane plans meeting crafts from the
-  save (relays, stations, debris, without importing them) from where the mission is before its last stop: from a
+  save (relays, stations, debris, without importing them) from where the mission is (its last stop; stops are added at the end, in order): from a
   KSC launch, from a craft it's at, or from the low orbit the Δv map's steps reach (e.g. home from the Mun). *Add to
   mission* adds a stop per craft; the crafts are kept with the mission, not on the Locations tab. *＋ Transfer* opens
   the Transfer Planner from the planet the mission is at (a moon's planet, via the map), and adds the destination's

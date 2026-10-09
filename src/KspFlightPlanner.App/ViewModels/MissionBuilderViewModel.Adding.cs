@@ -3,7 +3,7 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-/// <summary>How a rendezvous added to the mission starts: from where the mission is before its last stop.</summary>
+/// <summary>How a rendezvous added to the mission starts: from where the mission is (its last stop).</summary>
 public enum RendezvousStartKind
 {
     /// <summary>On Kerbin's surface: launch from KSC to the low orbit, then meet the craft.</summary>
@@ -15,7 +15,7 @@ public enum RendezvousStartKind
 }
 
 /// <summary>Where a rendezvous added to the mission would start, worked out for the body of the craft to meet.</summary>
-/// <param name="After">"stop 2: Kerbin — Low orbit (80 km)", the stop it's added after.</param>
+/// <param name="After">"stop 2: Kerbin — Low orbit (80 km)", the stop it's added after (the last one).</param>
 /// <param name="ParkingAltitudeM">The low orbit a launch climbs to, or the mission arrives in.</param>
 /// <param name="Chaser">The craft it leaves from (<see cref="RendezvousStartKind.Craft"/> only).</param>
 /// <param name="EarliestUt">When the mission gets there, if a leg tool knows it.</param>
@@ -108,11 +108,11 @@ public sealed partial class MissionBuilderViewModel
         AddDeployCommand = new RelayCommand(() => AddDeployRequested?.Invoke(), () => _map is not null && Stops.Count > 0);
     }
 
-    /// <summary>The body the mission is at (or around) before its last stop.</summary>
+    /// <summary>The body the mission is at (or around) at its last stop.</summary>
     public string? AddAfterBody => _map is null || Stops.Count == 0 ? null : _map[Stops[AddAfterIndex].NodeKey].BodyName;
 
     /// <summary>
-    /// The planet a transfer added before the last stop leaves from: the body the mission is at, or the planet its moon
+    /// The planet a transfer added after the last stop leaves from: the body the mission is at, or the planet its moon
     /// orbits (the Δv map climbs out to it first). Null around the star.
     /// </summary>
     public string? TransferOrigin
@@ -126,7 +126,7 @@ public sealed partial class MissionBuilderViewModel
     }
 
     /// <summary>
-    /// Adds a stop at <paramref name="destination"/> before the last stop, the leg flown in <paramref name="window"/>: its
+    /// Adds a stop at <paramref name="destination"/> after the last stop, the leg flown in <paramref name="window"/>: its
     /// orbit at <paramref name="arrivalAltitudeM"/> (a map orbit if there's one at that height, else the mission's own),
     /// or its intercept for a flyby. The Δv map supplies the steps on either side. Returns the new stop.
     /// </summary>
@@ -139,7 +139,7 @@ public sealed partial class MissionBuilderViewModel
         return key is null ? null : InsertStop(new MissionStop(key, Transfer: window));
     }
 
-    /// <summary>Adds a stop in a circular orbit of <paramref name="body"/> before the last stop, releasing a constellation there.</summary>
+    /// <summary>Adds a stop in a circular orbit of <paramref name="body"/> after the last stop, releasing a constellation there.</summary>
     public StopViewModel? AddDeployStop(CelestialBody body, double altitudeM, DeployStep step) =>
         OrbitStopKey(body.Name, altitudeM) is { } key ? InsertStop(new MissionStop(key, Deploy: step)) : null;
 
@@ -172,9 +172,17 @@ public sealed partial class MissionBuilderViewModel
         && _bodies.TryGetValue(node.BodyName, out var body) && body.ParentId is not null
         && LowOrbitOf(node.BodyName) is not null;
 
-    /// <summary>The legs between the stops, a launch to (or landing from) a stop's orbit above the low one flown as one leg.</summary>
-    private IReadOnlyList<RouteSegment> Route(IReadOnlyList<DvMapNode> stops) =>
-        MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map!, stops), n => n.Kind != "LowOrbit" && FoldsIntoOrbit(n));
+    /// <summary>
+    /// The legs between the stops, a launch to (or landing from) a stop's orbit above the low one flown as one leg, and
+    /// so is going from one placed craft to the next (a rendezvous; the map goes through the low orbit).
+    /// </summary>
+    private IReadOnlyList<RouteSegment> Route(IReadOnlyList<DvMapNode> stops)
+    {
+        var placed = PlacedLocations();
+        return MissionPlanner.CombineCraftHops(
+            MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map!, stops), n => n.Kind != "LowOrbit" && FoldsIntoOrbit(n)),
+            n => n.CustomLocationId is { } id && placed.Contains(id));
+    }
 
     private DvMapNode? LowOrbitOf(string bodyName) =>
         _map?.Nodes.FirstOrDefault(n => n.BodyName == bodyName && n.Kind == "LowOrbit" && !n.IsCustom);
@@ -211,23 +219,20 @@ public sealed partial class MissionBuilderViewModel
     private StopViewModel InsertStop(MissionStop definition)
     {
         var stop = new StopViewModel(definition, StopChanged, RefreshLegs);
-        Stops.Insert(Math.Max(1, Stops.Count - 1), stop);
+        Stops.Add(stop);
         StopChanged();
         return stop;
     }
 
-    /// <summary>Index of the stop new legs leave from: the one before the last stop (new stops go before the last).</summary>
-    private int AddAfterIndex => Math.Max(0, Stops.Count - 2);
+    /// <summary>Index of the stop new legs leave from: the last one (the mission is built in order, new stops at the end).</summary>
+    private int AddAfterIndex => Stops.Count - 1;
 
     /// <summary>"stop 2: Kerbin — Low orbit (80 km)", the stop new legs are added after.</summary>
     public string AddAfterText => _map is null || Stops.Count == 0 ? ""
         : $"stop {AddAfterIndex + 1}: {_map[Stops[AddAfterIndex].NodeKey].DisplayName}";
 
-    /// <summary>", before the last one" once there is a last stop to go before; a lone start stop is simply followed.</summary>
-    public string AddBeforeText => Stops.Count > 1 ? ", before the last one" : "";
-
     /// <summary>
-    /// Where a rendezvous with a craft around <paramref name="bodyName"/> starts if added before the last stop, by the
+    /// Where a rendezvous with a craft around <paramref name="bodyName"/> starts if added after the last stop, by the
     /// same rule as <see cref="LegTools.FindRendezvous"/>. Null around the star or where the map has no low orbit.
     /// </summary>
     public RendezvousStart? RendezvousStartFor(string bodyName)
@@ -248,13 +253,13 @@ public sealed partial class MissionBuilderViewModel
     }
 
     /// <summary>
-    /// Adds a stop at each craft, in order, before the last stop, each leg flown as the rendezvous planned. Crafts not on
+    /// Adds a stop at each craft, in order, after the last stop, each leg flown as the rendezvous planned. Crafts not on
     /// the Locations tab become the mission's own places. Returns the first new stop.
     /// </summary>
     public StopViewModel? AddRendezvousStops(IReadOnlyList<RendezvousStopToAdd> legs)
     {
         if (_map is null || legs.Count == 0) return null;
-        var insertAt = Math.Max(1, Stops.Count - 1);
+        var insertAt = Stops.Count;
         var added = new List<StopViewModel>();
         foreach (var (target, plan) in legs)
         {

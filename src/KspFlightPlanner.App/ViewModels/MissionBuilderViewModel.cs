@@ -204,12 +204,14 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>"Arrive Year 1, Day 3, 2:41:07 / Orbital burns 187 m/s", or why the plan isn't used.</summary>
     public string RendezvousText { get; private set; } = "";
 
-    internal void SetRendezvous(bool canHaveRendezvous, bool used)
+    /// <param name="startsTooEarly">The plan starts before the mission gets here (the leg before changed since).</param>
+    internal void SetRendezvous(bool canHaveRendezvous, bool used, bool startsTooEarly = false)
     {
         CanHaveRendezvous = canHaveRendezvous;
         RendezvousText = _rendezvous is not { } r ? ""
             : used ? $"Start {GameCalendar.Kerbin.FormatDate(r.StartUt)}, meet {GameCalendar.Kerbin.FormatDate(r.ArrivalUt)}\n" +
-                     $"Orbital burns {Format.Speed0(r.OrbitalDv)} (as planned)"
+                     $"Orbital burns {Format.Speed0(r.OrbitalDv)} (as planned)" +
+                     (startsTooEarly ? "\nPlanned to start before the mission gets here: open the leg to plan it again." : "")
             : "The leg here no longer meets this craft, so the plan isn't used.";
         foreach (var name in new[] { nameof(CanHaveRendezvous), nameof(HasRendezvous), nameof(OffersRendezvous), nameof(RendezvousText) })
             OnPropertyChanged(name);
@@ -441,7 +443,7 @@ public sealed class LegRowViewModel : ObservableObject
     public string Notes => string.Join(" · ", new[]
     {
         Leg.ToolNote,
-        Leg.Parts is { } parts ? $"Via {parts[0].To.Label}: {string.Join(" + ", parts.Select(p => p.DeltaV.ToString("N0", CultureInfo.CurrentCulture)))} m/s" : null,
+        Leg.Parts is { } parts && !Leg.IsFromTool ? $"Via {parts[0].To.Label}: {string.Join(" + ", parts.Select(p => p.DeltaV.ToString("N0", CultureInfo.CurrentCulture)))} m/s" : null,
         Leg.IsFromTool ? null : Leg.FlightTime is { } t ? $"Flight ≈ {t}" : null,
         Leg.CanAerobrake && Leg.AerobrakeDv > 0 ? $"Aerobraking possible (still needs a {Leg.AerobrakeDv:N0} m/s deorbit burn)"
             : Leg.CanAerobrake ? "Aerobraking possible" : null,
@@ -764,9 +766,10 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             stop.SetTools(LegTools.FindTransfer(segment.Legs, _bodies) is not null, transfer);
             var rendezvousSpan = FindRendezvous(segment.Legs, Stops[segment.ToStop - 1], stop, placed);
             var rendezvous = stop.Rendezvous is { } plan && rendezvousSpan is { } span && plan.TargetLocationId == span.TargetLocationId ? plan : null;
-            stop.SetRendezvous(rendezvousSpan is not null, rendezvous is not null);
+            var earliest = ArrivalAt(segment.ToStop - 1);
+            stop.SetRendezvous(rendezvousSpan is not null, rendezvous is not null, rendezvous?.StartsBefore(earliest) == true);
             _arrivals[segment.ToStop] = rendezvous?.ArrivalUt ?? transfer?.Window.ArrivalUt;
-            if (rendezvous is not null) return segment with { Legs = LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous) };
+            if (rendezvous is not null) return segment with { Legs = LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest) };
             return transfer is null ? segment : segment with { Legs = LegTools.ApplyTransfer(segment.Legs, transfer) };
         }).ToList();
     }
@@ -790,11 +793,10 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         var n => $"{n} values edited (shown in amber).",
     };
 
-    /// <summary>Clicking a stop on the map adds it before the final stop.</summary>
+    /// <summary>Clicking a stop on the map adds it after the last stop.</summary>
     public void AddStopFromMap(DvMapNode node)
     {
-        var insertAt = Math.Max(1, Stops.Count - 1);
-        Stops.Insert(insertAt, new StopViewModel(new MissionStop(node.Key), StopChanged, RefreshLegs));
+        Stops.Add(new StopViewModel(new MissionStop(node.Key), StopChanged, RefreshLegs));
         StopChanged();
     }
 
@@ -1039,9 +1041,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     private void AddStop()
     {
-        // Like adding a waypoint: goes before the final stop, starting at the previous stop's location.
-        var insertAt = Math.Max(1, Stops.Count - 1);
-        Stops.Insert(insertAt, new StopViewModel(new MissionStop(Stops[insertAt - 1].NodeKey), StopChanged, RefreshLegs));
+        // The mission is built in order: the new stop goes at the end, starting at the last stop's location.
+        Stops.Add(new StopViewModel(new MissionStop(Stops[^1].NodeKey), StopChanged, RefreshLegs));
         StopChanged();
     }
 
@@ -1144,7 +1145,6 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
         OnPropertyChanged(nameof(RouteSummary));
         OnPropertyChanged(nameof(AddAfterText));
-        OnPropertyChanged(nameof(AddBeforeText));
         OnPropertyChanged(nameof(RouteEdgeKeys));
         OnPropertyChanged(nameof(StopKeys));
         Recalculate();

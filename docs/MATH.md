@@ -669,6 +669,8 @@ Starting from a low orbit the mission arrives in, *where* on that orbit isn't kn
 
 The plan's burns already include any plane change, so these steps get no plane-change extra. Where craft are depends on the date and on the save, so the mission keeps the plan's result (its orbital Δv and arrival time) as well as the start time and picks (launch, phasing orbit, porkchop point). Opening the leg again plans from those, so it shows the same plan while the craft haven't moved. A new leg tool on the next leg starts when this one arrives.
 
+**Back-to-back rendezvous.** The map reaches a craft only through its body's low orbit, so craft A → craft B is two map steps (A → low orbit → B). You never stop in that low orbit, so the Mission Builder shows the two as one leg, A → B, whose map value is the two steps added; the rendezvous then replaces it. The second leg starts from A's orbit when the first one arrives (you're alongside A then), which is what the Rendezvous tab does when one plan meets both craft: planned leg by leg or in one go, the legs come out the same. If the first leg is planned again and now arrives later than the second leg's saved start, the second plan is out of date (A and B have moved on since): the mission flags it, and opening the leg plans it again from the new arrival.
+
 Worked example: launch to a placed station in a 150 km circular orbit inclined 5° (μ = 3.5316×10¹², LKO r₁ = 680,000 m, station r₂ = 750,000 m):
 
 1. The map's step LKO → Station is a Hohmann transfer (§2.1): a = 715,000 m, so 2,334.04 − 2,278.93 = 55.11 m/s, then 2,169.98 − 2,116.20 = 53.78 m/s, **108.9 m/s** in all. Its worst-case plane change for 5° at the station is 2 × 2,169.98 × sin 2.5° = **189.3 m/s** (§2.3).
@@ -676,7 +678,7 @@ Worked example: launch to a placed station in a 150 km circular orbit inclined 5
 3. Going on from the station to a relay at 400 km in Kerbin's equatorial plane starts from the station's 5° orbit, so that plan has a 189 m/s plane match among its burns (479 m/s in total).
 4. Coming home from the Mun to meet a relay at about 2,870 km: Mun surface → Mun low orbit (580) → Mun intercept (310) → Kerbin low orbit (860, or aerobrake) are the map's steps. The last step, Kerbin low orbit → relay, is the rendezvous. From 80 km, that is a small plane match (22 m/s for 0.56°), a 668 m/s transfer burn and a 433 m/s match, **1,122 m/s** in place of the map's Hohmann value.
 
-- Code: `LegTools.FindRendezvous`, `LegTools.ApplyRendezvous`, `MissionBuilderViewModel.RendezvousStartFor`, `RendezvousViewModel.EditLeg`; tested in `LegToolsTests`
+- Code: `LegTools.FindRendezvous`, `LegTools.ApplyRendezvous`, `RendezvousLeg.StartsBefore`, `MissionPlanner.CombineCraftHops`, `MissionBuilderViewModel.RendezvousStartFor`, `RendezvousViewModel.EditLeg`; tested in `LegToolsTests`
 - Source: §4.1 (Curtis 6.6–6.9, 5.3), Hohmann transfer (§2.1)
 
 ## 7. Your rocket: Δv and TWR
