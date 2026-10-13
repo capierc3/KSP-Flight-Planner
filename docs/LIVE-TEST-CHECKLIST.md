@@ -33,7 +33,7 @@ Notes:
 
 In flight, with a craft in orbit:
 
-- [ ] **Rendezvous tab**: the "Craft" dropdown shows your vessels with Pe/Ap. For the craft you're flying, compare with
+- [ ] **Rendezvous pane**: the "Craft" dropdown shows your vessels with Pe/Ap. For the craft you're flying, compare with
       KSP's map view (Pe/Ap of the orbit). **Should match within ~1 km.**
 - [x] "Save time" line now reads **"Game time: … · live from KSP"**
 - [x] Status bar (left) says **"live from KSP"** instead of "read 1:57 PM"
@@ -42,11 +42,11 @@ In flight, with a craft in orbit:
       flickering constantly = bad). It may refresh about once a game-minute.
 - [x] Launch something new (not in the save yet) and reach orbit → it appears in the Rendezvous craft list as
       "… · not saved yet"
-- [ ] **Locations tab**: if you have a linked location for a vessel you're moving, its orbit follows
+- [ ] **Locations pane**: if you have a linked location for a vessel you're moving, its orbit follows
 
 Notes (paste any mismatched numbers):
 
-## 3. Active vessel and target (Rendezvous tab)
+## 3. Active vessel and target (Rendezvous pane)
 
 - [ ] Left panel shows **"In KSP: flying X · target Y"** (or "no target set")
 - [ ] **Use the craft I'm flying** switches to "A craft already in orbit" with your craft selected
@@ -57,9 +57,9 @@ Notes (paste any mismatched numbers):
 
 Notes:
 
-## 4. Fly a rendezvous plan (Flight tab)
+## 4. Fly a rendezvous plan (Flight pane)
 
-- [ ] With a plan on the Rendezvous tab, click **Fly this plan** → switches to **Fly** and opens the **Flight** document with the new flight
+- [ ] With a plan in the Rendezvous pane, click **Fly this plan** → switches to **Fly** and opens the **Flight** document with the new flight
 - [ ] Flight shows "Flown by …", the burns with **countdowns that tick down**, first one marked **Next**
 - [ ] **Send next burn** → node appears in KSP; the burn's tag changes to **On the craft** (within ~2 s)
 - [ ] **Send all burns** → asks before replacing existing nodes; all nodes appear in KSP in order
@@ -77,7 +77,7 @@ Notes:
 This is the one thing that can't be tested without the game: do the planner's prograde/normal/radial land the same
 way in KSP?
 
-- [ ] On the Rendezvous tab, switch to **Exact nodes**. Pick a burn with a noticeable **normal** or **radial** part
+- [ ] On the Rendezvous pane, switch to **Exact nodes**. Pick a burn with a noticeable **normal** or **radial** part
       (a "Match planes" burn is ideal). Note its **"Orbit after"** Pe/Ap.
 - [ ] Send it (via Fly this plan → Send to KSP). In KSP's map view, check the node's **predicted orbit**:
   - [ ] Pe/Ap ≈ the planner's "Orbit after"
@@ -89,7 +89,7 @@ Notes (node values in planner vs KSP):
 
 ## 6. Resonant deployment
 
-- [ ] Resonant Orbits tab: Kerbin, 3 satellites, **Use synchronous** → **Fly this deployment**
+- [ ] Resonant Orbits pane: Kerbin, 3 satellites, **Use synchronous** → **Fly this deployment**
 - [ ] If you were flying a craft around Kerbin, the flight has burns straight away; otherwise it says to choose the
       carrier. Switch to the carrier → **Use the craft I'm flying** → burns appear
 - [ ] Burns: **Enter the carrier orbit** (~+84.6 m/s if starting circular at 2,863 km), then **Circularize satellite
@@ -114,7 +114,7 @@ Notes:
 - [ ] In game, open **KerbNet** on a probe orbiting the Mun, add a **custom waypoint**, then save (or quicksave) →
       it appears in the list as **(KerbNet waypoint)** with the right latitude/longitude. ⚠ The waypoint field names
       (`celestialName`, `latitude`, `longitude` under `ScenarioCustomWaypoints`) are from memory, not yet seen in your save
-- [ ] Optional: land near a planned spot and compare where you came down (Vessels tab / flag position) with the target
+- [ ] Optional: land near a planned spot and compare where you came down (Vessels pane / flag position) with the target
 
 ## 8. Launch into an inclination (no kRPC needed)
 
@@ -126,12 +126,12 @@ Notes:
 
 Notes:
 
-## 9. Launching from KSC to meet a craft (Rendezvous tab) ⚠ unverified constant
+## 9. Launching from KSC to meet a craft (Rendezvous pane) ⚠ unverified constant
 
 The planner assumes Kerbin is **rotated 90° at UT 0** (`LaunchSite.Ksc`, docs/MATH.md §4.5). If that's wrong, every
 lift-off time for a launch rendezvous is off.
 
-- [ ] Rendezvous tab: start **from the launch pad**, target a craft in an inclined orbit (≥ 5°), choose the
+- [ ] Rendezvous pane: start **from the launch pad**, target a craft in an inclined orbit (≥ 5°), choose the
       ascending- or descending-pass launch
 - [ ] Wait until the planner's **lift-off time** and launch on its heading → once in orbit, the **relative inclination**
       to the target is small (under ~1°). A large miss that grows with the time of day = wrong rotation constant
@@ -156,9 +156,9 @@ planner's database:
 
 Still to look at in the planner and in game:
 
-- [ ] Locations tab › Mun: a **"From your game (surface bake)"** group: "Compared with the wiki", each value as
+- [ ] Locations pane › Mun: a **"From your game (surface bake)"** group: "Compared with the wiki", each value as
       "Wiki … · game … · using game/wiki", highest/lowest grid point and biomes
-- [ ] Locations tab › Eeloo: its highest point is flagged ⚠. In game, fly over 27.95° N 24.34° E (the wiki's highest
+- [ ] Locations pane › Eeloo: its highest point is flagged ⚠. In game, fly over 27.95° N 24.34° E (the wiki's highest
       point) and note the terrain height: ________ m (the bake reads about 260 m there; 22% of Eeloo read exactly 0 m)
 - [ ] Mission with a **Mun — Surface** landing on a wiki landmark (no height of its own): the landing text now says
       **"ground … m (surface bake)"** and shows "Highest terrain under the braking burn"
@@ -258,7 +258,7 @@ Notes:
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date
-- [ ] **Vessels tab** still works while connected (it rebuilds when orbits change; your selection should stay)
+- [ ] **Vessels pane** still works while connected (it rebuilds when orbits change; your selection should stay)
 - [ ] **Connect to KSP when the planner starts** (Settings) → connects on launch if KSP is up; stays quiet if not
 - [ ] Leave it connected for a while in flight with lots of vessels: does KSP or the planner stutter every ~10 s?
       (Every vessel's orbit is read every 10 s.)
@@ -267,8 +267,8 @@ Notes:
 
 ---
 
-**Known gaps (not bugs):** the Transfer Planner can't send nodes yet (needs ejection-node math). The Mission Builder
-has no flight view yet (a mission's legs can't be sent; use From here or the Rendezvous/Resonant tools). kRPC can't see the VAB craft you're building.
+**Known gaps (not bugs):** a whole mission can't be flown yet (its legs can't be sent as one flight; use From here, or
+Fly this plan / deployment / window in the Rendezvous, Resonant Orbits and Transfer Planner panes). kRPC can't see the VAB craft you're building.
 
 **Not built yet:**
 - **Exact height of a spot** asked from the game when connected (one call per spot), so small features like the KSC

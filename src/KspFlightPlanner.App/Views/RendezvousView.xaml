@@ -85,7 +85,7 @@
                         <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,6"
                                    Text="The plan shown is saved with the mission: change the start time or launch in Calculators, or the phasing orbit or porkchop point here, to plan it another way." />
                         <Button Content="Stop editing the leg" Command="{Binding StopEditingLegCommand}" HorizontalAlignment="Left" Padding="8,1"
-                                ToolTip="Use the tab on its own again; the mission keeps this plan" />
+                                ToolTip="Use the Rendezvous planner on its own again; the mission keeps this plan" />
                     </StackPanel>
                 </Border>
 
@@ -116,8 +116,8 @@
                 </DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,18,6" Visibility="{Binding HasPlan, Converter={StaticResource BoolToVisibility}}">
                     <Button DockPanel.Dock="Right" Content="Fly this plan" Command="{Binding FlyCommand}" Padding="12,2" VerticalAlignment="Top"
-                            ToolTip="Open it on the Flight tab: send the burns to KSP as maneuver nodes and re-plan from your real orbit as you fly" />
-                    <TextBlock Text="Flying it? Hand it to the Flight tab to send the burns to KSP." Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            ToolTip="Open it in the Flight pane: send the burns to KSP as maneuver nodes and re-plan from your real orbit as you fly" />
+                    <TextBlock Text="Flying it? Hand it to the Flight pane to send the burns to KSP." Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,10,0" />
                 </DockPanel>
                 <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="3" Margin="0,0,18,4"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />

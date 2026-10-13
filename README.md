@@ -25,11 +25,11 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   values in Legs & phases and the Rocket totals. *＋ Rendezvous* in the Mission pane plans meeting crafts from the
   save (relays, stations, debris, without importing them) from where the mission is (its last stop; stops are added at the end, in order): from a
   KSC launch, from a craft it's at, or from the low orbit the Δv map's steps reach (e.g. home from the Mun). *Add to
-  mission* adds a stop per craft; the crafts are kept with the mission, not on the Locations tab. *＋ Transfer* opens
+  mission* adds a stop per craft; the crafts are kept with the mission, not in the Locations pane. *＋ Transfer* opens
   the Transfer Planner from the planet the mission is at (a moon's planet, via the map), and adds the destination's
   orbit (or a flyby) flown in the window picked; *＋ Deploy* opens Resonant Orbits around the body the mission is at,
   and adds a stop in that orbit with the constellation. Orbits not on the Δv map are kept with the mission too. Any leg to a placed
-  craft can *Plan the rendezvous*: the Rendezvous tab opens locked to the leg, and the plan's burns replace the map's
+  craft can *Plan the rendezvous*: the Rendezvous pane opens locked to the leg, and the plan's burns replace the map's
   orbital values (the plan is kept as made, since craft move). A new tool on the next leg starts when the previous leg's tool arrives. A deployment's
   carrier burns are added to a phase you pick (each satellite's own circularize burn is shown, not added); *Open* on
   the stop's deployment shows it in Resonant Orbits again. A stop a KSC launch arrives at has an
@@ -40,7 +40,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
 - **Math guide** — every formula the app uses with sources and worked examples, in [docs/MATH.md](docs/MATH.md)
-  and on the in-app Guide tab (same file, embedded at build time).
+  and on the in-app Math Guide pane (same file, embedded at build time).
 - **Transfer planner** — best launch window between two bodies (porkchop plot via Lambert solver),
   ejection/capture Δv, ejection burn angle, ideal Hohmann reference, optional return trip, and a mission Δv budget.
   Its inputs (bodies, orbits, earliest departure…) sit in the Calculators pane, which shows the inputs of whichever
@@ -61,7 +61,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   from the KSP folder — ModuleManager's cache when present, so mod patches count — and stored in the database.
   Saved designs (VAB/SPH .craft files, including the one open in the editor) get a stage-by-stage Δv, TWR and burn
   time, simulated like KSP's own stage readout (crossfeed, fuel lines, boosters dropped when spent).
-  In the Mission Builder's Rocket pane, pick a design to check it against the mission: its stages fill the phases
+  In the Rocket pane, pick a design to check it against the mission: its stages fill the phases
   in order, showing which stages cover each phase, the spare or missing Δv, and the launch TWR. Margins count as
   wiggle room: a design that flies the route but not every margin is "enough, inside the margin" (amber), not "not enough".
   It also checks the TWR at every landing and lift-off (Kerbin launch, Mun landing and ascent, …) with the stage
@@ -73,11 +73,11 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   [kRPC](https://krpc.github.io/krpc/) mod (install it with CKAN and click *Start server* in its in-game window). The
   status bar shows the link, the game scene and the game date. Address and ports default to kRPC's stock server and can
   be changed in *Tools › Settings › Live connection*. While connected:
-  - the game's live time and (in flight) every vessel's live orbit are laid over the save, so the Rendezvous tab, Vessels
+  - the game's live time and (in flight) every vessel's live orbit are laid over the save, so the Rendezvous pane, Vessels
     tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
-  - the Rendezvous tab can start from **the craft you're flying** and add **the craft you've targeted**
+  - the Rendezvous pane can start from **the craft you're flying** and add **the craft you've targeted**
   - the Transfer Planner's **Today** button sets the earliest departure to the game's date
-- **Fly mode** — the flying side. *Fly this plan* on the Rendezvous tab (or *Fly this deployment* on Resonant
+- **Fly mode** — the flying side. *Fly this plan* in the Rendezvous pane (or *Fly this deployment* on Resonant
   Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the
   rest from its real orbit. Resonant deployments time the carrier's burn and each satellite's circularize burn from

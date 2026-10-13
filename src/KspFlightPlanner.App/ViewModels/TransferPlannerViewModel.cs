@@ -348,7 +348,7 @@ public sealed class TransferPlannerViewModel : LegToolViewModel<TransferLegLink>
     public string? AnyTimeNote => CurrentPlotIsAnyTime && (ShowReturnPlot ? _returnRequest : _request) is { } r
         ? $"No launch window to wait for: {(IsPlanned(r.Destination) ? r.Destination.Name : r.Origin.Name)} is planned, so it will be " +
           "wherever you arrive. The plan departs at the earliest date on the ideal Hohmann transfer. Mark it as placed on the " +
-          "Locations tab (with its position) once it exists to get real launch windows."
+          "Locations pane (with its position) once it exists to get real launch windows."
         : null;
     public bool HasPlot => CurrentPlot is not null;
     private bool CurrentPlotIsAnyTime => (ShowReturnPlot ? _returnPlan : _plan)?.IsAnyTime == true;

@@ -691,7 +691,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
     public string EmptyText => Targets.Count == 0
         ? Crafts.Count == 0
-            ? "Nothing in orbit to meet yet. Link your KSP save (Tools › Settings) or place a custom location on the Locations tab."
+            ? "Nothing in orbit to meet yet. Link your KSP save (Tools › Settings) or place a custom location in the Locations pane."
             : "Add a target (left) to plan meeting it."
         : "";
 
@@ -715,7 +715,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
                 ? $"That takes about {_calendar.FormatDuration(trip)}, so the rendezvous below starts {_calendar.FormatDate(r.EarliestUt)}. "
                 : $"It waits for a launch window: pick one on the Transfer Planner, and set the start time to when you get to {r.Body.Name}. ";
             return from + when + "Where you'll be on that orbit isn't known yet: once you're there, click \"Use the craft I'm flying\" again " +
-                   "(or Re-plan on the Flight tab) to plan the rendezvous from your real orbit.";
+                   "(or Re-plan in the Flight pane) to plan the rendezvous from your real orbit.";
         }
     }
 
@@ -763,7 +763,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
     public string CapacityHint => StartFromLaunch
         ? _designs is null || DesignChoices.Count <= 1 ? "Link a KSP save (Tools › Settings) to check one of your saved designs." : "Vacuum Δv of each stage, poured into launch, then each leg."
-        : SelectedChaser?.Vessel is null ? "Pick a vessel from your save to compare with what's left in its tanks." : "What's left in its tanks, as on the Vessels tab.";
+        : SelectedChaser?.Vessel is null ? "Pick a vessel from your save to compare with what's left in its tanks." : "What's left in its tanks, as in the Vessels pane.";
 
     // Porkchop for one leg.
 

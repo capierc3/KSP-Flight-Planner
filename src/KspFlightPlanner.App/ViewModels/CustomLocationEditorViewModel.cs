@@ -315,8 +315,8 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
 
     private void Delete()
     {
-        if (!_owner.Confirm($"Delete \"{_original.Name}\" and its images?\n\nStops using it in the Mission Builder move to its parent orbit, " +
-                            "and saved missions that use it will no longer load."))
+        if (!_owner.Confirm($"Delete \"{_original.Name}\" and its images?\n\nStops using it in the open mission move to its parent orbit, " +
+                            "and saved missions drop their stops there when opened."))
             return;
         _repository.Delete(_original.Id);
         _deleted();

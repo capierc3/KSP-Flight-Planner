@@ -29,7 +29,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Landing at a crater, flag or waypoint: §2.6, §1.9
 - A rendezvous or docking: §4.1
 - A relay network / constellation: §5.1, §5.2
-- Why the Mission Builder shows a given Δv: §6.1, §6.2
+- Why a mission's legs show a given Δv: §6.1, §6.2
 - Whether your rocket is good enough: §7.3, §7.4
 - A vessel imported from your save, or the live game: §8.1, §8.2
 
@@ -64,7 +64,7 @@ Worked example — Kerbin: g = 1.00034160493135 × 9.80665 = 9.81 m/s², so μ =
 difference = |game − wiki| / |wiki|
 ```
 
-and the game's value is used when the difference is within a threshold: **5%** for constants the game defines exactly (sidereal day, radius, μ) and **15%** for sampled values (highest point, pressure at 0 m), since a 1° grid alone can be that far off. Beyond the threshold, the wiki value is kept and the Locations tab flags the difference (⚠). Two refinements:
+and the game's value is used when the difference is within a threshold: **5%** for constants the game defines exactly (sidereal day, radius, μ) and **15%** for sampled values (highest point, pressure at 0 m), since a 1° grid alone can be that far off. Beyond the threshold, the wiki value is kept and the Locations pane flags the difference (⚠). Two refinements:
 - **Highest point:** the grid steps over sharp summits, so it only ever reads low. Within the threshold the *higher* of the two is used, the safe side for parking orbits and terrain warnings.
 - **Pressure:** the wiki's baseline is its pressure table where there is one. When the game's value is used, its table (a row every km) replaces the wiki's.
 
@@ -200,7 +200,7 @@ normal   = (r × v) / |r × v|          "up" out of the orbit plane (purple tria
 radial   = prograde × normal          in the plane, at right angles to prograde, pointing away from the body (cyan)
 ```
 
-Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. On the Flight tab, **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
+Each burn's Δv vector is split as (Δv·prograde, Δv·normal, Δv·radial). These are the numbers to type into the node editor in **Exact nodes** mode. On the Flight pane, **Send to KSP** puts the same three numbers and the node time on the craft you're flying (kRPC `Control.AddNode(ut, prograde, normal, radial)`, which uses the same axes). Later nodes chain off the earlier ones in KSP just as they do in the plan.
 
 - Code: `NodeBurn.From`; tested in `RendezvousTests`
 
@@ -308,7 +308,7 @@ Worked example — a 100 km × 2,000 km orbit of Kerbin, from the 80 km low orbi
 2. Apoapsis first: a₁ = 1,640,000 → burn 1 = **590.5 m/s**, burn 2 (raise periapsis from 80 to 100 km at apoapsis) = **8.6 m/s** → **599 m/s**
 3. Periapsis first: 16.5 + 589.8 = 606 m/s — so the app uses the apoapsis-first order
 
-**Inclination** is charged as a plane change (§2.3) at the target's apoapsis, where you are slowest. For the orbit above at 10°: 2 × 759.1 × sin 5° = **132 m/s** — doing the same 10° in the 80 km orbit would cost 397 m/s. The Mission Builder adds this when "Include worst-case plane changes" is on.
+**Inclination** is charged as a plane change (§2.3) at the target's apoapsis, where you are slowest. For the orbit above at 10°: 2 × 759.1 × sin 5° = **132 m/s** — doing the same 10° in the 80 km orbit would cost 397 m/s. A mission adds this when "Include worst-case plane changes" is on (Mission pane, Options).
 
 **Validation** checks only the independent values: periapsis above the atmosphere (or the highest terrain on airless bodies), apoapsis inside the sphere of influence, apoapsis ≥ periapsis, inclination 0–180°.
 
@@ -323,7 +323,7 @@ Changing inclination by Δi at speed v costs:
 Δv = 2 · v · sin(Δi / 2)
 ```
 
-It's cheapest where you're slowest (high up, or at apoapsis). Worked example — matching Minmus's 6° inclination while still in 80 km Kerbin orbit: 2 × 2,278.9 × sin 3° = **238.5 m/s**. The Δv map lists a worst-case 340 m/s for Minmus; the Mission Builder's "Include worst-case plane changes" adds those map values.
+It's cheapest where you're slowest (high up, or at apoapsis). Worked example — matching Minmus's 6° inclination while still in 80 km Kerbin orbit: 2 × 2,278.9 × sin 3° = **238.5 m/s**. The Δv map lists a worst-case 340 m/s for Minmus; the Mission pane's "Include worst-case plane changes" adds those map values.
 
 - Code: map values only (`DvMapNode.PlaneChangeDv`)
 - Source: Curtis 6.10; [Orbital inclination change (Wikipedia)](https://en.wikipedia.org/wiki/Orbital_inclination_change)
@@ -595,7 +595,7 @@ The Hohmann numbers assume circular, flat orbits. For the real best window the a
 
 ### 3.5 Orbits around the Sun (Kerbol)
 
-An orbit around the Sun is an interplanetary destination, so the Mission Builder attaches it where every other interplanetary trip starts: Kerbin's escape node (next to the Duna, Eve and Moho intercepts), not Kerbol's 610 km low orbit. A solar orbit only "belongs" to Duna if it is inside Duna's sphere of influence — then it's a Duna orbit (§2.1).
+An orbit around the Sun is an interplanetary destination, so the planner attaches it where every other interplanetary trip starts: Kerbin's escape node (next to the Duna, Eve and Moho intercepts), not Kerbol's 610 km low orbit. A solar orbit only "belongs" to Duna if it is inside Duna's sphere of influence — then it's a Duna orbit (§2.1).
 
 Steps — combine §2.1 (around the Sun), §3.1 (leaving Kerbin) and the map's 950 m/s low-Kerbin-orbit → escape edge:
 
@@ -748,11 +748,11 @@ From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s
 
 ## 4. Meeting a craft in orbit (rendezvous)
 
-Getting from a launch, or from a craft already in orbit, to a standstill next to another craft. Used by the Rendezvous tab and by rendezvous legs (§6.5).
+Getting from a launch, or from a craft already in orbit, to a standstill next to another craft. Used by the Rendezvous pane and by rendezvous legs (§6.5).
 
 ### 4.1 How a rendezvous is planned
 
-The Rendezvous tab takes you from a launch (or a craft already in orbit) to a standstill next to each target in turn: a relay to repair, debris to deorbit. Every leg is the same four steps, and every burn is given both ways: **by feel** (which way to point, what to look for) and as **exact maneuver-node values** (time, prograde / normal / radial).
+The Rendezvous pane takes you from a launch (or a craft already in orbit) to a standstill next to each target in turn: a relay to repair, debris to deorbit. Every leg is the same four steps, and every burn is given both ways: **by feel** (which way to point, what to look for) and as **exact maneuver-node values** (time, prograde / normal / radial).
 
 1. **Match planes** at the cheaper of the next two crossings of the orbits' planes (§4.2)
 2. **Get into position**: wait for the window, or fly a phasing orbit to bring it sooner (§4.3)
@@ -778,7 +778,7 @@ That's §2.3 again, using the horizontal speed. Burn **anti-normal at the AN, no
 
 A plane change under **5 m/s** (`Rendezvous.SmallPlaneChangeDv`) isn't flown on its own. The transfer is a Lambert intercept between the real 3D orbits (§4.4), so its normal part and the match-velocity burn take up the small tilt for about the same Δv, with one burn fewer. At 100 km around Kerbin (v ≈ 2,246 m/s) that's tilts under 2·asin(5 / (2 × 2,246)) ≈ **0.13°**.
 
-**When the lead time hides a crossing.** The plan starts the lead time after now (§8.4). If the next crossing comes before then, the planner waits for a later one, which can be half an orbit or a whole orbit later. The Rendezvous tab and Re-plan then say so: `NextPlaneCrossingUt` finds the first crossing after now, and when it is before the start and earlier than the planned burn, the note gives its countdown.
+**When the lead time hides a crossing.** The plan starts the lead time after now (§8.4). If the next crossing comes before then, the planner waits for a later one, which can be half an orbit or a whole orbit later. The Rendezvous pane and Re-plan then say so: `NextPlaneCrossingUt` finds the first crossing after now, and when it is before the start and earlier than the planned burn, the note gives its countdown.
 
 Worked example: a 31m 27s orbit, the crossing in 4m 36s, a 5-minute lead. The planner skips that crossing. The other node, ~15m 43s later, costs a little more, so it plans the same node one lap on, 31m 27s after the skipped one. A 4-minute lead would catch it.
 
@@ -857,7 +857,7 @@ Worked example — KSC at UT 0: λ = −74.5575° + 90° = **15.4425°**; a quar
 
 ### 4.6 Starting from a craft around another body
 
-The Rendezvous tab can start from a craft (or the craft you're flying in KSP) that orbits another body than the targets: a lander around the Mun meeting a relay around Kerbin, say. It uses the same rule as a mission leg from another body (§6.5). The Δv map's steps go from the craft's body's low orbit to the targets' body's low orbit, and the rendezvous starts on that low orbit, anywhere on it. The map's steps keep their map values (the craft's real orbit may differ from the map's low orbit).
+The Rendezvous pane can start from a craft (or the craft you're flying in KSP) that orbits another body than the targets: a lander around the Mun meeting a relay around Kerbin, say. It uses the same rule as a mission leg from another body (§6.5). The Δv map's steps go from the craft's body's low orbit to the targets' body's low orbit, and the rendezvous starts on that low orbit, anywhere on it. The map's steps keep their map values (the craft's real orbit may differ from the map's low orbit).
 
 To date the rendezvous burns, the plan estimates how long the steps take. Each step between a moon and the planet it orbits counts as a Hohmann half-orbit (§2.1) around the planet, between the moon's orbit and the planet's low orbit:
 
@@ -867,7 +867,7 @@ t = π·√(a³ / μ_planet)                for each moon ↔ planet step; time 
 rendezvous start = start time + Σ t   (rounded up to the minute)
 ```
 
-A step between planets waits for a launch window, which matters far more than the flight, so there is no estimate: pick the window on the Transfer Planner (§3.4) and set the start time to the arrival. On the Flight tab the steps are shown first; once the craft is around the targets' body, Re-plan (§8.4) plans the rendezvous from its real orbit.
+A step between planets waits for a launch window, which matters far more than the flight, so there is no estimate: pick the window on the Transfer Planner (§3.4) and set the start time to the arrival. On the Flight pane the steps are shown first; once the craft is around the targets' body, Re-plan (§8.4) plans the rendezvous from its real orbit.
 
 Worked example: from the Mun to Kerbin's 80 km orbit (μ = 3.5316×10¹², Mun orbit r = 12,000,000 m, low orbit 680,000 m):
 
@@ -907,7 +907,7 @@ Worked example — 3 satellites at synchronous altitude above Kerbin: T_carrier 
 
 ### 5.2 Burn times and node values
 
-Resonant deployment (§5.1) needs the carrier to pass the shared apsis once per satellite. The *shared apsis* is the point at the deployment radius r: the carrier's periapsis for a resonant orbit, its apoapsis for a dive orbit. The Flight tab times every burn from the carrier's real orbit:
+Resonant deployment (§5.1) needs the carrier to pass the shared apsis once per satellite. The *shared apsis* is the point at the deployment radius r: the carrier's periapsis for a resonant orbit, its apoapsis for a dive orbit. The Flight pane times every burn from the carrier's real orbit:
 
 ```
 1. Enter the carrier orbit: if the craft isn't on it yet (period and shared-apsis radius both within 0.5%), burn at the
@@ -936,11 +936,11 @@ Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r 
 
 ## 6. Budgeting a mission
 
-How the Mission Builder adds up a mission's Δv: map values first, then leg tools that replace them with properly planned burns.
+How the planner adds up a mission's Δv: map values first, then leg tools that replace them with properly planned burns.
 
 ### 6.1 The Δv map and mission budgets
 
-The Mission Builder adds up legs from the community Δv map. Each map edge is a published Δv; aerobraking replaces a burn where the map allows it; plane changes are optional worst-case extras. A phase's budget is:
+A mission adds up its legs from the community Δv map. Each map edge is a published Δv; aerobraking replaces a burn where the map allows it; plane changes are optional worst-case extras. A phase's budget is:
 
 ```
 phase Δv = Σ(legs in the phase) × (1 + margin%/100) + extra
@@ -970,7 +970,7 @@ Known simplifications:
 - Custom orbits around a planet hang off its low orbit, so arriving from another planet charges "capture to low orbit, then climb". Capturing straight into a high orbit would be cheaper.
 - Custom orbit inclination is charged as a worst-case plane change at apoapsis (§2.2); the real cost depends on where your ascending node is.
 - Atmospheric ascent values (3,400 for Kerbin) are typical, not exact — they depend on your rocket.
-- Map surface ↔ low orbit values are optimistic; many players budget more (e.g. 700 instead of 580 for the Mun). Edit them in the Δv map tab.
+- Map surface ↔ low orbit values are optimistic; many players budget more (e.g. 700 instead of 580 for the Mun). Edit them in the Δv map pane.
 
 - Code: `DeltaVMap.Route`, `MissionPlanner.Summarize`
 - Source: [KSP Δv map 1.0.4 by /u/swashlebucky](https://www.reddit.com/r/KerbalSpaceProgram/) (based on Kowgan's map; CC BY-NC-SA 4.0)
@@ -1028,7 +1028,7 @@ Worked example: 3 relays at Duna 1,000 km, the last stop of the mission (μ = 3.
 
 ### 6.5 Rendezvous legs: meeting a placed craft
 
-A leg is a rendezvous leg when it arrives at a *placed* craft: a custom location, an imported vessel, or a craft from the save that the mission keeps itself (added with *＋ Rendezvous*, so it isn't on the Locations tab). There is then a real craft whose position is known. Where the leg starts decides how much of it the rendezvous covers. The Rendezvous tab plans that part (§4.1): the launch time, a plane match, phasing, the Lambert intercept and the match-velocity burn.
+A leg is a rendezvous leg when it arrives at a *placed* craft: a custom location, an imported vessel, or a craft from the save that the mission keeps itself (added with *＋ Rendezvous*, so it isn't in the Locations pane). There is then a real craft whose position is known. Where the leg starts decides how much of it the rendezvous covers. The Rendezvous pane plans that part (§4.1): the launch time, a plane match, phasing, the Lambert intercept and the match-velocity burn.
 
 ```
 from another placed craft around the same body   the whole leg is the rendezvous, starting from that craft's orbit
@@ -1043,12 +1043,12 @@ Starting from a low orbit the mission arrives in, *where* on that orbit isn't kn
 
 The plan's burns already include any plane change, so these steps get no plane-change extra. Where craft are depends on the date and on the save, so the mission keeps the plan's result (its orbital Δv and arrival time) as well as the start time and picks (launch, phasing orbit, porkchop point). Opening the leg again plans from those, so it shows the same plan while the craft haven't moved. A new leg tool on the next leg starts when this one arrives.
 
-**Back-to-back rendezvous.** The map reaches a craft only through its body's low orbit, so craft A → craft B is two map steps (A → low orbit → B). You never stop in that low orbit, so the Mission Builder shows the two as one leg, A → B, whose map value is the two steps added; the rendezvous then replaces it. The second leg starts from A's orbit when the first one arrives (you're alongside A then), which is what the Rendezvous tab does when one plan meets both craft: planned leg by leg or in one go, the legs come out the same. If the first leg is planned again and now arrives later than the second leg's saved start, the second plan is out of date (A and B have moved on since): the mission flags it, and opening the leg plans it again from the new arrival.
+**Back-to-back rendezvous.** The map reaches a craft only through its body's low orbit, so craft A → craft B is two map steps (A → low orbit → B). You never stop in that low orbit, so the mission shows the two as one leg, A → B, whose map value is the two steps added; the rendezvous then replaces it. The second leg starts from A's orbit when the first one arrives (you're alongside A then), which is what the Rendezvous pane does when one plan meets both craft: planned leg by leg or in one go, the legs come out the same. If the first leg is planned again and now arrives later than the second leg's saved start, the second plan is out of date (A and B have moved on since): the mission flags it, and opening the leg plans it again from the new arrival.
 
 Worked example: launch to a placed station in a 150 km circular orbit inclined 5° (μ = 3.5316×10¹², LKO r₁ = 680,000 m, station r₂ = 750,000 m):
 
 1. The map's step LKO → Station is a Hohmann transfer (§2.1): a = 715,000 m, so 2,334.04 − 2,278.93 = 55.11 m/s, then 2,169.98 − 2,116.20 = 53.78 m/s, **108.9 m/s** in all. Its worst-case plane change for 5° at the station is 2 × 2,169.98 × sin 2.5° = **189.3 m/s** (§2.3).
-2. The Rendezvous tab lifts off as KSC passes under the station's orbit, so the rocket climbs straight into its plane. The plan needs only **109 m/s** of orbital burns and no plane change, and that replaces the step.
+2. The Rendezvous pane lifts off as KSC passes under the station's orbit, so the rocket climbs straight into its plane. The plan needs only **109 m/s** of orbital burns and no plane change, and that replaces the step.
 3. Going on from the station to a relay at 400 km in Kerbin's equatorial plane starts from the station's 5° orbit, so that plan has a 189 m/s plane match among its burns (479 m/s in total).
 4. Coming home from the Mun to meet a relay at about 2,870 km: Mun surface → Mun low orbit (580) → Mun intercept (310) → Kerbin low orbit (860, or aerobrake) are the map's steps. The last step, Kerbin low orbit → relay, is the rendezvous. From 80 km, that is a small plane match (22 m/s for 0.56°), a 668 m/s transfer burn and a 433 m/s match, **1,122 m/s** in place of the map's Hohmann value.
 
@@ -1061,7 +1061,7 @@ What a vessel or a saved design can actually do, and whether that's enough for t
 
 ### 7.1 A vessel's remaining Δv (rocket equation)
 
-The Vessels tab works out what a vessel in your save can still do from **its parts and what's left in its tanks**. The save gives each part's dry mass, the resources in it and each engine's thrust limiter; the part data read from your KSP folder (ModuleManager's cache, so mod patches are included) gives each engine's thrust, Isp and propellant mix, and each resource's density.
+The Vessels pane works out what a vessel in your save can still do from **its parts and what's left in its tanks**. The save gives each part's dry mass, the resources in it and each engine's thrust limiter; the part data read from your KSP folder (ModuleManager's cache, so mod patches are included) gives each engine's thrust, Isp and propellant mix, and each resource's density.
 
 ```
 m_dry = Σ part masses                       m_wet = m_dry + Σ units × density
@@ -1125,7 +1125,7 @@ Worked example 2 — boosters that burn out first: a core (1 t tank with 4 t of 
 
 ### 7.3 Does a design have enough Δv for the mission?
 
-In the Mission Builder's Rocket pane you can pick a saved design. Its stages (§7.2, vacuum Δv, in firing order) are poured into the mission's phases (§6.1, in burn order): the first stage fills the first phase; whatever it has left carries into the next phase; when a stage runs out part-way through a phase, the next stage takes over — as in flight.
+In the Rocket pane you can pick a saved design. Its stages (§7.2, vacuum Δv, in firing order) are poured into the mission's phases (§6.1, in burn order): the first stage fills the first phase; whatever it has left carries into the next phase; when a stage runs out part-way through a phase, the next stage takes over — as in flight.
 
 Margins are wiggle room, not a requirement, so the stages are poured twice — once against each phase's Δv **with** its margin, once **without** — and each phase gets one of three verdicts:
 
@@ -1236,7 +1236,7 @@ L(t) = ϖ + M₀ + n·(t − epoch)                  mean longitude: where the c
 same path ⇔ |Δa|/a, |Δe|, |Δi|, |ΔΩ|, |Δϖ|, |ΔL(t)| all ≤ 10⁻⁵   (angles in radians, wrapped to ±π)
 ```
 
-10⁻⁵ rad is about 10 m per 1,000 km of orbit radius. That's more than a coasting craft's jitter under physics, and far less than any burn. Only a real change re-plans the Rendezvous tab and moves linked custom locations. Otherwise only the game time moves the plan's start, once per 60 s of game time.
+10⁻⁵ rad is about 10 m per 1,000 km of orbit radius. That's more than a coasting craft's jitter under physics, and far less than any burn. Only a real change re-plans the Rendezvous pane and moves linked custom locations. Otherwise only the game time moves the plan's start, once per 60 s of game time.
 
 Worked example: "KerbLink Mk2 A" (a = 3,470,794.97 m, M₀ = 4.0125185 rad at epoch 816,532.3 s), restated by KSP 1,000 s later:
 
@@ -1250,7 +1250,7 @@ Worked example: "KerbLink Mk2 A" (a = 3,470,794.97 m, M₀ = 4.0125185 rad at ep
 
 ### 8.3 Flying a plan: how far off it you are
 
-The Flight tab keeps the orbit a plan starts from and its burns. Where the plan has the craft at time *t* is that start orbit with each of the craft's own burns before *t* applied in turn (§1.8, the same step the planner uses). Satellites' burns are left out, because they don't move the carrier. The drift is the straight-line distance between where the plan has the craft and where its real orbit (live from the game, §8.2) has it:
+The Flight pane keeps the orbit a plan starts from and its burns. Where the plan has the craft at time *t* is that start orbit with each of the craft's own burns before *t* applied in turn (§1.8, the same step the planner uses). Satellites' burns are left out, because they don't move the carrier. The drift is the straight-line distance between where the plan has the craft and where its real orbit (live from the game, §8.2) has it:
 
 ```
 planned(t) = start orbit, then each own burn with time ≤ t applied (Rendezvous.OrbitAfter)
@@ -1275,7 +1275,7 @@ Worked example: a craft on a 100 km circular Kerbin orbit (r = 700,000 m) that i
 2. **Before the transfer**, the transfer burn and the match-velocity burn are solved again (Lambert, §4.4) from where those burns leave the craft.
 3. **On the coast after the transfer**, the miss is measured first: the craft's real path and the target's at the meeting time. Under 500 m, no correction is planned and only the match-velocity burn is updated for the real path (Δv = target's velocity − yours there). Otherwise a **course correction** is solved from the coast to the target, searched over the first half of what's left, at least two minutes from now. A speed error is cheapest to fix early, and a tilt late.
 4. The burn time and the meeting may each move by up to 15% of the time left. **Pinning them would be a mistake.** A transfer is close to half an orbit, and at 180° Lambert's transfer plane is undefined: a 0.07° tilt left by a plane match turned the re-solved transfer into 608 m/s instead of 55 m/s. Searching the window (the porkchop refinement of §3.4) finds a slightly shorter or longer transfer that costs about what the original did. The meeting can't move past the next leg's first burn.
-5. Within 2 minutes of the meeting there's nothing left to re-plan: fly the last part by eye (the Rendezvous tab's "Closing the last few kilometres").
+5. Within 2 minutes of the meeting there's nothing left to re-plan: fly the last part by eye (the Rendezvous pane's "Closing the last few kilometres").
 
 A tilt alone barely matters on the coast. A sideways error at a half-orbit transfer moves the meeting by metres, because the two paths cross again exactly half an orbit on. That's why a pure normal error needs no correction.
 
@@ -1291,7 +1291,7 @@ Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (
 - Code: `FlightReplan.RendezvousRest`, `Rendezvous.CheapestIntercept`, `FlightViewModel.ReplanAfterBurn`/`ReplanRest`; tested in `FlightReplanTests` (the table, row by row)
 - Source: Lambert's problem (§4.4); midcourse corrections as a re-solved Lambert arc, Curtis 5.3
 
-**When the leg hasn't started** (nothing flown yet, or the plane match still to come), Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). If a plane crossing falls inside the lead, the flight's note says so (§4.2). On the Rendezvous tab, a plan that starts from the game's time counts its "in …" times from the game's time, not from the start after the lead. It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made on the Rendezvous tab can change. That's intended: the old choice was for an orbit you're no longer on.
+**When the leg hasn't started** (nothing flown yet, or the plane match still to come), Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). If a plane crossing falls inside the lead, the flight's note says so (§4.2). On the Rendezvous pane, a plan that starts from the game's time counts its "in …" times from the game's time, not from the start after the lead. It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made in the Rendezvous pane can change. That's intended: the old choice was for an orbit you're no longer on.
 
 - Code: `FlightViewModel.ReplanRendezvousAsync`
 

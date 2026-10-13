@@ -1,0 +1,8 @@
+# Text is stored with LF in the repo and checked out with the platform's line endings.
+* text=auto
+
+# Binary files: never converted.
+*.ico binary
+*.png binary
+*.jpg binary
+*.db binary
