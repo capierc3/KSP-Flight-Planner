@@ -54,9 +54,6 @@ public sealed record LandingPlan(
 
     /// <summary>Deorbit plus braking, without the plane change.</summary>
     public double TotalDv => DeorbitDv + BrakingDv;
-
-    /// <summary>How far before the site (along the ground) the braking burn starts, as an angle around the body.</summary>
-    public double BrakingStartDeg => BrakingDistanceM / (Body.EquatorialRadiusM + PeriapsisAltitudeM) * 180 / Math.PI;
 }
 
 public static class Landing

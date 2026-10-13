@@ -11,7 +11,7 @@ internal static class Migrations
 {
     private static readonly string[] Scripts =
     [
-        // v1: constant body data + first user table
+        // v1: the whole schema (pre-release, so edited in place)
         """
         CREATE TABLE app_meta (
             key    TEXT PRIMARY KEY,
@@ -290,8 +290,6 @@ internal static class Migrations
         );
         """,
     ];
-
-    public static int LatestVersion => Scripts.Length;
 
     /// <summary>Hash of all schema scripts; changes whenever the schema text changes.</summary>
     public static string Fingerprint { get; } = Hashing.Sha256(string.Join("\n", Scripts));

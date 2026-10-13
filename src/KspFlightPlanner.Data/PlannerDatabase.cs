@@ -67,34 +67,28 @@ public sealed class PlannerDatabase
     public static readonly bool ResetOnSchemaChange = true;
 
     /// <summary>
-    /// Tables holding user data, copied into a rebuilt database. Columns are matched by name; the map
-    /// gives expressions for columns that were renamed or split (new column → SQL over the old table).
-    /// Rows that no longer fit (e.g. a body that disappeared) are skipped.
+    /// Tables holding user data, copied into a rebuilt database. Columns are matched by name; rows that
+    /// no longer fit (e.g. a body that disappeared) are skipped.
     /// </summary>
-    private static readonly (string Table, Dictionary<string, string> Renamed)[] UserTables =
+    private static readonly string[] UserTables =
     [
-        ("custom_locations", new()
-        {
-            ["periapsis_altitude_m"] = "altitude_m",
-            ["apoapsis_altitude_m"] = "altitude_m",
-            ["description"] = "note",
-        }),
-        ("custom_location_images", []),
-        ("dv_map_overrides", []),
-        ("saved_missions", new() { ["updated_utc"] = "created_utc" }),
-        ("saved_constellations", []),
-        ("flights", []),
-        ("app_settings", []),
+        "custom_locations",
+        "custom_location_images",
+        "dv_map_overrides",
+        "saved_missions",
+        "saved_constellations",
+        "flights",
+        "app_settings",
         // Read from the KSP install rather than typed in, but kept so a rebuild doesn't need KSP to be there.
-        ("ksp_resources", []),
-        ("ksp_parts", []),
-        ("ksp_part_resources", []),
-        ("ksp_part_engines", []),
-        ("ksp_engine_propellants", []),
-        ("ksp_part_antennas", []),
+        "ksp_resources",
+        "ksp_parts",
+        "ksp_part_resources",
+        "ksp_part_engines",
+        "ksp_engine_propellants",
+        "ksp_part_antennas",
         // Sampled from the running game; baking again needs KSP and takes minutes.
-        ("ksp_surface_bakes", []),
-        ("ksp_surface_bake_air", []),
+        "ksp_surface_bakes",
+        "ksp_surface_bake_air",
     ];
 
     public void Initialize()
@@ -135,7 +129,7 @@ public sealed class PlannerDatabase
                 attach.Parameters.AddWithValue("$path", oldPath);
                 attach.ExecuteNonQuery();
             }
-            foreach (var (table, renamed) in UserTables) CopyTable(connection, table, renamed);
+            foreach (var table in UserTables) CopyTable(connection, table);
             using var detach = connection.CreateCommand();
             detach.CommandText = "DETACH DATABASE old;";
             detach.ExecuteNonQuery();
@@ -151,24 +145,18 @@ public sealed class PlannerDatabase
         }
     }
 
-    private static void CopyTable(SqliteConnection connection, string table, Dictionary<string, string> renamed)
+    private static void CopyTable(SqliteConnection connection, string table)
     {
         var oldColumns = Columns(connection, "old", table);
         if (oldColumns.Count == 0) return; // table didn't exist before
         var newColumns = Columns(connection, "main", table);
 
-        var targets = new List<string>();
-        var sources = new List<string>();
-        foreach (var column in newColumns)
-        {
-            if (oldColumns.Contains(column)) { targets.Add(column); sources.Add(column); }
-            else if (renamed.TryGetValue(column, out var expr) && oldColumns.Contains(expr)) { targets.Add(column); sources.Add(expr); }
-        }
-        if (targets.Count == 0) return;
+        var columns = newColumns.Where(oldColumns.Contains).ToList();
+        if (columns.Count == 0) return;
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"INSERT OR IGNORE INTO main.{table} ({string.Join(", ", targets)}) " +
-                          $"SELECT {string.Join(", ", sources)} FROM old.{table};";
+        cmd.CommandText = $"INSERT OR IGNORE INTO main.{table} ({string.Join(", ", columns)}) " +
+                          $"SELECT {string.Join(", ", columns)} FROM old.{table};";
         try { cmd.ExecuteNonQuery(); }
         catch (SqliteException) { /* e.g. a foreign key no longer satisfied; skip this table */ }
     }

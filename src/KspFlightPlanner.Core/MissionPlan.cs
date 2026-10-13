@@ -9,9 +9,9 @@ public sealed record LegSetting(int PhaseIndex, bool UseAerobrake, bool IncludeP
 /// <summary>
 /// A place the mission visits, with an optional note ("Dock at station, pick up Jeb") and the tools of the leg that
 /// arrives here: <paramref name="Transfer"/> makes it a transfer leg flown in a chosen launch window,
-/// <paramref name="Rendezvous"/> a rendezvous leg that meets the craft at this stop, <paramref name="Landing"/> a landing at a
-/// chosen spot on a surface stop, <paramref name="Launch"/> a launch into an inclined orbit. <paramref name="Deploy"/> is a step at the stop itself: releasing a satellite
-/// constellation from a resonant orbit.
+/// <paramref name="Rendezvous"/> a rendezvous leg that meets the craft at this stop, <paramref name="Landing"/> a landing
+/// at a chosen spot on a surface stop, <paramref name="Launch"/> a launch into an inclined orbit. <paramref name="Deploy"/>
+/// is a step at the stop itself: releasing a satellite constellation from a resonant orbit.
 /// </summary>
 public sealed record MissionStop(string NodeKey, string? Note = null, TransferLeg? Transfer = null, DeployStep? Deploy = null,
     RendezvousLeg? Rendezvous = null, LandingLeg? Landing = null, LaunchLeg? Launch = null);
@@ -19,8 +19,8 @@ public sealed record MissionStop(string NodeKey, string? Note = null, TransferLe
 /// <summary>
 /// A saved mission: ordered stops plus phase/leg choices, the route-wide options, the design checked against it
 /// (by .craft file path) and free-form notes. <paramref name="Places"/> are the mission's own places its stops can be
-/// at (crafts met, constellation orbits), kept here rather than on the Locations tab. Serialised to the database as JSON; added fields need defaults so older
-/// missions still read.
+/// at (crafts met, constellation orbits), kept here rather than on the Locations pane. Serialised to the database as
+/// JSON; added fields need defaults so missions saved before them still read.
 /// </summary>
 public sealed record MissionDefinition(
     IReadOnlyList<MissionStop> Stops,

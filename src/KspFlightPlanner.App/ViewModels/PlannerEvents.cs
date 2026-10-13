@@ -1,13 +1,10 @@
 namespace KspFlightPlanner.App.ViewModels;
 
-/// <summary>Lets the screens tell each other about changes (e.g. a custom location edited on the Locations tab).</summary>
+/// <summary>Lets the screens tell each other about changes (e.g. a custom location edited on the Locations pane).</summary>
 public sealed class PlannerEvents
 {
     /// <summary>Custom locations were added, edited or deleted. The argument is the screen that made the change.</summary>
     public event Action<object>? LocationsChanged;
-
-    /// <summary>A screen asked to show a custom location in the Locations tab.</summary>
-    public event Action<long>? OpenLocationRequested;
 
     /// <summary>
     /// Another KSP save was chosen: its locations, missions, flights and constellations replace the last save's.
@@ -18,12 +15,11 @@ public sealed class PlannerEvents
     /// <summary>A body's surface bake was saved (Tools › Bake Surface Data); the argument is the body's name.</summary>
     public event Action<string>? SurfaceDataChanged;
 
-    /// <summary>A planning tab handed a plan to the Flight tab; the argument is the new flight's id.</summary>
+    /// <summary>A planning pane handed a plan to the Flight pane; the argument is the new flight's id.</summary>
     public event Action<long>? OpenFlightRequested;
 
     public void RaiseLocationsChanged(object sender) => LocationsChanged?.Invoke(sender);
     public void RaiseSurfaceDataChanged(string bodyName) => SurfaceDataChanged?.Invoke(bodyName);
     public void RaiseSaveChanged() => SaveChanged?.Invoke();
     public void RequestOpenFlight(long flightId) => OpenFlightRequested?.Invoke(flightId);
-    public void RequestOpenLocation(long locationId) => OpenLocationRequested?.Invoke(locationId);
 }

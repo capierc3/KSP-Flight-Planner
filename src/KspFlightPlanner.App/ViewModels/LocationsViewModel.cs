@@ -37,7 +37,7 @@ public sealed class LocationTreeItem : ObservableObject
 }
 
 /// <summary>
-/// The Locations tab: every body with all its data (read-only) and the user's custom locations (editable).
+/// The Locations pane: every body with all its data (read-only) and the user's custom locations (editable).
 /// </summary>
 public sealed class LocationsViewModel : ObservableObject
 {
@@ -97,7 +97,7 @@ public sealed class LocationsViewModel : ObservableObject
         Detail = item.Location is { } location ? CreateEditor(location) : item.Body is { } body ? CreateBodyDetail(body) : null;
     }
 
-    /// <summary>Opens a custom location (e.g. from the Mission Builder's ✎ button).</summary>
+    /// <summary>Selects a custom location in the tree and shows it.</summary>
     public void SelectLocation(long locationId)
     {
         var item = All(Tree).FirstOrDefault(i => i.Location?.Id == locationId);

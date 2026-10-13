@@ -200,7 +200,7 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>"Depart Year 1, Day 231, arrive Year 2, Day 75 / Ejection 1,055 m/s, capture 652 m/s", or why the saved window isn't used.</summary>
     public string TransferText { get; private set; } = "";
 
-    /// <summary>The rendezvous the leg arriving here is flown as, as planned on the Rendezvous tab; null for a Δv-map leg.</summary>
+    /// <summary>The rendezvous the leg arriving here is flown as, as planned on the Rendezvous pane; null for a Δv-map leg.</summary>
     public RendezvousLeg? Rendezvous
     {
         get => _rendezvous;
@@ -772,7 +772,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _baseMap = maps.GetMap();
         _map = MapWithPlaces();
 
-        // Custom locations are managed on the Locations tab; keep the stop pickers and map in step with it.
+        // Custom locations are managed on the Locations pane; keep the stop pickers and map in step with it.
         _events.LocationsChanged += _ => OnLocationsChanged();
         // Another save chosen (the window has offered to save this mission): carry on with that save's missions.
         _events.SaveChanged += OpenLastMission;
@@ -823,7 +823,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public ObservableCollection<PhaseViewModel> Phases { get; } = [];
     public ObservableCollection<LegRowViewModel> Legs { get; } = [];
 
-    // ---------------- Custom locations (managed on the Locations tab) ----------------
+    // ---------------- Custom locations (managed on the Locations pane) ----------------
 
     /// <summary>Custom locations changed: refresh the map and stop pickers, and move stops off deleted locations.</summary>
     private void OnLocationsChanged()
@@ -912,7 +912,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public RelayCommand<StopViewModel> OpenRendezvousCommand { get; }
     public RelayCommand<StopViewModel> RemoveRendezvousCommand { get; }
 
-    /// <summary>A stop's rendezvous leg should be opened on the Rendezvous tab.</summary>
+    /// <summary>A stop's rendezvous leg should be opened on the Rendezvous pane.</summary>
     public event Action<RendezvousLegLink>? RendezvousRequested;
 
     /// <summary>The Rendezvous link for the leg arriving at <paramref name="owner"/> (a stop), if it still has a rendezvous.</summary>

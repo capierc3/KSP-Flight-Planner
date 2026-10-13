@@ -209,7 +209,7 @@ public sealed class VesselAnalysisTests : IDisposable
         var ants = Assert.Single(r.Engines);
         Assert.Equal((3, 6.0, true), (ants.Count, ants.ThrustLimitPercent, ants.CountedForDeltaV));
         Assert.Equal(["Oxidizer", "Liquid Fuel", "ElectricCharge"], r.Resources.Select(x => x.DisplayName)); // heaviest first
-        Assert.Empty(r.Notes.Where(n => n.Contains("runs out")));
+        Assert.DoesNotContain(r.Notes, n => n.Contains("runs out"));
         Assert.Contains("probeCoreHex.v2", r.UnknownParts); // not in this small catalog
     }
 

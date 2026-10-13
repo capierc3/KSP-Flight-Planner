@@ -38,7 +38,7 @@ public sealed record CustomLocation(
 
     /// <summary>
     /// Ids from here up are places a mission keeps itself (a craft met, a constellation's orbit) rather than locations
-    /// on the Locations tab, so the two never collide.
+    /// on the Locations pane, so the two never collide.
     /// </summary>
     public const long MissionPlaceIdBase = 1L << 40;
 
@@ -84,7 +84,7 @@ public sealed record CustomLocationAnalysis(
 /// Duna/Eve/Moho intercepts); the edge is the extra ejection Δv plus the arrival burn — docs/MATH.md §3.5.</item>
 /// </list>
 /// Inclination is charged as a worst-case plane change at the target's apoapsis (docs/MATH.md §2.3); the
-/// Mission Builder adds it when "Include worst-case plane changes" is on.
+/// mission adds it when "Include worst-case plane changes" is on.
 /// </summary>
 public static class CustomLocations
 {

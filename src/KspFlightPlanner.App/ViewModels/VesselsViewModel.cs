@@ -28,7 +28,7 @@ public sealed class VesselTreeItem(string title, string subtitle, string glyph, 
 }
 
 /// <summary>
-/// The Vessels tab: every vessel in the linked KSP save, grouped by the body it's at, with its remaining Δv and fuel;
+/// The Vessels pane: every vessel in the linked KSP save, grouped by the body it's at, with its remaining Δv and fuel;
 /// and every saved design (.craft) with its stage-by-stage Δv. Reads straight from KSP's files, so it's always as
 /// current as KSP's last write.
 /// </summary>

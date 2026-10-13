@@ -16,8 +16,8 @@ public sealed record DesignEntry(CraftFileInfo File, DesignReport? Report)
 }
 
 /// <summary>
-/// The save's ship designs, read and flown once and shared by the Vessels tab and the Mission Builder. Refreshed when a
-/// .craft file changes (the Ships folder is watched) or the part data is read again.
+/// The save's ship designs, read and flown once and shared by the Vessels pane and the mission's design check.
+/// Refreshed when a .craft file changes (the Ships folder is watched) or the part data is read again.
 /// </summary>
 public sealed class DesignLibrary : ObservableObject
 {

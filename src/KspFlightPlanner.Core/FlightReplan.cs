@@ -42,8 +42,8 @@ public static class FlightReplan
 
         var leg = flight.Burns.Where(InLeg).OrderBy(b => b.Ut).ToList();
         var upcoming = leg.Where(b => b.Ut >= now).ToList();
-        if (upcoming.Count == 0 || upcoming[^1].KindOrFromTitle != ManeuverKind.MatchVelocity) return null;
-        if (upcoming.Count == leg.Count || upcoming.Any(b => b.KindOrFromTitle == ManeuverKind.PlaneChange)) return null;
+        if (upcoming.Count == 0 || upcoming[^1].Kind != ManeuverKind.MatchVelocity) return null;
+        if (upcoming.Count == leg.Count || upcoming.Any(b => b.Kind == ManeuverKind.PlaneChange)) return null;
 
         var match = upcoming[^1];
         var arrival = match.Ut;

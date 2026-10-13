@@ -1,6 +1,5 @@
 using KspFlightPlanner.Core;
 using KspFlightPlanner.Data;
-using Microsoft.Data.Sqlite;
 
 namespace KspFlightPlanner.Tests;
 
@@ -150,46 +149,5 @@ public sealed class LocationDetailsTests : IDisposable
         Assert.Single(locations.GetImages(id));
         Assert.Equal(700, new DvMapRepository(_db).GetMap()!["mun.surface"].DvFromParent);
         Assert.False(File.Exists(_path + ".old"));
-    }
-
-    [Fact]
-    public void Old_circular_locations_become_periapsis_and_apoapsis()
-    {
-        // A database from the previous version: custom_locations had altitude_m and note.
-        var oldPath = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
-        try
-        {
-            using (var c = new SqliteConnection($"Data Source={oldPath}"))
-            {
-                c.Open();
-                using var cmd = c.CreateCommand();
-                cmd.CommandText = """
-                    CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                    INSERT INTO app_meta VALUES ('fingerprint', 'previous-version');
-                    CREATE TABLE custom_locations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, body_name TEXT NOT NULL,
-                        altitude_m REAL NOT NULL, note TEXT, created_utc TEXT NOT NULL);
-                    INSERT INTO custom_locations VALUES (7, 'Eye of Kerbol', 'Kerbol', 10000000000, 'Sun watcher', '2026-10-07T00:00:00Z');
-                    PRAGMA user_version = 1;
-                    """;
-                cmd.ExecuteNonQuery();
-            }
-            TestDb.Release(oldPath);
-
-            var db = new PlannerDatabase(oldPath);
-            db.Initialize();
-
-            var eye = Assert.Single(new CustomLocationRepository(db).GetAll());
-            Assert.Equal(7, eye.Id);
-            Assert.Equal(10_000_000_000, eye.PeriapsisAltitudeM);
-            Assert.Equal(10_000_000_000, eye.ApoapsisAltitudeM);
-            Assert.Equal("Sun watcher", eye.Description);
-            Assert.NotNull(new DvMapRepository(db).GetMap()!["custom.7"]);
-        }
-        finally
-        {
-            TestDb.Release(oldPath);
-            File.Delete(oldPath);
-            File.Delete(oldPath + ".old");
-        }
     }
 }

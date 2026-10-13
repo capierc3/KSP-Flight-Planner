@@ -226,7 +226,7 @@ public sealed class MissionRepository(PlannerDatabase database)
             MissionDefinition? definition;
             try { definition = JsonSerializer.Deserialize<MissionDefinition>(reader.GetString(2), Json); }
             catch (JsonException) { continue; }
-            if (definition?.Stops is not { Count: >= 2 }) continue; // unreadable or pre-stops format
+            if (definition?.Stops is not { Count: >= 2 }) continue; // a mission needs somewhere to start and somewhere to go
             list.Add(new SavedMission(reader.GetInt64(0), reader.GetString(1), definition, Utc(reader.GetString(3)), Utc(reader.GetString(4))));
         }
         return list;

@@ -72,7 +72,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     public RelayCommand LoadPlanCommand { get; }
     public RelayCommand DeletePlanCommand { get; }
 
-    /// <summary>Hands the deployment to the Flight tab, which times the burns from the carrier's real orbit.</summary>
+    /// <summary>Hands the deployment to the Flight pane, which times the burns from the carrier's real orbit.</summary>
     public RelayCommand FlyCommand { get; }
 
     public RelayCommand StopEditingLegCommand { get; }
@@ -266,7 +266,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
 
     /// <summary>
     /// Creates the flight. When the craft being flown in KSP orbits this body it becomes the carrier and the burns are
-    /// planned from its orbit straight away; otherwise the Flight tab asks for the carrier.
+    /// planned from its orbit straight away; otherwise the Flight pane asks for the carrier.
     /// </summary>
     private void Fly()
     {

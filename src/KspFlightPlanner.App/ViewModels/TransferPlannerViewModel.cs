@@ -588,7 +588,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
             }
             catch (ArgumentException)
             {
-                // Position inputs invalid; fix it on the Locations tab.
+                // Position inputs invalid; fix it on the Locations pane.
             }
         }
         _byId = all.ToDictionary(b => b.Id);
@@ -596,7 +596,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         foreach (var b in all.Where(b => b.Orbit is not null && Siblings(b).Any())) Origins.Add(b);
     }
 
-    /// <summary>Custom locations changed on the Locations tab: reload, keeping the current choices where they still exist.</summary>
+    /// <summary>Custom locations changed on the Locations pane: reload, keeping the current choices where they still exist.</summary>
     private void ReloadBodies()
     {
         if (SelectedSystem is not { } system) return;

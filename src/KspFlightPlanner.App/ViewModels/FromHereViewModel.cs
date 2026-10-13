@@ -32,7 +32,6 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
 public sealed record TripOptionRow(TripOption Option, string Text)
 {
     public string Label => Option.Label;
-    public bool HasLabel => Option.Label.Length > 0;
 }
 
 /// <summary>

@@ -6,7 +6,7 @@ using KspFlightPlanner.Core;
 namespace KspFlightPlanner.Data;
 
 /// <summary>
-/// Flights handed to the Flight tab, kept until the player deletes them (a mission can span many sessions).
+/// Flights handed to the Flight pane, kept until the player deletes them (a mission can span many sessions).
 /// Only the active save's flights (<see cref="PlannerDatabase.ActiveSave"/>) and shared ones are read.
 /// </summary>
 public sealed class FlightRepository(PlannerDatabase database)

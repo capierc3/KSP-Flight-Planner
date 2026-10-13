@@ -87,8 +87,8 @@ public sealed record LiveMerge(KspSave Save, IReadOnlyDictionary<LiveVessel, str
 
     /// <summary>
     /// Whether two statements of an orbit describe the same path with the craft in the same place at <paramref name="ut"/>
-    /// (to within about 10 m per 1,000 km, above the jitter of a coasting craft under physics). Angles that are undefined for circular or equatorial orbits are compared as
-    /// the combinations that are defined.
+    /// (to within about 10 m per 1,000 km, above the jitter of a coasting craft under physics). Angles that are undefined
+    /// for circular or equatorial orbits are compared as the combinations that are defined.
     /// </summary>
     public static bool SamePath(SavedOrbit a, SavedOrbit b, double ut, Func<string, double?> mu)
     {

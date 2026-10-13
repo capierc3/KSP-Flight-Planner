@@ -74,7 +74,7 @@ public sealed class DatabaseTests : IDisposable
         Assert.Equal(13, atm.PressureTable.Count);
         Assert.Equal(1.225, atm.PressureTable[0].DensityKgM3);
 
-        // Gap filled from the page text; Moho's parking default now clears its peaks instead of 10% of the radius.
+        // Gap filled from the page text; Moho's parking default clears its peaks (not the 10%-of-radius fallback).
         Assert.Equal(6817, stock["Moho"].HighestElevationM);
         Assert.Equal(["Lowlands", "Midlands", "Highlands"], stock["Gilly"].Biomes);
         Assert.Single(repo.GetBody(mun.Id)!.Landmarks, m => m.Name == "Armstrong memorial");
@@ -117,7 +117,7 @@ public sealed class DatabaseTests : IDisposable
         var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
         try
         {
-            // Simulate a database from an older build: user_version 1 but missing columns, no fingerprint.
+            // A database that doesn't match the schema: user_version 1 but missing columns, no fingerprint.
             using (var old = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
             {
                 old.Open();
@@ -270,7 +270,7 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
-    public void Missions_and_the_last_open_one_survive_a_rebuild_from_before_updated_utc()
+    public void Missions_and_the_last_open_one_survive_a_rebuild()
     {
         var repo = new MissionRepository(_db);
         var id = repo.Add("Duna relays", new MissionDefinition([new("kerbin.surface"), new("duna.lo")], [new("Launch")], [], Notes: "Bring HG-5s"));
@@ -278,7 +278,7 @@ public sealed class DatabaseTests : IDisposable
         using (var c = _db.Open())
         using (var cmd = c.CreateCommand())
         {
-            cmd.CommandText = "ALTER TABLE saved_missions DROP COLUMN updated_utc;"; // as saved by an older version
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
             cmd.ExecuteNonQuery();
         }
         TestDb.Release(_path);
@@ -287,7 +287,6 @@ public sealed class DatabaseTests : IDisposable
 
         var saved = Assert.Single(new MissionRepository(_db).GetAll());
         Assert.Equal(("Duna relays", "Bring HG-5s"), (saved.Name, saved.Definition.Notes));
-        Assert.Equal(saved.CreatedUtc, saved.UpdatedUtc); // filled from created_utc
         Assert.Equal(id, new SettingsRepository(_db).LoadLastMissionId());
     }
 

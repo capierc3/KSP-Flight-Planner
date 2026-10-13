@@ -10,7 +10,7 @@ namespace KspFlightPlanner.App.ViewModels;
 
 public enum BurnState { Upcoming, Next, OnCraft, Passed }
 
-/// <summary>One burn on the Flight tab: what and when, its node values, and whether it's on the craft yet.</summary>
+/// <summary>One burn on the Flight pane: what and when, its node values, and whether it's on the craft yet.</summary>
 public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObject
 {
     private string _countdown = "";
@@ -54,7 +54,7 @@ public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObjec
 }
 
 /// <summary>
-/// The Flight tab: plans handed over from the planning tabs, flown against the live game. Shows each burn's countdown
+/// The Flight pane: plans handed over from the planning panes, flown against the live game. Shows each burn's countdown
 /// and whether it's on the craft, sends burns as maneuver nodes, and re-plans from the craft's real orbit when it has
 /// drifted from the plan.
 /// </summary>

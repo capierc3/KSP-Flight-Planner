@@ -19,7 +19,7 @@ public static class DockTheme
     // AvalonDock key → Fluent brush key (or Accent / Clear).
     private static readonly (object Key, string Fluent)[] Colours =
     [
-        // Frame: window colour between panes, slightly lighter pane content (like the old card panels)
+        // Frame: window colour between panes, slightly lighter pane content
         (VsKeys.Background, "SolidBackgroundFillColorTertiaryBrush"),
         (VsKeys.TabBackground, "SolidBackgroundFillColorBaseBrush"),
         (VsKeys.PanelBorderBrush, "SolidBackgroundFillColorBaseBrush"),

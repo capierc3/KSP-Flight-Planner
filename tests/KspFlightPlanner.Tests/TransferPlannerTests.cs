@@ -88,7 +88,7 @@ public sealed class TransferPlannerTests : IDisposable
         Assert.True(w.TotalDv < plan.Hohmann.EjectionDv + plan.Hohmann.CaptureDv + 300);
 
         // The refined optimum is no worse than any grid cell.
-        var gridMin = plan.Porkchop.TotalDv.Where(double.IsFinite).Min();
+        var gridMin = Assert.IsType<PorkchopPlot>(plan.Porkchop).TotalDv.Where(double.IsFinite).Min();
         Assert.True(w.TotalDv <= gridMin + 0.01);
     }
 

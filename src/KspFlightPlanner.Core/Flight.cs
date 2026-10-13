@@ -4,9 +4,9 @@ namespace KspFlightPlanner.Core;
 
 public enum FlightKind
 {
-    /// <summary>Meet craft in orbit (Rendezvous tab).</summary>
+    /// <summary>Meet craft in orbit (Rendezvous pane).</summary>
     Rendezvous,
-    /// <summary>Deploy a constellation from a carrier orbit (Resonant Orbits tab).</summary>
+    /// <summary>Deploy a constellation from a carrier orbit (Resonant Orbits pane).</summary>
     Resonant,
     /// <summary>One-off burns planned from where the craft was (From here pane): flown as they are, not re-planned.</summary>
     Burns,
@@ -31,19 +31,6 @@ public sealed record FlightBurn(string Title, double Ut, NodeBurn Burn)
 
     /// <summary>A rendezvous burn's part in its leg (a course correction is a <see cref="ManeuverKind.Transfer"/>); null otherwise.</summary>
     public ManeuverKind? Kind { get; init; }
-
-    /// <summary>
-    /// <see cref="Kind"/>, or for a flight stored before burns carried it, read from the title
-    /// ("Transfer burn: KerbLink Mk2 B").
-    /// </summary>
-    public ManeuverKind? KindOrFromTitle => Kind ?? (Title.Split(':')[0] switch
-    {
-        "Match planes" => ManeuverKind.PlaneChange,
-        "Phasing orbit" => ManeuverKind.Phasing,
-        "Transfer burn" or "Course correction" => ManeuverKind.Transfer,
-        "Match velocity" => ManeuverKind.MatchVelocity,
-        _ => Title.StartsWith("Deorbit", StringComparison.Ordinal) ? ManeuverKind.Deorbit : null,
-    });
 }
 
 /// <summary>The craft flying a flight. <see cref="SaveVesselId"/> is null for a craft not in the save yet.</summary>
@@ -65,7 +52,7 @@ public sealed record FlightApproach(string FromBody, double ParkingAltitudeM, IR
 }
 
 /// <summary>
-/// A plan handed from a planning tab to the Flight tab: its burns as maneuver nodes, the orbit they start from (to see
+/// A plan handed from a planning pane to the Flight pane: its burns as maneuver nodes, the orbit they start from (to see
 /// how far the real craft has drifted), and the plan's inputs, so it can be planned again from the craft's real orbit.
 /// </summary>
 public sealed record Flight
@@ -144,7 +131,7 @@ public sealed record Flight
 public sealed record DeploymentPlan(IReadOnlyList<FlightBurn> Burns, OrbitalElements StartOrbit, bool Inserting, IReadOnlyList<string> Warnings);
 
 /// <summary>
-/// Flying a resonant deployment (Resonant Orbits tab): get on the carrier orbit, then release one satellite each time
+/// Flying a resonant deployment (Resonant Orbits pane): get on the carrier orbit, then release one satellite each time
 /// the carrier passes the shared apsis and circularize it there. docs/MATH.md §5.2.
 /// </summary>
 public static class ResonantDeployment

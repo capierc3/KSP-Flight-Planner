@@ -98,11 +98,6 @@ public sealed class MainViewModel : ObservableObject
                 else if (link.Body != deploy.Body || link.AltitudeM != deploy.AltitudeM) Resonant.EditDeploy(link);
             }
         };
-        events.OpenLocationRequested += id =>
-        {
-            Locations.SelectLocation(id);
-            RequestPane(Panes.Location);
-        };
     }
 
     public MissionBuilderViewModel Mission { get; }

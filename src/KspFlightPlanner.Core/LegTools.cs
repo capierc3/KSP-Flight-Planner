@@ -37,11 +37,11 @@ public sealed record TransferSpan(
 public sealed record TransferLegResult(TransferSpan Span, TransferWindow Window);
 
 /// <summary>
-/// A rendezvous leg as planned on the Rendezvous tab: meeting the placed custom location (or imported vessel)
+/// A rendezvous leg as planned on the Rendezvous pane: meeting the placed custom location (or imported vessel)
 /// <paramref name="TargetLocationId"/>, starting at <paramref name="StartUt"/>. Where craft are depends on the date and the
 /// save, so the result is kept as planned: <paramref name="OrbitalDv"/> (plane match, phasing, transfer and match burns)
 /// and <paramref name="ArrivalUt"/>. The picks (launch, phasing orbit, porkchop point; null = the planner's) let the
-/// Rendezvous tab show the same plan again.
+/// Rendezvous pane show the same plan again.
 /// </summary>
 public sealed record RendezvousLeg(
     long TargetLocationId,

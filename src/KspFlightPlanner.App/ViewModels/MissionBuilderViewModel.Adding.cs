@@ -30,13 +30,13 @@ public sealed record RendezvousStart(string After, RendezvousStartKind Kind, str
     };
 }
 
-/// <summary>A rendezvous leg to add: the craft met and the plan made for it on the Rendezvous tab.</summary>
-/// <param name="Target">The craft: a location on the Locations tab (kept as it is), or a new place for the mission (Id 0).</param>
+/// <summary>A rendezvous leg to add: the craft met and the plan made for it on the Rendezvous pane.</summary>
+/// <param name="Target">The craft: a location on the Locations pane (kept as it is), or a new place for the mission (Id 0).</param>
 public sealed record RendezvousStopToAdd(CustomLocation Target, RendezvousLeg Plan);
 
 public sealed partial class MissionBuilderViewModel
 {
-    /// <summary>The Δv map as stored (with the Locations tab's custom locations), before the mission's own places.</summary>
+    /// <summary>The Δv map as stored (with the Locations pane's custom locations), before the mission's own places.</summary>
     private DeltaVMap? _baseMap;
 
     /// <summary>The mission's own places (crafts met, constellation orbits), by id; kept with the mission.</summary>
@@ -47,7 +47,7 @@ public sealed partial class MissionBuilderViewModel
 
     private bool IsPlaceKey(string key) => _places.Values.Any(p => p.Key == key);
 
-    /// <summary>A custom location by id: one of the mission's own places, or one on the Locations tab.</summary>
+    /// <summary>A custom location by id: one of the mission's own places, or one on the Locations pane.</summary>
     private CustomLocation? Location(long id) => _places.TryGetValue(id, out var place) ? place : _locations.Get(id);
 
     /// <summary>The mission's places, replacing the last mission's (when one is opened).</summary>
@@ -92,7 +92,7 @@ public sealed partial class MissionBuilderViewModel
     public RelayCommand AddTransferCommand { get; private set; } = null!;
     public RelayCommand AddDeployCommand { get; private set; } = null!;
 
-    /// <summary>The Rendezvous tab should start planning a leg to add (its start: where the mission is).</summary>
+    /// <summary>The Rendezvous pane should start planning a leg to add (its start: where the mission is).</summary>
     public event Action? AddRendezvousRequested;
 
     /// <summary>The Transfer Planner should start choosing a window for a leg to add (from the planet the mission is at).</summary>
@@ -254,7 +254,7 @@ public sealed partial class MissionBuilderViewModel
 
     /// <summary>
     /// Adds a stop at each craft, in order, after the last stop, each leg flown as the rendezvous planned. Crafts not on
-    /// the Locations tab become the mission's own places. Returns the first new stop.
+    /// the Locations pane become the mission's own places. Returns the first new stop.
     /// </summary>
     public StopViewModel? AddRendezvousStops(IReadOnlyList<RendezvousStopToAdd> legs)
     {

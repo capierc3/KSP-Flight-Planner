@@ -236,7 +236,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
     /// <summary>
     /// Publishes the save file with the live game over it (or the file alone when not connected, or when the file is newer).
     /// A live update only replaces <see cref="Save"/> when an orbit or situation changed or the game time moved on by
-    /// <see cref="LiveTimeStepS"/>, so tabs that re-plan from it don't churn every poll.
+    /// <see cref="LiveTimeStepS"/>, so panes that re-plan from it don't churn every poll.
     /// </summary>
     private void ApplyLive(bool fileChanged)
     {

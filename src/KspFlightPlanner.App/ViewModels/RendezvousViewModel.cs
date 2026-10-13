@@ -74,7 +74,7 @@ public sealed class LegRow : ObservableObject
 }
 
 /// <summary>
-/// A mission leg the Rendezvous tab is planning: where it starts (a KSC launch or a craft) and the craft it meets come
+/// A mission leg the Rendezvous pane is planning: where it starts (a KSC launch or a craft) and the craft it meets come
 /// from the leg, and every plan made is saved back into the mission through <see cref="Save"/>.
 /// </summary>
 /// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
@@ -93,7 +93,7 @@ public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpa
 }
 
 /// <summary>
-/// The Rendezvous tab: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
+/// The Rendezvous pane: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
 /// KSC or from a craft already in orbit. Burns are shown as exact maneuver-node values or as instructions to fly by feel.
 /// </summary>
 public sealed class RendezvousViewModel : ObservableObject
@@ -149,7 +149,7 @@ public sealed class RendezvousViewModel : ObservableObject
     private bool _startFromMission;
     private RendezvousStart? _missionStart;
 
-    /// <summary>Crafts that aren't in the save or on the Locations tab: the mission's own places and parking orbits.</summary>
+    /// <summary>Crafts that aren't in the save or on the Locations pane: the mission's own places and parking orbits.</summary>
     private readonly List<CraftChoice> _extraCrafts = [];
 
     /// <summary>The custom location (or mission place) behind a craft in the list, by craft key.</summary>
@@ -210,7 +210,7 @@ public sealed class RendezvousViewModel : ObservableObject
 
     public RelayCommand StopEditingLegCommand { get; }
 
-    /// <summary>The mission leg being planned; null when the tab is used on its own.</summary>
+    /// <summary>The mission leg being planned; null when the pane is used on its own.</summary>
     public RendezvousLegLink? Leg => _leg;
 
     public bool IsEditingLeg => _leg is not null;
@@ -261,7 +261,7 @@ public sealed class RendezvousViewModel : ObservableObject
         Recalculate();
     }
 
-    /// <summary>Back to using the tab on its own; the mission keeps the plan last made.</summary>
+    /// <summary>Back to using the pane on its own; the mission keeps the plan last made.</summary>
     public void StopEditingLeg()
     {
         _leg = null;
@@ -280,7 +280,7 @@ public sealed class RendezvousViewModel : ObservableObject
 
     /// <summary>
     /// A custom location (or mission place) in the craft list: the save's vessel while it's linked to this save, else
-    /// the location's own entry, added to the list if it isn't there (a mission's place isn't on the Locations tab).
+    /// the location's own entry, added to the list if it isn't there (a mission's place isn't on the Locations pane).
     /// </summary>
     private CraftChoice CraftForLocation(CustomLocation location)
     {
@@ -332,7 +332,7 @@ public sealed class RendezvousViewModel : ObservableObject
 
     // ---------------- Inputs ----------------
 
-    /// <summary>Every craft and placed location in orbit, from the linked save and the Locations tab.</summary>
+    /// <summary>Every craft and placed location in orbit, from the linked save and the Locations pane.</summary>
     public ObservableCollection<CraftChoice> Crafts { get; } = [];
 
     /// <summary>Crafts that can be added as the next target: same body as the start, not already on the route.</summary>
@@ -431,7 +431,7 @@ public sealed class RendezvousViewModel : ObservableObject
         OnPropertyChanged(nameof(ParkingAltitudeText));
     }
 
-    /// <summary>Links the tab to the mission, so a plan can start where the mission is and be added to it.</summary>
+    /// <summary>Links the pane to the mission, so a plan can start where the mission is and be added to it.</summary>
     public void AttachMission(MissionBuilderViewModel mission)
     {
         _mission = mission;
@@ -463,7 +463,7 @@ public sealed class RendezvousViewModel : ObservableObject
         var n => $"Adds {n} stops ({string.Join(", ", Targets.Select(t => t.Name))}), each flown as its leg of this plan.",
     };
 
-    /// <summary>The plan was added to the mission: the first new stop, whose leg the tab can now show.</summary>
+    /// <summary>The plan was added to the mission: the first new stop, whose leg the pane can now show.</summary>
     public event Action<StopViewModel>? AddedToMission;
 
     private void AddToMission()
@@ -484,7 +484,7 @@ public sealed class RendezvousViewModel : ObservableObject
     private static T? At<T>(List<T> list, int index) => index < list.Count ? list[index] : default;
 
     /// <summary>
-    /// The craft as a place the mission can stop at: its location on the Locations tab if it has one, else a new place
+    /// The craft as a place the mission can stop at: its location on the Locations pane if it has one, else a new place
     /// for the mission from its orbit (linked to the save's vessel, so it's the same craft next time).
     /// </summary>
     private CustomLocation LocationFor(CraftChoice craft, IReadOnlyDictionary<string, CelestialBody> bodies)
@@ -633,7 +633,7 @@ public sealed class RendezvousViewModel : ObservableObject
         TargetsChanged();
     }
 
-    /// <summary>Hands the plan to the Flight tab, where its burns are sent to the game and re-planned as it's flown.</summary>
+    /// <summary>Hands the plan to the Flight pane, where its burns are sent to the game and re-planned as it's flown.</summary>
     private void Fly()
     {
         if (_request is not { } request || _plan is not { } plan) return;
@@ -904,7 +904,7 @@ public sealed class RendezvousViewModel : ObservableObject
             }
             catch (ArgumentException)
             {
-                // Position inputs invalid; fix it on the Locations tab.
+                // Position inputs invalid; fix it on the Locations pane.
             }
         }
 
@@ -1385,8 +1385,8 @@ public sealed class RendezvousViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Launch: the saved design checked against launch + each leg (+ deorbit), as in the Mission Builder, with 10% margin on
-    /// the orbital phases for flying by hand. From orbit: the chosen vessel's remaining Δv against the route.
+    /// Launch: the saved design checked against launch + each leg (+ deorbit), as in the mission's design check, with
+    /// 10% margin on the orbital phases for flying by hand. From orbit: the chosen vessel's remaining Δv against the route.
     /// </summary>
     private void RefreshCapacity()
     {

@@ -45,7 +45,7 @@ public sealed class FlightReplanTests : IDisposable
             Targets = [new FlightTarget("Station", null, target, leg.ArrivalUt)],
             PlannedUt = 1000,
         };
-        _output.WriteLine(string.Join(", ", flight.Burns.Select(b => $"{b.KindOrFromTitle} {b.DeltaV:0.0} @ {b.Ut:0}")));
+        _output.WriteLine(string.Join(", ", flight.Burns.Select(b => $"{b.Kind} {b.DeltaV:0.0} @ {b.Ut:0}")));
         return (flight, chaser, target);
     }
 
@@ -61,7 +61,7 @@ public sealed class FlightReplanTests : IDisposable
     private double MissAtMeeting(OrbitalElements craft, RestPlan rest, double now, OrbitalElements target)
     {
         var arrival = rest.Burns[^1].Ut;
-        var after = Flown(craft, rest.Burns.Where(b => b.Ut >= now && b.KindOrFromTitle != ManeuverKind.MatchVelocity));
+        var after = Flown(craft, rest.Burns.Where(b => b.Ut >= now && b.Kind != ManeuverKind.MatchVelocity));
         return (Kepler.StateAt(after, Mu, arrival).Position - Kepler.StateAt(target, Mu, arrival).Position).Length;
     }
 
@@ -69,7 +69,7 @@ public sealed class FlightReplanTests : IDisposable
     public void A_sloppy_transfer_burn_gets_a_course_correction()
     {
         var (flight, start, target) = Planned(Circular(80_000), Circular(150_000, meanAnomalyDeg: 60));
-        var transfer = flight.Burns.Single(b => b.KindOrFromTitle == ManeuverKind.Transfer);
+        var transfer = flight.Burns.Single(b => b.Kind == ManeuverKind.Transfer);
         var arrival = flight.Targets[0].ArrivalUt;
         var now = transfer.Ut + 300;
         var craft = Flown(start, flight.Burns.Where(b => b.Ut <= transfer.Ut), transfer, new NodeBurn(1.5, 0.5, 0));
@@ -91,7 +91,7 @@ public sealed class FlightReplanTests : IDisposable
     {
         var (flight, start, target) = Planned(Circular(80_000), Circular(150_000, inclinationDeg: 3, meanAnomalyDeg: 200));
         var plane = flight.Burns.First();
-        Assert.Equal(ManeuverKind.PlaneChange, plane.KindOrFromTitle);
+        Assert.Equal(ManeuverKind.PlaneChange, plane.Kind);
         var arrival = flight.Targets[0].ArrivalUt;
         var now = plane.Ut + 200;
         var craft = Flown(start, [plane], plane, new NodeBurn(0, 3, 1));
@@ -113,7 +113,7 @@ public sealed class FlightReplanTests : IDisposable
         // A tilt alone barely matters on a half-orbit transfer (the paths cross again at the far side); with a speed
         // error too, the correction has to fix both while the meeting is still nearly 180° away.
         var (flight, start, target) = Planned(Circular(80_000), Circular(150_000, meanAnomalyDeg: 60));
-        var transfer = flight.Burns.Single(b => b.KindOrFromTitle == ManeuverKind.Transfer);
+        var transfer = flight.Burns.Single(b => b.Kind == ManeuverKind.Transfer);
         var now = transfer.Ut + 210;
         var craft = Flown(start, flight.Burns.Where(b => b.Ut <= transfer.Ut), transfer, new NodeBurn(1.5, 4, 0.5));
 
@@ -137,7 +137,7 @@ public sealed class FlightReplanTests : IDisposable
     public void On_course_there_is_no_correction()
     {
         var (flight, start, target) = Planned(Circular(80_000), Circular(150_000, meanAnomalyDeg: 60));
-        var transfer = flight.Burns.Single(b => b.KindOrFromTitle == ManeuverKind.Transfer);
+        var transfer = flight.Burns.Single(b => b.Kind == ManeuverKind.Transfer);
         var now = transfer.Ut + 300;
         var craft = Flown(start, flight.Burns.Where(b => b.Ut <= transfer.Ut));
 
@@ -153,19 +153,10 @@ public sealed class FlightReplanTests : IDisposable
     public void Too_close_to_the_meeting_says_to_fly_by_eye()
     {
         var (flight, start, target) = Planned(Circular(80_000), Circular(150_000, meanAnomalyDeg: 60));
-        var transfer = flight.Burns.Single(b => b.KindOrFromTitle == ManeuverKind.Transfer);
+        var transfer = flight.Burns.Single(b => b.Kind == ManeuverKind.Transfer);
         var craft = Flown(start, flight.Burns.Where(b => b.Ut <= transfer.Ut), transfer, new NodeBurn(2, 0, 0));
         var now = flight.Targets[0].ArrivalUt - 200;
         var ex = Assert.Throws<ArgumentException>(() => FlightReplan.RendezvousRest(flight, _kerbin, craft, _ => target, now, 120));
         Assert.Contains("by eye", ex.Message);
-    }
-
-    [Fact]
-    public void Old_flights_read_the_burn_kind_from_the_title()
-    {
-        Assert.Equal(ManeuverKind.Transfer, new FlightBurn("Transfer burn: KerbLink Mk2 B", 0, default).KindOrFromTitle);
-        Assert.Equal(ManeuverKind.MatchVelocity, new FlightBurn("Match velocity: KerbLink Mk2 B", 0, default).KindOrFromTitle);
-        Assert.Equal(ManeuverKind.Deorbit, new FlightBurn("Deorbit KerbLink", 0, default).KindOrFromTitle);
-        Assert.Null(new FlightBurn("Circularize at apoapsis (250 km)", 0, default).KindOrFromTitle);
     }
 }
