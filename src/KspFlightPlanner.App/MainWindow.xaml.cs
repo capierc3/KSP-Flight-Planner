@@ -356,8 +356,7 @@ public partial class MainWindow : Window
 
     private void About_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
-        MessageBox.Show(this, $"KSP Flight Planner {version}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
+        MessageBox.Show(this, $"KSP Flight Planner {BuildInfo.Version}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
                               "Every formula is explained in the Math Guide (F1).",
             "About KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
     }
