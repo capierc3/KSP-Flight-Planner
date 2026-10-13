@@ -739,9 +739,11 @@ Worked example — Kerbin (100 km round equatorial orbit) to a 100 km orbit arou
 
 From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s into an 80 km orbit. Then the same Kerbin → Duna choices: 2,815 m/s in all for the cheapest. Mun → Minmus (30 km to 20 km) costs **450 m/s**.
 
+**Flying a Transfer Planner window.** *Fly this window* hands the window you picked (the best one, or a point clicked on the porkchop plot) to the Flight pane as a transfer flight. If you're flying a craft around the origin, it's planned from that craft's orbit. Otherwise it's planned from a round equatorial orbit at the planner's parking height, to plan again from the real orbit once you're up ("Use the craft I'm flying"). *Re-plan* works from wherever the craft is: around the origin it's this hop across in that window, and around the parent it's a course correction (§3.7). A window whose departure is more than 2 % of its flight time in the past is gone. The arrival mode carries over too: *Aerobrake* and *Flyby* drop the capture burn.
+
 **Planned again on the way.** Once out of Kerbin's sphere the craft is around the Sun, and Go to Duna is a hop *down* (§3.7). It's on the way, so it's a correction. In the test, a 2 m/s overburn at Kerbin is fixed with **28.7 m/s**, a quarter of the way to Duna.
 
-- Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`); the pane is `FromHereViewModel`; tested in `TripPlannerTests`
+- Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`), `TransferFlights.Plan`; the panes are `FromHereViewModel`, `TransferPlannerViewModel` (Fly this window) and `FlightViewModel` (Re-plan); tested in `TripPlannerTests`
 - Source: Curtis 8.2–8.10 (patched conics, the sphere of influence, departure and arrival hyperbolas); Lambert's problem (§3.4)
 
 ## 4. Meeting a craft in orbit (rendezvous)

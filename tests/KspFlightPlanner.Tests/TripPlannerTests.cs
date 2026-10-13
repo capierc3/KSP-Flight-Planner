@@ -22,7 +22,7 @@ public sealed class TripPlannerTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
     }
 
@@ -123,5 +123,41 @@ public sealed class TripPlannerTests : IDisposable
         Assert.True(fix[0].IsCorrection);
         Assert.InRange(fix[0].Legs[0].Plan.Departure.Sum(b => b.DeltaV), 0.01, 40);
         Assert.Equal(100_000, fix[0].Arrival.PeriapsisAltitudeM, 100.0);
+    }
+
+    [Fact]
+    public void A_transfer_planner_window_flies_from_orbit_and_is_planned_again_on_the_way()
+    {
+        var (kerbin, duna, sun) = (Body("Kerbin"), Body("Duna"), Body("Kerbol"));
+        var now = 1_000_000.0;
+        var window = TransferPlanner.Plan(new TransferRequest(kerbin, duna, sun, 100_000, 100_000, now)).BestWindow;
+        var flight = new Flight
+        {
+            Name = "Kerbin → Duna", Kind = FlightKind.Transfer, BodyName = "Kerbin", OriginName = "Kerbin", DestinationName = "Duna",
+            TransferDepartureUt = window.DepartureUt, TransferFlightTimeS = window.FlightTimeS, AltitudeM = 100_000,
+        };
+        var craft = Circular("Kerbin", 100_000);
+        var planned = TransferFlights.Plan(flight, _bodies, kerbin, craft, now, flight.LeadS);
+        foreach (var b in planned.Burns) _output.WriteLine($"{b.Title}: {b.DeltaV:0.0} m/s at +{(b.Ut - now) / 3600:0.0} h");
+        Assert.Equal("Kerbin", planned.BodyName);
+        Assert.StartsWith("Leave Kerbin", planned.Burns[0].Title);
+        Assert.StartsWith("Capture at Duna", planned.Burns[^1].Title);
+        Assert.InRange(planned.Burns[0].Ut, window.DepartureUt - 86_400, window.DepartureUt + 86_400);
+
+        // Flown 2 m/s hard; once out of Kerbin's sphere it's planned again from the path around the Sun.
+        var leave = planned.Burns[0];
+        var flown = Rendezvous.OrbitAfter(leave.Ut, leave.Burn with { Prograde = leave.Burn.Prograde + 2 }, craft, kerbin.Mu);
+        var exit = Hops.LeaveSoi(kerbin, sun, flown, leave.Ut, leave.Ut + 1e7)!;
+        var again = TransferFlights.Plan(planned, _bodies, sun, exit.Path, exit.CrossingUt + 86_400, flight.LeadS);
+        foreach (var b in again.Burns) _output.WriteLine($"  again: {b.Title}: {b.DeltaV:0.0} m/s");
+        Assert.Equal("Kerbol", again.BodyName);
+        Assert.StartsWith("Course correction to Duna", again.Burns[0].Title);
+        Assert.InRange(again.Burns[0].DeltaV, 0.01, 40);
+
+        // Too late for the window, or aerobraking at the end.
+        Assert.Throws<ArgumentException>(() => TransferFlights.Plan(flight, _bodies, kerbin, craft, window.DepartureUt + 0.1 * window.FlightTimeS, 300));
+        var braking = TransferFlights.Plan(flight with { Arrival = ArrivalMode.Aerobrake }, _bodies, kerbin, craft, now, 300);
+        Assert.DoesNotContain(braking.Burns, b => b.Title.StartsWith("Capture"));
+        Assert.Contains("aerobrake", braking.Note);
     }
 }

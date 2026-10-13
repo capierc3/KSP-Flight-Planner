@@ -23,6 +23,12 @@ public sealed class PlannerDatabase
     public string DatabasePath { get; }
 
     /// <summary>
+    /// Closes this database's pooled connections, so its file can be moved or deleted. Only this file's: others (tests
+    /// running alongside) keep theirs.
+    /// </summary>
+    public void ReleaseConnections() => SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
+
+    /// <summary>
     /// The KSP save (folder name) being planned for. Custom locations, missions, flights and constellations belong to
     /// one save: only that save's rows (and shared ones, with no save) are read, and new rows are added to it.
     /// Null when no save is chosen: only shared rows are read, and new rows are shared.
@@ -115,7 +121,7 @@ public sealed class PlannerDatabase
     private void RebuildKeepingUserData(string fingerprint)
     {
         var oldPath = DatabasePath + ".old";
-        SqliteConnection.ClearAllPools();
+        ReleaseConnections();
         File.Delete(oldPath);
         File.Move(DatabasePath, oldPath);
 
@@ -140,7 +146,7 @@ public sealed class PlannerDatabase
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            ReleaseConnections();
             File.Delete(oldPath);
         }
     }
@@ -191,7 +197,7 @@ public sealed class PlannerDatabase
 
     private void DeleteDatabase()
     {
-        SqliteConnection.ClearAllPools();
+        ReleaseConnections();
         File.Delete(DatabasePath);
     }
 

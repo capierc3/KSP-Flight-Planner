@@ -138,7 +138,7 @@ public sealed class FlightViewModel : ObservableObject
     public bool HasNoSelection => _selected is null;
 
     public string NoSelectionText => Flights.Count == 0
-        ? "No flights yet. For a quick burn from where you are, use the From here pane. Or plan on the Rendezvous or Resonant Orbits tool, then click Fly this plan."
+        ? "No flights yet. For a quick burn or a trip from where you are, use the From here pane. Or plan on the Rendezvous, Resonant Orbits or Transfer Planner tool, then click Fly this plan (or window)."
         : "Pick a flight in the Flights pane to see its burns and send them to KSP.";
 
     // ---------------- The game ----------------
@@ -171,6 +171,8 @@ public sealed class FlightViewModel : ObservableObject
         FlightKind.Rendezvous => _selected.Targets.Count == 0 ? "Rendezvous" : $"Rendezvous with {string.Join(", then ", _selected.Targets.Select(t => t.Name))}",
         FlightKind.Resonant => $"Deploy {_selected.SatelliteCount} satellites at {_selected.AltitudeM / 1000:#,0.#} km around {_selected.BodyName}",
         FlightKind.Burns => $"Planned from where the craft was around {_selected.BodyName}. To plan it again, use the From here pane.",
+        FlightKind.Transfer => $"To {_selected.DestinationName} in the window leaving {_selected.OriginName} {_calendar.FormatDate(_selected.TransferDepartureUt)}, " +
+                               $"{_calendar.FormatDuration(_selected.TransferFlightTimeS)} there. Re-plan from wherever the craft is on the way.",
         _ => "",
     };
 
@@ -308,6 +310,15 @@ public sealed class FlightViewModel : ObservableObject
         if (f.Craft is not { } craft) { DriftText = ""; return; }
         if (Body(f.BodyName) is not { } body) { DriftText = ""; return; }
         var orbit = _sync.OrbitOf(craft);
+        if (f.Kind == FlightKind.Transfer && _sync.PathOf(craft)?.BodyName is { } around && around != f.BodyName)
+        {
+            // On the way: into the parent's sphere after the ejection, or arrived.
+            IsDrifting = around != f.DestinationName;
+            DriftText = around == f.DestinationName
+                ? $"{craft.Name} has reached {around}: capture with the burn above, or Circularize at periapsis in the From here pane."
+                : $"{craft.Name} is around {around} now: Re-plan from here to correct the course from its real path.";
+            return;
+        }
         if (orbit is null || orbit.BodyName != f.BodyName)
         {
             DriftText = f.Approach is not null && orbit?.BodyName is { } there
@@ -343,6 +354,11 @@ public sealed class FlightViewModel : ObservableObject
         if (_selected is not { } f || f.Craft is not { } craft || f.Kind == FlightKind.Burns) return;
         if (Body(f.BodyName) is not { } body) { Status = $"{f.BodyName} isn't in the planner's bodies."; return; }
         if (_sync.Now is not { } now) { Status = "No game time yet: connect to KSP or link a save."; return; }
+        if (f.Kind == FlightKind.Transfer)
+        {
+            await ReplanTransferAsync(f, craft, now);
+            return;
+        }
         var orbit = _sync.OrbitOf(craft);
         if (orbit is null || orbit.BodyName != f.BodyName)
         {
@@ -367,6 +383,37 @@ public sealed class FlightViewModel : ObservableObject
             if (replanned is null) return;
             Store(replanned);
             Status = $"Re-planned from {craft.Name}'s orbit at {_calendar.FormatDate(now)}.";
+        }
+        catch (ArgumentException ex)
+        {
+            Status = $"Couldn't re-plan: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>
+    /// Plans a transfer flight again from wherever the craft is: its orbit around the origin (the window's burns), or its
+    /// path on the way (a course correction). docs/MATH.md §3.8.
+    /// </summary>
+    private async Task ReplanTransferAsync(Flight f, FlightCraft craft, double now)
+    {
+        if (_sync.PathOf(craft) is not { BodyName: { } there } path || Body(there) is not { } around)
+        {
+            Status = $"{craft.Name} isn't in orbit, so there's nothing to plan from.";
+            return;
+        }
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var bodies = _sync.StockBodies().Values.ToList();
+            var replanned = await Task.Run(() => TransferFlights.Plan(f, bodies, around, path.ToElements(), now, f.LeadS));
+            Store(replanned);
+            Status = $"Planned from {craft.Name}'s path around {around.Name} at {_calendar.FormatDate(now)}.";
         }
         catch (ArgumentException ex)
         {

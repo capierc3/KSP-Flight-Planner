@@ -150,7 +150,7 @@ public sealed class VesselAnalysisTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
     }
 
@@ -259,7 +259,7 @@ public sealed class VesselAnalysisTests : IDisposable
             cmd.CommandText = "UPDATE app_meta SET value = 'stale' WHERE key = 'fingerprint';";
             cmd.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         _db.Initialize();
 
         var loaded = repo.Load();

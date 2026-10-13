@@ -25,7 +25,7 @@ public sealed class LegToolsTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
     }
 

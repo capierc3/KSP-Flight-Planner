@@ -82,6 +82,8 @@
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
 
                     <DockPanel Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right" Content="Fly this window" Command="{Binding FlyCommand}" Padding="12,2" Margin="6,0,0,0"
+                                ToolTip="{Binding FlyHint}" ToolTipService.ShowOnDisabled="True" />
                         <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetToBestCommand}"
                                 Visibility="{Binding IsCustomSelection, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="{Binding Outbound.Title}" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />

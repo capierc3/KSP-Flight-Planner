@@ -18,7 +18,7 @@ public sealed class LocationDetailsTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
         File.Delete(_path + ".old");
     }
@@ -140,7 +140,7 @@ public sealed class LocationDetailsTests : IDisposable
             cmd.CommandText = "UPDATE app_meta SET value = 'stale' WHERE key = 'fingerprint';";
             cmd.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         _db.Initialize();
 
         var kept = Assert.Single(locations.GetAll());
@@ -173,7 +173,7 @@ public sealed class LocationDetailsTests : IDisposable
                     """;
                 cmd.ExecuteNonQuery();
             }
-            SqliteConnection.ClearAllPools();
+            TestDb.Release(oldPath);
 
             var db = new PlannerDatabase(oldPath);
             db.Initialize();
@@ -187,7 +187,7 @@ public sealed class LocationDetailsTests : IDisposable
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            TestDb.Release(oldPath);
             File.Delete(oldPath);
             File.Delete(oldPath + ".old");
         }

@@ -10,7 +10,7 @@
         <Button DockPanel.Dock="Bottom" Content="Delete flight" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
                    Visibility="{Binding HasNoFlights, Converter={StaticResource BoolToVisibility}}"
-                   Text="No flights yet. Plan on the Rendezvous or Resonant Orbits tab, then click Fly this plan." />
+                   Text="No flights yet. Plan on the Rendezvous, Resonant Orbits or Transfer Planner tab, then click Fly this plan (or window)." />
         <ListBox ItemsSource="{Binding Flights}" SelectedItem="{Binding SelectedFlight}" SelectionChanged="List_SelectionChanged" BorderThickness="0" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate>

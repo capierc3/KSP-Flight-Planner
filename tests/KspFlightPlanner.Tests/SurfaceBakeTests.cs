@@ -22,7 +22,7 @@ public sealed class SurfaceBakeTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
         File.Delete(_path + ".old");
     }
@@ -115,7 +115,7 @@ public sealed class SurfaceBakeTests : IDisposable
             cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries install tables over
             cmd.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         _db.Initialize();
 
         var repo = new SurfaceBakeRepository(_db);

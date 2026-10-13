@@ -10,6 +10,8 @@ public enum FlightKind
     Resonant,
     /// <summary>One-off burns planned from where the craft was (From here pane): flown as they are, not re-planned.</summary>
     Burns,
+    /// <summary>To another planet or moon in a launch window (Transfer Planner): re-planned from wherever the craft is on the way.</summary>
+    Transfer,
 }
 
 /// <summary>One burn of a flight, as a maneuver node.</summary>
@@ -99,7 +101,15 @@ public sealed record Flight
     public double StayS { get; init; }
     public double? DeorbitPeriapsisAltitudeM { get; init; }
 
-    // Resonant inputs.
+    // Transfer inputs: the window (leaving OriginName at TransferDepartureUt, TransferFlightTimeS long) and the arrival.
+    // BodyName is the body the burns were last planned around: the origin, then its parent on the way.
+    public string? OriginName { get; init; }
+    public string? DestinationName { get; init; }
+    public double TransferDepartureUt { get; init; }
+    public double TransferFlightTimeS { get; init; }
+    public ArrivalMode Arrival { get; init; } = ArrivalMode.Circularize;
+
+    // Resonant inputs (AltitudeM is also a transfer's arrival height).
     public int SatelliteCount { get; init; }
     public double AltitudeM { get; init; }
     public bool PreferDiveOrbit { get; init; }
@@ -209,5 +219,67 @@ public static class ResonantDeployment
             });
         }
         return new DeploymentPlan(burns, craft, !onCarrier, warnings);
+    }
+}
+
+/// <summary>
+/// Flying a launch window from the Transfer Planner: the burns of a hop across (§3.8) from the craft's orbit around the
+/// origin, or once it has left, a course correction from its path around the parent (§3.7). docs/MATH.md §3.8.
+/// </summary>
+public static class TransferFlights
+{
+    /// <summary>A window is gone once its departure is this far (as a fraction of the flight) in the past.</summary>
+    public const double LateFraction = 0.02;
+
+    /// <summary>
+    /// <paramref name="flight"/> (a <see cref="FlightKind.Transfer"/>) with its burns planned from <paramref name="orbit"/>,
+    /// the craft's orbit around <paramref name="around"/> at <paramref name="now"/>, none sooner than
+    /// <paramref name="leadS"/> from then. Throws <see cref="ArgumentException"/> when it can't be planned from there.
+    /// </summary>
+    public static Flight Plan(Flight flight, IReadOnlyCollection<CelestialBody> bodies, CelestialBody around, OrbitalElements orbit, double now, double leadS)
+    {
+        CelestialBody Named(string? name) => bodies.FirstOrDefault(b => b.Name == name) ?? throw new ArgumentException($"{name} isn't in the planner's bodies.");
+        var origin = Named(flight.OriginName);
+        var destination = Named(flight.DestinationName);
+        var parent = bodies.FirstOrDefault(b => b.Id == origin.ParentId) ?? throw new ArgumentException($"{origin.Name} doesn't orbit anything.");
+        var earliest = now + leadS;
+
+        HopPlan plan;
+        if (around.Id == origin.Id)
+        {
+            if (now > flight.TransferDepartureUt + LateFraction * flight.TransferFlightTimeS)
+                throw new ArgumentException($"This window left {origin.Name} {GameCalendar.Kerbin.FormatDuration(now - flight.TransferDepartureUt)} ago: " +
+                                            $"pick another on the Transfer Planner, or use Go to {destination.Name} in the From here pane.");
+            plan = Hops.Across(origin, destination, parent, orbit, earliest, flight.AltitudeM, flight.TransferDepartureUt, flight.TransferFlightTimeS);
+        }
+        else if (around.Id == parent.Id)
+        {
+            plan = Hops.Down(parent, destination, orbit, earliest, flight.AltitudeM);
+        }
+        else if (around.Id == destination.Id)
+        {
+            throw new ArgumentException($"Already around {destination.Name}: use Circularize at periapsis in the From here pane to capture.");
+        }
+        else
+        {
+            throw new ArgumentException($"The craft is around {around.Name}: this window leaves from {origin.Name}.");
+        }
+
+        var notes = plan.Warnings.ToList();
+        if (flight.Arrival != ArrivalMode.Circularize && plan.Capture is not null)
+        {
+            plan = plan with { Capture = null };
+            notes.Add(flight.Arrival == ArrivalMode.Aerobrake
+                ? $"No capture burn: you chose to aerobrake at {destination.Name}."
+                : $"No capture burn: a flyby of {destination.Name}.");
+        }
+        return flight with
+        {
+            BodyName = around.Name,
+            StartOrbit = orbit,
+            Burns = plan.Burns,
+            PlannedUt = now,
+            Note = notes.Count > 0 ? string.Join(" ", notes) : null,
+        };
     }
 }

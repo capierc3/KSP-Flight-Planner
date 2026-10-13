@@ -43,7 +43,7 @@ public sealed class KspSaveTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
     }
 
@@ -171,7 +171,7 @@ public sealed class KspSaveTests : IDisposable
             cmd.CommandText = "UPDATE app_meta SET value = 'stale' WHERE key = 'fingerprint';";
             cmd.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         _db.Initialize();
 
         Assert.Equal(new AppSettings { KspInstallPath = @"E:\KSP", KspSaveName = "Protogen", WatchSave = false }, settings.Load());

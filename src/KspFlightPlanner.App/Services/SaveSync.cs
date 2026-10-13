@@ -102,12 +102,15 @@ public sealed class SaveSync : ObservableObject, IDisposable
     /// A craft's current orbit: live while connected and flying (from the save otherwise), found by save id, or by name
     /// for a craft not in the save yet. Null if it isn't in orbit or can't be found.
     /// </summary>
-    public SavedOrbit? OrbitOf(FlightCraft craft)
+    public SavedOrbit? OrbitOf(FlightCraft craft) => PathOf(craft) is { IsClosed: true } orbit ? orbit : null;
+
+    /// <summary>Like <see cref="OrbitOf"/>, but also a path that escapes the body (leaving it, or flying past a moon).</summary>
+    public SavedOrbit? PathOf(FlightCraft craft)
     {
         SavedOrbit? orbit = null;
         if (craft.SaveVesselId is { } id) orbit = Save?.Vessels.FirstOrDefault(v => v.Id == id)?.Orbit;
         else if (_link.Game?.Vessels is { } vessels) orbit = vessels.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true)?.Orbit;
-        return orbit is { IsClosed: true } ? orbit : null;
+        return orbit is { IsPath: true } ? orbit : null;
     }
 
     /// <summary>The save vessel a live vessel was matched to, or null when it's not in the save.</summary>

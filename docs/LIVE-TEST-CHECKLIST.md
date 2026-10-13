@@ -242,6 +242,13 @@ From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 and §3.8
 - [ ] After the ejection, once around the Sun: **Go to…** Duna again → a small **Course correction** and the capture
 - [ ] From the Mun, **Go to…** Duna → the trip stops in Kerbin orbit (80 km) first; the later burns say to plan again from there
 - [ ] Mun → Minmus → a hop across around Kerbin, with a small course correction
+- [ ] **Transfer Planner › Fly this window** (Kerbin → Duna) while flying a craft in Kerbin orbit → Fly mode opens the Flight
+      pane with a "Kerbin → Duna" flight flown by that craft: Leave Kerbin for Duna, a course correction, Capture at Duna
+- [ ] Same with no craft (or not connected) → planned from a round orbit at the parking height, with a note to click "Use
+      the craft I'm flying" once up; doing that plans it from the real orbit
+- [ ] Click a different point on the porkchop plot, then Fly this window → the flight leaves at that point's date
+- [ ] After the ejection, out of Kerbin's sphere: the Flight pane says the craft is around Kerbol and lights **Re-plan**;
+      Re-plan → a course correction and the capture
 
 Notes:
 

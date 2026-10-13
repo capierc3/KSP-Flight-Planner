@@ -37,7 +37,7 @@ public partial class App : Application
                 new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes),
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
                 new VesselsViewModel(sync, designs),
-                new TransferPlannerViewModel(bodies, locations, events, sync),
+                new TransferPlannerViewModel(bodies, locations, events, sync, flights),
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
                 new FlightViewModel(flights, sync, events),

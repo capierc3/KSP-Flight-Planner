@@ -17,7 +17,7 @@ public sealed class DatabaseTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         File.Delete(_path);
     }
 
@@ -130,7 +130,7 @@ public sealed class DatabaseTests : IDisposable
                     """;
                 cmd.ExecuteNonQuery();
             }
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TestDb.Release(path);
 
             var db = new PlannerDatabase(path);
             db.Initialize();
@@ -141,7 +141,7 @@ public sealed class DatabaseTests : IDisposable
         }
         finally
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TestDb.Release(path);
             File.Delete(path);
         }
     }
@@ -157,7 +157,7 @@ public sealed class DatabaseTests : IDisposable
             cmd.CommandText = "DROP TABLE ksp_part_antennas;";
             cmd.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
 
         _db.Initialize();
 
@@ -175,7 +175,7 @@ public sealed class DatabaseTests : IDisposable
             cmd.CommandText = "ALTER TABLE ksp_resources DROP COLUMN flow_mode;";
             cmd.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
 
         _db.Initialize();
 
@@ -208,7 +208,7 @@ public sealed class DatabaseTests : IDisposable
             cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
             cmd.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
         _db.Initialize();
 
         var loaded = Assert.Single(new FlightRepository(_db).GetAll());
@@ -281,7 +281,7 @@ public sealed class DatabaseTests : IDisposable
             cmd.CommandText = "ALTER TABLE saved_missions DROP COLUMN updated_utc;"; // as saved by an older version
             cmd.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        TestDb.Release(_path);
 
         _db.Initialize();
 
@@ -342,7 +342,7 @@ public sealed class DatabaseTests : IDisposable
                 cmd.Parameters.AddWithValue("$fp", Migrations.Fingerprint + BodySeeder.Fingerprint + DvMapSeeder.Fingerprint);
                 cmd.ExecuteNonQuery();
             }
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TestDb.Release(path);
 
             var db = new PlannerDatabase(path);
             db.Initialize();
@@ -351,7 +351,7 @@ public sealed class DatabaseTests : IDisposable
         }
         finally
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TestDb.Release(path);
             File.Delete(path);
         }
     }
