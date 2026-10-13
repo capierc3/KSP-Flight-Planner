@@ -114,7 +114,8 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
 - `star_systems`, `celestial_bodies` — built-in constants seeded from `src/KspFlightPlanner.Data/Seed/bodies.json`
   (`is_builtin = 1`). Stock bodies include parent, orbital elements, atmosphere and surface-to-orbit Δv;
   modded systems currently have physical data only (no orbits, so no transfer planning).
-- `dv_map_nodes` — the Δv map as a tree rooted at Kerbin's surface (seeded from `Seed/dvmap.json`).
+- `dv_map_nodes` — the Δv map as a tree rooted at Kerbin's surface, computed from the stock bodies by
+  `DeltaVMapGenerator` at first start (see `docs/MATH.md` §6.1).
 - `dv_map_overrides` — user edits to map values, keyed by node key.
 - `custom_locations`, `custom_location_images` — user-defined orbits (periapsis, apoapsis, inclination,
   description) and their images (stored as BLOBs).
@@ -135,6 +136,5 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
   Biomes, landmark coordinates, science multipliers and pressure tables come from the wiki's body pages and
   *List of easter eggs*, pulled by `tools/wiki/scrape_wiki.py` and merged by `tools/wiki/apply_wiki.py`
   (facts only; see `docs/WIKI-COMPARISON.md`).
-- Surface-to-low-orbit Δv and the mission builder's route values: the community
-  [KSP Δv map 1.0.4](https://www.reddit.com/r/KerbalSpaceProgram/) by /u/swashlebucky, based on Kowgan's map
-  (CC BY-NC-SA 4.0).
+- Surface-to-low-orbit Δv and the Δv map's route values are computed by the app from the body data above
+  (orbital mechanics, plus a rule-of-thumb allowance for climbing through an atmosphere; `docs/MATH.md` §6.1).

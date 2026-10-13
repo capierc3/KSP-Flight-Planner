@@ -67,7 +67,7 @@ public sealed class TransferPlannerTests : IDisposable
 
         Assert.Equal(44.36, h.PhaseAngleDeg, 0.05);
         Assert.InRange(h.TransferTimeS, 6_522_000, 6_526_000);
-        Assert.InRange(h.EjectionDv, 1_050, 1_090); // community Δv map: ~1,060 m/s
+        Assert.InRange(h.EjectionDv, 1_050, 1_090); // Δv map: 930 + 140 = 1,070 m/s
         Assert.Equal("prograde", h.Ejection.Reference);
         Assert.InRange(h.Ejection.AngleDeg, 140, 150);
     }
@@ -134,7 +134,7 @@ public sealed class TransferPlannerTests : IDisposable
         Assert.Equal("retrograde", back.Ejection.Reference);
 
         var budget = MissionBudget.Build(outbound, there, includeLanding: true, (returnRequest, back));
-        Assert.Contains(budget, l => l.Stage == "Launch: Duna surface → 60 km orbit" && l.DeltaV == 1450);
+        Assert.Contains(budget, l => l.Stage == "Launch: Duna surface → 60 km orbit" && l.DeltaV == 1320);
         Assert.Contains(budget, l => l.Stage == "Return ejection burn");
         Assert.Contains(budget, l => l.Stage.StartsWith("Capture at Kerbin by aerobraking") && l.Note!.Contains("Atmosphere entry"));
     }

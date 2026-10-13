@@ -346,7 +346,7 @@ public sealed class LegToolsTests : IDisposable
 
         Assert.Equal(["mun.lo", "mun.intercept", "kerbin.lo"], approach.Steps.Select(s => s.From.Key).Append(approach.Steps[^1].To.Key));
         Assert.Equal(310 + 860, approach.DeltaV);
-        Assert.Equal((14_000, 80_000), (approach.FromAltitudeM, approach.ParkingAltitudeM));
+        Assert.Equal((10_000, 80_000), (approach.FromAltitudeM, approach.ParkingAltitudeM));
         // Mun → Kerbin: a Hohmann half-orbit from the Mun's 12,000 km orbit down to 680 km (docs/MATH.md §4.6).
         Assert.Equal(26_686.9, approach.TripTimeS!.Value, 0.1);
     }

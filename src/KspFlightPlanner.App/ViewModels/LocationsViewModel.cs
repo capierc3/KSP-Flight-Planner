@@ -308,7 +308,7 @@ public sealed class BodyDetailViewModel
                 new("Orbital speed", Units.Speed(OrbitMath.CircularVelocity(body.Mu, r))),
                 new("Period", Units.Duration(OrbitMath.Period(body.Mu, r))),
                 new("Escape from low orbit", Units.Dv(OrbitMath.HyperbolicBurnDv(body.Mu, r, 0))),
-                new("Surface → low orbit (map)", body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Units.Dv(dv)}" : "—"),
+                new("Surface → low orbit (estimate)", body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Units.Dv(dv)}" : "—"),
             ]));
         }
 
@@ -436,7 +436,7 @@ public sealed class BodyDetailViewModel
     public bool HasCustomLocations => CustomLocations.Count > 0;
     public string Sources => "Sources: KSP wiki <Body>/Param pages (orbit, atmosphere, gravity, science) and body pages " +
                              "(biomes, pressure tables, landmarks; see docs/WIKI-COMPARISON.md); Eric Meyer's Resonant Orbit " +
-                             "Calculator data (radius, SOI, day); community Δv map 1.0.4 (map stops). Derived values: see the Math guide.";
+                             "Calculator data (radius, SOI, day). Map stops and all derived values are computed: see the Math guide.";
 }
 
 public sealed record MapStopRow(string Stop, string From, string DeltaV, string PlaneChange, string Aerobrake, string FlightTime);

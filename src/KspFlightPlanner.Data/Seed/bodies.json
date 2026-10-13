@@ -2,7 +2,6 @@
   "sources": {
     "bodies": "https://meyerweb.com/eric/ksp/resonant-orbits/systems.js (Eric Meyer, MIT License)",
     "stockDetails": "https://wiki.kerbalspaceprogram.com <Body>/Param pages (orbits, atmosphere, gravity, mu)",
-    "surfaceToLowOrbitDv": "Community KSP 1.x delta-v map; approximate",
     "wikiExtras": "https://wiki.kerbalspaceprogram.com body pages and List of easter eggs (biomes, landmarks, science multipliers, pressure tables); imported by tools/wiki"
   },
   "systems": [
@@ -21,7 +20,6 @@
           "rotationPeriodS": 432000,
           "soiRadiusM": 1000000000000000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "seaLevelPressureAtm": 0.157907727430507,
@@ -53,7 +51,6 @@
           "rotationPeriodS": 1210000,
           "soiRadiusM": 9646663.02332811,
           "highestElevationM": 6817,
-          "surfaceToLowOrbitDv": 870,
           "orbit": {
             "semiMajorAxisM": 5263138304,
             "eccentricity": 0.200000002980232,
@@ -107,7 +104,6 @@
           "rotationPeriodS": 80500,
           "soiRadiusM": 85109364.7382441,
           "highestElevationM": 7526,
-          "surfaceToLowOrbitDv": 8000,
           "orbit": {
             "semiMajorAxisM": 9832684544,
             "eccentricity": 0.00999999977648258,
@@ -245,7 +241,6 @@
           "rotationPeriodS": 28255,
           "soiRadiusM": 126123.271704568,
           "highestElevationM": 6400,
-          "surfaceToLowOrbitDv": 30,
           "orbit": {
             "semiMajorAxisM": 31500000,
             "eccentricity": 0.550000011920929,
@@ -280,7 +275,6 @@
           "rotationPeriodS": 21549.4251830898,
           "soiRadiusM": 84159286.4796305,
           "highestElevationM": 6761,
-          "surfaceToLowOrbitDv": 3400,
           "orbit": {
             "semiMajorAxisM": 13599840256,
             "eccentricity": 0,
@@ -537,7 +531,6 @@
           "rotationPeriodS": 138984.376574476,
           "soiRadiusM": 2429559.11656475,
           "highestElevationM": 7061.1416,
-          "surfaceToLowOrbitDv": 580,
           "orbit": {
             "semiMajorAxisM": 12000000,
             "eccentricity": 0,
@@ -652,7 +645,6 @@
           "rotationPeriodS": 40400,
           "soiRadiusM": 2247428.3879023,
           "highestElevationM": 5725,
-          "surfaceToLowOrbitDv": 180,
           "orbit": {
             "semiMajorAxisM": 47000000,
             "eccentricity": 0,
@@ -710,7 +702,6 @@
           "rotationPeriodS": 65517.859375,
           "soiRadiusM": 47921949.369738,
           "highestElevationM": 8264,
-          "surfaceToLowOrbitDv": 1450,
           "orbit": {
             "semiMajorAxisM": 20726155264,
             "eccentricity": 0.0509999990463257,
@@ -861,7 +852,6 @@
           "rotationPeriodS": 65517.8621348081,
           "soiRadiusM": 1049598.93931162,
           "highestElevationM": 12750,
-          "surfaceToLowOrbitDv": 390,
           "orbit": {
             "semiMajorAxisM": 3200000,
             "eccentricity": 0.0299999993294477,
@@ -901,7 +891,6 @@
           "rotationPeriodS": 34800,
           "soiRadiusM": 32832839.5767762,
           "highestElevationM": 5700,
-          "surfaceToLowOrbitDv": 430,
           "orbit": {
             "semiMajorAxisM": 40839348203,
             "eccentricity": 0.145,
@@ -950,7 +939,6 @@
           "rotationPeriodS": 36000,
           "soiRadiusM": 2455985185.42347,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": {
             "semiMajorAxisM": 68773560320,
             "eccentricity": 0.0500000007450581,
@@ -1077,7 +1065,6 @@
           "rotationPeriodS": 52980.8790593796,
           "soiRadiusM": 3723645.81113302,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 2900,
           "orbit": {
             "semiMajorAxisM": 27184000,
             "eccentricity": 0,
@@ -1196,7 +1183,6 @@
           "rotationPeriodS": 105962.088893924,
           "soiRadiusM": 2406401.44479404,
           "highestElevationM": 7976,
-          "surfaceToLowOrbitDv": 860,
           "orbit": {
             "semiMajorAxisM": 43152000,
             "eccentricity": 0,
@@ -1246,7 +1232,6 @@
           "rotationPeriodS": 211926.35802123,
           "soiRadiusM": 10856518.3683586,
           "highestElevationM": 11290,
-          "surfaceToLowOrbitDv": 2270,
           "orbit": {
             "semiMajorAxisM": 68500000,
             "eccentricity": 0,
@@ -1296,7 +1281,6 @@
           "rotationPeriodS": 544507.428516654,
           "soiRadiusM": 1221060.86284253,
           "highestElevationM": 21758,
-          "surfaceToLowOrbitDv": 220,
           "orbit": {
             "semiMajorAxisM": 128500000,
             "eccentricity": 0.234999999403954,
@@ -1342,7 +1326,6 @@
           "rotationPeriodS": 901902.623531173,
           "soiRadiusM": 1042138.89230178,
           "highestElevationM": 5590.2134,
-          "surfaceToLowOrbitDv": 130,
           "orbit": {
             "semiMajorAxisM": 179890000,
             "eccentricity": 0.17085,
@@ -1388,7 +1371,6 @@
           "rotationPeriodS": 19460,
           "soiRadiusM": 119082941.6,
           "highestElevationM": 3874,
-          "surfaceToLowOrbitDv": 620,
           "orbit": {
             "semiMajorAxisM": 90118820000,
             "eccentricity": 0.26,
@@ -1453,7 +1435,6 @@
           "rotationPeriodS": 432000,
           "soiRadiusM": 1000000000000000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 600000
@@ -1471,7 +1452,6 @@
           "rotationPeriodS": 1210000,
           "soiRadiusM": 9646663.02332811,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 870,
           "orbit": null,
           "atmosphere": null
         },
@@ -1487,7 +1467,6 @@
           "rotationPeriodS": 80500,
           "soiRadiusM": 85109364.7382441,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 8000,
           "orbit": null,
           "atmosphere": {
             "heightM": 90000
@@ -1505,7 +1484,6 @@
           "rotationPeriodS": 28255,
           "soiRadiusM": 126123.271704568,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 30,
           "orbit": null,
           "atmosphere": null
         },
@@ -1521,7 +1499,6 @@
           "rotationPeriodS": 21549.4251830898,
           "soiRadiusM": 84159286.4796305,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 3400,
           "orbit": null,
           "atmosphere": {
             "heightM": 70000
@@ -1539,7 +1516,6 @@
           "rotationPeriodS": 138984.376574476,
           "soiRadiusM": 2429559.11656475,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 580,
           "orbit": null,
           "atmosphere": null
         },
@@ -1555,7 +1531,6 @@
           "rotationPeriodS": 40400,
           "soiRadiusM": 2247428.3879023,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 180,
           "orbit": null,
           "atmosphere": null
         },
@@ -1571,7 +1546,6 @@
           "rotationPeriodS": 65517.859375,
           "soiRadiusM": 47921949.369738,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 1450,
           "orbit": null,
           "atmosphere": {
             "heightM": 50000
@@ -1589,7 +1563,6 @@
           "rotationPeriodS": 65517.8621348081,
           "soiRadiusM": 1049598.93931162,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 390,
           "orbit": null,
           "atmosphere": null
         },
@@ -1605,7 +1578,6 @@
           "rotationPeriodS": 34800,
           "soiRadiusM": 32832839.5767762,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 430,
           "orbit": null,
           "atmosphere": null
         },
@@ -1621,7 +1593,6 @@
           "rotationPeriodS": 36000,
           "soiRadiusM": 2455985185.42347,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 200000
@@ -1639,7 +1610,6 @@
           "rotationPeriodS": 52980.8790593796,
           "soiRadiusM": 3723645.81113302,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 2900,
           "orbit": null,
           "atmosphere": {
             "heightM": 50000
@@ -1657,7 +1627,6 @@
           "rotationPeriodS": 105962.088893924,
           "soiRadiusM": 2406401.44479404,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 860,
           "orbit": null,
           "atmosphere": null
         },
@@ -1673,7 +1642,6 @@
           "rotationPeriodS": 211926.35802123,
           "soiRadiusM": 10856518.3683586,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 2270,
           "orbit": null,
           "atmosphere": null
         },
@@ -1689,7 +1657,6 @@
           "rotationPeriodS": 544507.428516654,
           "soiRadiusM": 1221060.86284253,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 220,
           "orbit": null,
           "atmosphere": null
         },
@@ -1705,7 +1672,6 @@
           "rotationPeriodS": 901902.623531173,
           "soiRadiusM": 1042138.89230178,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 130,
           "orbit": null,
           "atmosphere": null
         },
@@ -1721,7 +1687,6 @@
           "rotationPeriodS": 28500,
           "soiRadiusM": 2740126708.15753,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 580000
@@ -1739,7 +1704,6 @@
           "rotationPeriodS": 23555.3138379232,
           "soiRadiusM": 41000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1755,7 +1719,6 @@
           "rotationPeriodS": 29440.1470076036,
           "soiRadiusM": 94000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1771,7 +1734,6 @@
           "rotationPeriodS": 57914.7837330607,
           "soiRadiusM": 1159066.15680512,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 620,
           "orbit": null,
           "atmosphere": null
         },
@@ -1787,7 +1749,6 @@
           "rotationPeriodS": 192771.154552164,
           "soiRadiusM": 9598158.64601184,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1803,7 +1764,6 @@
           "rotationPeriodS": 666154.482822571,
           "soiRadiusM": 8637005.19544461,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 95000
@@ -1821,7 +1781,6 @@
           "rotationPeriodS": 41000,
           "soiRadiusM": 2562260673.07757,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 325000
@@ -1839,7 +1798,6 @@
           "rotationPeriodS": 73017.1106367597,
           "soiRadiusM": 1661114.85305207,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1855,7 +1813,6 @@
           "rotationPeriodS": 73017.1106367597,
           "soiRadiusM": 446767.601978615,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1871,7 +1828,6 @@
           "rotationPeriodS": 1009410.78951369,
           "soiRadiusM": 18933504.6847765,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1887,7 +1843,6 @@
           "rotationPeriodS": 48874.4834835978,
           "soiRadiusM": 139966.651259813,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1903,7 +1858,6 @@
           "rotationPeriodS": 40250,
           "soiRadiusM": 4415723830.49107,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 260000
@@ -1921,7 +1875,6 @@
           "rotationPeriodS": 306442.674516556,
           "soiRadiusM": 5709379.08853188,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 35000
@@ -1939,7 +1892,6 @@
           "rotationPeriodS": 27924.8723,
           "soiRadiusM": 7366476.63525513,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1955,7 +1907,6 @@
           "rotationPeriodS": 106309.606989054,
           "soiRadiusM": 612762335.918708,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -1971,7 +1922,6 @@
           "rotationPeriodS": 106327.763381606,
           "soiRadiusM": 939354.324277521,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         }
@@ -1992,7 +1942,6 @@
           "rotationPeriodS": 432000,
           "soiRadiusM": 1000000000000000000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 600000
@@ -2010,7 +1959,6 @@
           "rotationPeriodS": 5067031.68,
           "soiRadiusM": 112424173.3,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2026,7 +1974,6 @@
           "rotationPeriodS": -20996797.02,
           "soiRadiusM": 616281980.7,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 145000
@@ -2044,7 +1991,6 @@
           "rotationPeriodS": 86164.0989,
           "soiRadiusM": 924650434.7,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 140000
@@ -2062,7 +2008,6 @@
           "rotationPeriodS": 2356558.618,
           "soiRadiusM": 66173072.96,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2078,7 +2023,6 @@
           "rotationPeriodS": 88642.6848,
           "soiRadiusM": 577254493.5,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 125000
@@ -2096,7 +2040,6 @@
           "rotationPeriodS": 27575.06417,
           "soiRadiusM": 47250,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2112,7 +2055,6 @@
           "rotationPeriodS": 109082.8775,
           "soiRadiusM": 45456,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2128,7 +2070,6 @@
           "rotationPeriodS": 35730,
           "soiRadiusM": 48196239907,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 1550000
@@ -2146,7 +2087,6 @@
           "rotationPeriodS": 153039.6428,
           "soiRadiusM": 7841031.532,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2162,7 +2102,6 @@
           "rotationPeriodS": 307002.3723,
           "soiRadiusM": 9728374.712,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2178,7 +2117,6 @@
           "rotationPeriodS": 618553.2791,
           "soiRadiusM": 24361825.13,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2194,7 +2132,6 @@
           "rotationPeriodS": 1443315.918,
           "soiRadiusM": 37706560.89,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2210,7 +2147,6 @@
           "rotationPeriodS": 38052,
           "soiRadiusM": 54475373438,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 2000000
@@ -2228,7 +2164,6 @@
           "rotationPeriodS": 81843.87407,
           "soiRadiusM": 396400,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2244,7 +2179,6 @@
           "rotationPeriodS": 118762.9628,
           "soiRadiusM": 504200,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2260,7 +2194,6 @@
           "rotationPeriodS": 163440.0316,
           "soiRadiusM": 1213895.698,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2276,7 +2209,6 @@
           "rotationPeriodS": 236765.9216,
           "soiRadiusM": 1954724.558,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2292,7 +2224,6 @@
           "rotationPeriodS": 390536.924,
           "soiRadiusM": 3675585.654,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2308,7 +2239,6 @@
           "rotationPeriodS": 1377912.606,
           "soiRadiusM": 43324648.46,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 600000
@@ -2326,7 +2256,6 @@
           "rotationPeriodS": 6853119.643,
           "soiRadiusM": 22501874.86,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2342,7 +2271,6 @@
           "rotationPeriodS": 62063.712,
           "soiRadiusM": 51692538810,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 1400000
@@ -2360,7 +2288,6 @@
           "rotationPeriodS": 58000.32,
           "soiRadiusM": 86643720667,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 1250000
@@ -2378,7 +2305,6 @@
           "rotationPeriodS": -507728.9877,
           "soiRadiusM": 11964329.55,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 110000
@@ -2396,7 +2322,6 @@
           "rotationPeriodS": 552731.9654,
           "soiRadiusM": 3116527989,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 110000
@@ -2414,7 +2339,6 @@
           "rotationPeriodS": 552731.9654,
           "soiRadiusM": 8292108.138,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         }
@@ -2435,7 +2359,6 @@
           "rotationPeriodS": 540000,
           "soiRadiusM": 1000000000000000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 1600000
@@ -2453,7 +2376,6 @@
           "rotationPeriodS": 766931.0655,
           "soiRadiusM": 3491161.222,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2469,7 +2391,6 @@
           "rotationPeriodS": 72000,
           "soiRadiusM": 13645687.92,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2485,7 +2406,6 @@
           "rotationPeriodS": 515362.4882,
           "soiRadiusM": 1656715.488,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2501,7 +2421,6 @@
           "rotationPeriodS": 43200,
           "soiRadiusM": 34386218.42,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 65000
@@ -2519,7 +2438,6 @@
           "rotationPeriodS": 21549.41452,
           "soiRadiusM": 83667623.55,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 70000
@@ -2537,7 +2455,6 @@
           "rotationPeriodS": 495456.2682,
           "soiRadiusM": 2491177.09,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2553,7 +2470,6 @@
           "rotationPeriodS": 1363993.543,
           "soiRadiusM": 8144195.754,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2569,7 +2485,6 @@
           "rotationPeriodS": 57600,
           "soiRadiusM": 260440071.5,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 45000
@@ -2587,7 +2502,6 @@
           "rotationPeriodS": 2554.684189,
           "soiRadiusM": 40000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2603,7 +2517,6 @@
           "rotationPeriodS": 139245.7813,
           "soiRadiusM": 194786348.7,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 50000
@@ -2621,7 +2534,6 @@
           "rotationPeriodS": 139245.7813,
           "soiRadiusM": 3139597.025,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2637,7 +2549,6 @@
           "rotationPeriodS": 50400,
           "soiRadiusM": 1701552278,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 600000
@@ -2655,7 +2566,6 @@
           "rotationPeriodS": 53456.75179,
           "soiRadiusM": 2153486.147,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 60000
@@ -2673,7 +2583,6 @@
           "rotationPeriodS": 108188.8589,
           "soiRadiusM": 837807.8343,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2689,7 +2598,6 @@
           "rotationPeriodS": 313204.2218,
           "soiRadiusM": 1362261.78,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2705,7 +2613,6 @@
           "rotationPeriodS": 61200,
           "soiRadiusM": 2652003276,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 400000
@@ -2723,7 +2630,6 @@
           "rotationPeriodS": 62924.31582,
           "soiRadiusM": 886957.5516,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2739,7 +2645,6 @@
           "rotationPeriodS": 340308.8105,
           "soiRadiusM": 30021332.15,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 280000
@@ -2757,7 +2662,6 @@
           "rotationPeriodS": 25902.63259,
           "soiRadiusM": 1070061.653,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 130000
@@ -2775,7 +2679,6 @@
           "rotationPeriodS": 39600,
           "soiRadiusM": 8835394858,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 560000
@@ -2793,7 +2696,6 @@
           "rotationPeriodS": 66949.22302,
           "soiRadiusM": 1610803.495,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 80000
@@ -2811,7 +2713,6 @@
           "rotationPeriodS": 135495.7007,
           "soiRadiusM": 538982.3508,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2827,7 +2728,6 @@
           "rotationPeriodS": 291540.329,
           "soiRadiusM": 1590728.15,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2843,7 +2743,6 @@
           "rotationPeriodS": 639093.3695,
           "soiRadiusM": 2244163.881,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2859,7 +2758,6 @@
           "rotationPeriodS": 28800,
           "soiRadiusM": 5002991.847,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2875,7 +2773,6 @@
           "rotationPeriodS": 36000,
           "soiRadiusM": 5118022.32,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2891,7 +2788,6 @@
           "rotationPeriodS": 64800,
           "soiRadiusM": 567558458,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 40000
@@ -2909,7 +2805,6 @@
           "rotationPeriodS": 947939.2886,
           "soiRadiusM": 2885399.812,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2925,7 +2820,6 @@
           "rotationPeriodS": 21600,
           "soiRadiusM": 600295990.2,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 35000
@@ -2943,7 +2837,6 @@
           "rotationPeriodS": 1296000,
           "soiRadiusM": 500000000000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 400000
@@ -2961,7 +2854,6 @@
           "rotationPeriodS": 28500,
           "soiRadiusM": 3496577901,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 580000
@@ -2979,7 +2871,6 @@
           "rotationPeriodS": 23555.31384,
           "soiRadiusM": 41000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -2995,7 +2886,6 @@
           "rotationPeriodS": 29440.14701,
           "soiRadiusM": 94000,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3011,7 +2901,6 @@
           "rotationPeriodS": 57914.78373,
           "soiRadiusM": 1159066.157,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": 620,
           "orbit": null,
           "atmosphere": null
         },
@@ -3027,7 +2916,6 @@
           "rotationPeriodS": 192771.1546,
           "soiRadiusM": 9598158.646,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3043,7 +2931,6 @@
           "rotationPeriodS": 666154.4828,
           "soiRadiusM": 8637005.195,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 95000
@@ -3061,7 +2948,6 @@
           "rotationPeriodS": 41000,
           "soiRadiusM": 2517599239,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 325000
@@ -3079,7 +2965,6 @@
           "rotationPeriodS": 73017.11064,
           "soiRadiusM": 1661114.853,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3095,7 +2980,6 @@
           "rotationPeriodS": 73017.11064,
           "soiRadiusM": 446767.602,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3111,7 +2995,6 @@
           "rotationPeriodS": 1009410.79,
           "soiRadiusM": 18933504.68,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3127,7 +3010,6 @@
           "rotationPeriodS": 48874.48348,
           "soiRadiusM": 139966.6513,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3143,7 +3025,6 @@
           "rotationPeriodS": 40250,
           "soiRadiusM": 3944323312,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 260000
@@ -3161,7 +3042,6 @@
           "rotationPeriodS": 306442.6745,
           "soiRadiusM": 5709379.089,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": {
             "heightM": 35000
@@ -3179,7 +3059,6 @@
           "rotationPeriodS": 27924.8723,
           "soiRadiusM": 7366476.635,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3195,7 +3074,6 @@
           "rotationPeriodS": 106309.607,
           "soiRadiusM": 586443111.1,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         },
@@ -3211,7 +3089,6 @@
           "rotationPeriodS": 106327.7634,
           "soiRadiusM": 939354.3243,
           "highestElevationM": null,
-          "surfaceToLowOrbitDv": null,
           "orbit": null,
           "atmosphere": null
         }

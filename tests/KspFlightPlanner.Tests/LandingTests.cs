@@ -80,7 +80,7 @@ public sealed class LandingTests : IDisposable
         var mun = _map.Route(_map["mun.lo"], _map["mun.surface"]);
         Assert.Equal(0, LegTools.FindLanding(mun));
         var plan = LegTools.EvaluateLanding(mun, new LandingLeg(KerbolArch), _bodies)!;
-        Assert.Equal(14_000, plan.OrbitAltitudeM);
+        Assert.Equal(10_000, plan.OrbitAltitudeM);
         var applied = LegTools.ApplyLanding(mun, plan);
         Assert.Equal(Math.Round(plan.TotalDv), applied[0].DeltaV);
         Assert.Equal(580, applied[0].MapDeltaV);

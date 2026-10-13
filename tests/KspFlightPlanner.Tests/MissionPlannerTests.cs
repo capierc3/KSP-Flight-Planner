@@ -42,12 +42,12 @@ public sealed class MissionPlannerTests : IDisposable
         var leg = Assert.Single(up[0].Legs);
         Assert.Equal("kerbin.surface", leg.From.Key);
         Assert.Equal("kerbin.keo", leg.To.Key);
-        Assert.Equal(3400 + 1115, leg.DeltaV);
+        Assert.Equal(3400 + 1100, leg.DeltaV);
         Assert.Equal(["kerbin.lo", "kerbin.keo"], leg.EdgeKeys);
         Assert.Equal("Launch", MissionPlanner.DefaultPhases(up, Stops("kerbin.surface", "kerbin.keo")).Phases.Single().Name);
 
         var down = MissionPlanner.CombineClimbs(MissionPlanner.BuildRoute(_map, Stops("kerbin.keo", "kerbin.surface")), IsOrbit);
-        Assert.Equal(3400 + 1115, Assert.Single(down[0].Legs).DeltaV);
+        Assert.Equal(3400 + 1100, Assert.Single(down[0].Legs).DeltaV);
     }
 
     [Fact]
@@ -79,25 +79,25 @@ public sealed class MissionPlannerTests : IDisposable
         Assert.Equal(2, notPicked[0].Legs.Count);
     }
 
-    // Totals printed on the Δv map under each destination (Kerbin surface → destination, no plane changes).
+    // Kerbin surface → destination on the generated map, no plane changes (docs/MATH.md §6.1).
     [Theory]
     [InlineData("mun.surface", 5150)]
-    [InlineData("minmus.surface", 4670)]
-    [InlineData("kerbin.keo", 4515)]
-    [InlineData("kerbol.surface", 91050)]
-    [InlineData("moho.surface", 8390)]
-    [InlineData("eve.surface", 15850)]
-    [InlineData("gilly.surface", 5020)]
-    [InlineData("duna.surface", 6540)]
-    [InlineData("ike.surface", 5330)]
-    [InlineData("dres.surface", 6680)]
-    [InlineData("jool.surface", 22300)]
-    [InlineData("laythe.surface", 10390)]
-    [InlineData("vall.surface", 7880)]
-    [InlineData("tylo.surface", 9260)]
-    [InlineData("bop.surface", 6830)]
-    [InlineData("pol.surface", 6600)]
-    [InlineData("eeloo.surface", 7480)]
+    [InlineData("minmus.surface", 4650)]
+    [InlineData("kerbin.keo", 4500)]
+    [InlineData("kerbol.surface", 101020)]
+    [InlineData("moho.surface", 8350)]
+    [InlineData("eve.surface", 15200)]
+    [InlineData("gilly.surface", 4990)]
+    [InlineData("duna.surface", 6400)]
+    [InlineData("ike.surface", 5340)]
+    [InlineData("dres.surface", 6620)]
+    [InlineData("jool.surface", 21730)]
+    [InlineData("laythe.surface", 10310)]
+    [InlineData("vall.surface", 7840)]
+    [InlineData("tylo.surface", 9190)]
+    [InlineData("bop.surface", 6820)]
+    [InlineData("pol.surface", 6620)]
+    [InlineData("eeloo.surface", 7390)]
     public void Route_from_kerbin_matches_map_totals(string destination, double expected)
     {
         var legs = _map.Route(_map["kerbin.surface"], _map[destination]);
@@ -219,8 +219,8 @@ public sealed class MissionPlannerTests : IDisposable
         var noAero = legs.Select(_ => new LegSetting(0, UseAerobrake: false, IncludePlaneChange: true)).ToList();
         PhaseDefinition[] one = [new("All", MarginPercent: 0)];
 
-        Assert.Equal(180 + 160, MissionPlanner.Summarize(one, legs, aero)[0].RequiredDv);
-        Assert.Equal(180 + 160 + 930 + 340 + 3400, MissionPlanner.Summarize(one, legs, noAero)[0].RequiredDv);
+        Assert.Equal(170 + 160, MissionPlanner.Summarize(one, legs, aero)[0].RequiredDv);
+        Assert.Equal(170 + 160 + 920 + 330 + 3400, MissionPlanner.Summarize(one, legs, noAero)[0].RequiredDv);
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class MissionPlannerTests : IDisposable
     {
         var legs = _map.Route(_map["ike.lo"], _map["duna.lo"]);
         Assert.Equal(["ike.intercept", "duna.elliptical", "duna.lo"], legs.Select(l => l.To.Key));
-        Assert.Equal(180 + 30 + 360, legs.Sum(l => l.DeltaV));
+        Assert.Equal(170 + 60 + 360, legs.Sum(l => l.DeltaV));
         Assert.True(legs[2].CanAerobrake); // Duna elliptical → low orbit
     }
 

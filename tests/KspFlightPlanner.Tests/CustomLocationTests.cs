@@ -131,19 +131,19 @@ public sealed class CustomLocationTests : IDisposable
         Assert.Equal("Kerbol — Eye of Kerbol (10,000,000 km)", node.DisplayName);
         Assert.Equal("Eye of Kerbol", node.CustomName);           // map title is the location, not the body
         Assert.Equal("10,000,000 km", node.CustomOrbitText);
-        Assert.Equal(787, node.DvFromParent);          // 64 extra ejection + 723 circularization (docs/MATH.md §3.5)
+        Assert.Equal(807, node.DvFromParent);          // 84 extra ejection + 723 circularization (docs/MATH.md §3.5)
         Assert.Equal(723, node.AerobrakeResidualDv);   // coming home, Kerbin's atmosphere does the capture
         Assert.Equal("175 days", node.FlightTime);
 
         var route = map.Route(map["kerbin.surface"], node);
         Assert.Equal(["kerbin.lo", "kerbin.soi", node.Key], route.Select(l => l.To.Key));
-        Assert.Equal(3400 + 950 + 787, route.Sum(l => l.DeltaV));
+        Assert.Equal(3400 + 930 + 807, route.Sum(l => l.DeltaV));
     }
 
     [Fact]
     public void Sun_orbit_at_dunas_distance_matches_the_maps_duna_intercept()
     {
-        // At Duna's orbital radius the extra ejection beyond Kerbin escape should match the map's 130 m/s Duna edge.
+        // At Duna's orbital radius the extra ejection beyond Kerbin escape should match the map's Duna intercept edge.
         var map = new DvMapRepository(_db).GetMap()!;
         var bodies = new BodyRepository(_db).GetBodies(new BodyRepository(_db).GetSystems()[0].Id).ToDictionary(b => b.Name);
         var kerbol = bodies["Kerbol"];
@@ -152,7 +152,7 @@ public sealed class CustomLocationTests : IDisposable
         var node = CustomLocations.Place(atDuna, map, bodies);
         var extraEjection = node.DvFromParent - node.AerobrakeResidualDv;
 
-        Assert.InRange(extraEjection, 115, 135);
+        Assert.InRange(extraEjection, map["duna.intercept"].DvFromParent - 10, map["duna.intercept"].DvFromParent + 10);
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public sealed class CustomLocationTests : IDisposable
     {
         var bodies = new DvMapRepository(_db).GetCustomLocationBodies();
         Assert.Contains(bodies, b => b.Name == "Kerbin" && b.LowOrbit.AltitudeM == 80_000);
-        Assert.Contains(bodies, b => b.Name == "Mun" && b.LowOrbit.AltitudeM == 14_000);
+        Assert.Contains(bodies, b => b.Name == "Mun" && b.LowOrbit.AltitudeM == 10_000);
         Assert.Equal(17, bodies.Count);
     }
 }

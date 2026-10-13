@@ -21,7 +21,7 @@ public static class MissionBudget
         if (returnLeg is not null) lines.Add(new BudgetLine($"Outbound: {origin.Name} → {dest.Name}", null, IsHeader: true));
         if (!origin.IsCustomLocation)
             lines.Add(new($"Launch: {origin.Name} surface → {outbound.ParkingAltitudeM / 1000:0} km orbit", origin.SurfaceToLowOrbitDv,
-                origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate; depends on your ascent"));
+                origin.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Estimate; depends on your ascent"));
         AddTransfer(lines, outbound, outboundWindow, "Transfer ejection burn");
 
         if (landing)
@@ -39,7 +39,7 @@ public static class MissionBudget
             {
                 lines.Add(new BudgetLine($"Launch: {dest.Name} surface → {ret.Request.ParkingAltitudeM / 1000:0} km orbit",
                     dest.SurfaceToLowOrbitDv,
-                    dest.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Community Δv-map estimate"));
+                    dest.SurfaceToLowOrbitDv is null ? "No estimate for this body" : "Estimate; depends on your ascent"));
             }
             AddTransfer(lines, ret.Request, ret.Window, "Return ejection burn");
         }

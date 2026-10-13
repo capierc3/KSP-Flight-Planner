@@ -43,7 +43,6 @@ internal static class Migrations
             rotation_period_s        REAL    NOT NULL,  -- sidereal; negative = retrograde
             soi_radius_m             REAL    NOT NULL,  -- from body centre
             highest_elevation_m      REAL,
-            surface_to_orbit_dv      REAL,              -- approximate, community delta-v map
 
             -- orbit around parent (NULL for the star / unknown)
             sma_m                    REAL,

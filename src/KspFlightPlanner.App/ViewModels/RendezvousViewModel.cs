@@ -1318,7 +1318,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             }
             if (plan.Launch is not null)
                 BudgetLines.Add(new BudgetLine($"Launch: {request.Body.Name} surface → {Km(request.Ascent!.ParkingAltitudeM)} km orbit",
-                    request.Body.SurfaceToLowOrbitDv, "Community Δv-map estimate; depends on your ascent"));
+                    request.Body.SurfaceToLowOrbitDv, "Estimate; depends on your ascent"));
             foreach (var leg in plan.Legs)
             {
                 BudgetLines.Add(new BudgetLine($"Meet {leg.Target.Name}", null, IsHeader: true));

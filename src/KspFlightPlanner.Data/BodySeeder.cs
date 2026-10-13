@@ -1,4 +1,5 @@
 using System.Text.Json;
+using KspFlightPlanner.Core.Models;
 using Microsoft.Data.Sqlite;
 
 namespace KspFlightPlanner.Data;
@@ -20,7 +21,7 @@ internal static class BodySeeder
     private sealed record SeedBody(
         string Name, string Color, bool IsDefault, string? BodyClass, string? Parent,
         double Mu, double MassKg, double EquatorialRadiusM, double RotationPeriodS, double SoiRadiusM,
-        double? HighestElevationM, double? SurfaceToLowOrbitDv, SeedOrbit? Orbit, SeedAtmosphere? Atmosphere,
+        double? HighestElevationM, SeedOrbit? Orbit, SeedAtmosphere? Atmosphere,
         SeedScience? Science = null, List<string>? Biomes = null, List<SeedLandmark>? Landmarks = null);
     private sealed record SeedOrbit(
         double SemiMajorAxisM, double Eccentricity, double InclinationDeg, double LongitudeOfAscendingNodeDeg,
@@ -88,7 +89,7 @@ internal static class BodySeeder
         cmd.CommandText = """
             INSERT INTO celestial_bodies
                 (system_id, name, body_class, color, is_default, sort_order, is_builtin,
-                 mass_kg, mu, equatorial_radius_m, rotation_period_s, soi_radius_m, highest_elevation_m, surface_to_orbit_dv,
+                 mass_kg, mu, equatorial_radius_m, rotation_period_s, soi_radius_m, highest_elevation_m,
                  sma_m, eccentricity, inclination_deg, lan_deg, arg_periapsis_deg, mean_anomaly_epoch_rad, epoch_s,
                  atmosphere_height_m, sea_level_pressure_atm, scale_height_m, min_temp_c, max_temp_c, has_oxygen,
                  molar_mass_g_mol, adiabatic_index, equator_temp_night_c, equator_temp_day_c, pole_temp_low_c, pole_temp_high_c,
@@ -96,7 +97,7 @@ internal static class BodySeeder
                  sci_flying_high_from_m, sci_space_high_from_m)
             VALUES
                 ($sys, $name, $class, $color, $default, $order, 1,
-                 $mass, $mu, $eqr, $rot, $soi, $highest, $dvOrbit,
+                 $mass, $mu, $eqr, $rot, $soi, $highest,
                  $sma, $ecc, $inc, $lan, $argPe, $mean, $epoch,
                  $atmHeight, $pressure, $scaleHeight, $minTemp, $maxTemp, $oxygen,
                  $molar, $gamma, $eqNight, $eqDay, $poleLow, $poleHigh,
@@ -117,7 +118,6 @@ internal static class BodySeeder
         p.AddWithValue("$rot", body.RotationPeriodS);
         p.AddWithValue("$soi", body.SoiRadiusM);
         p.AddWithValue("$highest", Db(body.HighestElevationM));
-        p.AddWithValue("$dvOrbit", Db(body.SurfaceToLowOrbitDv));
 
         var o = body.Orbit;
         p.AddWithValue("$sma", Db(o?.SemiMajorAxisM));
@@ -188,6 +188,34 @@ internal static class BodySeeder
     }
 
     private static object Db(object? value) => value ?? DBNull.Value;
+
+    /// <summary>
+    /// The physical data of one built-in system as bodies (ids are list positions, not database ids), for work that
+    /// needs the seed data before it's stored, such as generating the Δv map.
+    /// </summary>
+    public static List<CelestialBody> LoadBodies(string systemName)
+    {
+        var seeds = LoadSeed().Systems.Single(s => s.Name == systemName).Bodies;
+        var ids = seeds.Select((b, i) => (b.Name, Id: (long)i)).ToDictionary(x => x.Name, x => x.Id);
+        return seeds.Select((b, i) => new CelestialBody
+        {
+            Id = i,
+            Name = b.Name,
+            BodyClass = b.BodyClass,
+            ParentId = b.Parent is null ? null : ids[b.Parent],
+            IsDefault = b.IsDefault,
+            MassKg = b.MassKg,
+            Mu = b.Mu,
+            EquatorialRadiusM = b.EquatorialRadiusM,
+            RotationPeriodS = b.RotationPeriodS,
+            SoiRadiusM = b.SoiRadiusM,
+            HighestElevationM = b.HighestElevationM,
+            Orbit = b.Orbit is { } o ? new OrbitalElements(o.SemiMajorAxisM, o.Eccentricity, o.InclinationDeg,
+                o.LongitudeOfAscendingNodeDeg, o.ArgumentOfPeriapsisDeg, o.MeanAnomalyAtEpochRad) : null,
+            Atmosphere = b.Atmosphere is { } a ? new Atmosphere(a.HeightM, a.SeaLevelPressureAtm, a.ScaleHeightM,
+                a.MinTempC, a.MaxTempC, a.HasOxygen) : null,
+        }).ToList();
+    }
 
     private static SeedFile LoadSeed()
     {

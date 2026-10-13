@@ -58,7 +58,7 @@ public sealed class BodyRepository(PlannerDatabase database)
 
     private const string SelectBodies = """
         SELECT id, system_id, parent_id, name, body_class, color, is_default,
-               mass_kg, mu, equatorial_radius_m, rotation_period_s, soi_radius_m, highest_elevation_m, surface_to_orbit_dv,
+               mass_kg, mu, equatorial_radius_m, rotation_period_s, soi_radius_m, highest_elevation_m,
                sma_m, eccentricity, inclination_deg, lan_deg, arg_periapsis_deg, mean_anomaly_epoch_rad, epoch_s,
                atmosphere_height_m, sea_level_pressure_atm, scale_height_m, min_temp_c, max_temp_c, has_oxygen,
                molar_mass_g_mol, adiabatic_index, equator_temp_night_c, equator_temp_day_c, pole_temp_low_c, pole_temp_high_c,
@@ -75,33 +75,33 @@ public sealed class BodyRepository(PlannerDatabase database)
         {
             double? D(int i) => reader.IsDBNull(i) ? null : reader.GetDouble(i);
 
-            var orbit = reader.IsDBNull(14) ? null : new OrbitalElements(
-                SemiMajorAxisM: reader.GetDouble(14),
-                Eccentricity: reader.GetDouble(15),
-                InclinationDeg: reader.GetDouble(16),
-                LongitudeOfAscendingNodeDeg: reader.GetDouble(17),
-                ArgumentOfPeriapsisDeg: reader.GetDouble(18),
-                MeanAnomalyAtEpochRad: reader.GetDouble(19),
-                EpochS: D(20) ?? 0);
+            var orbit = reader.IsDBNull(13) ? null : new OrbitalElements(
+                SemiMajorAxisM: reader.GetDouble(13),
+                Eccentricity: reader.GetDouble(14),
+                InclinationDeg: reader.GetDouble(15),
+                LongitudeOfAscendingNodeDeg: reader.GetDouble(16),
+                ArgumentOfPeriapsisDeg: reader.GetDouble(17),
+                MeanAnomalyAtEpochRad: reader.GetDouble(18),
+                EpochS: D(19) ?? 0);
 
-            var atmosphere = reader.IsDBNull(21) ? null : new Atmosphere(
-                HeightM: reader.GetDouble(21),
-                SeaLevelPressureAtm: D(22),
-                ScaleHeightM: D(23),
-                MinTempC: D(24),
-                MaxTempC: D(25),
-                HasOxygen: reader.IsDBNull(26) ? null : reader.GetInt64(26) != 0)
+            var atmosphere = reader.IsDBNull(20) ? null : new Atmosphere(
+                HeightM: reader.GetDouble(20),
+                SeaLevelPressureAtm: D(21),
+                ScaleHeightM: D(22),
+                MinTempC: D(23),
+                MaxTempC: D(24),
+                HasOxygen: reader.IsDBNull(25) ? null : reader.GetInt64(25) != 0)
             {
-                MolarMassGPerMol = D(27),
-                AdiabaticIndex = D(28),
-                EquatorTempC = D(29) is { } night && D(30) is { } day ? (night, day) : null,
-                PoleTempC = D(31) is { } low && D(32) is { } high ? (low, high) : null,
+                MolarMassGPerMol = D(26),
+                AdiabaticIndex = D(27),
+                EquatorTempC = D(28) is { } night && D(29) is { } day ? (night, day) : null,
+                PoleTempC = D(30) is { } low && D(31) is { } high ? (low, high) : null,
             };
 
-            var science = Enumerable.Range(33, 9).All(reader.IsDBNull) ? null : new ScienceMultipliers(
-                Landed: D(33), Splashed: D(34), FlyingLow: D(35), FlyingHigh: D(36),
-                SpaceLow: D(37), SpaceHigh: D(38), Recovery: D(39),
-                FlyingHighFromM: D(40), SpaceHighFromM: D(41));
+            var science = Enumerable.Range(32, 9).All(reader.IsDBNull) ? null : new ScienceMultipliers(
+                Landed: D(32), Splashed: D(33), FlyingLow: D(34), FlyingHigh: D(35),
+                SpaceLow: D(36), SpaceHigh: D(37), Recovery: D(38),
+                FlyingHighFromM: D(39), SpaceHighFromM: D(40));
 
             list.Add(new CelestialBody
             {
@@ -118,7 +118,6 @@ public sealed class BodyRepository(PlannerDatabase database)
                 RotationPeriodS = reader.GetDouble(10),
                 SoiRadiusM = reader.GetDouble(11),
                 HighestElevationM = D(12),
-                SurfaceToLowOrbitDv = D(13),
                 Orbit = orbit,
                 Atmosphere = atmosphere,
                 Science = science,

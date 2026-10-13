@@ -107,8 +107,8 @@ public sealed record CelestialBody
 
     public double? HighestElevationM { get; init; }
 
-    /// <summary>Approximate Δv from the surface to low orbit (community Δv map), when known.</summary>
-    public double? SurfaceToLowOrbitDv { get; init; }
+    /// <summary>Estimated Δv from the surface to <see cref="DefaultParkingAltitudeM"/>; null for stars (see <see cref="DeltaVMapGenerator"/>).</summary>
+    public double? SurfaceToLowOrbitDv => DeltaVMapGenerator.SurfaceToLowOrbitDv(this);
 
     /// <summary>Orbit around the parent body; null for the central star or bodies without data.</summary>
     public OrbitalElements? Orbit { get; init; }

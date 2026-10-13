@@ -1,20 +1,19 @@
 using System.Text.Json;
+using KspFlightPlanner.Core;
 using Microsoft.Data.Sqlite;
 
 namespace KspFlightPlanner.Data;
 
-/// <summary>Loads the community Δv map from the embedded Seed/dvmap.json (source noted in the file).</summary>
+/// <summary>Stores the Δv map that <see cref="DeltaVMapGenerator"/> builds from the stock bodies in Seed/bodies.json.</summary>
 internal static class DvMapSeeder
 {
-    private const string ResourceName = "KspFlightPlanner.Data.Seed.dvmap.json";
+    private const string SystemName = BodyRepository.StockSystemName;
 
-    /// <summary>Hash of the embedded seed file; changes whenever the map data changes.</summary>
-    public static string Fingerprint { get; } = Hashing.Sha256(OpenSeed());
+    private static IReadOnlyList<DvMapNodeSpec> Nodes { get; } =
+        DeltaVMapGenerator.Generate(BodySeeder.LoadBodies(SystemName), LaunchSite.Ksc.BodyName);
 
-    private sealed record SeedFile(string System, List<SeedNode> Nodes);
-    private sealed record SeedNode(
-        string Key, string? Parent, string Body, string Kind, string Label,
-        double Dv, double Plane, bool AeroDown, bool AeroUp, bool Jet, string? FlightTime, double? AltitudeKm);
+    /// <summary>Hash of the generated map; changes whenever the map data (or the math behind it) changes.</summary>
+    public static string Fingerprint { get; } = Hashing.Sha256(JsonSerializer.Serialize(Nodes));
 
     public static void SeedIfEmpty(SqliteConnection connection)
     {
@@ -24,25 +23,21 @@ internal static class DvMapSeeder
             if (Convert.ToInt64(check.ExecuteScalar()) > 0) return;
         }
 
-        using var stream = OpenSeed();
-        var seed = JsonSerializer.Deserialize<SeedFile>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web))
-            ?? throw new InvalidOperationException("Δv map seed is empty.");
-
         using var tx = connection.BeginTransaction();
         long systemId;
         using (var sys = connection.CreateCommand())
         {
             sys.Transaction = tx;
             sys.CommandText = "SELECT id FROM star_systems WHERE name = $name;";
-            sys.Parameters.AddWithValue("$name", seed.System);
+            sys.Parameters.AddWithValue("$name", SystemName);
             systemId = Convert.ToInt64(sys.ExecuteScalar()
-                ?? throw new InvalidOperationException($"Δv map system '{seed.System}' not found."));
+                ?? throw new InvalidOperationException($"Δv map system '{SystemName}' not found."));
         }
 
         var ids = new Dictionary<string, long>();
-        for (var i = 0; i < seed.Nodes.Count; i++)
+        for (var i = 0; i < Nodes.Count; i++)
         {
-            var n = seed.Nodes[i];
+            var n = Nodes[i];
             using var cmd = connection.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = """
@@ -58,27 +53,23 @@ internal static class DvMapSeeder
             var p = cmd.Parameters;
             p.AddWithValue("$sys", systemId);
             p.AddWithValue("$key", n.Key);
-            p.AddWithValue("$parent", n.Parent is null ? DBNull.Value
-                : ids.TryGetValue(n.Parent, out var pid) ? pid
-                : throw new InvalidOperationException($"Δv map node '{n.Key}' lists parent '{n.Parent}' before it is defined."));
-            p.AddWithValue("$body", n.Body);
+            p.AddWithValue("$parent", n.ParentKey is null ? DBNull.Value
+                : ids.TryGetValue(n.ParentKey, out var pid) ? pid
+                : throw new InvalidOperationException($"Δv map node '{n.Key}' lists parent '{n.ParentKey}' before it is defined."));
+            p.AddWithValue("$body", n.BodyName);
             p.AddWithValue("$kind", n.Kind);
             p.AddWithValue("$label", n.Label);
             p.AddWithValue("$dv", n.Dv);
-            p.AddWithValue("$plane", n.Plane);
-            p.AddWithValue("$down", n.AeroDown ? 1 : 0);
-            p.AddWithValue("$up", n.AeroUp ? 1 : 0);
-            p.AddWithValue("$jet", n.Jet ? 1 : 0);
+            p.AddWithValue("$plane", n.PlaneChangeDv);
+            p.AddWithValue("$down", n.AerobrakeDown ? 1 : 0);
+            p.AddWithValue("$up", n.AerobrakeUp ? 1 : 0);
+            p.AddWithValue("$jet", n.JetEnginesPossible ? 1 : 0);
             p.AddWithValue("$time", (object?)n.FlightTime ?? DBNull.Value);
-            p.AddWithValue("$alt", n.AltitudeKm is { } km ? km * 1000 : (object)DBNull.Value);
+            p.AddWithValue("$alt", (object?)n.AltitudeM ?? DBNull.Value);
             p.AddWithValue("$order", i);
             ids[n.Key] = Convert.ToInt64(cmd.ExecuteScalar());
         }
 
         tx.Commit();
     }
-
-    private static Stream OpenSeed() =>
-        typeof(DvMapSeeder).Assembly.GetManifestResourceStream(ResourceName)
-            ?? throw new InvalidOperationException($"Embedded resource '{ResourceName}' not found.");
 }

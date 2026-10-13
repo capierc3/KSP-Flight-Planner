@@ -274,7 +274,7 @@ Worked example — space station at 150 km, starting from an 80 km orbit: r₁ =
 
 Same steps for a 500 km station: Δv₁ = 254.6, Δv₂ = 225.6, total **480.2 m/s** (≈ 23 min).
 
-Sanity check against the community Δv map: 80 km → keostationary (2,863 km) by Hohmann is ≈ 1,099 m/s; the map lists 1,115 m/s. Map values are rounded and include a little slack, so expect differences of that size.
+The Δv map's 80 km → keostationary (2,863 km) edge is this Hohmann transfer, ≈ 1,099 m/s, rounded to 1,100 (§6.1).
 
 **Coming back down with aerobraking.** If you're heading for the surface of a body with an atmosphere, you only need the first burn of the downward transfer (the deorbit burn, which drops your periapsis); the atmosphere replaces the circularization. From 500 km that's the 225.6 m/s burn. The app charges this "deorbit burn" on aerobraked legs from custom orbits. Real deorbits usually aim periapsis at 30–45 km, a few m/s more than aiming at 80 km.
 
@@ -323,9 +323,9 @@ Changing inclination by Δi at speed v costs:
 Δv = 2 · v · sin(Δi / 2)
 ```
 
-It's cheapest where you're slowest (high up, or at apoapsis). Worked example — matching Minmus's 6° inclination while still in 80 km Kerbin orbit: 2 × 2,278.9 × sin 3° = **238.5 m/s**. The Δv map lists a worst-case 340 m/s for Minmus; the Mission pane's "Include worst-case plane changes" adds those map values.
+It's cheapest where you're slowest (high up, or at apoapsis). Worked example — matching Minmus's 6° inclination while still in 80 km Kerbin orbit: 2 × 2,278.9 × sin 3° = **238.5 m/s**. The Δv map charges the worst case instead: the whole 6° at the fastest point of the transfer to Minmus, its 3,199.8 m/s periapsis speed, so 2 × 3,199.8 × sin 3° = 334.9, shown as **330 m/s** (§6.1). The Mission pane's "Include worst-case plane changes" adds those map values.
 
-- Code: map values only (`DvMapNode.PlaneChangeDv`)
+- Code: `OrbitMath.PlaneChangeDv`; map values from `DeltaVMapGenerator` (`DvMapNode.PlaneChangeDv`)
 - Source: Curtis 6.10; [Orbital inclination change (Wikipedia)](https://en.wikipedia.org/wiki/Orbital_inclination_change)
 
 ### 2.4 Synchronous (stationary) orbit
@@ -365,7 +365,7 @@ The app's choices, where the method leaves one open:
 - The descent's low point is **1,000 m** above the site's ground. The ground height comes from the spot itself when it has one (flags and landed craft record it as `alt` in the save), otherwise from the surface bake (§1.9). Without either, the datum (0 m) is assumed and the plan says so.
 - **The approach.** With a surface bake, the app walks back from the site along the ground track over the braking distance d (step 5), every 500 m, and reads the terrain (§1.9). The northbound pass arrives on heading az = asin(cos H) east of north (cos H from step 5), the southbound one on 180° − az. The lower of the two is suggested, and the plan warns if that terrain reaches within 100 m of the descent's low point. Without a bake it can only compare the low point with the body's highest peak.
 - The lander's thrust is entered as its **TWR at the body's surface** (default 2), so a_T = TWR × μ/R².
-- r₀ is the low orbit the leg comes down from (the Δv map's, e.g. 14 km on the Mun).
+- r₀ is the low orbit the leg comes down from (the Δv map's, e.g. 10 km on the Mun).
 
 **Step 1 — Can the orbit pass over the site?** A ground track never goes further north or south than the inclination, so the orbit must satisfy
 
@@ -421,7 +421,7 @@ Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to t
 - Step 3: P = 2π √(230,000³ / μ) = 2,715.5 s. The track moves west **7.03° per orbit**, which is 24.6 km at the equator.
 - Step 4: r₀ = 230,000 m, r_p = 203,000 m, a = 216,500 m. Δv₁ = 532.18 − 515.32 = **16.86 m/s**. t_desc = **1,240 s**, during which the Mun turns 3.21°: about 10.9 km at this latitude.
 - Step 5: v_p = 583.86 m/s, v_s = 8.96 m/s, cos H = cos 15° / cos 12.4508° = 0.9892, so v_rel = **574.99 m/s**. g = 1.581 m/s², a_h = √(5² − 1.581²) = 4.744 m/s². Braking takes t_b = **121.2 s** over d = **34.8 km**, costing Δv₂ = **606.1 m/s**. That is 31.1 m/s (5.4%) more than v_rel, because of the gravity loss.
-- Total from orbit: 16.9 + 606.1 = **623 m/s**. Compare the Δv map's 580 m/s from its 14 km low orbit, which assumes no particular spot.
+- Total from orbit: 16.9 + 606.1 = **623 m/s**. Compare the Δv map's 580 m/s from its 10 km low orbit, which assumes no particular spot.
 
 Still to come: timing the deorbit burn from the craft's orbit (step 3; the bake now stores θ₀), and a drag model for bodies with air.
 
@@ -541,7 +541,7 @@ Far from a planet you have a leftover speed v∞ (hyperbolic excess speed). Burn
 The same formula gives the capture burn at the destination (circularizing at radius r). Escape speed is the special case v∞ = 0 measured from rest: v_esc = √(2μ/r).
 
 Worked example — leaving 80 km Kerbin orbit for Duna (v∞ = 918.3 m/s, see §3.2):
-Δv = √(918.3² + 2 × 3.5316e12 / 680,000) − 2,278.9 = **1,072 m/s** (the Δv map says 950 + 130 = 1,080).
+Δv = √(918.3² + 2 × 3.5316e12 / 680,000) − 2,278.9 = **1,072 m/s** (the Δv map says 930 + 140 = 1,070: the same burn, split at the SOI edge and rounded; §6.1).
 
 - Code: `TransferPlanner.HyperbolicBurnDv`
 - Source: Curtis 8.6–8.7 (patched conics); [Hyperbolic trajectory (Wikipedia)](https://en.wikipedia.org/wiki/Hyperbolic_trajectory)
@@ -597,24 +597,24 @@ The Hohmann numbers assume circular, flat orbits. For the real best window the a
 
 An orbit around the Sun is an interplanetary destination, so the planner attaches it where every other interplanetary trip starts: Kerbin's escape node (next to the Duna, Eve and Moho intercepts), not Kerbol's 610 km low orbit. A solar orbit only "belongs" to Duna if it is inside Duna's sphere of influence — then it's a Duna orbit (§2.1).
 
-Steps — combine §2.1 (around the Sun), §3.1 (leaving Kerbin) and the map's 950 m/s low-Kerbin-orbit → escape edge:
+Steps — combine §2.1 (around the Sun), §3.1 (leaving Kerbin) and the map's 930 m/s low-Kerbin-orbit → escape edge:
 
 ```
 r₁ = Kerbin's orbit radius,  r₂ = R_Kerbol + altitude,  a = (r₁ + r₂)/2      (around Kerbol, μ_sun)
 v∞          = | √(μ_sun·(2/r₁ − 1/a)) − √(μ_sun/r₁) |       departure excess speed
 ejection    = √(v∞² + 2μ_Kerbin/r_park) − √(μ_Kerbin/r_park)   from 80 km Kerbin orbit
 circularize = | √(μ_sun/r₂) − √(μ_sun·(2/r₂ − 1/a)) |        no planet there, so no Oberth bonus
-edge from Kerbin escape = (ejection − 950) + circularize
+edge from Kerbin escape = (ejection − 930) + circularize
 ```
 
 Worked example — "Eye of Kerbol", 10,000,000 km above Kerbol: r₁ = 13,599,840,256 m, r₂ = 261,600,000 + 10,000,000,000 = 10,261,600,000 m.
 
 1. a = 11,930,720,128 m; Kerbin's speed √(μ_sun/r₁) = 9,284.5 m/s; transfer speed at r₁ = 8,610.6 m/s → v∞ = **673.9 m/s** (an inward transfer: you slow down relative to Kerbin)
-2. Ejection from 80 km = √(673.9² + 2 × 3.5316e12/680,000) − 2,278.9 = **1,013.7 m/s** → beyond the map's 950: **64 m/s**
+2. Ejection from 80 km = √(673.9² + 2 × 3.5316e12/680,000) − 2,278.9 = **1,013.7 m/s** → beyond the map's 930: **84 m/s**
 3. Circularize at r₂: √(μ_sun/r₂) − speed on the transfer at r₂ = **723.2 m/s**
-4. Edge = 64 + 723 = **787 m/s**; flight time π√(a³/μ_sun) ≈ **175 Kerbin days**. Total from Kerbin's surface: 3,400 + 950 + 787 = 5,137 m/s.
+4. Edge = 84 + 723 = **807 m/s**; flight time π√(a³/μ_sun) ≈ **175 Kerbin days**. Total from Kerbin's surface: 3,400 + 930 + 807 = 5,137 m/s.
 
-Check: put the orbit at Duna's distance and step 2 gives 122 m/s — the map's own Duna intercept edge is 130 m/s.
+Check: put the orbit at Duna's distance and step 2 gives 142 m/s — the map's own Duna intercept edge is 140 m/s.
 
 Coming home, Kerbin's atmosphere can capture you (the map marks every interplanetary return as aerobrakeable), so only the 723 m/s burn to leave the custom orbit is charged when aerobraking.
 
@@ -683,7 +683,7 @@ Minmus (6° tilt) from 80 km at 20 km: the first chance costs **1,049.9 m/s**, w
 
 Worked example — from a 30 km round equatorial orbit around the Mun, back to 80 km over Kerbin:
 
-1. Estimate with an infinitely large sphere: to fall from the Mun's distance (12,000 km) to a 680 km periapsis, the speed there must be √(2μ·r_p / (r_a·(r_a + r_p))) = 177.7 m/s, against the Mun's 542.5 m/s. So v∞ = 364.8 m/s. At 230 km from the Mun's centre, √(v_esc² + v∞²) − v_circ = √(752.6² + 364.8²) − 532.2 = **304.2 m/s**. (From 14 km this gives 310 m/s, the Δv map's Mun → Kerbin edge.)
+1. Estimate with an infinitely large sphere: to fall from the Mun's distance (12,000 km) to a 680 km periapsis, the speed there must be √(2μ·r_p / (r_a·(r_a + r_p))) = 177.7 m/s, against the Mun's 542.5 m/s. So v∞ = 364.8 m/s. At 230 km from the Mun's centre, √(v_esc² + v∞²) − v_circ = √(752.6² + 364.8²) − 532.2 = **304.2 m/s**. (From the map's 10 km low orbit this gives 311.1 m/s, its Mun → Kerbin edge of 310.)
 2. The planner's burn is **+260.8 m/s** prograde. It's less because the real sphere is only 2,430 km across: the burn is placed so the craft leaves it about 970 km on Kerbin's side of the Mun, already falling inward at 135 m/s, where 193 m/s of sideways speed is all the periapsis allows.
 3. Capture at 80 km: **−851.9 m/s**. Asking for 35 km instead (inside Kerbin's 70 km atmosphere) needs a 263.5 m/s burn, with no capture.
 4. Burn 5 m/s too hard, and the periapsis is at the surface. Half an hour later, an **8.6 m/s retrograde** correction puts it back at 80 km.
@@ -735,7 +735,7 @@ Worked example — Kerbin (100 km round equatorial orbit) to a 100 km orbit arou
 | Shortest flight | 54 days | 45.3 days | 1,153.2 m/s | — | 919.7 m/s | **2,073 m/s** |
 | Leaves soonest, arrives soonest | now | 81.1 days | 1,843.8 m/s | — | 984.8 m/s | **2,829 m/s** |
 
-(Days of 24 h here, as the tests print them.) The cheapest matches the Δv map: 950 + 130 m/s to leave from low Kerbin orbit, and 250 + 360 to get into low Duna orbit. The other two tune straight onto Duna, so they need no correction.
+(Days of 24 h here, as the tests print them.) The cheapest matches the Δv map: 930 + 140 m/s to leave from low Kerbin orbit, and 250 + 360 to get into low Duna orbit. The other two tune straight onto Duna, so they need no correction.
 
 From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s into an 80 km orbit. Then the same Kerbin → Duna choices: 2,815 m/s in all for the cheapest. Mun → Minmus (30 km to 20 km) costs **450 m/s**.
 
@@ -940,11 +940,54 @@ How the planner adds up a mission's Δv: map values first, then leg tools that r
 
 ### 6.1 The Δv map and mission budgets
 
-A mission adds up its legs from the community Δv map. Each map edge is a published Δv; aerobraking replaces a burn where the map allows it; plane changes are optional worst-case extras. A phase's budget is:
+A mission adds up its legs from the Δv map. The app works the map out from the bodies' data (below), and you can edit any value in the Δv map pane. Aerobraking replaces a burn where the map allows it, and plane changes are optional worst-case extras. A phase's budget is:
 
 ```
 phase Δv = Σ(legs in the phase) × (1 + margin%/100) + extra
 ```
+
+**How the map is built.** The map is a tree rooted at Kerbin's surface: Kerbin's low orbit, keostationary orbit and moons hang off its low orbit. The Sun and the other planets hang off an "escape" node at the edge of Kerbin's SOI, and each planet's moons hang off that planet. Every edge is worked out with the formulas earlier in this guide, treating every orbit as circular at its semi-major axis, and rounded to 10 m/s:
+
+```
+low orbit altitude          10 km above the atmosphere, or 2 km above the highest peak (at least 10 km), rounded up to a km
+surface ↔ low orbit         ideal climb + loss allowance (below)
+low orbit → keostationary   Hohmann (§2.1)
+low orbit → moon intercept  Hohmann Δv₁ out to the moon's orbit
+intercept → low orbit       capture from v∞ (§3.1); v∞ = moon's orbital speed − transfer's apoapsis speed
+low orbit → escape          ellipse from low orbit to the SOI edge: v_p − v_circ
+escape → planet intercept   ejection for the Hohmann v∞ (§3.1, §3.2), less the escape edge already paid
+intercept → elliptical      planets with moons: capture into an ellipse from low orbit to the SOI edge
+elliptical → low orbit      v_p − v_circ at the ellipse's periapsis
+elliptical → moon intercept at that periapsis, lower the apoapsis to the moon's orbit
+escape → Sun intercept      ejection that drops the solar periapsis to the Sun's low orbit
+plane change (worst case)   the whole inclination difference at the transfer's faster end: 2·v·sin(Δi/2) (§2.3)
+flight time                 half the transfer orbit's period
+aerobraking                 toward Kerbin wherever Kerbin's air can do the braking; away from Kerbin into any body with air
+```
+
+The climb from a surface is the only part that isn't pure orbital mechanics. The ideal climb is a Hohmann transfer from a point resting on the equator up to low orbit, minus the equator's own speed (launching east). On a body with air, a **loss allowance** for gravity and drag is added:
+
+```
+ideal = v_p − v_rot + (v_circ − v_a)      climb ellipse from r = R to r = R + low orbit altitude
+loss  = 1,000 m/s × (g / 9.80665) × max(1, 0.4 + 0.6 · p)      g = surface gravity, p = sea-level pressure (atm); 0 if airless
+```
+
+The loss allowance is a rule of thumb, not a simulation. The 1,000 m/s per g is the usual figure for Kerbin. The pressure factor grows it for air thicker than Kerbin's, where drag dominates. It comes within about 10% of the figures players usually quote, and the real number depends on your rocket and how you fly it.
+
+Worked example — Kerbin surface → 80 km:
+
+1. Climb ellipse a = (600,000 + 680,000) / 2 = 640,000 m: v_p = 2,500.8, v_a = 2,206.6, v_circ = 2,278.9. From rest: 2,500.8 + (2,278.9 − 2,206.6) = 2,573.1 m/s
+2. Kerbin's equator moves at 2π × 600,000 / 21,549.4 = 174.9 m/s, so ideal = **2,398.2 m/s**
+3. Loss: g = 1.000, p = 1 → **1,000.3 m/s**. Total 3,398.5, shown as **3,400 m/s**
+
+The same rule gives Duna 1,320, Laythe 2,830, Eve 9,360 and Jool 13,450. Airless bodies get the ideal climb only, e.g. the Mun from its 10 km low orbit: 584.4 − 9.0 = **575 m/s**, shown as 580.
+
+Worked example — low Kerbin orbit → the Mun:
+
+1. Transfer from 680 km to 12,000 km: a = 6,340,000 m, v_p = 3,135.3, so the intercept edge is 3,135.3 − 2,278.9 = **856.4 → 860 m/s**; flight time 7.4 h
+2. Arriving: v_a = 177.7 against the Mun's 542.5, so v∞ = 364.8 m/s. Capture at 10 km (r = 210,000 m): √(364.8² + 2μ/r) − √(μ/r) = **311.1 → 310 m/s**
+
+And to Duna: Kerbin's escape edge is 3,209.9 − 2,278.9 = **931 → 930 m/s**. The Hohmann v∞ of 918.3 m/s (§3.2) needs a 1,072.2 m/s ejection (§3.1), so the Duna intercept edge is 1,072.2 − 931.0 = **141 → 140 m/s**. Arriving with v∞ = 826.1 m/s, capture into a 60 km × SOI ellipse costs **250** and lowering the apoapsis to low orbit **360**.
 
 **Launching straight to a higher orbit.** A stop in a planet's or moon's orbit above its low orbit (picked as "Orbit" with an altitude) hangs off the low orbit on the map. When the leg starts on that body's surface and the low orbit isn't a stop, the two steps are shown as one leg (and the same coming down):
 
@@ -969,11 +1012,12 @@ Known simplifications:
 - The map is a tree, so moon-to-moon trips go through low Kerbin orbit and are overstated.
 - Custom orbits around a planet hang off its low orbit, so arriving from another planet charges "capture to low orbit, then climb". Capturing straight into a high orbit would be cheaper.
 - Custom orbit inclination is charged as a worst-case plane change at apoapsis (§2.2); the real cost depends on where your ascending node is.
-- Atmospheric ascent values (3,400 for Kerbin) are typical, not exact — they depend on your rocket.
-- Map surface ↔ low orbit values are optimistic; many players budget more (e.g. 700 instead of 580 for the Mun). Edit them in the Δv map pane.
+- Planet and moon orbits are taken as circular at their semi-major axis, so trips to eccentric orbits (Moho, Eeloo, Dres) vary from the map with the date. A transfer leg (§6.3) works out the real window.
+- Atmospheric ascent values (3,400 for Kerbin) come from the loss allowance above. They're typical, not exact: they depend on your rocket.
+- Airless surface ↔ low orbit values are ideal (instant burns); many players budget more (e.g. 700 instead of 580 for the Mun). Edit them in the Δv map pane.
 
-- Code: `DeltaVMap.Route`, `MissionPlanner.Summarize`
-- Source: [KSP Δv map 1.0.4 by /u/swashlebucky](https://www.reddit.com/r/KerbalSpaceProgram/) (based on Kowgan's map; CC BY-NC-SA 4.0)
+- Code: `DeltaVMapGenerator` (builds the map; stored at first start by `DvMapSeeder`), `CelestialBody.SurfaceToLowOrbitDv`, `DeltaVMap.Route`, `MissionPlanner.Summarize`; tested in `DeltaVMapGeneratorTests`
+- Source: Curtis 6.2 (Hohmann), 8.6–8.7 (escape and capture with patched conics)
 
 ### 6.2 Leg tools: replacing map values with a planned leg
 
@@ -999,7 +1043,7 @@ The Lambert solution already points the ejection out of the plane where it needs
 Worked example: Kerbin low orbit (80 km) to Duna low orbit (60 km), best window from Year 1, Day 1:
 
 1. The planner picks departure Year 1, Day 231 (UT 4,987,091.8 s) and a 269-day flight. The Lambert solution gives v∞ = **854.38 m/s** leaving Kerbin and **890.99 m/s** arriving at Duna.
-2. Ejection (§3.1, μ = 3.5316×10¹², r = 680,000 m): √(854.38² + 2μ/r) − √(μ/r) = 3,334.22 − 2,278.93 = **1,055.3 m/s**. This replaces the map's 950 + 130 = 1,080 for LKO → escape → Duna intercept.
+2. Ejection (§3.1, μ = 3.5316×10¹², r = 680,000 m): √(854.38² + 2μ/r) − √(μ/r) = 3,334.22 − 2,278.93 = **1,055.3 m/s**. This replaces the map's 930 + 140 = 1,070 for LKO → escape → Duna intercept.
 3. Capture (μ = 3.0136×10¹¹, r = 380,000 m): √(890.99² + 2μ/r) − √(μ/r) = 1,542.72 − 890.54 = **652.2 m/s**. This replaces the map's 250 + 360 = 610 for intercept → elliptical → low orbit (or 0 when aerobraking).
 
 - Code: `LegTools.FindTransfer`, `LegTools.ApplyTransfer`, `MissionBuilderViewModel.ApplyTools`; tested in `LegToolsTests`
@@ -1301,6 +1345,5 @@ Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (
 - Bate, Mueller & White, *Fundamentals of Astrodynamics* (Dover) — alternative derivations
 - [KSP wiki](https://wiki.kerbalspaceprogram.com) — body data (`<Body>/Param` pages), pressure tables, biomes and landmark coordinates (body pages, *List of easter eggs*), part data
 - [Eric Meyer — Resonant Orbit Calculator](https://meyerweb.com/eric/ksp/resonant-orbits/) — body constants, resonant-orbit method (MIT License)
-- KSP Δv map 1.0.4 by /u/swashlebucky, based on Kowgan's map (CC BY-NC-SA 4.0) — mission leg values
 - [alexmoon — KSP Launch Window Planner](https://alexmoon.github.io/ksp/) — porkchop approach for KSP
 - Wikipedia articles linked in each section
