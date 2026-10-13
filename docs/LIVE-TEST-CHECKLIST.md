@@ -247,6 +247,9 @@ From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 and §3.8
 - [ ] Same with no craft (or not connected) → planned from a round orbit at the parking height, with a note to click "Use
       the craft I'm flying" once up; doing that plans it from the real orbit
 - [ ] Click a different point on the porkchop plot, then Fly this window → the flight leaves at that point's date
+- [ ] The return leg's **Fly this window** (Plan return trip ticked) → a "Duna → Kerbin" flight leaving at the return
+      window's date. With Aerobrake (the default) there's no capture burn and the note says the periapsis is aimed at 30.1 km;
+      send the ejection from Duna orbit and check KSP's predicted Kerbin periapsis
 - [ ] After the ejection, out of Kerbin's sphere: the Flight pane says the craft is around Kerbol and lights **Re-plan**;
       Re-plan → a course correction and the capture
 

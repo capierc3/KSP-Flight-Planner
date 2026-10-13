@@ -90,7 +90,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
         _sync = sync;
         _flights = flights;
         _events = events;
-        FlyCommand = new RelayCommand(() => _ = FlyAsync(), () => CanFly && !IsBusy);
+        FlyCommand = new RelayCommand(() => _ = FlyAsync(_request!, _selectedWindow!), () => CanFly && !IsBusy);
+        FlyReturnCommand = new RelayCommand(() => _ = FlyAsync(_returnRequest!, _returnWindow!), () => CanFlyReturn && !IsBusy);
         UseGameDateCommand = new RelayCommand(UseGameDate, () => _sync?.Save is not null);
         events.LocationsChanged += _ => ReloadBodies();
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
@@ -179,23 +180,34 @@ public sealed class TransferPlannerViewModel : ObservableObject
     /// <summary>Hands the chosen outbound window to the Flight pane as burns from the craft's orbit.</summary>
     public RelayCommand FlyCommand { get; }
 
-    /// <summary>The window can be flown: a planet or moon to another with the same parent, in the stock system.</summary>
-    public bool CanFly => _flights is not null && _request is { } r && _selectedWindow is not null && SelectedSystem?.Name == "KSP Stock"
-                          && r.Origin is { IsCustomLocation: false, Orbit: not null } && r.Destination is { IsCustomLocation: false, Orbit: not null };
+    /// <summary>Hands the chosen return window to the Flight pane, the same way.</summary>
+    public RelayCommand FlyReturnCommand { get; }
 
-    public string FlyHint => CanFly
-        ? "Plan this window's burns (ejection, course correction, capture) from the craft you're flying if it's around " +
-          $"{_request!.Origin.Name}, else from a round {ParkingAltitudeText} km orbit, and open them in the Flight pane"
-        : "Pick a planet or moon to go to (not a custom location) to fly a window";
+    /// <summary>The window can be flown: a planet or moon to another with the same parent, in the stock system.</summary>
+    public bool CanFly => Flyable(_request, _selectedWindow);
+
+    public bool CanFlyReturn => _planReturn && Flyable(_returnRequest, _returnWindow);
+
+    private bool Flyable(TransferRequest? request, TransferWindow? window) =>
+        _flights is not null && request is not null && window is not null && SelectedSystem?.Name == "KSP Stock"
+        && request.Origin is { IsCustomLocation: false, Orbit: not null } && request.Destination is { IsCustomLocation: false, Orbit: not null };
+
+    public string FlyHint => CanFly ? FlyText(_request!) : "Pick a planet or moon to go to (not a custom location) to fly a window";
+
+    public string FlyReturnHint => CanFlyReturn ? FlyText(_returnRequest!) : "Pick a planet or moon to go to (not a custom location) to fly its return";
+
+    private static string FlyText(TransferRequest request) =>
+        "Plan this window's burns (ejection, course correction, capture) from the craft you're flying if it's around " +
+        $"{request.Origin.Name}, else from a round {Km(request.ParkingAltitudeM)} km orbit, and open them in the Flight pane";
 
     /// <summary>
     /// Makes the window a flight (docs/MATH.md §3.8): planned from the craft being flown when it's around the origin,
     /// otherwise from a round equatorial orbit at the parking height, to be planned again from the real orbit once the
     /// craft is up. Opens it in the Flight pane.
     /// </summary>
-    private async Task FlyAsync()
+    private async Task FlyAsync(TransferRequest request, TransferWindow window)
     {
-        if (!CanFly || _request is not { } request || _selectedWindow is not { } window || SelectedSystem is not { } system) return;
+        if (!Flyable(request, window) || SelectedSystem is not { } system) return;
         var origin = request.Origin;
         var flight = new Flight
         {
@@ -223,7 +235,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
         {
             now = Math.Min(_sync?.Now ?? request.EarliestDepartureUt, window.DepartureUt);
             orbit = new OrbitalElements(origin.EquatorialRadiusM + request.ParkingAltitudeM, 0, 0, 0, 0, 0, now);
-            assumed = $"Planned from a round equatorial {Km(request.ParkingAltitudeM)} km orbit around {origin.Name}. Once you're up, switch to the " +
+            assumed = $"Planned from a round equatorial {Km(request.ParkingAltitudeM)} km orbit around {origin.Name}. Once you're in orbit there, switch to the " +
                       "craft in KSP and click \"Use the craft I'm flying\" to plan it from its real orbit.";
         }
 
@@ -482,6 +494,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
                 _leg.Save(new TransferLeg(_request!.EarliestDepartureUt, value.DepartureUt, value.FlightTimeS));
             OnPropertyChanged(nameof(IsCustomSelection));
             OnPropertyChanged(nameof(CanFly));
+            OnPropertyChanged(nameof(CanFlyReturn));
+            OnPropertyChanged(nameof(FlyReturnHint));
             OnPropertyChanged(nameof(FlyHint));
             OnPropertyChanged(nameof(CanAddToMission));
             OnPropertyChanged(nameof(AddToMissionText));
@@ -501,6 +515,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
                 IsCustomReturnSelection ? "Selected return transfer" : "Best return window",
                 $"Time at {_returnRequest!.Origin.Name}", value.DepartureUt - _selectedWindow.ArrivalUt);
             OnPropertyChanged(nameof(IsCustomReturnSelection));
+            OnPropertyChanged(nameof(CanFlyReturn));
+            OnPropertyChanged(nameof(FlyReturnHint));
             RefreshPlotOutputs();
             RefreshBudget();
         }

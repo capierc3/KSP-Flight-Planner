@@ -160,4 +160,25 @@ public sealed class TripPlannerTests : IDisposable
         Assert.DoesNotContain(braking.Burns, b => b.Title.StartsWith("Capture"));
         Assert.Contains("aerobrake", braking.Note);
     }
+
+    [Fact]
+    public void A_return_window_flies_home_and_aerobraking_aims_into_the_atmosphere()
+    {
+        var (kerbin, duna, sun) = (Body("Kerbin"), Body("Duna"), Body("Kerbol"));
+        var now = 5_000_000.0;
+        var window = TransferPlanner.Plan(new TransferRequest(duna, kerbin, sun, 60_000, 80_000, now, ArrivalMode.Aerobrake)).BestWindow;
+        var flight = new Flight
+        {
+            Name = "Duna → Kerbin", Kind = FlightKind.Transfer, BodyName = "Duna", OriginName = "Duna", DestinationName = "Kerbin",
+            TransferDepartureUt = window.DepartureUt, TransferFlightTimeS = window.FlightTimeS, AltitudeM = 80_000, Arrival = ArrivalMode.Aerobrake,
+        };
+        var planned = TransferFlights.Plan(flight, _bodies, duna, Circular("Duna", 60_000), now, flight.LeadS);
+        foreach (var b in planned.Burns) _output.WriteLine($"{b.Title}: {b.DeltaV:0.0} m/s at +{(b.Ut - now) / 3600:0.0} h");
+        _output.WriteLine(planned.Note);
+
+        Assert.StartsWith("Leave Duna for Kerbin", planned.Burns[0].Title);
+        Assert.DoesNotContain(planned.Burns, b => b.Title.StartsWith("Capture"));
+        Assert.Contains("aimed at 30.1 km, in Kerbin's atmosphere", planned.Note);
+        Assert.InRange(planned.Burns.Sum(b => b.DeltaV), 300, 800);
+    }
 }

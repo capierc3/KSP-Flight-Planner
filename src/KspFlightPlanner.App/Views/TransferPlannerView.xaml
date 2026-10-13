@@ -92,6 +92,8 @@
 
                     <StackPanel Visibility="{Binding PlanReturn, Converter={StaticResource BoolToVisibility}}">
                         <DockPanel Margin="0,14,0,6">
+                            <Button DockPanel.Dock="Right" Content="Fly this window" Command="{Binding FlyReturnCommand}" Padding="12,2" Margin="6,0,0,0"
+                                    ToolTip="{Binding FlyReturnHint}" ToolTipService.ShowOnDisabled="True" />
                             <Button DockPanel.Dock="Right" Content="Back to best" Command="{Binding ResetReturnToBestCommand}"
                                     Visibility="{Binding IsCustomReturnSelection, Converter={StaticResource BoolToVisibility}}" />
                             <TextBlock Text="{Binding Return.Title, TargetNullValue='Return window'}" Style="{StaticResource SectionHeader}"

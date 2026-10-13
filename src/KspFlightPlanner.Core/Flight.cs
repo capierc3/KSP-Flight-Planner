@@ -232,6 +232,12 @@ public static class TransferFlights
     public const double LateFraction = 0.02;
 
     /// <summary>
+    /// Aerobraking aims the periapsis this far up the atmosphere (as a fraction of its height), when the arrival height
+    /// asked for is above it: as a deorbit (docs/MATH.md §2.5).
+    /// </summary>
+    public const double AerobrakeFraction = 0.43;
+
+    /// <summary>
     /// <paramref name="flight"/> (a <see cref="FlightKind.Transfer"/>) with its burns planned from <paramref name="orbit"/>,
     /// the craft's orbit around <paramref name="around"/> at <paramref name="now"/>, none sooner than
     /// <paramref name="leadS"/> from then. Throws <see cref="ArgumentException"/> when it can't be planned from there.
@@ -243,6 +249,9 @@ public static class TransferFlights
         var destination = Named(flight.DestinationName);
         var parent = bodies.FirstOrDefault(b => b.Id == origin.ParentId) ?? throw new ArgumentException($"{origin.Name} doesn't orbit anything.");
         var earliest = now + leadS;
+        var height = flight.Arrival == ArrivalMode.Aerobrake && destination.AtmosphereHeightM > 0
+            ? Math.Min(flight.AltitudeM, AerobrakeFraction * destination.AtmosphereHeightM)
+            : flight.AltitudeM;
 
         HopPlan plan;
         if (around.Id == origin.Id)
@@ -250,11 +259,11 @@ public static class TransferFlights
             if (now > flight.TransferDepartureUt + LateFraction * flight.TransferFlightTimeS)
                 throw new ArgumentException($"This window left {origin.Name} {GameCalendar.Kerbin.FormatDuration(now - flight.TransferDepartureUt)} ago: " +
                                             $"pick another on the Transfer Planner, or use Go to {destination.Name} in the From here pane.");
-            plan = Hops.Across(origin, destination, parent, orbit, earliest, flight.AltitudeM, flight.TransferDepartureUt, flight.TransferFlightTimeS);
+            plan = Hops.Across(origin, destination, parent, orbit, earliest, height, flight.TransferDepartureUt, flight.TransferFlightTimeS);
         }
         else if (around.Id == parent.Id)
         {
-            plan = Hops.Down(parent, destination, orbit, earliest, flight.AltitudeM);
+            plan = Hops.Down(parent, destination, orbit, earliest, height);
         }
         else if (around.Id == destination.Id)
         {
@@ -266,6 +275,13 @@ public static class TransferFlights
         }
 
         var notes = plan.Warnings.ToList();
+        if (height < flight.AltitudeM)
+        {
+            // The hop's own note on the atmosphere says the same, less exactly.
+            notes.RemoveAll(n => n.Contains("atmosphere"));
+            notes.Add($"Aerobrakes: the periapsis is aimed at {height / 1000:#,0.#} km, in {destination.Name}'s atmosphere, so there's no capture " +
+                      "burn. Check the path in KSP: a little higher to skim and aerobrake again, lower to come straight down.");
+        }
         if (flight.Arrival != ArrivalMode.Circularize && plan.Capture is not null)
         {
             plan = plan with { Capture = null };
