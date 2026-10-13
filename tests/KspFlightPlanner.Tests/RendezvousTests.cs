@@ -106,6 +106,48 @@ public sealed class RendezvousTests : IDisposable
     }
 
     [Fact]
+    public void Tiny_plane_change_is_left_to_the_transfer()
+    {
+        // 0.1° at ~2,250 m/s is about 3.9 m/s: under SmallPlaneChangeDv, so no Match planes burn.
+        var chaser = Circular(100_000);
+        var target = new RendezvousTarget("Relay", Circular(1_000_000, inclinationDeg: 0.1, lanDeg: 40, meanAnomalyDeg: 200));
+
+        var leg = Rendezvous.PlanLeg(_kerbin, chaser, target, 0, PhasingChoice.None);
+        Assert.DoesNotContain(leg.Maneuvers, m => m.Kind == ManeuverKind.PlaneChange);
+        var transfer = leg.Maneuvers.Single(m => m.Kind == ManeuverKind.Transfer);
+        var miss = (PositionAfterBurn(transfer, chaser, leg.ArrivalUt) - Kepler.StateAt(target.Orbit, _kerbin.Mu, leg.ArrivalUt).Position).Length;
+        Assert.True(miss < 10, $"missed by {miss:0.0} m");
+    }
+
+    [Fact]
+    public void Burns_leave_room_to_set_up_the_next_one()
+    {
+        var chaser = Circular(100_000);
+        var target = new RendezvousTarget("Relay", Circular(1_000_000, inclinationDeg: 5, lanDeg: 40, meanAnomalyDeg: 200));
+
+        var leg = Rendezvous.PlanLeg(_kerbin, chaser, target, 0, PhasingChoice.None);
+        Assert.Equal(ManeuverKind.PlaneChange, leg.Maneuvers[0].Kind);
+        foreach (var (first, next) in leg.Maneuvers.Zip(leg.Maneuvers.Skip(1)))
+            Assert.True(next.Ut - first.Ut >= Rendezvous.BurnGapS - 1e-6, $"{first.Kind} → {next.Kind}: {next.Ut - first.Ut:0} s");
+    }
+
+    [Fact]
+    public void Next_plane_crossing_is_in_the_targets_plane_and_no_later_than_the_plane_change()
+    {
+        var chaser = Circular(200_000);
+        var target = Circular(500_000, inclinationDeg: 10, lanDeg: 30);
+
+        var next = Rendezvous.NextPlaneCrossingUt(_kerbin, chaser, target, 100);
+        var (burn, _) = Rendezvous.MatchPlane(_kerbin, chaser, target, 100);
+        Assert.NotNull(next);
+        Assert.True(next > 100 && next <= burn.Ut + 1e-6);
+        var r = Kepler.StateAt(chaser, _kerbin.Mu, next!.Value).Position;
+        var t0 = Kepler.StateAt(target, _kerbin.Mu, 0);
+        var normal = Vector3d.Cross(t0.Position, t0.Velocity).Normalized;
+        Assert.True(Math.Abs(Vector3d.Dot(r.Normalized, normal)) < 1e-6);
+    }
+
+    [Fact]
     public void Same_orbit_phasing_lap_then_a_short_hop_meets_the_target()
     {
         var chaser = Circular(200_000);

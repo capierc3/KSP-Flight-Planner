@@ -14,7 +14,7 @@ namespace KspFlightPlanner.App;
 public sealed class DockWorkspace
 {
     // Bump when the default layout changes enough that old saved layouts should be dropped.
-    private const int LayoutVersion = 4;
+    private const int LayoutVersion = 5;
 
     private readonly DockingManager _dock;
     private readonly WorkMode _mode;
@@ -101,6 +101,7 @@ public sealed class DockWorkspace
         {
             panel.Children.Add(SideColumn(320, [Panes.Flights], [Panes.Vessels]));
             panel.Children.Add(Documents(Panes.Flight));
+            panel.Children.Add(SideColumn(340, [Panes.FromHere]));
         }
         _dock.Layout = root;
         ReportActiveDocument();

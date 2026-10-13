@@ -42,6 +42,9 @@
             </DockPanel>
         </Border>
 
+        <TextBlock DockPanel.Dock="Top" Text="{Binding NoSelectionText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,18,0"
+                   Visibility="{Binding HasNoSelection, Converter={StaticResource BoolToVisibility}}" />
+
         <!-- The flight -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,18,0" Visibility="{Binding HasFlight, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="{Binding SelectedFlight.Name}" Style="{StaticResource SectionHeader}" Margin="0" />

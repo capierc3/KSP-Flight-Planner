@@ -2,6 +2,7 @@
 
 Everything here was built and unit-tested without the game running. These checks confirm it against real KSP.
 Tick items as you go and jot down anything odd (numbers, messages, screenshots). Then hand this file back to Claude.
+Easiest way: open `docs/checklist.html` in Edge or Chrome and pick this file. Ticks and notes save straight back into it.
 
 **Rough priority:** sections 2 and 5 matter most. A wrong number there sends burns the wrong way.
 
@@ -9,21 +10,21 @@ Tick items as you go and jot down anything odd (numbers, messages, screenshots).
 
 ## 0. Setup
 
-- [ ] Start KSP, load the **Protogen** save
-- [ ] kRPC window → **Start server** (auto-accept is already on)
-- [ ] Start the planner (`publish\KspFlightPlanner.exe`)
-- [ ] Have a craft **in orbit around Kerbin** you don't mind adding/removing maneuver nodes on (a KerbLink relay is fine)
+- [x] Start KSP, load the **Protogen** save
+- [x] kRPC window → **Start server** (auto-accept is already on)
+- [x] Start the planner (`publish\KspFlightPlanner.exe`)
+- [x] Have a craft **in orbit around Kerbin** you don't mind adding/removing maneuver nodes on (a KerbLink relay is fine)
 - [ ] Optional for later sections: a second craft in Kerbin orbit to use as a **target**, and a carrier with a few
       decouplable probes for the **resonant deployment** test
 
 ## 1. Connecting
 
-- [ ] **Tools › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
-- [ ] Status bar date **ticks forward** every couple of seconds while time passes in game
+- [x] **Tools › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
+- [x] Status bar date **ticks forward** every couple of seconds while time passes in game
 - [ ] Switch scenes (Space Center → Tracking Station → flight): status bar scene name follows
-- [ ] **Tools › Disconnect from KSP** → grey dot, "not connected". Connect again works.
-- [ ] Quit KSP while connected → planner shows "Lost the connection to KSP" in red (it shouldn't freeze or crash)
-- [ ] Optional: **Settings › Live connection**: enter a bad port (e.g. `abc`) → red message and OK greyed out;
+- [x] **Tools › Disconnect from KSP** → grey dot, "not connected". Connect again works.
+- [x] Quit KSP while connected → planner shows "Lost the connection to KSP" in red (it shouldn't freeze or crash)
+- [x] Optional: **Settings › Live connection**: enter a bad port (e.g. `abc`) → red message and OK greyed out;
       **Restore kRPC defaults** puts 127.0.0.1 / 50000 / 50001 back
 
 Notes:
@@ -34,12 +35,12 @@ In flight, with a craft in orbit:
 
 - [ ] **Rendezvous tab**: the "Craft" dropdown shows your vessels with Pe/Ap. For the craft you're flying, compare with
       KSP's map view (Pe/Ap of the orbit). **Should match within ~1 km.**
-- [ ] "Save time" line now reads **"Game time: … · live from KSP"**
-- [ ] Status bar (left) says **"live from KSP"** instead of "read 1:57 PM"
-- [ ] Burn a little prograde in game (change Ap by 50+ km) → within ~10 s the planner's Pe/Ap for that craft updates
-- [ ] While just coasting, the Rendezvous plan should **not** keep recalculating every few seconds (progress bar
+- [x] "Save time" line now reads **"Game time: … · live from KSP"**
+- [x] Status bar (left) says **"live from KSP"** instead of "read 1:57 PM"
+- [x] Burn a little prograde in game (change Ap by 50+ km) → within ~10 s the planner's Pe/Ap for that craft updates
+- [x] While just coasting, the Rendezvous plan should **not** keep recalculating every few seconds (progress bar
       flickering constantly = bad). It may refresh about once a game-minute.
-- [ ] Launch something new (not in the save yet) and reach orbit → it appears in the Rendezvous craft list as
+- [x] Launch something new (not in the save yet) and reach orbit → it appears in the Rendezvous craft list as
       "… · not saved yet"
 - [ ] **Locations tab**: if you have a linked location for a vessel you're moving, its orbit follows
 
@@ -99,6 +100,9 @@ Notes (node values in planner vs KSP):
       (sending it while flying the carrier should ask first)
 - [ ] After flying it, the satellite's orbit is **circular** at ~2,863 km
 - [ ] After satellite 1, **Re-plan from here** (with the carrier selected) → the plan picks up at satellite 2
+- [ ] Re-plan with the carrier a minute or two before the next pass → satellite 2 is still on **that** pass (not a lap later)
+- [ ] Release a satellite a minute before the pass, switch to it, From here › **Circularize at periapsis** → the node is on
+      this pass, a minute away, with a "the burn is only … away" note
 
 Notes:
 
@@ -166,6 +170,42 @@ Known limit: a 1° grid misses small features. The KSC pad reads 47 m (really ab
 
 Notes:
 
+## 10a. Re-planning during a rendezvous ⚠ important
+
+Fly a rendezvous flight from the Flight pane, connected. Burn a little sloppily on purpose.
+
+- [ ] ~90 s after each burn's node time, the burns update by themselves and the status line says what changed
+      (e.g. "Course correction 3.0 m/s: without it you'd pass 5 km…"). Nothing is sent to KSP by itself
+- [ ] After the transfer burn: a **Course correction** appears (or "On course" if you nailed it). **Send all burns**
+      → KSP's closest-approach marker drops to well under 1 km after the correction node
+- [ ] After the correction: Match velocity at the meeting leaves you within a few hundred metres, nearly at rest
+      relative to the target. Distance: ________ m (was 9.7 km before this change)
+- [ ] **Re-plan from here** mid-leg keeps the steps (no new plane match or phasing orbit appears)
+- [ ] Inside 2 min of the meeting: "fly the last part by eye", no new burns
+
+Notes:
+
+## 10b. From here (Fly mode, right side) — no plan needed
+
+Fly mode's default layout changed, so your Fly panes start from the default once. **View › From here** reopens the pane.
+
+- [ ] The top line shows the craft, its orbit and the target, and follows the game as you switch craft or target
+- [ ] **Circularize at apoapsis** on an elliptical orbit → **Send to KSP** → the node sits on the Ap marker, and KSP's
+      predicted orbit after it is round (Pe ≈ Ap)
+- [ ] Right after lift-off, coasting up with Ap ~80 km and Pe underground, Ap under 2 min away: **Circularize at
+      apoapsis** → the node is on **this** Ap (not next orbit), with a short-notice note
+- [ ] Same, but just after passing Ap → "Circularize now", 30 s out, with a radial part; KSP's predicted orbit is round
+- [ ] **Circularize at periapsis** with Pe in the atmosphere → refused, telling you to use the apoapsis
+- [ ] **Change the apoapsis** to e.g. 250 km → the node is at Pe and KSP's predicted Ap reads ~250 km
+- [ ] **Change the periapsis** to 30 km → node at Ap, predicted Pe ~30 km. Then try an apoapsis below your Pe → refused
+      with a note
+- [ ] **Match planes** with a targeted craft, then with the Mun or Minmus targeted → KSP's AN/DN markers read ~0° after it
+- [ ] **Rendezvous with the target** → its burns match the Rendezvous tool's for the same craft
+- [ ] **Keep as a flight** → it opens in the Flight pane with countdowns. Re-plan is greyed for a one-off burn
+- [ ] The Flight pane no longer sits blank when a flight exists: the first flight is selected
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date
@@ -179,7 +219,7 @@ Notes:
 ---
 
 **Known gaps (not bugs):** the Transfer Planner can't send nodes yet (needs ejection-node math). The Mission Builder
-has no flight view yet. kRPC can't see the VAB craft you're building.
+has no flight view yet (a mission's legs can't be sent; use From here or the Rendezvous/Resonant tools). kRPC can't see the VAB craft you're building.
 
 **Not built yet:**
 - **Exact height of a spot** asked from the game when connected (one call per spot), so small features like the KSC

@@ -1142,14 +1142,17 @@ public sealed class RendezvousViewModel : ObservableObject
         PlotLegs.Clear();
         DeorbitStep = null;
 
+        LeadNote = "";
         if (request is not null && plan is not null)
         {
-            var now = request.EarliestUt;
+            // "in …" counts from the game's time when the plan follows it, else from the start entered.
+            var now = FollowSaveTime && _sync.Now is { } game ? game : request.EarliestUt;
+            if (FollowSaveTime && _approach is null && _sync.Now is { } live) LeadNote = SkippedCrossingNote(request, plan, live, "your", canLower: true) ?? "";
             var number = 1;
             foreach (var step in _approach?.Steps ?? []) ApproachSteps.Add(ApproachStepFor(step, number++));
             if (plan.Launch is { } launch)
             {
-                foreach (var option in plan.LaunchOptions) LaunchRows.Add(LaunchRowFor(request, option));
+                foreach (var option in plan.LaunchOptions) LaunchRows.Add(LaunchRowFor(option, now));
                 LaunchStep = LaunchStepFor(request, launch, now, number++);
             }
             for (var i = 0; i < plan.Legs.Count; i++)
@@ -1168,8 +1171,37 @@ public sealed class RendezvousViewModel : ObservableObject
         RefreshPlot();
     }
 
+    /// <summary>
+    /// Says so when the first plane change waits for a later crossing only because the next one comes before the lead
+    /// time is up; null otherwise. <paramref name="whose"/> names the lead ("your", "the flight's"); <paramref name="canLower"/>
+    /// adds how to catch the first crossing.
+    /// </summary>
+    internal static string? SkippedCrossingNote(RendezvousRequest request, RendezvousPlan plan, double now, string whose, bool canLower)
+    {
+        if (request.Chaser is null || plan.Legs.Count == 0) return null;
+        var leg = plan.Legs[0];
+        var lead = request.EarliestUt - now;
+        if (lead <= 0 || leg.Maneuvers.Count == 0 || leg.Maneuvers[0].Kind != ManeuverKind.PlaneChange) return null;
+        if (Rendezvous.NextPlaneCrossingUt(request.Body, leg.StartOrbit, leg.Target.Orbit, now) is not { } next
+            || next >= request.EarliestUt || leg.Maneuvers[0].Ut - next < 60) return null;
+        var later = leg.Maneuvers[0].Ut - next;
+        return $"Your orbit crosses {leg.Target.Name}'s plane in {Clock(next - now)}, inside {whose} {Clock(lead)} lead, so the plan matches " +
+               $"planes at the crossing after that ({Clock(later)} later)." + (canLower ? " Lower the lead to catch the first one." : "");
+    }
+
+    /// <summary>A short span as "4m 36s" (or "1h 05m").</summary>
+    private static string Clock(double seconds) => seconds >= 3600
+        ? $"{(int)(seconds / 3600)}h {(int)(seconds % 3600 / 60):00}m"
+        : $"{(int)(seconds / 60)}m {(int)(seconds % 60):00}s";
+
+    /// <summary>Why the plan starts later than it could (see <see cref="SkippedCrossingNote"/>), or empty.</summary>
+    public string LeadNote { get; private set; } = "";
+
+    public bool HasLeadNote => LeadNote.Length > 0;
+
     private static readonly string[] PlanProperties =
     [
+        nameof(LeadNote), nameof(HasLeadNote),
         nameof(HasPlan), nameof(HasNoPlan), nameof(EmptyText), nameof(HasApproach), nameof(ApproachTitle), nameof(ApproachText), nameof(HasLaunch), nameof(LaunchIndex), nameof(LaunchStep), nameof(DeorbitStep), nameof(HasDeorbit),
         nameof(CanAddToMission),
     ];
@@ -1187,7 +1219,7 @@ public sealed class RendezvousViewModel : ObservableObject
 
     // ---------------- Formatting the plan ----------------
 
-    private LaunchRow LaunchRowFor(RendezvousRequest request, LaunchOption o)
+    private LaunchRow LaunchRowFor(LaunchOption o, double now)
     {
         var kind = o.Kind switch
         {
@@ -1196,7 +1228,7 @@ public sealed class RendezvousViewModel : ObservableObject
             _ => "due east, plane fixed in orbit",
         };
         return new LaunchRow($"{_calendar.FormatDate(o.LiftoffUt)}  ·  heading {o.HeadingDeg:0.0}°",
-            $"{Wait(o.LiftoffUt - request.EarliestUt)} · {kind}");
+            $"{Wait(o.LiftoffUt - now)} · {kind}");
     }
 
     private StepRow LaunchStepFor(RendezvousRequest request, LaunchOption o, double now, int number)
@@ -1255,7 +1287,7 @@ public sealed class RendezvousViewModel : ObservableObject
         var steps = new List<StepRow>();
         foreach (var m in leg.Maneuvers) steps.Add(StepFor(m, body, leg.Target.Name, now, number++));
         return new LegRow(index, $"Leg {index + 1}: meet {leg.Target.Name}", guide, rows, selected, steps,
-            $"Alongside {leg.Target.Name} at {_calendar.FormatDate(leg.ArrivalUt)} ({Wait(leg.ArrivalUt - now)} from the start)",
+            $"Alongside {leg.Target.Name} at {_calendar.FormatDate(leg.ArrivalUt)} ({Wait(leg.ArrivalUt - _request.EarliestUt)} from the start)",
             Format.Speed0(leg.TotalDv), PhasingChanged);
     }
 

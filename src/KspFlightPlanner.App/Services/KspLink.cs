@@ -35,8 +35,6 @@ public sealed class KspLink : ObservableObject, IDisposable
 
     // Connecting blocks until KSP replies, which waits for the player when kRPC asks them to allow the client.
     private static readonly TimeSpan AskPlayerAfter = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan VesselsEvery = TimeSpan.FromSeconds(10);
 
     private readonly Func<AppSettings> _settings;
     private readonly DispatcherTimer _poll;
@@ -52,6 +50,8 @@ public sealed class KspLink : ObservableObject, IDisposable
     private string? _serverVersion;
     private GameScene? _scene;
     private LiveGame? _game;
+    private TimeSpan? _lastRead;
+    private TimeSpan? _lastVesselsRead;
 
     public KspLink(Func<AppSettings> settings)
     {
@@ -71,10 +71,22 @@ public sealed class KspLink : ObservableObject, IDisposable
             if (!SetProperty(ref _state, value)) return;
             OnPropertyChanged(nameof(IsConnected));
             OnPropertyChanged(nameof(MenuText));
+            OnPropertyChanged(nameof(ToolTipText));
         }
     }
 
     public bool IsConnected => State == KspLinkState.Connected;
+
+    // How often to read, from Settings › Live connection (read each time, so a change applies at the next poll).
+    private TimeSpan PollEvery => TimeSpan.FromSeconds(_settings().KrpcPollSeconds);
+    private TimeSpan VesselsEvery => TimeSpan.FromSeconds(_settings().KrpcVesselsSeconds);
+
+    /// <summary>Status-bar tooltip: what clicking does and how long the last reads took (to tune the read intervals).</summary>
+    public string ToolTipText => !IsConnected ? MenuText
+        : $"{MenuText}\nReads the game time every {PollEvery.TotalSeconds:0.#} s (last took {Ms(_lastRead)}) and every vessel's orbit " +
+          $"every {VesselsEvery.TotalSeconds:0.#} s (last took {Ms(_lastVesselsRead)}).";
+
+    private static string Ms(TimeSpan? t) => t is { } d ? $"{d.TotalMilliseconds:#,0} ms" : "—";
 
     /// <summary>Tools-menu label: what clicking it will do.</summary>
     public string MenuText => State switch
@@ -309,7 +321,9 @@ public sealed class KspLink : ObservableObject, IDisposable
         _polling = true;
         try
         {
+            _poll.Interval = PollEvery;
             var readVessels = _vesselsDue || DateTime.UtcNow - _vesselsReadAt >= VesselsEvery;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var (scene, game) = await CallAsync(c =>
             {
                 var scene = c.KRPC().GameScene;
@@ -329,7 +343,10 @@ public sealed class KspLink : ObservableObject, IDisposable
             {
                 _vesselsDue = false;
                 _vesselsReadAt = DateTime.UtcNow;
+                _lastVesselsRead = clock.Elapsed;
             }
+            else _lastRead = clock.Elapsed;
+            OnPropertyChanged(nameof(ToolTipText));
             if (scene != Scene) _vesselsDue = scene == GameScene.Flight; // read straight away on entering flight
             Scene = scene;
             Game = game;

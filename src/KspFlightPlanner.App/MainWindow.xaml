@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="clr-namespace:KspFlightPlanner.App"
         xmlns:ad="https://github.com/Dirkster99/AvalonDock"
+        Icon="/Assets/app.ico"
         Title="{Binding Mission.WindowTitle, FallbackValue='KSP Flight Planner'}"
         Width="1480" Height="920" MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen" WindowState="Maximized"
@@ -83,6 +84,7 @@
                     <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
                     <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />
                     <MenuItem Header="F_lights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
+                    <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
                     <Separator />
                     <MenuItem Header="Legs &amp; p_hases" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Legs}" />
                     <MenuItem Header="Δv m_ap" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.DvMap}" />
@@ -146,7 +148,7 @@
                         </Ellipse.Style>
                     </Ellipse>
                     <TextBlock FontSize="12">
-                        <Hyperlink Command="{x:Static app:MainCommands.ConnectKsp}" ToolTip="{Binding Link.MenuText}">
+                        <Hyperlink Command="{x:Static app:MainCommands.ConnectKsp}" ToolTip="{Binding Link.ToolTipText}">
                             <Run Text="{Binding Link.Status, Mode=OneWay}" />
                         </Hyperlink>
                     </TextBlock>

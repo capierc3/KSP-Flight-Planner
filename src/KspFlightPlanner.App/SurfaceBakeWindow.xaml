@@ -1,6 +1,7 @@
 <Window x:Class="KspFlightPlanner.App.SurfaceBakeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="/Assets/app.ico"
         Title="Bake surface data from KSP" Width="760" Height="760" MinWidth="560" MinHeight="420"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontSize="{DynamicResource ControlContentThemeFontSize}">

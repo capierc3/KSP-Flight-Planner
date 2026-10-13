@@ -8,6 +8,8 @@ public enum FlightKind
     Rendezvous,
     /// <summary>Deploy a constellation from a carrier orbit (Resonant Orbits tab).</summary>
     Resonant,
+    /// <summary>One-off burns planned from where the craft was (From here pane): flown as they are, not re-planned.</summary>
+    Burns,
 }
 
 /// <summary>One burn of a flight, as a maneuver node.</summary>
@@ -24,6 +26,22 @@ public sealed record FlightBurn(string Title, double Ut, NodeBurn Burn)
 
     /// <summary>What to do just before, if anything ("Release the next satellite, then switch to it").</summary>
     public string? Note { get; init; }
+
+    /// <summary>A rendezvous burn's part in its leg (a course correction is a <see cref="ManeuverKind.Transfer"/>); null otherwise.</summary>
+    public ManeuverKind? Kind { get; init; }
+
+    /// <summary>
+    /// <see cref="Kind"/>, or for a flight stored before burns carried it, read from the title
+    /// ("Transfer burn: KerbLink Mk2 B").
+    /// </summary>
+    public ManeuverKind? KindOrFromTitle => Kind ?? (Title.Split(':')[0] switch
+    {
+        "Match planes" => ManeuverKind.PlaneChange,
+        "Phasing orbit" => ManeuverKind.Phasing,
+        "Transfer burn" or "Course correction" => ManeuverKind.Transfer,
+        "Match velocity" => ManeuverKind.MatchVelocity,
+        _ => Title.StartsWith("Deorbit", StringComparison.Ordinal) ? ManeuverKind.Deorbit : null,
+    });
 }
 
 /// <summary>The craft flying a flight. <see cref="SaveVesselId"/> is null for a craft not in the save yet.</summary>
@@ -128,8 +146,12 @@ public static class ResonantDeployment
     /// <param name="satellites">Satellites still to release.</param>
     /// <param name="earliestUt">No burn before this time.</param>
     /// <param name="firstNumber">The first satellite's number (satellites already released count before it).</param>
+    /// <param name="nextReleaseAfterUt">
+    /// Partway through (a satellite already released): on the carrier orbit, the next release is the first pass after
+    /// this, however soon. Skipping a pass to keep the lead time would put the next satellite in the wrong slot.
+    /// </param>
     public static DeploymentPlan Plan(CelestialBody body, ResonantOrbitResult carrier, OrbitalElements craft, int satellites, double earliestUt,
-        int firstNumber = 1)
+        int firstNumber = 1, double? nextReleaseAfterUt = null)
     {
         var mu = body.Mu;
         var r = carrier.SatelliteRadiusM;
@@ -145,7 +167,7 @@ public static class ResonantDeployment
         double after;
         if (onCarrier)
         {
-            after = earliestUt;
+            after = nextReleaseAfterUt ?? earliestUt;
         }
         else
         {
@@ -162,7 +184,7 @@ public static class ResonantDeployment
                              $"Bring your {(atPeriapsis ? "periapsis" : "apoapsis")} to the deployment altitude first for the best result.");
 
             // Horizontal at the burn point with the speed for an orbit whose other apsis is the carrier's.
-            var target = HorizontalVelocity(state, OrbitMath.VisViva(mu, radius, (radius + carrierOtherApsis) / 2));
+            var target = QuickBurns.HorizontalVelocity(state, OrbitMath.VisViva(mu, radius, (radius + carrierOtherApsis) / 2));
             var burn = NodeBurn.From(state, target - state.Velocity);
             burns.Add(new FlightBurn("Enter the carrier orbit", ut, burn)
             {
@@ -179,7 +201,7 @@ public static class ResonantDeployment
         {
             var ut = first + i * period;
             var state = Kepler.StateAt(orbit, mu, ut);
-            var target = HorizontalVelocity(state, OrbitMath.CircularVelocity(mu, state.Position.Length));
+            var target = QuickBurns.HorizontalVelocity(state, OrbitMath.CircularVelocity(mu, state.Position.Length));
             burns.Add(new FlightBurn($"Circularize satellite {firstNumber + i}", ut, NodeBurn.From(state, target - state.Velocity))
             {
                 ByReleasedCraft = true,
@@ -187,13 +209,5 @@ public static class ResonantDeployment
             });
         }
         return new DeploymentPlan(burns, craft, !onCarrier, warnings);
-    }
-
-    /// <summary>A velocity of <paramref name="speed"/> at right angles to the radius, in the orbit's plane and direction.</summary>
-    private static Vector3d HorizontalVelocity(StateVector state, double speed)
-    {
-        var up = state.Position.Normalized;
-        var horizontal = state.Velocity - up * Vector3d.Dot(state.Velocity, up);
-        return horizontal.Normalized * speed;
     }
 }

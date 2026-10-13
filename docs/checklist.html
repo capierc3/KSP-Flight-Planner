@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test Checklist</title>
+<!--
+  Opens a Markdown checklist (e.g. LIVE-TEST-CHECKLIST.md) and shows it with real checkboxes and note boxes.
+  In Edge/Chrome every tick and note is written straight back into the .md file, so the file stays the one
+  source of truth (Claude edits it; you tick it). Other browsers: read-only open + "Download .md".
+-->
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --accent: #2f6fde; --ok: #1f9d55; --warn: #c2410c; --code: #eef1f5; --done: #8a93a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1a1f27; --text: #e6e9ef; --muted: #9aa3b2; --line: #2a313c;
+      --accent: #6c9cff; --ok: #4ade80; --warn: #fb923c; --code: #232a35; --done: #6b7383;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line);
+           padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  header .file { font-weight: 600; }
+  header .status { color: var(--muted); font-size: 13px; }
+  header .status.err { color: var(--warn); }
+  header .spacer { flex: 1; }
+  .bar { width: 160px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--ok); width: 0; transition: width .2s; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover { filter: brightness(1.08); }
+  main { max-width: 860px; margin: 0 auto; padding: 16px 16px 80px; }
+  .empty { text-align: center; padding: 60px 16px; color: var(--muted); }
+  .empty button { margin: 6px; }
+  .drop { outline: 3px dashed var(--accent); outline-offset: -12px; }
+  h1 { font-size: 24px; margin: 8px 0 12px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+            padding: 4px 18px 14px; margin: 14px 0; }
+  h2 { font-size: 17px; margin: 12px 0 8px; display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+  h2 .count { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  h2 .count.full { color: var(--ok); }
+  section.collapsed > :not(h2) { display: none; }
+  h2::before { content: "▾"; color: var(--muted); font-size: 13px; }
+  section.collapsed h2::before { content: "▸"; }
+  p { margin: 6px 0; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  ul { margin: 4px 0; padding-left: 22px; }
+  ul.checks { list-style: none; padding-left: 0; }
+  ul.checks ul.checks { padding-left: 28px; }
+  li.check { margin: 2px 0; }
+  li.check > label { display: flex; gap: 10px; align-items: flex-start; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  li.check > label:hover { background: var(--code); }
+  li.check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--ok); cursor: pointer; }
+  li.check.done > label > span { color: var(--done); }
+  .notes { margin-top: 10px; }
+  .notes label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  textarea { width: 100%; min-height: 64px; resize: vertical; font: 14px/1.45 Consolas, "Cascadia Mono", monospace;
+             background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+</style>
+</head>
+<body>
+<header>
+  <span class="file" id="fileName">No checklist open</span>
+  <div class="bar" title="Progress"><div id="barFill"></div></div>
+  <span class="status" id="progress"></span>
+  <span class="spacer"></span>
+  <span class="status" id="status"></span>
+  <button id="btnCollapse" hidden>Collapse done</button>
+  <button id="btnDownload" hidden>Download .md</button>
+  <button id="btnOpen" class="primary">Open checklist…</button>
+</header>
+<main id="main">
+  <div class="empty" id="empty">
+    <p>Open <code>docs\LIVE-TEST-CHECKLIST.md</code>, or drag it onto this page.</p>
+    <p id="saveHint"></p>
+    <p><button id="btnReopen" class="primary" hidden></button></p>
+  </div>
+</main>
+<input type="file" id="filePick" accept=".md,text/markdown" hidden>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const canWrite = "showOpenFilePicker" in window;
+
+let lines = [];        // the file, line by line: the only state; the page is drawn from it
+let eol = "\n";
+let fileName = "";
+let handle = null;     // FileSystemFileHandle when we can write back
+let lastText = null;   // file text as last read/written, to spot edits made elsewhere
+let saveTimer = null;
+
+$("saveHint").textContent = canWrite
+  ? "Ticks and notes are saved straight back into the file as you go."
+  : "This browser can't write files: ticks are kept until you use Download .md. Use Edge or Chrome to save in place.";
+
+// ---------- remembering the file between visits (Edge/Chrome) ----------
+function idb(mode, fn) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("checklist", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction("kv", mode);
+      const r = fn(tx.objectStore("kv"));
+      tx.oncomplete = () => resolve(r && r.result);
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+async function rememberHandle(h) { try { await idb("readwrite", s => s.put(h, "last")); } catch {} }
+async function recallHandle() { try { return await idb("readonly", s => s.get("last")); } catch { return null; } }
+
+(async () => {
+  if (!canWrite) return;
+  const h = await recallHandle();
+  if (!h) return;
+  const b = $("btnReopen");
+  b.textContent = "Reopen " + h.name;
+  b.hidden = false;
+  b.onclick = () => openHandle(h);
+})();
+
+// ---------- opening ----------
+$("btnOpen").onclick = async () => {
+  if (!canWrite) return $("filePick").click();
+  try {
+    const [h] = await showOpenFilePicker({
+      types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }],
+      id: "checklist",
+    });
+    await openHandle(h);
+  } catch (e) { if (e.name !== "AbortError") setStatus(e.message, true); }
+};
+
+async function openHandle(h) {
+  try {
+    if ((await h.queryPermission({ mode: "readwrite" })) !== "granted" &&
+        (await h.requestPermission({ mode: "readwrite" })) !== "granted") {
+      return setStatus("No permission to save to the file", true);
+    }
+    handle = h;
+    rememberHandle(h);
+    const text = await (await h.getFile()).text();
+    loadText(text, h.name);
+  } catch (e) { setStatus("Couldn't open: " + e.message, true); }
+}
+
+$("filePick").onchange = async e => {
+  const f = e.target.files[0];
+  if (f) { handle = null; loadText(await f.text(), f.name); }
+};
+
+document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
+document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("drop"); });
+document.addEventListener("drop", async e => {
+  e.preventDefault();
+  document.body.classList.remove("drop");
+  const item = e.dataTransfer.items && e.dataTransfer.items[0];
+  if (item && item.getAsFileSystemHandle) {
+    const h = await item.getAsFileSystemHandle();
+    if (h && h.kind === "file") return openHandle(h);
+  }
+  const f = e.dataTransfer.files[0];
+  if (f) { handle = null; loadText(await f.text(), f.name); }
+});
+
+// Also used by tests: loadText(markdown, "name.md")
+function loadText(text, name) {
+  eol = text.includes("\r\n") ? "\r\n" : "\n";
+  lines = text.split(/\r?\n/);
+  lastText = text;
+  fileName = name;
+  document.title = name.replace(/\.md$/i, "");
+  $("fileName").textContent = name;
+  $("btnDownload").hidden = false;
+  $("btnCollapse").hidden = false;
+  setStatus(handle ? "Saving to the file" : "Not saving: use Download .md when done");
+  render();
+}
+
+// ---------- saving ----------
+function changed() {
+  updateProgress();
+  if (!handle) { setStatus("Changes not saved to the file yet"); return; }
+  setStatus("Saving…");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 400);
+}
+
+async function save() {
+  try {
+    const onDisk = await (await handle.getFile()).text();
+    if (onDisk !== lastText) {
+      // Someone (probably Claude) changed the file since we read it: don't overwrite their edit.
+      setStatus("The file changed on disk. Reloaded it; redo your last tick or note.", true);
+      return loadText(onDisk, handle.name);
+    }
+    const text = lines.join(eol);
+    const w = await handle.createWritable();
+    await w.write(text);
+    await w.close();
+    lastText = text;
+    setStatus("Saved " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }));
+  } catch (e) { setStatus("Save failed: " + e.message, true); }
+}
+
+// Pick up edits made elsewhere when you come back to the page.
+window.addEventListener("focus", async () => {
+  if (!handle || saveTimer && $("status").textContent === "Saving…") return;
+  try {
+    const onDisk = await (await handle.getFile()).text();
+    if (onDisk !== lastText) { loadText(onDisk, handle.name); setStatus("Reloaded: the file changed on disk"); }
+  } catch {}
+});
+
+$("btnDownload").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join(eol)], { type: "text/markdown" }));
+  a.download = fileName || "checklist.md";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+$("btnCollapse").onclick = () => {
+  for (const s of document.querySelectorAll("section")) {
+    const c = s.querySelector("h2 .count");
+    if (c && c.classList.contains("full")) s.classList.add("collapsed");
+  }
+};
+
+function setStatus(msg, err) {
+  const s = $("status");
+  s.textContent = msg;
+  s.classList.toggle("err", !!err);
+}
+
+// ---------- Markdown → page ----------
+const CHECK = /^(\s*)- \[([ xX])\] (.*)$/;
+const BULLET = /^(\s*)- (.*)$/;
+const NOTES = /^Notes\b.*:\s*$/;
+const isHeading = l => /^#{1,6} /.test(l);
+const isRule = l => /^---+\s*$/.test(l);
+
+function inline(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+}
+const indentOf = l => l.match(/^\s*/)[0].length;
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+
+function render() {
+  const main = $("main");
+  const scroll = window.scrollY;
+  const collapsed = new Set([...document.querySelectorAll("section.collapsed h2")].map(h => h.dataset.key));
+  main.innerHTML = "";
+  let container = main;
+  let i = 0;
+
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { i++; continue; }
+
+    if (/^# /.test(l)) { main.append(el("h1", null, inline(l.slice(2)))); container = main; i++; continue; }
+
+    if (/^## /.test(l)) {
+      const sec = el("section");
+      const h = el("h2", null, inline(l.slice(3)));
+      h.dataset.key = l;
+      h.append(el("span", "count"));
+      h.onclick = () => sec.classList.toggle("collapsed");
+      if (collapsed.has(l)) sec.classList.add("collapsed");
+      sec.append(h);
+      main.append(sec);
+      container = sec;
+      i++; continue;
+    }
+
+    if (isRule(l)) { main.append(el("hr")); container = main; i++; continue; }
+
+    if (NOTES.test(l)) { i = renderNotes(container, i); continue; }
+
+    if (BULLET.test(l)) { i = renderList(container, i, indentOf(l)); continue; }
+
+    // paragraph: consecutive plain lines
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !isHeading(lines[i]) && !isRule(lines[i]) &&
+           !BULLET.test(lines[i]) && !NOTES.test(lines[i])) para.push(lines[i++].trim());
+    container.append(el("p", null, inline(para.join(" "))));
+  }
+
+  updateProgress();
+  window.scrollTo(0, scroll);
+}
+
+// A list at the given indent, with nested lists and wrapped continuation lines.
+function renderList(container, i, indent) {
+  let ul = null;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim() || !BULLET.test(l) || indentOf(l) < indent) break;
+    if (indentOf(l) > indent) { i = renderList(ul.lastElementChild || ul, i, indentOf(l)); continue; }
+
+    const m = l.match(CHECK);
+    const lineNo = i;
+    let text = m ? m[3] : l.match(BULLET)[2];
+    i++;
+    // continuation lines: indented further than the dash, not a new bullet
+    while (i < lines.length && lines[i].trim() && !BULLET.test(lines[i]) && indentOf(lines[i]) > indent) {
+      text += " " + lines[i++].trim();
+    }
+
+    if (!ul || ul.classList.contains("checks") !== !!m) {
+      ul = el("ul", m ? "checks" : null);
+      container.append(ul);
+    }
+    if (m) {
+      const li = el("li", "check");
+      const label = el("label");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = m[2] !== " ";
+      li.classList.toggle("done", box.checked);
+      box.onchange = () => {
+        lines[lineNo] = lines[lineNo].replace(/- \[[ xX]\]/, box.checked ? "- [x]" : "- [ ]");
+        li.classList.toggle("done", box.checked);
+        changed();
+      };
+      label.append(box, el("span", null, inline(text)));
+      li.append(label);
+      ul.append(li);
+    } else {
+      ul.append(el("li", null, inline(text)));
+    }
+  }
+  return i;
+}
+
+// "Notes:" line followed by free text up to the next heading or rule. Edits rewrite that block.
+function renderNotes(container, i) {
+  const start = i;
+  let end = i + 1;
+  while (end < lines.length && !isHeading(lines[end]) && !isRule(lines[end])) end++;
+  const body = lines.slice(start + 1, end);
+  while (body.length && !body[0].trim()) body.shift();
+  while (body.length && !body[body.length - 1].trim()) body.pop();
+
+  const wrap = el("div", "notes");
+  wrap.append(el("label", null, inline(lines[start])));
+  const ta = document.createElement("textarea");
+  ta.value = body.join("\n");
+  ta.placeholder = "Numbers, messages, anything odd…";
+  const fit = () => { ta.style.height = "auto"; ta.style.height = Math.max(64, ta.scrollHeight + 2) + "px"; };
+  ta.oninput = () => {
+    fit();
+    // Find the block again (earlier edits may have shifted line numbers): it's the nth Notes line.
+    const s = nthNotesLine(+wrap.dataset.nth);
+    let e = s + 1;
+    while (e < lines.length && !isHeading(lines[e]) && !isRule(lines[e])) e++;
+    const text = ta.value.replace(/\s+$/, "");
+    const block = text ? ["", ...text.split("\n"), ""] : [""];
+    lines.splice(s + 1, e - s - 1, ...block);
+    reindex();
+    changed();
+  };
+  wrap.dataset.nth = lines.slice(0, start).filter(l => NOTES.test(l)).length;
+  wrap.append(ta);
+  container.append(wrap);
+  requestAnimationFrame(fit);
+  return end;
+}
+
+// Note edits change line counts, so checkbox line numbers captured earlier go stale: redraw without losing focus.
+function reindex() {
+  const active = document.activeElement;
+  const head = active && active.closest(".notes") && active.closest(".notes").dataset.nth;
+  const sel = active && [active.selectionStart, active.selectionEnd];
+  render();
+  if (head) {
+    const box = [...document.querySelectorAll(".notes")].find(n => n.dataset.nth === head);
+    const ta = box && box.querySelector("textarea");
+    if (ta) { ta.focus(); ta.setSelectionRange(sel[0], sel[1]); }
+  }
+}
+
+function nthNotesLine(n) {
+  for (let i = 0, k = 0; i < lines.length; i++) if (NOTES.test(lines[i]) && k++ === n) return i;
+  return -1;
+}
+
+function updateProgress() {
+  let total = 0, done = 0;
+  for (const s of document.querySelectorAll("section")) {
+    const boxes = s.querySelectorAll("li.check input");
+    const ticked = [...boxes].filter(b => b.checked).length;
+    total += boxes.length; done += ticked;
+    const c = s.querySelector("h2 .count");
+    if (c) {
+      c.textContent = boxes.length ? `${ticked} / ${boxes.length}` : "";
+      c.classList.toggle("full", boxes.length > 0 && ticked === boxes.length);
+    }
+  }
+  $("progress").textContent = total ? `${done} of ${total} done` : "";
+  $("barFill").style.width = total ? (100 * done / total) + "%" : "0";
+}
+</script>
+</body>
+</html>

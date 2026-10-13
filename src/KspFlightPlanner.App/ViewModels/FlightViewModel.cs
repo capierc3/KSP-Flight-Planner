@@ -57,6 +57,12 @@ public sealed class FlightViewModel : ObservableObject
     /// <summary>Further than this from the planned path lights up Re-plan. docs/MATH.md §8.3.</summary>
     public const double DriftThresholdM = 1_000;
 
+    /// <summary>How long after a burn's node time it counts as flown (about half a long burn comes after the node).</summary>
+    public const double SettleS = 90;
+
+    /// <summary>The soonest a re-planned burn (a course correction) is placed: time to turn the craft.</summary>
+    public const double CorrectionLeadS = 120;
+
     private readonly FlightRepository _flights;
     private readonly SaveSync _sync;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
@@ -65,6 +71,7 @@ public sealed class FlightViewModel : ObservableObject
     private string _driftText = "";
     private bool _isDrifting;
     private bool _busy;
+    private (long Id, double Ut)? _autoTried; // the flight and burn last re-planned after
 
     public FlightViewModel(FlightRepository flights, SaveSync sync, PlannerEvents events)
     {
@@ -87,7 +94,7 @@ public sealed class FlightViewModel : ObservableObject
         };
 
         UseActiveCraftCommand = new RelayCommand(() => _ = UseActiveCraftAsync(), () => _selected is not null && _sync.ActiveCraft is not null && !_busy);
-        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(), () => _selected?.Craft is not null && !_busy);
+        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(), () => _selected is { Craft: not null, Kind: not FlightKind.Burns } && !_busy);
         SendBurnCommand = new RelayCommand<FlightBurnRow>(r => _ = SendAsync([r.Burn], replace: false), r => CanSend && r.State != BurnState.Passed);
         SendNextCommand = new RelayCommand(() => _ = SendAsync([NextOwnBurn()!.Burn], replace: false), () => CanSend && NextOwnBurn() is not null);
         SendAllCommand = new RelayCommand(() => _ = SendAsync(OwnFutureBurns(), replace: true), () => CanSend && OwnFutureBurns().Count > 0);
@@ -122,6 +129,11 @@ public sealed class FlightViewModel : ObservableObject
 
     public bool HasFlight => _selected is not null;
     public bool HasNoFlights => Flights.Count == 0;
+    public bool HasNoSelection => _selected is null;
+
+    public string NoSelectionText => Flights.Count == 0
+        ? "No flights yet. For a quick burn from where you are, use the From here pane. Or plan on the Rendezvous or Resonant Orbits tool, then click Fly this plan."
+        : "Pick a flight in the Flights pane to see its burns and send them to KSP.";
 
     // ---------------- The game ----------------
 
@@ -152,6 +164,7 @@ public sealed class FlightViewModel : ObservableObject
     {
         FlightKind.Rendezvous => _selected.Targets.Count == 0 ? "Rendezvous" : $"Rendezvous with {string.Join(", then ", _selected.Targets.Select(t => t.Name))}",
         FlightKind.Resonant => $"Deploy {_selected.SatelliteCount} satellites at {_selected.AltitudeM / 1000:#,0.#} km around {_selected.BodyName}",
+        FlightKind.Burns => $"Planned from where the craft was around {_selected.BodyName}. To plan it again, use the From here pane.",
         _ => "",
     };
 
@@ -191,7 +204,7 @@ public sealed class FlightViewModel : ObservableObject
         var keep = _selected?.Id;
         Flights.Clear();
         foreach (var f in _flights.GetAll()) Flights.Add(f);
-        _selected = Flights.FirstOrDefault(f => f.Id == keep);
+        _selected = Flights.FirstOrDefault(f => f.Id == keep) ?? Flights.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedFlight));
         OnPropertyChanged(nameof(HasNoFlights));
         RebuildBurns();
@@ -215,7 +228,7 @@ public sealed class FlightViewModel : ObservableObject
             for (var i = 0; i < f.Burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, f.Burns[i]));
         foreach (var name in new[]
                  {
-                     nameof(HasFlight), nameof(KindText), nameof(CraftText), nameof(Note), nameof(HasNote), nameof(PlannedText), nameof(HasApproach),
+                     nameof(HasFlight), nameof(HasNoSelection), nameof(NoSelectionText), nameof(KindText), nameof(CraftText), nameof(Note), nameof(HasNote), nameof(PlannedText), nameof(HasApproach),
                      nameof(ApproachTitle), nameof(ApproachSteps),
                  })
             OnPropertyChanged(name);
@@ -238,8 +251,49 @@ public sealed class FlightViewModel : ObservableObject
             if (row.State is BurnState.Next or BurnState.OnCraft) nextSet = true;
         }
         RefreshDrift(now);
+        ReplanAfterBurn(now);
         CommandManager.InvalidateRequerySuggested();
     }
+
+    /// <summary>
+    /// Once a rendezvous burn has been flown (its node time is <see cref="SettleS"/> behind), re-plans the rest of the leg
+    /// from the craft's real orbit, once per burn. Only updates the flight: nothing is sent to KSP.
+    /// </summary>
+    private void ReplanAfterBurn(double? now)
+    {
+        if (_busy || !_sync.Link.IsConnected || _selected is not { Kind: FlightKind.Rendezvous, Craft: not null } f || now is not { } t) return;
+        var flown = f.Burns.Where(b => !b.ByReleasedCraft && b.Ut > f.PlannedUt && b.Ut + SettleS < t).Select(b => b.Ut).DefaultIfEmpty(double.NaN).Max();
+        if (double.IsNaN(flown) || _autoTried == (f.Id, flown) || !f.Burns.Any(b => !b.ByReleasedCraft && b.Ut > t)) return;
+        _autoTried = (f.Id, flown);
+        ReplanRest(f, t, afterBurn: true);
+    }
+
+    /// <summary>
+    /// Re-plans the rest of the current rendezvous leg, keeping its steps and meeting time (docs/MATH.md §8.4). False when
+    /// the leg hasn't started, so the whole flight is planned again instead.
+    /// </summary>
+    private bool ReplanRest(Flight f, double now, bool afterBurn)
+    {
+        if (Body(f.BodyName) is not { } body || f.Craft is not { } craft || _sync.OrbitOf(craft) is not { } orbit || orbit.BodyName != f.BodyName) return false;
+        try
+        {
+            var start = orbit.ToElements();
+            var rest = FlightReplan.RendezvousRest(f, body, start, TargetOrbit, now, Math.Min(f.LeadS, CorrectionLeadS));
+            if (rest is null) return false;
+            Store(f with { Burns = rest.Burns, Targets = rest.Targets, StartOrbit = start, PlannedUt = now });
+            var onCraft = _sync.Link.Game?.ActiveNodes.Count > 0 ? " Send all burns to replace the nodes on the craft." : "";
+            Status = (afterBurn ? $"Burn flown, so the rest was re-planned from {craft.Name}'s real orbit. " : "Re-planned the rest of this leg. ") + rest.Summary + onCraft;
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        return true;
+    }
+
+    /// <summary>A target's orbit now: live while connected, else as planned.</summary>
+    private OrbitalElements TargetOrbit(FlightTarget t) =>
+        (t.SaveVesselId is { } id ? _sync.OrbitOf(new FlightCraft(t.Name, id))?.ToElements() : null) ?? t.Orbit;
 
     private void RefreshDrift(double? now)
     {
@@ -280,7 +334,7 @@ public sealed class FlightViewModel : ObservableObject
     /// <summary>Plans the rest of the flight again from where the craft really is, starting at least the lead time from now.</summary>
     private async Task ReplanAsync()
     {
-        if (_selected is not { } f || f.Craft is not { } craft) return;
+        if (_selected is not { } f || f.Craft is not { } craft || f.Kind == FlightKind.Burns) return;
         if (Body(f.BodyName) is not { } body) { Status = $"{f.BodyName} isn't in the planner's bodies."; return; }
         if (_sync.Now is not { } now) { Status = "No game time yet: connect to KSP or link a save."; return; }
         var orbit = _sync.OrbitOf(craft);
@@ -291,6 +345,8 @@ public sealed class FlightViewModel : ObservableObject
                 : $"{craft.Name} isn't in orbit around {f.BodyName}, so there's nothing to plan from.";
             return;
         }
+        // Partway through a rendezvous leg: keep its steps and fix the rest, rather than starting the leg over.
+        if (f.Kind == FlightKind.Rendezvous && ReplanRest(f, now, afterBurn: false)) return;
 
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
@@ -327,7 +383,8 @@ public sealed class FlightViewModel : ObservableObject
             return null;
         }
         var carrier = ResonantOrbitCalculator.Calculate(new ResonantOrbitRequest(body, f.SatelliteCount, f.AltitudeM, f.PreferDiveOrbit));
-        var plan = ResonantDeployment.Plan(body, carrier, start, left, now + f.LeadS, released + 1);
+        // Once one is out, the rest must follow on the very next passes, however soon, to keep the spacing.
+        var plan = ResonantDeployment.Plan(body, carrier, start, left, now + f.LeadS, released + 1, released > 0 ? now : null);
         return f with
         {
             StartOrbit = plan.StartOrbit,
@@ -358,7 +415,7 @@ public sealed class FlightViewModel : ObservableObject
             Burns = RendezvousBurns(plan),
             Targets = left.Zip(plan.Legs, (t, leg) => t with { Orbit = leg.Target.Orbit, ArrivalUt = leg.ArrivalUt }).ToList(),
             PlannedUt = now,
-            Note = null,
+            Note = RendezvousViewModel.SkippedCrossingNote(request, plan, now, "the flight's", canLower: false),
             Approach = null, // planned from around the body, so the way there is flown
         };
     }
@@ -366,8 +423,9 @@ public sealed class FlightViewModel : ObservableObject
     /// <summary>A rendezvous plan's burns as flight burns, titled with the craft they're for.</summary>
     public static List<FlightBurn> RendezvousBurns(RendezvousPlan plan)
     {
-        var burns = plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn))).ToList();
-        if (plan.Deorbit is { } d) burns.Add(new FlightBurn($"Deorbit {plan.Legs[^1].Target.Name}", d.Ut, d.Burn) { Note = "Docked with the target." });
+        var burns = plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn) { Kind = m.Kind })).ToList();
+        if (plan.Deorbit is { } d)
+            burns.Add(new FlightBurn($"Deorbit {plan.Legs[^1].Target.Name}", d.Ut, d.Burn) { Note = "Docked with the target.", Kind = ManeuverKind.Deorbit });
         return burns;
     }
 
@@ -457,7 +515,7 @@ public sealed class FlightViewModel : ObservableObject
 
     private static string Distance(double metres) => metres < 1000 ? $"{metres:0} m" : $"{metres / 1000:#,0.#} km";
 
-    private static string OrbitText(OrbitalElements orbit, CelestialBody body)
+    internal static string OrbitText(OrbitalElements orbit, CelestialBody body)
     {
         var pe = orbit.SemiMajorAxisM * (1 - orbit.Eccentricity) - body.EquatorialRadiusM;
         var ap = orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) - body.EquatorialRadiusM;

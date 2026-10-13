@@ -239,6 +239,8 @@
                     <TextBlock Text="First burn no sooner than (min)" Style="{StaticResource Label}" />
                     <TextBox Grid.Column="1" Text="{Binding LeadMinutes, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
                 </Grid>
+                <TextBlock Text="{Binding LeadNote}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="#FFB74D"
+                           Visibility="{Binding HasLeadNote, Converter={StaticResource BoolToVisibility}}" />
                 <Grid Visibility="{Binding ManualStart, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />

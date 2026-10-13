@@ -17,7 +17,7 @@ public sealed class MainViewModel : ObservableObject
     private string? _activeCalculator;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
-        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, SaveSync sync, KspLink link, PlannerEvents events)
+        RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, FromHereViewModel fromHere, SaveSync sync, KspLink link, PlannerEvents events)
     {
         Sync = sync;
         Link = link;
@@ -28,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
         Rendezvous = rendezvous;
         Resonant = resonant;
         Flight = flight;
+        FromHere = fromHere;
         Events = events;
         events.OpenFlightRequested += _ => RequestPane(Panes.Flight);
 
@@ -113,6 +114,9 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Flying the plans handed over from planning, against the live game.</summary>
     public FlightViewModel Flight { get; }
+
+    /// <summary>One-off burns planned from where the craft is now.</summary>
+    public FromHereViewModel FromHere { get; }
     public SaveSync Sync { get; }
 
     /// <summary>Live connection to the running game (kRPC).</summary>

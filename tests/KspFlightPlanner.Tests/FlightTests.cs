@@ -72,6 +72,22 @@ public sealed class FlightTests
     }
 
     [Fact]
+    public void Partway_through_the_next_release_is_the_next_pass_however_soon()
+    {
+        var carrier = Carrier(3, 1_000_000);
+        var onCarrier = new OrbitalElements(carrier.CarrierSemiMajorAxisM, carrier.CarrierEccentricity, 0.5, 30, 0, 0, Start);
+        var pass = Start + carrier.CarrierPeriodS;
+        var now = pass - 60; // a minute before the shared apsis, inside the 5-minute lead
+
+        var skipping = ResonantDeployment.Plan(Kerbin, carrier, onCarrier, 2, now + 300, 2);
+        var keeping = ResonantDeployment.Plan(Kerbin, carrier, onCarrier, 2, now + 300, 2, nextReleaseAfterUt: now);
+
+        Assert.Equal(pass + carrier.CarrierPeriodS, skipping.Burns[0].Ut, 0); // a lap late: the spacing would be off
+        Assert.Equal(pass, keeping.Burns[0].Ut, 0);
+        Assert.Equal("Circularize satellite 2", keeping.Burns[0].Title);
+    }
+
+    [Fact]
     public void A_dive_orbit_shares_its_apoapsis_and_satellites_speed_up_to_circularize()
     {
         var carrier = Carrier(3, 2_863_334, dive: true);

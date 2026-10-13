@@ -293,7 +293,7 @@ public sealed class LegToolsTests : IDisposable
             Ascent: new AscentProfile(80_000)));
 
         // The second leg planned on its own, from the station once the mission gets there, is the same leg.
-        var second = Rendezvous.Plan(new RendezvousRequest(kerbin, [Target(relay)], both.Legs[0].ArrivalUt + Rendezvous.MinimumLeadS, 0,
+        var second = Rendezvous.Plan(new RendezvousRequest(kerbin, [Target(relay)], both.Legs[0].ArrivalUt + Rendezvous.BurnGapS, 0,
             Chaser: Target(station))).Legs[0];
         Assert.Equal(both.Legs[1].TotalDv, second.TotalDv, 6);
         Assert.Equal(both.Legs[1].ArrivalUt, second.ArrivalUt, 6);

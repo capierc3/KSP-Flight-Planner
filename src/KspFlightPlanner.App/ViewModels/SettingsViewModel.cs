@@ -17,6 +17,8 @@ public sealed class SettingsViewModel : ObservableObject
     private string _krpcRpcPort;
     private string _krpcStreamPort;
     private bool _krpcConnectOnStartup;
+    private string _krpcPollSeconds;
+    private string _krpcVesselsSeconds;
 
     public SettingsViewModel(AppSettings settings, PartData parts)
     {
@@ -27,6 +29,8 @@ public sealed class SettingsViewModel : ObservableObject
         _krpcRpcPort = settings.KrpcRpcPort.ToString(CultureInfo.InvariantCulture);
         _krpcStreamPort = settings.KrpcStreamPort.ToString(CultureInfo.InvariantCulture);
         _krpcConnectOnStartup = settings.KrpcConnectOnStartup;
+        _krpcPollSeconds = settings.KrpcPollSeconds.ToString(CultureInfo.CurrentCulture);
+        _krpcVesselsSeconds = settings.KrpcVesselsSeconds.ToString(CultureInfo.CurrentCulture);
         RestoreKrpcDefaultsCommand = new RelayCommand(RestoreKrpcDefaults);
         BrowseCommand = new RelayCommand(Browse);
         DetectCommand = new RelayCommand(Detect);
@@ -75,6 +79,10 @@ public sealed class SettingsViewModel : ObservableObject
 
     public bool KrpcConnectOnStartup { get => _krpcConnectOnStartup; set => SetProperty(ref _krpcConnectOnStartup, value); }
 
+    public string KrpcPollSeconds { get => _krpcPollSeconds; set { if (SetProperty(ref _krpcPollSeconds, value)) OnKrpcChanged(); } }
+
+    public string KrpcVesselsSeconds { get => _krpcVesselsSeconds; set { if (SetProperty(ref _krpcVesselsSeconds, value)) OnKrpcChanged(); } }
+
     /// <summary>What's wrong with the connection settings, or null. OK is disabled until it's fixed.</summary>
     public string? KrpcProblem
     {
@@ -83,6 +91,10 @@ public sealed class SettingsViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(KrpcAddress)) return "Enter the address of the computer running KSP (127.0.0.1 for this one).";
             if (Port(KrpcRpcPort) is not { } rpc) return "The RPC port must be a whole number from 1 to 65535.";
             if (Port(KrpcStreamPort) is not { } stream) return "The stream port must be a whole number from 1 to 65535.";
+            if (Seconds(KrpcPollSeconds, AppSettings.MinKrpcPollSeconds, AppSettings.MaxKrpcPollSeconds) is null)
+                return $"Read the game time every {AppSettings.MinKrpcPollSeconds:0.#} to {AppSettings.MaxKrpcPollSeconds:0} seconds.";
+            if (Seconds(KrpcVesselsSeconds, AppSettings.MinKrpcVesselsSeconds, AppSettings.MaxKrpcVesselsSeconds) is null)
+                return $"Read the vessels every {AppSettings.MinKrpcVesselsSeconds:0} to {AppSettings.MaxKrpcVesselsSeconds:0} seconds.";
             return rpc == stream ? "The RPC and stream ports must be different." : null;
         }
     }
@@ -98,6 +110,8 @@ public sealed class SettingsViewModel : ObservableObject
         KrpcRpcPort = Port(KrpcRpcPort) ?? AppSettings.DefaultKrpcRpcPort,
         KrpcStreamPort = Port(KrpcStreamPort) ?? AppSettings.DefaultKrpcStreamPort,
         KrpcConnectOnStartup = KrpcConnectOnStartup,
+        KrpcPollSeconds = Seconds(KrpcPollSeconds, AppSettings.MinKrpcPollSeconds, AppSettings.MaxKrpcPollSeconds) ?? AppSettings.DefaultKrpcPollSeconds,
+        KrpcVesselsSeconds = Seconds(KrpcVesselsSeconds, AppSettings.MinKrpcVesselsSeconds, AppSettings.MaxKrpcVesselsSeconds) ?? AppSettings.DefaultKrpcVesselsSeconds,
     };
 
     private void OnKrpcChanged()
@@ -111,7 +125,12 @@ public sealed class SettingsViewModel : ObservableObject
         KrpcAddress = AppSettings.DefaultKrpcAddress;
         KrpcRpcPort = AppSettings.DefaultKrpcRpcPort.ToString(CultureInfo.InvariantCulture);
         KrpcStreamPort = AppSettings.DefaultKrpcStreamPort.ToString(CultureInfo.InvariantCulture);
+        KrpcPollSeconds = AppSettings.DefaultKrpcPollSeconds.ToString(CultureInfo.CurrentCulture);
+        KrpcVesselsSeconds = AppSettings.DefaultKrpcVesselsSeconds.ToString(CultureInfo.CurrentCulture);
     }
+
+    private static double? Seconds(string text, double min, double max) =>
+        double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var s) && s >= min && s <= max ? s : null;
 
     private static int? Port(string text) =>
         int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port is > 0 and <= 65535 ? port : null;

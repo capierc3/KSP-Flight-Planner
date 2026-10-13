@@ -10,6 +10,7 @@
     <Product>KSP Flight Planner</Product>
     <Company>Brick Road Software</Company>
     <Version>0.1.0</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- `dotnet publish -c Release` produces one self-contained KspFlightPlanner.exe (no .NET install needed). -->
@@ -20,6 +21,11 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The exe icon (ApplicationIcon) and every window's title-bar/taskbar icon (Icon="/Assets/app.ico"). -->
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- The in-app Guide tab renders this file; edit docs/MATH.md, not a copy. -->

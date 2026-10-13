@@ -9,7 +9,7 @@ Each section has the formulas, a worked example, the code that implements them a
 ## Contents
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are
 - **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
@@ -20,6 +20,7 @@ Each section has the formulas, a worked example, the code that implements them a
 **Where to look for…**
 
 - Raising, lowering or reshaping an orbit: §2.1, §2.2
+- A single burn from where your craft is now (circularize, change Ap/Pe): §2.8
 - A plane change or an inclined target: §2.3, §4.2
 - A polar or other inclined orbit straight from the launch pad: §2.7
 - A trip to another planet, and its launch window: §3.2, §3.4
@@ -481,6 +482,34 @@ The same 80 km orbit at other inclinations, against turning an equatorial orbit 
 - Code: `LaunchInclination.Plan` (steps 1–4), `LegTools.FindLaunch`, `LegTools.ApplyLaunch` (adds the extra to the launch step), `LegTools.MeasurePlaneChanges` (later custom orbits); tested in `LaunchInclinationTests` (this worked example is `Polar_launch_matches_the_worked_example`, the table `Launching_into_the_plane_is_far_cheaper_than_turning_in_orbit`)
 - Source: launch azimuth sin(az) = cos i / cos φ and the rotating-launch-site velocity ([Braeunig, Orbital Mechanics](http://www.braeunig.us/space/orbmech.htm)); Curtis chapter 4 (orbits in three dimensions); KSC Launch Pad coordinates from the KSP wiki
 
+### 2.8 Quick burns from where you are
+
+The **From here** pane in Fly mode plans one burn from the live orbit of the craft you're flying, with no mission. Each burn is at an apsis, where the velocity is horizontal, so it's purely prograde or retrograde. The new speed comes straight from vis-viva (§1.3):
+
+```
+circularize at r:                v_new = √(μ / r)
+move the far apsis to r₁,
+burning at the near one r₀:      v_new = √(2μ·r₁ / (r₀·(r₀ + r₁)))        (r₀ stays put)
+Δv (prograde) = v_new − v_now
+```
+
+To change the apoapsis it burns at the periapsis, and to change the periapsis it burns at the apoapsis. Each uses the **next** apsis, however soon it is, and the pane warns when that's under two minutes away. Skipping a close apsis would put the burn a whole orbit later, which a craft just off the pad never reaches (its periapsis is underground) and which puts a released relay in the wrong slot (§5.2). An orbit with e < 0.002 has no apsis worth waiting for, so the burn is two minutes from now.
+
+If the periapsis is in the atmosphere (or below the ground on an airless body), the craft can't wait for a periapsis:
+
+- *Circularize at periapsis* and *Change the apoapsis* (which burns there) are refused.
+- If the next periapsis comes before the apoapsis you asked for, the craft is falling: it's just past the apoapsis after a launch. *Circularize* then burns 30 s from now (`FallingLeadS`) and turns the velocity horizontal at the circular speed for that height: Δv = √(μ/r)·ĥ − v, where ĥ is the horizontal direction in the orbit's plane. The radial part cancels the fall. *Change the periapsis* is refused, with a note to circularize instead.
+
+Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
+
+Worked example — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km), from an 80 km circular orbit:
+
+1. Raise the apoapsis to 250 km: r₀ = 680,000, r₁ = 850,000. v_now = √(μ/r₀) = 2,278.93 m/s and v_new = 2,402.20 m/s, so the burn is **+123.27 m/s** prograde. That's the first Hohmann burn of §2.1, as it should be.
+2. Circularize at the new 250 km apoapsis: v_a = √(2μ·680,000 / (850,000 × 1,530,000)) = 1,921.76 m/s and √(μ/850,000) = 2,038.34 m/s, so **+116.57 m/s**.
+
+- Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`)
+- Source: vis-viva (§1.3); Curtis 6.2–6.3 (coplanar maneuvers at an apsis)
+
 ## 3. Going to another planet
 
 Leaving one body's sphere of influence and arriving at another: the burns, when to make them, and where to point.
@@ -616,6 +645,8 @@ The Rendezvous tab takes you from a launch (or a craft already in orbit) to a st
 3. **Transfer**: a Lambert intercept, searched around the Hohmann window (§4.4)
 4. **Match velocity** at the meeting point
 
+Each burn is planned at least **5 minutes** (`Rendezvous.BurnGapS`, node time to node time) after the one before, and after reaching orbit. That's time to finish one burn, turn to the next node and set it up. Node times are burn midpoints, so a 2-minute burn uses up 1 minute on each side and leaves 3 minutes to turn.
+
 The positions come straight from the save: KSP stores each vessel's orbit as Keplerian elements (SMA, ECC, INC, LAN, LPE, MNA at epoch EPH), and §1.4 turns them into positions at any time. That is why the page asks you to plan from the save's current time — quicksave right before you plan.
 
 - Code: `Rendezvous.Plan`, `Rendezvous.PlanLeg`; tested in `RendezvousTests`
@@ -631,9 +662,15 @@ v_new = v_r·r̂ + |v_h|·(n̂_target × r̂)        v_r = radial speed, v_h = h
 
 That's §2.3 again, using the horizontal speed. Burn **anti-normal at the AN, normal at the DN**. The planner takes the cheaper of the next two crossings (the higher, slower one if your orbit is eccentric).
 
+A plane change under **5 m/s** (`Rendezvous.SmallPlaneChangeDv`) isn't flown on its own. The transfer is a Lambert intercept between the real 3D orbits (§4.4), so its normal part and the match-velocity burn take up the small tilt for about the same Δv, with one burn fewer. At 100 km around Kerbin (v ≈ 2,246 m/s) that's tilts under 2·asin(5 / (2 × 2,246)) ≈ **0.13°**.
+
+**When the lead time hides a crossing.** The plan starts the lead time after now (§8.4). If the next crossing comes before then, the planner waits for a later one, which can be half an orbit or a whole orbit later. The Rendezvous tab and Re-plan then say so: `NextPlaneCrossingUt` finds the first crossing after now, and when it is before the start and earlier than the planned burn, the note gives its countdown.
+
+Worked example: a 31m 27s orbit, the crossing in 4m 36s, a 5-minute lead. The planner skips that crossing. The other node, ~15m 43s later, costs a little more, so it plans the same node one lap on, 31m 27s after the skipped one. A 4-minute lead would catch it.
+
 Worked example — circular 200 km orbit, target tilted 10°: v = √(3.5316×10¹² / 800,000) = 2,101.07 m/s → Δv = 2 × 2,101.07 × sin 5° = **366.24 m/s**.
 
-- Code: `Rendezvous.MatchPlane`, `Rendezvous.RelativeInclinationDeg`; tested in `RendezvousTests`
+- Code: `Rendezvous.MatchPlane`, `Rendezvous.NextPlaneCrossingUt`, `Rendezvous.RelativeInclinationDeg`, `RendezvousViewModel.SkippedCrossingNote`; tested in `RendezvousTests`
 - Source: Curtis 6.10
 
 ### 4.3 Phase angle, waiting, and phasing orbits
@@ -771,6 +808,8 @@ Resonant deployment (§5.1) needs the carrier to pass the shared apsis once per 
 ```
 
 Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative). If the craft's apsis misses r by more than 1 km, the plan warns you: the satellites will end up at that apsis instead, and their spacing will be off.
+
+Re-planning partway through (at least one satellite already out) keeps the very next pass of the shared apsis, even if it's inside the flight's lead time. Waiting a lap would put the next satellite 2/n of an orbit behind the one before instead of 1/n, so the spacing would be lost (`Partway_through_the_next_release_is_the_next_pass_however_soon`). The same goes for a released satellite circularized from the From here pane (§2.8).
 
 Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r = 3,463,334.1 m, μ = 3.5317×10¹² m³/s²), from a circular orbit at that altitude:
 
@@ -1064,7 +1103,7 @@ Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
 
 ### 8.2 Following the live game (kRPC)
 
-While connected to the game (*Tools › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
+While connected to the game (*Tools › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
 
 **Which save vessel is it?** kRPC has no vessel ids, so live vessels are paired with save vessels by name. A different type adds 100 to the score. Among same-named vessels, the closest orbit wins:
 
@@ -1114,7 +1153,29 @@ Worked example: a craft on a 100 km circular Kerbin orbit (r = 700,000 m) that i
 
 ### 8.4 Re-planning a rendezvous
 
-Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made on the Rendezvous tab can change. That's intended: the old choice was for an orbit you're no longer on.
+**Partway through a leg** (at least one of its burns flown, and the plane match behind you), Re-plan keeps the leg's steps and fixes only the rest. It doesn't start the leg over, because a fresh plan would throw away the phasing you've already flown and cost far more. The same re-plan runs **by itself after each burn**: 90 s after the burn's node time (about half a long burn comes after the node), once per burn, while connected. It only updates the flight. Nothing goes to KSP until you click send, and the status line says when the craft's old nodes need replacing (Send all burns).
+
+1. Burns already flown stay. Burns still to come before the last one (a phasing orbit before the transfer) stay as planned, applied to the craft's **real** orbit.
+2. **Before the transfer**, the transfer burn and the match-velocity burn are solved again (Lambert, §4.4) from where those burns leave the craft.
+3. **On the coast after the transfer**, the miss is measured first: the craft's real path and the target's at the meeting time. Under 500 m, no correction is planned and only the match-velocity burn is updated for the real path (Δv = target's velocity − yours there). Otherwise a **course correction** is solved from the coast to the target, searched over the first half of what's left, at least two minutes from now. A speed error is cheapest to fix early, and a tilt late.
+4. The burn time and the meeting may each move by up to 15% of the time left. **Pinning them would be a mistake.** A transfer is close to half an orbit, and at 180° Lambert's transfer plane is undefined: a 0.07° tilt left by a plane match turned the re-solved transfer into 608 m/s instead of 55 m/s. Searching the window (the porkchop refinement of §3.4) finds a slightly shorter or longer transfer that costs about what the original did. The meeting can't move past the next leg's first burn.
+5. Within 2 minutes of the meeting there's nothing left to re-plan: fly the last part by eye (the Rendezvous tab's "Closing the last few kilometres").
+
+A tilt alone barely matters on the coast. A sideways error at a half-orbit transfer moves the meeting by metres, because the two paths cross again exactly half an orbit on. That's why a pure normal error needs no correction.
+
+Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (transfer 55.1 m/s, match velocity 53.8 m/s):
+
+| Flown badly | Without a fix | Re-plan |
+|---|---|---|
+| Transfer +1.5 prograde, +0.5 normal | passes 5 km from it | correction **3.0 m/s**, match 54.3 m/s, meeting 34 s sooner |
+| Transfer +1.5 prograde, +4 normal, +0.5 radial | passes 5.5 km from it | correction **2.8 m/s**, match 54.3 m/s |
+| Transfer flown exactly | passes 9 m from it | none, match 53.8 m/s |
+| 3° plane match off by 3 m/s normal, 1 m/s radial | — | transfer **57.8 m/s** (was 55.1), match 56.2 m/s, meeting 27 s sooner |
+
+- Code: `FlightReplan.RendezvousRest`, `Rendezvous.CheapestIntercept`, `FlightViewModel.ReplanAfterBurn`/`ReplanRest`; tested in `FlightReplanTests` (the table, row by row)
+- Source: Lambert's problem (§4.4); midcourse corrections as a re-solved Lambert arc, Curtis 5.3
+
+**When the leg hasn't started** (nothing flown yet, or the plane match still to come), Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). If a plane crossing falls inside the lead, the flight's note says so (§4.2). On the Rendezvous tab, a plan that starts from the game's time counts its "in …" times from the game's time, not from the start after the lead. It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made on the Rendezvous tab can change. That's intended: the old choice was for an orbit you're no longer on.
 
 - Code: `FlightViewModel.ReplanRendezvousAsync`
 

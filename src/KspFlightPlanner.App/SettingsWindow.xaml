@@ -1,6 +1,7 @@
 <Window x:Class="KspFlightPlanner.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="/Assets/app.ico"
         Title="Settings" Width="820" Height="500" MinWidth="640" MinHeight="420"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         FontSize="{DynamicResource ControlContentThemeFontSize}">
@@ -94,10 +95,28 @@
                         <TextBox Text="{Binding KrpcStreamPort, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Read the game time every (s)" Style="{StaticResource Field}" />
+                        <TextBox Text="{Binding KrpcPollSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Read every vessel's orbit every (s)" Style="{StaticResource Field}" />
+                        <TextBox Text="{Binding KrpcVesselsSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Style="{StaticResource Note}" Margin="0,4,0,0"
+                           Text="Each value kRPC reads costs about one game frame, so reading every vessel takes longer the more vessels (and debris) there are. Hover the KSP status at the bottom of the main window to see how long the last reads took. Defaults: 2 s and 10 s." />
                 <TextBlock Text="{Binding KrpcProblem}" Foreground="#EF5350" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12" />
 
                 <Button Content="Restore kRPC defaults" Command="{Binding RestoreKrpcDefaultsCommand}" HorizontalAlignment="Left"
-                        Margin="0,8,0,0" Padding="12,3" ToolTip="127.0.0.1, RPC port 50000, stream port 50001" />
+                        Margin="0,8,0,0" Padding="12,3" ToolTip="127.0.0.1, RPC port 50000, stream port 50001, reads every 2 s and 10 s" />
 
                 <CheckBox Content="Connect to KSP when the planner starts" IsChecked="{Binding KrpcConnectOnStartup}" Margin="0,16,0,0" />
                 <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"

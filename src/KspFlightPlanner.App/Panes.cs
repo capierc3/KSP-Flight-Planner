@@ -29,6 +29,7 @@ public static class Panes
     public const string Vessels = "vessels";
     public const string Rocket = "rocket";
     public const string Flights = "flights";
+    public const string FromHere = "fromhere";
 
     // Documents
     public const string Legs = "legs";
@@ -55,6 +56,7 @@ public static class Panes
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
         new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
+        new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
 
         new(Legs, "Legs & phases", true, Plan, vm => new MissionLegsView { DataContext = vm.Mission }),
         new(DvMap, "Δv map", true, Plan, vm => new DvMapView { DataContext = vm.Mission }),

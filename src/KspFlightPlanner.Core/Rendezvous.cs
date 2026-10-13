@@ -186,11 +186,20 @@ public static class Rendezvous
     /// <summary>Planes closer than this are treated as matched.</summary>
     public const double PlaneToleranceDeg = 0.02;
 
+    /// <summary>
+    /// A plane change cheaper than this isn't flown on its own: the transfer burn's normal part and the match-velocity
+    /// burn take up so small a tilt. See docs/MATH.md §4.2.
+    /// </summary>
+    public const double SmallPlaneChangeDv = 5;
+
     /// <summary>Orbits whose sizes differ by less than this fraction count as the same orbit (no Hohmann window: phase by laps).</summary>
     public const double SameOrbitFraction = 0.005;
 
-    /// <summary>Earliest a burn is planned after the previous step, so there is time to set up the node.</summary>
-    public const double MinimumLeadS = 60;
+    /// <summary>
+    /// Earliest a burn is planned after the previous one (node time to node time): time to finish that burn, turn to the
+    /// next node and set it up. See docs/MATH.md §4.1.
+    /// </summary>
+    public const double BurnGapS = 300;
 
     /// <summary>Waiting longer than this many of your orbits for a window makes the planner look at phasing orbits.</summary>
     public const double PhasingWaitOrbits = 3;
@@ -221,7 +230,7 @@ public static class Rendezvous
             if (launches.Count == 0) throw new ArgumentException("No launch opportunity found.");
             launchIndex = choices.Launch is { } pick && pick >= 0 && pick < launches.Count ? pick : BestLaunch(body, launches, first, choices);
             chaser = launches[launchIndex].ParkingOrbit;
-            start = launches[launchIndex].InsertionUt + MinimumLeadS;
+            start = launches[launchIndex].InsertionUt + BurnGapS;
         }
         else
         {
@@ -235,7 +244,7 @@ public static class Rendezvous
             var leg = PlanLeg(body, chaser, request.Targets[i], start, choices.PhasingFor(i), choices.InterceptFor(i));
             legs.Add(leg);
             chaser = request.Targets[i].Orbit; // docked: you now fly the target's orbit
-            start = leg.ArrivalUt + Math.Max(request.StayS, MinimumLeadS);
+            start = leg.ArrivalUt + Math.Max(request.StayS, BurnGapS);
         }
 
         var deorbit = request.DeorbitPeriapsisAltitudeM is { } pe ? Deorbit(body, chaser, start, pe) : null;
@@ -247,7 +256,7 @@ public static class Rendezvous
     {
         var plans = launches.Select(l =>
         {
-            try { return PlanLeg(body, l.ParkingOrbit, first, l.InsertionUt + MinimumLeadS, choices.PhasingFor(0)); }
+            try { return PlanLeg(body, l.ParkingOrbit, first, l.InsertionUt + BurnGapS, choices.PhasingFor(0)); }
             catch (ArgumentException) { return null; }
         }).ToList();
         var cheapest = plans.Where(p => p is not null).Select(p => p!.TotalDv).DefaultIfEmpty(double.NaN).Min();
@@ -289,13 +298,13 @@ public static class Rendezvous
         var orbit = chaser;
         var t = startUt;
 
-        // 1. Match planes at the cheaper of the next two crossings.
-        if (RelativeInclinationDeg(orbit, target.Orbit, mu) > PlaneToleranceDeg)
+        // 1. Match planes at the cheaper of the next two crossings (unless it's so small the transfer takes it up).
+        if (RelativeInclinationDeg(orbit, target.Orbit, mu) > PlaneToleranceDeg
+            && MatchPlane(body, orbit, target.Orbit, t) is var (plane, tilted) && plane.DeltaV >= SmallPlaneChangeDv)
         {
-            var (burn, after) = MatchPlane(body, orbit, target.Orbit, t);
-            maneuvers.Add(burn);
-            orbit = after;
-            t = burn.Ut + MinimumLeadS;
+            maneuvers.Add(plane);
+            orbit = tilted;
+            t = plane.Ut + BurnGapS;
         }
 
         // 2. Phase: wait for the window, or fly a phasing orbit to bring it sooner.
@@ -332,7 +341,7 @@ public static class Rendezvous
         // 3. Transfer: Lambert intercepts around the predicted window; the cheapest (or the one picked) is flown. Sharing the
         // target's orbit, the phasing lap has already brought you to it: a short hop of a quarter to under half an orbit
         // closes what's left (a half-orbit hop would be a 180° transfer, which Lambert can't solve).
-        var earliest = t + (chosen is null ? 0 : MinimumLeadS);
+        var earliest = t + (chosen is null ? 0 : BurnGapS);
         var depStart = Math.Max(earliest, predicted - halfWindow);
         var depEnd = Math.Max(depStart + 60, predicted + halfWindow);
         var (tofMin, tofMax) = guide.SameOrbit
@@ -382,25 +391,10 @@ public static class Rendezvous
         var mu = body.Mu;
         var targetNormal = Normal(target, mu);
         var relInc = RelativeInclinationDeg(chaser, target, mu);
-        var period = Kepler.OrbitalPeriod(chaser, mu);
-
-        double Side(double ut) => Vector3d.Dot(Kepler.StateAt(chaser, mu, ut).Position, targetNormal);
 
         (Maneuver Burn, OrbitalElements After)? best = null;
-        const int samples = 360;
-        var found = 0;
-        for (var k = 0; k < samples && found < 2; k++)
+        foreach (var ut in PlaneCrossings(chaser, targetNormal, mu, afterUt).Take(2))
         {
-            double t0 = afterUt + period * k / samples, t1 = afterUt + period * (k + 1) / samples;
-            double s0 = Side(t0), s1 = Side(t1);
-            if (Math.Sign(s0) == Math.Sign(s1) || s1 == 0) continue;
-            for (var i = 0; i < 60; i++)
-            {
-                var mid = (t0 + t1) / 2;
-                if (Math.Sign(Side(mid)) == Math.Sign(s0)) t0 = mid; else t1 = mid;
-            }
-            found++;
-            var ut = (t0 + t1) / 2;
             var s = Kepler.StateAt(chaser, mu, ut);
             var rHat = s.Position.Normalized;
             var vr = Vector3d.Dot(s.Velocity, rHat);
@@ -416,6 +410,31 @@ public static class Rendezvous
             if (best is null || burn.DeltaV < best.Value.Burn.DeltaV - 0.01) best = (burn, after);
         }
         return best ?? throw new ArgumentException("Couldn't find where the orbits' planes cross.");
+    }
+
+    /// <summary>The first time after <paramref name="afterUt"/> that <paramref name="chaser"/> crosses <paramref name="target"/>'s plane, or null if it doesn't within an orbit.</summary>
+    public static double? NextPlaneCrossingUt(CelestialBody body, OrbitalElements chaser, OrbitalElements target, double afterUt) =>
+        PlaneCrossings(chaser, Normal(target, body.Mu), body.Mu, afterUt).Select(ut => (double?)ut).FirstOrDefault();
+
+    /// <summary>Times within one orbit after <paramref name="afterUt"/> that the chaser passes through the plane with normal <paramref name="planeNormal"/>, in order.</summary>
+    private static IEnumerable<double> PlaneCrossings(OrbitalElements chaser, Vector3d planeNormal, double mu, double afterUt)
+    {
+        var period = Kepler.OrbitalPeriod(chaser, mu);
+        double Side(double ut) => Vector3d.Dot(Kepler.StateAt(chaser, mu, ut).Position, planeNormal);
+
+        const int samples = 360;
+        for (var k = 0; k < samples; k++)
+        {
+            double t0 = afterUt + period * k / samples, t1 = afterUt + period * (k + 1) / samples;
+            double s0 = Side(t0), s1 = Side(t1);
+            if (Math.Sign(s0) == Math.Sign(s1) || s1 == 0) continue;
+            for (var i = 0; i < 60; i++)
+            {
+                var mid = (t0 + t1) / 2;
+                if (Math.Sign(Side(mid)) == Math.Sign(s0)) t0 = mid; else t1 = mid;
+            }
+            yield return (t0 + t1) / 2;
+        }
     }
 
     /// <summary>
@@ -533,6 +552,16 @@ public static class Rendezvous
         });
         return new PorkchopPlot(depStart, depEnd, tofMin, tofMax, columns, rows, grid);
     }
+
+    /// <summary>
+    /// The cheapest intercept (transfer + match-velocity Δv) leaving between <paramref name="depStart"/> and
+    /// <paramref name="depEnd"/> with a flight time in the given range. Searching, not fixing the times, steers clear of
+    /// the 180° transfer, where a tiny tilt between the orbits makes Lambert's answer enormous. docs/MATH.md §8.4.
+    /// </summary>
+    public static InterceptPoint CheapestIntercept(OrbitalElements chaser, OrbitalElements target, double mu, double depStart, double depEnd,
+        double tofMin, double tofMax) =>
+        Refine(chaser, target, mu, Porkchop(chaser, target, mu, depStart, Math.Max(depEnd, depStart + 1), Math.Max(60, tofMin), Math.Max(tofMin + 1, tofMax), 40, 30),
+            depStart);
 
     /// <summary>The cheapest grid cell, then a few rounds of zooming in around it (as in the Transfer Planner).</summary>
     private static InterceptPoint Refine(OrbitalElements chaser, OrbitalElements target, double mu, PorkchopPlot plot, double earliest)

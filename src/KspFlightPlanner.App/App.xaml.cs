@@ -41,6 +41,7 @@ public partial class App : Application
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
                 new FlightViewModel(flights, sync, events),
+                new FromHereViewModel(sync, flights, events),
                 sync,
                 link,
                 events)

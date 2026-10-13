@@ -307,6 +307,22 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Live_read_intervals_default_round_trip_and_ignore_out_of_range_values()
+    {
+        var repository = new SettingsRepository(_db);
+        var defaults = repository.Load();
+        Assert.Equal((2.0, 10.0), (defaults.KrpcPollSeconds, defaults.KrpcVesselsSeconds));
+
+        repository.Save(defaults with { KrpcPollSeconds = 0.5, KrpcVesselsSeconds = 3 });
+        var loaded = repository.Load();
+        Assert.Equal((0.5, 3.0), (loaded.KrpcPollSeconds, loaded.KrpcVesselsSeconds));
+
+        repository.Save(defaults with { KrpcPollSeconds = 0.01, KrpcVesselsSeconds = 9999 });
+        loaded = repository.Load();
+        Assert.Equal((2.0, 10.0), (loaded.KrpcPollSeconds, loaded.KrpcVesselsSeconds));
+    }
+
+    [Fact]
     public void Broken_database_with_current_fingerprint_is_rebuilt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
