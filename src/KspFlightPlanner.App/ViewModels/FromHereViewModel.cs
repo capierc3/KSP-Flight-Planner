@@ -19,7 +19,7 @@ public sealed record QuickActionOption(QuickAction Action, string Name)
 /// <summary>An entry in the Go to list: a body, or (<see cref="Body"/> null) whatever is targeted in KSP, following the game.</summary>
 public sealed class DestinationOption(CelestialBody? body) : ObservableObject
 {
-    private string _name = body?.Name ?? "KSP's target";
+    private string _name = body?.Name ?? "KSP's target (none set)";
 
     public CelestialBody? Body { get; } = body;
     public bool IsTarget => Body is null;
@@ -57,7 +57,7 @@ public sealed class FromHereViewModel : ObservableObject
     private readonly DestinationOption _target = new(null);
     private string? _targetKey; // what KSP's target was when last looked at
     private TripOptionRow? _trip;
-    private string? _destinationsFrom; // the body the destination list is for
+    private string? _destinationsFrom = "\0"; // the body the destination list is for ("" outside flight); "\0" until it's built
 
     // What the shown burns were planned from, for keeping them as a flight.
     private CelestialBody? _plannedBody;
@@ -73,8 +73,7 @@ public sealed class FromHereViewModel : ObservableObject
         _flights = flights;
         _events = events;
         _action = Actions[0];
-        Destinations = [_target];
-        _destination = _target;
+        RefreshDestinations();
         sync.Link.GameUpdated += _ => RefreshLive();
         sync.Link.PropertyChanged += (_, e) =>
         {
@@ -435,13 +434,15 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The altitude box's starting value: the apsis as it is now, or a periapsis low in the atmosphere.</summary>
     private string DefaultAltitude()
     {
+        // A destination's parking height doesn't depend on where the craft is: shown outside flight too.
+        if (_action.Action == QuickAction.GoTo)
+            return Destination()?.DefaultParkingAltitudeM is { } parking ? Math.Round(parking / 1000).ToString("#,0", CultureInfo.CurrentCulture) : "";
         if (Here() is not (var body, var orbit)) return "";
         var periapsis = Kepler.PeriapsisRadius(orbit) - body.EquatorialRadiusM;
         var metres = _action.Action switch
         {
             // Capturing from a flyby: an apoapsis at the parking height, or above the pass.
             QuickAction.SetApoapsis when orbit.Eccentricity >= 1 => Math.Max(periapsis, body.DefaultParkingAltitudeM),
-            QuickAction.GoTo => Destination()?.DefaultParkingAltitudeM ?? double.NaN,
             QuickAction.SetApoapsis => orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) - body.EquatorialRadiusM,
             QuickAction.SetPeriapsis => orbit.SemiMajorAxisM * (1 - orbit.Eccentricity) - body.EquatorialRadiusM,
             QuickAction.Deorbit => body.AtmosphereHeightM * 0.43, // as the Rendezvous tool's deorbit (docs/MATH.md §2.5)
@@ -505,16 +506,20 @@ public sealed class FromHereViewModel : ObservableObject
             OnPropertyChanged(nameof(NeedsAltitude));
         }
 
-        var here = Here();
-        var moved = here?.Body.Name != _destinationsFrom;
+        var here = Here()?.Body;
+        var moved = (here?.Name ?? "") != _destinationsFrom;
         if (moved)
         {
-            _destinationsFrom = here?.Body.Name;
+            _destinationsFrom = here?.Name ?? "";
             var list = new List<DestinationOption> { _target };
-            if (here is (var body, _)) list.AddRange(Reachable(body).Select(b => new DestinationOption(b)));
+            list.AddRange(Reachable(here).Select(b => new DestinationOption(b)));
             Destinations = list;
+            // KSP's target if one is set; else around a moon its planet, else the nearest moon (of the home planet, outside flight).
+            var from = here ?? _sync.StockBodies().Values.FirstOrDefault(b => b.IsDefault);
             _destination = targetKey is not null ? _target
-                : list.FirstOrDefault(o => here is (var from, _) && o.Body?.Id == from.ParentId) ?? list.ElementAtOrDefault(1) ?? _target;
+                : list.FirstOrDefault(o => o.Body is { } b && from is not null && b.Id == from.ParentId && here is not null)
+                  ?? list.FirstOrDefault(o => o.Body is { } b && from is not null && b.ParentId == from.Id)
+                  ?? list.ElementAtOrDefault(1) ?? _target;
             OnPropertyChanged(nameof(Destinations));
             OnPropertyChanged(nameof(SelectedDestination));
             OnPropertyChanged(nameof(NeedsAltitude));
@@ -531,16 +536,17 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>
     /// Every body a trip can go to from <paramref name="here"/>, nearest first: its moons, its planet (around a moon), then
     /// the rest of the system, each planet followed by its moons. Not the star, and not where the craft already is.
+    /// Outside flight (<paramref name="here"/> null), every planet and moon in order, to pick one ahead.
     /// </summary>
-    private IReadOnlyList<CelestialBody> Reachable(CelestialBody here)
+    private IReadOnlyList<CelestialBody> Reachable(CelestialBody? here)
     {
-        var bodies = _sync.StockBodies().Values.Where(b => b.Orbit is not null && b.ParentId is not null && b.Id != here.Id).ToList();
+        var bodies = _sync.StockBodies().Values.Where(b => b.Orbit is not null && b.ParentId is not null && b.Id != here?.Id).ToList();
         var byId = _sync.StockBodies().Values.ToDictionary(b => b.Id);
         var star = byId.Values.FirstOrDefault(b => b.ParentId is null);
         // A body's planet: itself if it orbits the star, else its parent.
         CelestialBody Planet(CelestialBody b) => b.ParentId == star?.Id || b.ParentId is not { } p || !byId.TryGetValue(p, out var parent) ? b : parent;
 
-        var near = bodies.Where(b => b.ParentId == here.Id).OrderBy(b => b.Orbit!.SemiMajorAxisM)
+        var near = here is null ? [] : bodies.Where(b => b.ParentId == here.Id).OrderBy(b => b.Orbit!.SemiMajorAxisM)
             .Concat(bodies.Where(b => b.Id == here.ParentId)).ToList();
         var rest = bodies.Except(near)
             .OrderBy(b => Planet(b).Orbit!.SemiMajorAxisM).ThenBy(b => Planet(b) == b ? 0 : 1).ThenBy(b => b.Orbit!.SemiMajorAxisM);
