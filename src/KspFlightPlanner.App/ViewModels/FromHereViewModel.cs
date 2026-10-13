@@ -24,6 +24,15 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
     public CelestialBody? Body { get; } = body;
     public bool IsTarget => Body is null;
     public string Name { get => _name; set => SetProperty(ref _name, value); }
+
+    public override string ToString() => Name;
+}
+
+/// <summary>One way of making a trip, as a row to pick: what it's best at, and when it leaves, how long it takes, its Δv.</summary>
+public sealed record TripOptionRow(TripOption Option, string Text)
+{
+    public string Label => Option.Label;
+    public bool HasLabel => Option.Label.Length > 0;
 }
 
 /// <summary>
@@ -47,7 +56,7 @@ public sealed class FromHereViewModel : ObservableObject
     private DestinationOption? _destination;
     private readonly DestinationOption _target = new(null);
     private string? _targetKey; // what KSP's target was when last looked at
-    private bool _soonest;
+    private TripOptionRow? _trip;
     private string? _destinationsFrom; // the body the destination list is for
 
     // What the shown burns were planned from, for keeping them as a flight.
@@ -56,6 +65,7 @@ public sealed class FromHereViewModel : ObservableObject
     private double _plannedUt;
     private RendezvousPlan? _plannedRendezvous;
     private FlightCraft? _plannedTarget;
+    private CelestialBody? _plannedTo;
 
     public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events)
     {
@@ -141,11 +151,20 @@ public sealed class FromHereViewModel : ObservableObject
         }
     }
 
-    /// <summary>Leave for a moon at the first chance rather than waiting for a tilted moon to come near the craft's plane.</summary>
-    public bool LeaveSoonest
+    /// <summary>The ways of making the trip planned (Go to), when there's more than one to choose from.</summary>
+    public ObservableCollection<TripOptionRow> TripOptions { get; } = [];
+
+    public bool HasTripOptions => TripOptions.Count > 1;
+
+    /// <summary>The way of making the trip whose burns are shown.</summary>
+    public TripOptionRow? SelectedTrip
     {
-        get => _soonest;
-        set { if (SetProperty(ref _soonest, value)) Clear(); }
+        get => _trip;
+        set
+        {
+            if (value is null || !SetProperty(ref _trip, value)) return;
+            ShowTrip(value.Option);
+        }
     }
 
     public string AltitudeText
@@ -159,9 +178,10 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.CircularizeAtApoapsis => "One burn at the next apoapsis, however soon. Just past it, falling back into the atmosphere, it's half a minute from now. On an orbit that's already round, two minutes.",
         QuickAction.CircularizeAtPeriapsis => "One burn at the next periapsis, however soon. On an orbit that's already round, it's two minutes from now. " +
                                               "Just arrived at a moon (inside its sphere of influence), this is the capture burn.",
-        QuickAction.GoTo => "To a moon, or back from one to its planet: the burn to leave, and the capture burn into a round orbit at this height there, " +
-                            "going the way it spins. A height in the planet's atmosphere brings you down (or aerobrakes) instead. Already on the way? " +
-                            "It plans a course correction, or just the capture if you're on course. KSP's target follows the game: a moon or planet " +
+        QuickAction.GoTo => "Anywhere in the system: the burns to leave, any course correction on the way, and the capture into a round orbit at this " +
+                            "height there, going the way it spins. A height in the atmosphere brings you down (or aerobrakes) instead. Trips through a " +
+                            "launch window (another planet, or moon to moon) offer a few windows to choose from; from a moon to another planet, it stops " +
+                            "in the planet's orbit on the way. Already on the way? It plans a course correction. KSP's target follows the game: a body " +
                             "goes there, a craft plans a rendezvous with it.",
         QuickAction.SetApoapsis => "Burns at the periapsis, which stays where it is.",
         QuickAction.SetPeriapsis => "Burns at the apoapsis, which stays where it is.",
@@ -216,7 +236,6 @@ public sealed class FromHereViewModel : ObservableObject
         try
         {
             List<FlightBurn> burns;
-            MoonTransferPlan? trip = null;
             switch (_action.Action)
             {
                 case QuickAction.CircularizeAtApoapsis or QuickAction.CircularizeAtPeriapsis:
@@ -241,18 +260,9 @@ public sealed class FromHereViewModel : ObservableObject
                         Status = $"You're already around {destination.Name}. To change your orbit here, circularize or change the apoapsis or periapsis.";
                         return;
                     }
-                    var up = destination.Id == body.ParentId && destination.ParentId is not null;
-                    if (!up && destination.ParentId != body.Id)
-                    {
-                        Status = $"Going from {body.Name} to {destination.Name} can't be planned here yet: for now, only between a planet and its moons.";
-                        return;
-                    }
                     if (!TryKm(out var height)) return;
-                    trip = up
-                        ? MoonTransfer.PlanReturn(body, destination, orbit, after, height)
-                        : MoonTransfer.Plan(body, destination, orbit, after, height, _soonest);
-                    burns = [.. trip.Burns];
-                    break;
+                    _ = PlanTripAsync(body, destination, orbit, now, after, height);
+                    return;
                 case QuickAction.Deorbit:
                     if (!TryKm(out var periapsis)) return;
                     var deorbit = Rendezvous.Deorbit(body, orbit, after, periapsis);
@@ -271,31 +281,10 @@ public sealed class FromHereViewModel : ObservableObject
 
             (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
             for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
-            if (trip is not null)
-            {
-                var pass = trip.Arrival;
-                var to = Destination()!.Name;
-                var crossing = Destination()!.Id == body.ParentId
-                    ? $"leaves {body.Name}'s sphere of influence {_calendar.FormatDate(pass.CrossingUt)}"
-                    : $"enters {to}'s sphere of influence {_calendar.FormatDate(pass.CrossingUt)}";
-                ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · " +
-                             (trip.Transfer is null ? "already on course: " : trip.IsCorrection ? "corrected: " : "") +
-                             $"{crossing}, comes to {Km(pass.PeriapsisAltitudeM)} over {to} ({pass.Path.InclinationDeg:0}° to its equator)" +
-                             (trip.Capture is null ? " without a capture burn" : " and captures there");
-                if (trip.Warnings.Count > 0) Status = string.Join(" ", trip.Warnings);
-                if (burns.Count == 0)
-                {
-                    Status = $"On course, with nothing to burn. {Status}";
-                    RefreshLive();
-                    return;
-                }
-            }
-            else
-            {
-                var end = burns.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
-                ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
-            }
+            var end = burns.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
+            ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
             OnPropertyChanged(nameof(HasBurns));
+            Status = FuelNote();
             // An apsis burn is never pushed to the next orbit, so it can be close.
             if (burns[0].Ut - now < LeadS)
                 Status = (burns[0].Note is { } note ? note + " " : "") +
@@ -306,6 +295,89 @@ public sealed class FromHereViewModel : ObservableObject
         {
             Status = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Plans the ways to <paramref name="to"/> off the UI thread (a launch window search takes a moment), lists them and
+    /// shows the first (the cheapest).
+    /// </summary>
+    private async Task PlanTripAsync(CelestialBody from, CelestialBody to, OrbitalElements orbit, double now, double after, double height)
+    {
+        _busy = true;
+        Status = $"Working out the way to {to.Name}…";
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var bodies = _sync.StockBodies().Values.ToList();
+            var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies));
+            (_plannedBody, _plannedFrom, _plannedUt, _plannedTo) = (from, orbit, now, to);
+            foreach (var option in options) TripOptions.Add(new TripOptionRow(option, OptionText(option, now)));
+            OnPropertyChanged(nameof(HasTripOptions));
+            SelectedTrip = TripOptions[0];
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>"leaves in 46d 2h · 67d 3h there · 1,691 m/s".</summary>
+    private string OptionText(TripOption option, double now)
+    {
+        var leaves = double.IsNaN(option.DepartureUt) ? "on course" : option.DepartureUt - now < 3600 ? "leaves now" : "leaves in " + Duration(option.DepartureUt - now);
+        var there = Duration(option.ArrivalUt - (double.IsNaN(option.DepartureUt) ? now : option.DepartureUt));
+        return $"{leaves} · {there} there · {Format.Speed0(option.DeltaV)}";
+    }
+
+    /// <summary>Shows one way of making the planned trip: its burns, where it arrives, and anything to know.</summary>
+    private void ShowTrip(TripOption option)
+    {
+        Burns.Clear();
+        var burns = option.Burns;
+        for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
+        var last = option.Legs[^1];
+        var to = last.Hop.To;
+        var stops = option.Legs.Take(option.Legs.Count - 1).Select(l => $"{l.Hop.To.Name} ({Km(l.AltitudeM)})").ToList();
+        ResultText = $"{Format.Speed0(option.DeltaV)} in all · " + (option.IsCorrection ? "corrected: " : "") +
+                     $"arrives {_calendar.FormatDate(option.ArrivalUt)}, {Km(option.Arrival.PeriapsisAltitudeM)} over {to.Name} " +
+                     $"({option.Arrival.Path.InclinationDeg:0}° to its equator)" + (last.Plan.Capture is null ? " without a capture burn" : " and captures there") +
+                     (stops.Count > 0 ? $" · stops in orbit around {string.Join(", then ", stops)} on the way" : "");
+        var notes = option.Warnings.ToList();
+        if (burns.Count == 0) notes.Insert(0, "On course, with nothing to burn.");
+        if (FuelNote() is { } fuel) notes.Add(fuel);
+        Status = notes.Count > 0 ? string.Join(" ", notes) : null;
+        OnPropertyChanged(nameof(HasBurns));
+        RefreshLive();
+    }
+
+    /// <summary>The craft being flown as the save last recorded it (its parts, fuel and engines), if it's in the save.</summary>
+    private VesselReport? ActiveReport()
+    {
+        if (_sync.ActiveCraft?.SaveVesselId is not { } id || _sync.Save?.Vessels.FirstOrDefault(v => v.Id == id) is not { } vessel) return null;
+        try { return VesselAnalysis.Analyze(vessel, _sync.Parts.Catalog); }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Sets each burn's length for the craft being flown (docs/MATH.md §7.1), and says if its fuel doesn't stretch to them
+    /// all; null when it does, or the engines aren't known.
+    /// </summary>
+    private string? FuelNote()
+    {
+        if (ActiveReport() is not { ThrustKn: > 0 } report) return null;
+        var times = VesselAnalysis.BurnTimes(report, Burns.Select(b => b.Burn.DeltaV));
+        for (var i = 0; i < Burns.Count; i++)
+            Burns[i].BurnTime = times[i] is { } t ? "burn " + Units.BurnTime(t) : "not enough fuel";
+        var need = Burns.Sum(b => b.Burn.DeltaV);
+        var name = _sync.ActiveCraft!.Name;
+        return need > report.DeltaVVacuum
+            ? $"{name} has {Format.Speed0(report.DeltaVVacuum)} left (as the save last recorded it): {Format.Speed0(need - report.DeltaVVacuum)} short."
+            : null;
     }
 
     /// <summary>A rendezvous with the craft targeted in KSP (as the Rendezvous tool plans it); null, with a status, if there isn't one here.</summary>
@@ -385,6 +457,11 @@ public sealed class FromHereViewModel : ObservableObject
         ResultText = "";
         _plannedRendezvous = null;
         _plannedTarget = null;
+        _plannedTo = null;
+        TripOptions.Clear();
+        _trip = null;
+        OnPropertyChanged(nameof(SelectedTrip));
+        OnPropertyChanged(nameof(HasTripOptions));
         OnPropertyChanged(nameof(HasBurns));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -433,13 +510,8 @@ public sealed class FromHereViewModel : ObservableObject
         if (moved)
         {
             _destinationsFrom = here?.Body.Name;
-            var bodies = _sync.StockBodies().Values.ToList();
             var list = new List<DestinationOption> { _target };
-            if (here is (var body, _))
-            {
-                list.AddRange(bodies.Where(b => b.ParentId == body.Id && b.Orbit is not null).OrderBy(b => b.Orbit!.SemiMajorAxisM).Select(b => new DestinationOption(b)));
-                if (bodies.FirstOrDefault(b => b.Id == body.ParentId) is { ParentId: not null } planet && body.Orbit is not null) list.Add(new DestinationOption(planet));
-            }
+            if (here is (var body, _)) list.AddRange(Reachable(body).Select(b => new DestinationOption(b)));
             Destinations = list;
             _destination = targetKey is not null ? _target
                 : list.FirstOrDefault(o => here is (var from, _) && o.Body?.Id == from.ParentId) ?? list.ElementAtOrDefault(1) ?? _target;
@@ -454,6 +526,25 @@ public sealed class FromHereViewModel : ObservableObject
             _altitudeText = DefaultAltitude();
             OnPropertyChanged(nameof(AltitudeText));
         }
+    }
+
+    /// <summary>
+    /// Every body a trip can go to from <paramref name="here"/>, nearest first: its moons, its planet (around a moon), then
+    /// the rest of the system, each planet followed by its moons. Not the star, and not where the craft already is.
+    /// </summary>
+    private IReadOnlyList<CelestialBody> Reachable(CelestialBody here)
+    {
+        var bodies = _sync.StockBodies().Values.Where(b => b.Orbit is not null && b.ParentId is not null && b.Id != here.Id).ToList();
+        var byId = _sync.StockBodies().Values.ToDictionary(b => b.Id);
+        var star = byId.Values.FirstOrDefault(b => b.ParentId is null);
+        // A body's planet: itself if it orbits the star, else its parent.
+        CelestialBody Planet(CelestialBody b) => b.ParentId == star?.Id || b.ParentId is not { } p || !byId.TryGetValue(p, out var parent) ? b : parent;
+
+        var near = bodies.Where(b => b.ParentId == here.Id).OrderBy(b => b.Orbit!.SemiMajorAxisM)
+            .Concat(bodies.Where(b => b.Id == here.ParentId)).ToList();
+        var rest = bodies.Except(near)
+            .OrderBy(b => Planet(b).Orbit!.SemiMajorAxisM).ThenBy(b => Planet(b) == b ? 0 : 1).ThenBy(b => b.Orbit!.SemiMajorAxisM);
+        return [.. near, .. rest];
     }
 
     // ---------------- Sending and keeping ----------------
@@ -497,7 +588,7 @@ public sealed class FromHereViewModel : ObservableObject
                 Kind = FlightKind.Rendezvous,
                 Targets = [new FlightTarget(plan.Legs[0].Target.Name, _plannedTarget?.SaveVesselId, plan.Legs[0].Target.Orbit, plan.Legs[0].ArrivalUt)],
             }
-            : new Flight { Name = burns[0].Title, Kind = FlightKind.Burns };
+            : new Flight { Name = _plannedTo is { } to ? $"To {to.Name}" : burns[0].Title, Kind = FlightKind.Burns };
         flight = flight with
         {
             BodyName = body.Name,

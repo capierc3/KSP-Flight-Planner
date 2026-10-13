@@ -5,13 +5,13 @@ using Xunit.Abstractions;
 
 namespace KspFlightPlanner.Tests;
 
-public sealed class MoonTransferTests : IDisposable
+public sealed class HopsTests : IDisposable
 {
     private readonly ITestOutputHelper _output;
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
     private readonly CelestialBody _kerbin, _mun, _minmus;
 
-    public MoonTransferTests(ITestOutputHelper output)
+    public HopsTests(ITestOutputHelper output)
     {
         _output = output;
         var db = new PlannerDatabase(_path);
@@ -33,7 +33,7 @@ public sealed class MoonTransferTests : IDisposable
     private OrbitalElements Circular(double altitudeM, double inclinationDeg = 0) =>
         new(_kerbin.EquatorialRadiusM + altitudeM, 0, inclinationDeg, 0, 0, 1.0, 1_000_000);
 
-    private void Show(MoonTransferPlan plan)
+    private void Show(HopPlan plan)
     {
         foreach (var b in plan.Burns)
             _output.WriteLine($"{b.Title}: {b.DeltaV:0.00} m/s (pro {b.Burn.Prograde:0.00}, nrm {b.Burn.Normal:0.00}, rad {b.Burn.Radial:0.00}) at UT {b.Ut:0}");
@@ -73,7 +73,7 @@ public sealed class MoonTransferTests : IDisposable
     public void From_low_kerbin_orbit_to_the_mun_passes_at_the_asked_height_and_captures()
     {
         var craft = Circular(100_000);
-        var plan = MoonTransfer.Plan(_kerbin, _mun, craft, 1_000_120, 30_000);
+        var plan = Hops.Down(_kerbin, _mun, craft, 1_000_120, 30_000);
         Show(plan);
 
         Assert.False(plan.IsCorrection);
@@ -87,7 +87,7 @@ public sealed class MoonTransferTests : IDisposable
 
         // Flying the transfer exactly arrives as planned.
         var flown = Rendezvous.OrbitAfter(transfer.Ut, transfer.Burn, craft, _kerbin.Mu);
-        var arrival = MoonTransfer.EnterSoi(_kerbin, _mun, flown, transfer.Ut, transfer.Ut + 10 * 86_400)!;
+        var arrival = Hops.EnterSoi(_kerbin, _mun, flown, transfer.Ut, transfer.Ut + 10 * 86_400)!;
         Assert.Equal(plan.Arrival.CrossingUt, arrival.CrossingUt, 1.0);
 
         // The capture burn leaves a circular orbit at the periapsis.
@@ -102,7 +102,7 @@ public sealed class MoonTransferTests : IDisposable
     [Fact]
     public void Minmus_waits_for_its_tilted_orbit_to_cross_yours_unless_asked_to_leave_now()
     {
-        var plan = MoonTransfer.Plan(_kerbin, _minmus, Circular(80_000), 1_000_120, 20_000);
+        var plan = Hops.Down(_kerbin, _minmus, Circular(80_000), 1_000_120, 20_000);
         Show(plan);
         Assert.Equal(20_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
         Assert.True(plan.Arrival.Prograde);
@@ -110,7 +110,7 @@ public sealed class MoonTransferTests : IDisposable
         Assert.True(Math.Abs(plan.Transfer.Burn.Normal) < 20);
         Assert.Contains(plan.Warnings, w => w.StartsWith("Waits"));
 
-        var now = MoonTransfer.Plan(_kerbin, _minmus, Circular(80_000), 1_000_120, 20_000, soonest: true);
+        var now = Hops.Down(_kerbin, _minmus, Circular(80_000), 1_000_120, 20_000, soonest: true);
         Show(now);
         Assert.Equal(20_000, now.Arrival.PeriapsisAltitudeM, 50.0);
         Assert.True(now.Transfer!.Ut < plan.Transfer.Ut);
@@ -122,14 +122,14 @@ public sealed class MoonTransferTests : IDisposable
     public void A_sloppy_transfer_burn_gets_a_small_course_correction()
     {
         var craft = Circular(100_000);
-        var plan = MoonTransfer.Plan(_kerbin, _mun, craft, 1_000_120, 30_000);
+        var plan = Hops.Down(_kerbin, _mun, craft, 1_000_120, 30_000);
         var transfer = plan.Transfer!;
         // Burned 3 m/s too much.
         var flown = Rendezvous.OrbitAfter(transfer.Ut, transfer.Burn with { Prograde = transfer.Burn.Prograde + 3 }, craft, _kerbin.Mu);
-        var off = MoonTransfer.EnterSoi(_kerbin, _mun, flown, transfer.Ut, transfer.Ut + 10 * 86_400);
+        var off = Hops.EnterSoi(_kerbin, _mun, flown, transfer.Ut, transfer.Ut + 10 * 86_400);
         _output.WriteLine($"Off course: periapsis {off?.PeriapsisAltitudeM / 1000:0.0} km, prograde {off?.Prograde}");
 
-        var fix = MoonTransfer.Plan(_kerbin, _mun, flown, transfer.Ut + 3_600, 30_000);
+        var fix = Hops.Down(_kerbin, _mun, flown, transfer.Ut + 3_600, 30_000);
         Show(fix);
         Assert.True(fix.IsCorrection);
         Assert.InRange(fix.Transfer!.DeltaV, 0.01, 15);
@@ -141,9 +141,9 @@ public sealed class MoonTransferTests : IDisposable
     public void On_course_there_is_only_the_capture()
     {
         var craft = Circular(100_000);
-        var transfer = MoonTransfer.Plan(_kerbin, _mun, craft, 1_000_120, 30_000).Transfer!;
+        var transfer = Hops.Down(_kerbin, _mun, craft, 1_000_120, 30_000).Transfer!;
         var flown = Rendezvous.OrbitAfter(transfer.Ut, transfer.Burn, craft, _kerbin.Mu);
-        var plan = MoonTransfer.Plan(_kerbin, _mun, flown, transfer.Ut + 3_600, 30_000);
+        var plan = Hops.Down(_kerbin, _mun, flown, transfer.Ut + 3_600, 30_000);
         Assert.Null(plan.Transfer);
         Assert.Single(plan.Burns);
     }
@@ -152,7 +152,7 @@ public sealed class MoonTransferTests : IDisposable
     public void Inside_the_moons_sphere_circularize_at_periapsis_captures()
     {
         var craft = Circular(100_000);
-        var plan = MoonTransfer.Plan(_kerbin, _mun, craft, 1_000_120, 30_000);
+        var plan = Hops.Down(_kerbin, _mun, craft, 1_000_120, 30_000);
         var flyby = plan.Arrival.Path;
         var now = plan.Arrival.CrossingUt + 600;
 
@@ -180,7 +180,7 @@ public sealed class MoonTransferTests : IDisposable
     public void From_the_mun_back_to_kerbin_comes_down_to_the_asked_height_and_captures()
     {
         var craft = MunOrbit(30_000);
-        var plan = MoonTransfer.PlanReturn(_mun, _kerbin, craft, 1_000_120, 80_000);
+        var plan = Hops.Up(_mun, _kerbin, craft, 1_000_120, 80_000);
         Show(plan);
 
         var escape = plan.Transfer!;
@@ -193,7 +193,7 @@ public sealed class MoonTransferTests : IDisposable
 
         // Flying the burn exactly leaves the Mun as planned, onto that path round Kerbin.
         var flown = Rendezvous.OrbitAfter(escape.Ut, escape.Burn, craft, _mun.Mu);
-        var left = MoonTransfer.LeaveSoi(_mun, _kerbin, flown, escape.Ut, escape.Ut + 10 * 86_400)!;
+        var left = Hops.LeaveSoi(_mun, _kerbin, flown, escape.Ut, escape.Ut + 10 * 86_400)!;
         Assert.Equal(plan.Arrival.CrossingUt, left.CrossingUt, 1.0);
         var exit = Kepler.StateAt(left.Path, _kerbin.Mu, left.CrossingUt);
         var mun = Kepler.StateAt(_mun.Orbit!, _kerbin.Mu, left.CrossingUt);
@@ -211,7 +211,7 @@ public sealed class MoonTransferTests : IDisposable
     [Fact]
     public void Coming_home_through_the_atmosphere_has_no_capture_burn()
     {
-        var plan = MoonTransfer.PlanReturn(_mun, _kerbin, MunOrbit(30_000), 1_000_120, 35_000);
+        var plan = Hops.Up(_mun, _kerbin, MunOrbit(30_000), 1_000_120, 35_000);
         Show(plan);
         Assert.Null(plan.Capture);
         Assert.Single(plan.Burns);
@@ -223,12 +223,12 @@ public sealed class MoonTransferTests : IDisposable
     public void A_sloppy_escape_burn_gets_a_small_course_correction()
     {
         var craft = MunOrbit(30_000);
-        var escape = MoonTransfer.PlanReturn(_mun, _kerbin, craft, 1_000_120, 80_000).Transfer!;
+        var escape = Hops.Up(_mun, _kerbin, craft, 1_000_120, 80_000).Transfer!;
         var flown = Rendezvous.OrbitAfter(escape.Ut, escape.Burn with { Prograde = escape.Burn.Prograde + 5 }, craft, _mun.Mu);
-        var off = MoonTransfer.LeaveSoi(_mun, _kerbin, flown, escape.Ut, escape.Ut + 10 * 86_400);
+        var off = Hops.LeaveSoi(_mun, _kerbin, flown, escape.Ut, escape.Ut + 10 * 86_400);
         _output.WriteLine($"Off course: periapsis {off?.PeriapsisAltitudeM / 1000:0.0} km over Kerbin");
 
-        var fix = MoonTransfer.PlanReturn(_mun, _kerbin, flown, escape.Ut + 1_800, 80_000);
+        var fix = Hops.Up(_mun, _kerbin, flown, escape.Ut + 1_800, 80_000);
         Show(fix);
         Assert.True(fix.IsCorrection);
         Assert.InRange(fix.Transfer!.DeltaV, 0.01, 15);
@@ -239,7 +239,7 @@ public sealed class MoonTransferTests : IDisposable
     public void Minmus_back_to_kerbin_works_too()
     {
         var craft = new OrbitalElements(_minmus.EquatorialRadiusM + 20_000, 0, 0, 0, 0, 0.3, 1_000_000);
-        var plan = MoonTransfer.PlanReturn(_minmus, _kerbin, craft, 1_000_120, 80_000);
+        var plan = Hops.Up(_minmus, _kerbin, craft, 1_000_120, 80_000);
         Show(plan);
         Assert.Equal(80_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
         Assert.InRange(plan.Transfer!.DeltaV, 100, 250);

@@ -10,7 +10,7 @@ Each section has the formulas, a worked example, the code that implements them a
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
 - **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are
-- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture
+- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
@@ -25,6 +25,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A polar or other inclined orbit straight from the launch pad: §2.7
 - A trip to another planet, and its launch window: §3.2, §3.4
 - Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
+- Burns from where you are to anywhere else (Duna, Mun → Minmus, Mun → Duna), with a choice of windows: §3.8
 - Landing at a crater, flag or waypoint: §2.6, §1.9
 - A rendezvous or docking: §4.1
 - A relay network / constellation: §5.1, §5.2
@@ -522,7 +523,7 @@ Worked example — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km), from an 80 
 1. Raise the apoapsis to 250 km: r₀ = 680,000, r₁ = 850,000. v_now = √(μ/r₀) = 2,278.93 m/s and v_new = 2,402.20 m/s, so the burn is **+123.27 m/s** prograde. That's the first Hohmann burn of §2.1, as it should be.
 2. Circularize at the new 250 km apoapsis: v_a = √(2μ·680,000 / (850,000 × 1,530,000)) = 1,921.76 m/s and √(μ/850,000) = 2,038.34 m/s, so **+116.57 m/s**.
 
-- Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`) and, for capture, `MoonTransferTests.Inside_the_moons_sphere_circularize_at_periapsis_captures`
+- Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`) and, for capture, `HopsTests.Inside_the_moons_sphere_circularize_at_periapsis_captures`
 - Source: vis-viva (§1.3); Curtis 6.2–6.3 (coplanar maneuvers at an apsis)
 
 ## 3. Going to another planet
@@ -689,10 +690,59 @@ Worked example — from a 30 km round equatorial orbit around the Mun, back to 8
 
 From Minmus (20 km) to 80 km over Kerbin: **159.4 m/s**, which matches the Δv map's Minmus → Kerbin edge of 160 m/s.
 
-Not yet: moon to moon (Mun → Minmus), which is a small transfer around the planet between two spheres.
+Moon to moon (Mun → Minmus) and planet to planet are hops *across*: §3.8.
 
-- Code: `MoonTransfer.Plan`, `MoonTransfer.PlanReturn`, `MoonTransfer.EnterSoi`, `MoonTransfer.LeaveSoi`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `MoonTransferTests`
+**Already on the way, and missing.** A path that crosses the moon's orbit and passes within five of its spheres (or a tenth of its distance), without entering, also counts as on the way: a correction is planned rather than a new transfer. The correction is tried now, a quarter of the way to the meeting and halfway (a plane fix is cheaper later), and the cheapest wins.
+
+- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
 - Source: Curtis 8.9–8.10 (patched conics and the sphere of influence); Curtis 5.3 (Lambert's problem); vis-viva (§1.3)
+
+### 3.8 Trips anywhere: routes, launch windows and options
+
+*Go to…* plans a trip from the craft's orbit to any body in the system. Every trip is a chain of three kinds of hop through the tree of bodies (star → planets → moons):
+
+| Hop | Example | How it's planned |
+|---|---|---|
+| **Down** | Kerbin → Mun, the Sun → Duna | §3.7: the cheapest intercept of the body's centre, tuned to the height |
+| **Up** | Mun → Kerbin | §3.7: a prograde escape burn, placed where the least Δv reaches the height |
+| **Across** | Kerbin → Duna, Mun → Minmus | a launch window from the Transfer Planner (§3.4), flown from the real orbit (below) |
+
+**The route.** List each body's chain of parents and find the first they share. Then go up from where you are to just below it, across to the destination's branch, and down to the destination. Mun → Duna is *up* (Mun → Kerbin), then *across* (Kerbin → Duna). Mun → Ike adds *down* (Duna → Ike). Each hop is planned from where the one before leaves the craft. A stop on the way is a round orbit at that body's usual parking height. Only the first hop is planned from where the craft really is, so each later burn says to plan again from there.
+
+**A hop across** is flown in three burns:
+
+1. **Ejection.** The window gives the departure velocity relative to the origin body, v∞ (Lambert's problem, §3.4). With patched conics the origin stops pulling at the edge of its sphere, so that's where the speed must be |v∞|. Vis-viva gives the burn from a round orbit at r:
+   ```
+   v_burn = √(|v∞|² + 2μ/r − 2μ/r_SOI)          Δv = v_burn − v
+   ```
+   (§3.1's √(v∞² + 2μ/r) is the same with an infinitely large sphere. For Kerbin's 84,159 km sphere the difference is about 45 m/s at the edge, which would make you arrive at Duna ten days early.) The burn is prograde, placed where the path's direction *at the sphere's edge* is nearest v∞'s. From r = p / (1 + e·cos ν) at r_SOI, that direction is (−sin ν, e + cos ν) in the orbit's plane. 72 places round the orbit are tried, then it's narrowed down by golden-section search.
+2. **Tuned through both spheres.** The burn is then tuned like §3.7's, with the path followed out of the origin's sphere and into the destination's. First a normal (out-of-plane) part takes out the miss across the path's plane where it comes closest, using a few secant steps since the miss is close to linear in it. Then the prograde part is tuned for the height. Near a 180° transfer Lambert's plane is ill-defined, and v∞ can carry a tilt that isn't really needed. So the burn is also tried with v∞ laid flat in the origin's own orbital plane. Of the four ways (as given or flat, with or without the plane fix), the one costing least in all, ejection plus correction, wins.
+3. **Course correction**, a tenth of the way along the coast (§3.7's correction), for whatever the tuning couldn't reach. Then the **capture** at the destination's periapsis.
+
+**Options.** The windows come from the porkchop plot (80 × 60, searched from when the trip can leave):
+
+- the **cheapest** window;
+- the **fastest** flight among cells costing at most 1.25 × the cheapest;
+- the cheapest flight **leaving at the first chance**. It's left out when the cheapest window is already near (within 5 % of a synodic period).
+
+Each is planned in full. Then each is named for what it's best at, by its planned burns: *cheapest*, *arrives soonest*, *shortest flight* (time in space) or *leaves soonest*. One that's best at nothing is dropped. A trip down to a tilted moon (§3.7) offers its cheapest window and leaving at once in the same way.
+
+Worked example — Kerbin (100 km round equatorial orbit) to a 100 km orbit around Duna, from UT 1,000,120 s:
+
+| | Leaves in | Flight | Ejection | Correction | Capture | In all |
+|---|---|---|---|---|---|---|
+| Cheapest | 46 days | 66.1 days | 1,030.5 m/s | 16.7 m/s | 643.4 m/s | **1,691 m/s** |
+| Shortest flight | 54 days | 45.3 days | 1,153.2 m/s | — | 919.7 m/s | **2,073 m/s** |
+| Leaves soonest, arrives soonest | now | 81.1 days | 1,843.8 m/s | — | 984.8 m/s | **2,829 m/s** |
+
+(Days of 24 h here, as the tests print them.) The cheapest matches the Δv map: 950 + 130 m/s to leave from low Kerbin orbit, and 250 + 360 to get into low Duna orbit. The other two tune straight onto Duna, so they need no correction.
+
+From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s into an 80 km orbit. Then the same Kerbin → Duna choices: 2,815 m/s in all for the cheapest. Mun → Minmus (30 km to 20 km) costs **450 m/s**.
+
+**Planned again on the way.** Once out of Kerbin's sphere the craft is around the Sun, and Go to Duna is a hop *down* (§3.7). It's on the way, so it's a correction. In the test, a 2 m/s overburn at Kerbin is fixed with **28.7 m/s**, a quarter of the way to Duna.
+
+- Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`); the pane is `FromHereViewModel`; tested in `TripPlannerTests`
+- Source: Curtis 8.2–8.10 (patched conics, the sphere of influence, departure and arrival hyperbolas); Lambert's problem (§3.4)
 
 ## 4. Meeting a craft in orbit (rendezvous)
 
@@ -1032,7 +1082,9 @@ Worked example — the relay "KerbLink Mk2 A" (14 parts: HECS probe core, RA-2 r
 4. Δv = 315 × 9.80665 × ln(0.49709 / 0.4255) = 3,089.1 × 0.15550 = **480.3 m/s**
 5. Thrust = 3 × 2 kN × 6 % = 0.36 kN → ṁ = 0.36 / (315 × 9.80665) = 0.0001165 t/s → burn time = 0.07159 / 0.0001165 = **614 s** (37 s at full thrust)
 
-- Code: `VesselAnalysis.Analyze`, `PartCatalogReader.Parse`; tested in `VesselAnalysisTests`
+**How long one burn takes.** The **From here** pane shows each planned burn's length for the craft you're flying (as the save last recorded it). A burn of Δv uses up `m₀·(1 − e^(−Δv / (Isp·g₀)))` of propellant, from the rocket equation turned round, at the mass flow `F / (Isp·g₀)`. The next burn starts that much lighter. A burn the fuel doesn't stretch to gets no time. Example: 10 t, 100 kN, Isp 300 s (g₀·Isp = 2,942 m/s), 1,000 m/s → 10 × (1 − e^(−0.3399)) = 2.881 t at 0.03399 t/s = **84.8 s**. A second 1,000 m/s burn then starts at 7.119 t: **60.4 s**. Start a long burn about half its length before the node.
+
+- Code: `VesselAnalysis.Analyze`, `VesselAnalysis.BurnTimes`, `PartCatalogReader.Parse`; tested in `VesselAnalysisTests`
 - Source: [Tsiolkovsky rocket equation (Wikipedia)](https://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation); part and resource values from the game's own configs (ModuleManager.ConfigCache)
 
 ### 7.2 A saved design's stage-by-stage Δv

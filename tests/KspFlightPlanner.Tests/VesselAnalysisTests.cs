@@ -327,4 +327,16 @@ public sealed class VesselAnalysisTests : IDisposable
         Assert.Equal(new PartResource("MonoPropellant", 7.5, 10), vessel.Parts[0].Resources[0]);
         Assert.Equal(new SavedEngineState(50, true, false, false), vessel.Parts[1].Engines[0]);
     }
+
+    [Fact]
+    public void Burn_times_follow_the_rocket_equation_and_get_shorter_as_the_craft_gets_lighter()
+    {
+        // 10 t, 100 kN, Isp 300 s, with 2,500 m/s in the tanks (docs/MATH.md §7.1).
+        var report = new VesselReport(5, 10, [], [], 2_500, 300, 100, 100, 0, [], [], []);
+        var times = VesselAnalysis.BurnTimes(report, [1_000, 1_000, 1_000]);
+        Assert.Equal(84.77, times[0]!.Value, 0.01);
+        Assert.Equal(60.35, times[1]!.Value, 0.01);
+        Assert.Null(times[2]); // only 500 m/s left
+        Assert.All(VesselAnalysis.BurnTimes(report with { ThrustKn = 0 }, [10]), t => Assert.Null(t));
+    }
 }

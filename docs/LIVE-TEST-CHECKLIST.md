@@ -206,16 +206,18 @@ Fly mode's default layout changed, so your Fly panes start from the default once
 
 Notes:
 
-## 10c. Go to a moon or planet (From here)
+## 10c. Go to… (From here)
 
-From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 for what to expect.
+From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 and §3.8 for what to expect.
 
-- [ ] **Go to…** → the To list starts with **KSP's target**, then Mun and Minmus. With a target set, that entry is picked and
+- [ ] **Go to…** → the To list starts with **KSP's target**, then Mun and Minmus, then every other planet and moon (each planet
+      followed by its moons; no Sun). With a target set, that entry is picked and
       names it; change the target in KSP and the entry follows (and the height box takes the new body's parking height)
 - [ ] KSP's target set to Minmus → Plan it → the same burns as picking Minmus from the list
 - [ ] KSP's target set to a craft around Kerbin → "(rendezvous)", no height box; Plan it → the same burns as **Rendezvous with
       the target**
-- [ ] KSP's target set to Duna → a note that this trip can't be planned here yet
+- [ ] Each burn shows how long it takes ("burn 1m 24s"), for the craft you're flying as the save last recorded it. If the trip
+      needs more Δv than the craft has, a note says how much it's short
 - [ ] Mun, 30 km → **Plan it** → two burns: Transfer to Mun (~840 m/s) and Capture at Mun (~260 m/s)
 - [ ] **Send to KSP** → the transfer node's predicted path shows a Mun encounter with Pe ≈ 30 km, going the way the Mun spins
       (KSP's encounter readout under the node)
@@ -225,13 +227,21 @@ From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 for what 
 - [ ] Inside the Mun's sphere of influence: the top line shows "a … km pass, escaping"; **Circularize at periapsis** → node
       at Pe, and KSP's predicted orbit after it is round at ~30 km
 - [ ] Same, but **Change the apoapsis** to 500 km → "Capture at Mun, apoapsis 500 km", cheaper than circularizing
-- [ ] Minmus, 20 km → a note that it waits about 6 days for a cheaper transfer; tick **Leave at the first chance** → a burn
-      soon, ~130 m/s dearer, with a large normal part
+- [ ] Minmus, 20 km → **Ways to go** lists two: *Cheapest* (waits about 6 days) and *Leaves soonest* (~130 m/s dearer,
+      with a large normal part). Picking one shows its burns
 - [ ] **Keep as a flight** → opens in the Flight pane; both burns show countdowns
 - [ ] Coming home: in a round orbit around the Mun, the To list shows Kerbin, picked by default. 80 km → **Leave Mun for Kerbin**
       (~260 m/s, from 30 km) and **Capture at Kerbin** (~850 m/s). Sent, KSP's predicted path leaves the Mun with a Kerbin Pe ≈ 80 km
 - [ ] Same with 35 km → no capture burn, and a note that the atmosphere does the braking
 - [ ] After the escape burn, still inside the Mun's sphere, **Plan it** again → a small correction, or only the capture
+- [ ] Duna, 100 km, from Kerbin orbit → **Ways to go** lists up to three (*Cheapest* ~1,690 m/s in all, *Shortest flight*,
+      *Leaves soonest*), each with when it leaves, how long it flies and its Δv. Each has a **Leave Kerbin for Duna** burn and a
+      **Capture at Duna**; the cheapest also has a small course correction
+- [ ] Send the cheapest's ejection and look at KSP's predicted path: does it reach Duna's sphere (an encounter)? Note how close
+      KSP says the Duna periapsis is
+- [ ] After the ejection, once around the Sun: **Go to…** Duna again → a small **Course correction** and the capture
+- [ ] From the Mun, **Go to…** Duna → the trip stops in Kerbin orbit (80 km) first; the later burns say to plan again from there
+- [ ] Mun → Minmus → a hop across around Kerbin, with a small course correction
 
 Notes:
 

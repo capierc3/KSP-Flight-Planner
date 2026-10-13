@@ -45,6 +45,29 @@ public static class VesselAnalysis
     /// <summary>Resources that don't run out (solar panels recharge) and have no mass, so never limit a burn.</summary>
     private static readonly HashSet<string> Renewable = ["ElectricCharge", "IntakeAir"];
 
+    /// <summary>
+    /// How long each of <paramref name="deltaVs"/> takes to burn, in turn, for the vessel in <paramref name="report"/>: the
+    /// mass burned for a Δv is m₀·(1 − e^(−Δv / (Isp·g₀))), at the engines' mass flow F / (Isp·g₀), and the next burn
+    /// starts that much lighter. Null for a burn the fuel doesn't stretch to (and every one after), or with no thrust.
+    /// docs/MATH.md §7.1.
+    /// </summary>
+    public static IReadOnlyList<double?> BurnTimes(VesselReport report, IEnumerable<double> deltaVs)
+    {
+        var exhaust = report.EffectiveIspS * G0;
+        var mass = report.WetMassT;
+        var left = report.DeltaVVacuum;
+        var times = new List<double?>();
+        foreach (var dv in deltaVs)
+        {
+            if (report.ThrustKn <= 0 || exhaust <= 0 || dv > left + 1e-9) { times.Add(null); left = -1; continue; }
+            var burned = mass * (1 - Math.Exp(-dv / exhaust));
+            times.Add(burned * exhaust / report.ThrustKn);
+            mass -= burned;
+            left -= dv;
+        }
+        return times;
+    }
+
     public static VesselReport Analyze(SavedVessel vessel, PartCatalog catalog)
     {
         var unknown = new List<string>();

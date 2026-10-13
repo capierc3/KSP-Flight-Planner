@@ -14,6 +14,7 @@ public enum BurnState { Upcoming, Next, OnCraft, Passed }
 public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObject
 {
     private string _countdown = "";
+    private string _burnTime = "";
     private BurnState _state;
 
     public int Number { get; } = number;
@@ -28,6 +29,11 @@ public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObjec
         $"prograde {Signed(Burn.Burn.Prograde)}   normal {Signed(Burn.Burn.Normal)}   radial {Signed(Burn.Burn.Radial)}   · UT {Burn.Ut.ToString("#,0", CultureInfo.CurrentCulture)} s";
 
     public string Countdown { get => _countdown; set => SetProperty(ref _countdown, value); }
+
+    /// <summary>How long the engines run for it ("burn 1m 24s"), when the craft's engines are known; else empty.</summary>
+    public string BurnTime { get => _burnTime; set { if (SetProperty(ref _burnTime, value)) OnPropertyChanged(nameof(HasBurnTime)); } }
+
+    public bool HasBurnTime => BurnTime.Length > 0;
 
     public BurnState State
     {
