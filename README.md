@@ -138,3 +138,7 @@ SQLite file at `%LOCALAPPDATA%\BrickRoadSoftware\KspFlightPlanner\kspflightplann
   (facts only; see `docs/WIKI-COMPARISON.md`).
 - Surface-to-low-orbit Δv and the Δv map's route values are computed by the app from the body data above
   (orbital mechanics, plus a rule-of-thumb allowance for climbing through an atmosphere; `docs/MATH.md` §6.1).
+
+## License
+
+MIT; see [LICENSE](LICENSE). Data sources keep their own terms (listed above).
