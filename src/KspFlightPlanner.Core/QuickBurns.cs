@@ -5,7 +5,8 @@ namespace KspFlightPlanner.Core;
 /// <summary>
 /// One-off burns planned from where a craft is right now, without a mission (Fly mode's From here pane): circularize, or
 /// move one apsis by burning at the other. Each is a single prograde/retrograde burn at an apsis, where the velocity is
-/// horizontal, so the new speed comes straight from vis-viva. docs/MATH.md §2.8.
+/// horizontal, so the new speed comes straight from vis-viva. On a path that escapes the body (a flyby of a moon just
+/// arrived at), the periapsis burns capture: circularize there, or set the apoapsis. docs/MATH.md §2.8.
 /// </summary>
 public static class QuickBurns
 {
@@ -29,9 +30,11 @@ public static class QuickBurns
     {
         var mu = body.Mu;
         if (!atApoapsis && !ClearOfAtmosphere(body, orbit))
-            throw new ArgumentException($"The periapsis is {Below(body)}: circularize at the apoapsis instead.");
+            throw new ArgumentException(orbit.Eccentricity >= 1
+                ? $"The pass of {body.Name} is {Below(body)}: correct the path first (a small radial burn raises the periapsis)."
+                : $"The periapsis is {Below(body)}: circularize at the apoapsis instead.");
 
-        var ut = ApsisUt(orbit, mu, now, leadS, atApoapsis);
+        var ut = ApsisUt(orbit, mu, now, leadS, atApoapsis, body.Name);
         if (FallsFirst(body, orbit, now, ut))
         {
             ut = now + Math.Min(leadS, FallingLeadS);
@@ -58,7 +61,7 @@ public static class QuickBurns
         var mu = body.Mu;
         if (apoapsis && !ClearOfAtmosphere(body, orbit))
             throw new ArgumentException($"The periapsis is {Below(body)}, so there's no burning there: change the periapsis or circularize first.");
-        var ut = ApsisUt(orbit, mu, now, leadS, atApoapsis: !apoapsis);
+        var ut = ApsisUt(orbit, mu, now, leadS, atApoapsis: !apoapsis, body.Name);
         if (FallsFirst(body, orbit, now, ut))
             throw new ArgumentException($"You'll reach the periapsis {Below(body)} before the next apoapsis: circularize now instead.");
         var r0 = Kepler.StateAt(orbit, mu, ut).Position.Length;
@@ -69,17 +72,27 @@ public static class QuickBurns
 
         var current = apoapsis ? orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) : orbit.SemiMajorAxisM * (1 - orbit.Eccentricity);
         var verb = r1 >= current ? "Raise" : "Lower";
-        var title = $"{verb} {(apoapsis ? "apoapsis" : "periapsis")} to {Km(altitudeM)}";
+        var title = orbit.Eccentricity >= 1 ? $"Capture at {body.Name}, apoapsis {Km(altitudeM)}" : $"{verb} {(apoapsis ? "apoapsis" : "periapsis")} to {Km(altitudeM)}";
         return AlongVelocity(title, orbit, mu, ut, Math.Sqrt(2 * mu * r1 / (r0 * (r0 + r1))));
     }
 
     /// <summary>
     /// The next apoapsis (or periapsis) after <paramref name="now"/>, however soon; <paramref name="leadS"/> from now on
     /// a circular orbit. Waiting for the lead would skip an apsis that's close and leave the burn a whole orbit later,
-    /// which a suborbital craft never reaches and which breaks a relay's spacing.
+    /// which a suborbital craft never reaches and which breaks a relay's spacing. A path escaping
+    /// <paramref name="bodyName"/> has no apoapsis and only one periapsis, which may have passed.
     /// </summary>
-    public static double ApsisUt(OrbitalElements orbit, double mu, double now, double leadS, bool atApoapsis) =>
-        orbit.Eccentricity < CircularEccentricity ? now + leadS : Kepler.NextTimeAtMeanAnomaly(orbit, mu, now, atApoapsis ? Math.PI : 0);
+    public static double ApsisUt(OrbitalElements orbit, double mu, double now, double leadS, bool atApoapsis, string bodyName = "the body")
+    {
+        if (orbit.Eccentricity >= 1)
+        {
+            if (atApoapsis)
+                throw new ArgumentException($"The craft is escaping {bodyName}, so there's no apoapsis: capture first (circularize at periapsis, or change the apoapsis).");
+            return Kepler.NextPeriapsisUt(orbit, mu, now)
+                   ?? throw new ArgumentException($"The craft is past its periapsis and on its way out of {bodyName}'s sphere of influence.");
+        }
+        return orbit.Eccentricity < CircularEccentricity ? now + leadS : Kepler.NextTimeAtMeanAnomaly(orbit, mu, now, atApoapsis ? Math.PI : 0);
+    }
 
     /// <summary>The periapsis is above the atmosphere (or the ground, for a body without one).</summary>
     public static bool ClearOfAtmosphere(CelestialBody body, OrbitalElements orbit) =>

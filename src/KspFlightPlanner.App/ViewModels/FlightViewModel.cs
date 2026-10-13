@@ -518,6 +518,7 @@ public sealed class FlightViewModel : ObservableObject
     internal static string OrbitText(OrbitalElements orbit, CelestialBody body)
     {
         var pe = orbit.SemiMajorAxisM * (1 - orbit.Eccentricity) - body.EquatorialRadiusM;
+        if (orbit.Eccentricity >= 1) return $"a {pe / 1000:#,0.#} km pass, escaping";
         var ap = orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) - body.EquatorialRadiusM;
         return Math.Abs(ap - pe) < 2_000 ? $"{pe / 1000:#,0.#} km" : $"{pe / 1000:#,0.#} × {ap / 1000:#,0.#} km";
     }

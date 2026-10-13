@@ -36,6 +36,9 @@ public sealed record SavedOrbit(
     /// <summary>A closed orbit the planner can fly from or to (escaping and NaN orbits aren't).</summary>
     public bool IsClosed => double.IsFinite(SemiMajorAxisM) && SemiMajorAxisM > 0 && Eccentricity is >= 0 and < 1;
 
+    /// <summary>A path the planner can follow: a closed orbit, or a hyperbola (escaping, or passing a moon).</summary>
+    public bool IsPath => IsClosed || double.IsFinite(SemiMajorAxisM) && SemiMajorAxisM < 0 && Eccentricity > 1 && double.IsFinite(Eccentricity);
+
     /// <summary>KSP's flightGlobalsIndex for the stock system (the REF value).</summary>
     public static readonly string[] StockBodyOrder =
         ["Kerbol", "Kerbin", "Mun", "Minmus", "Moho", "Eve", "Duna", "Ike", "Jool", "Laythe", "Vall", "Bop", "Tylo", "Gilly", "Pol", "Dres", "Eeloo"];

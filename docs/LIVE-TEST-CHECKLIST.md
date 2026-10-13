@@ -206,6 +206,35 @@ Fly mode's default layout changed, so your Fly panes start from the default once
 
 Notes:
 
+## 10c. Go to a moon or planet (From here)
+
+From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 for what to expect.
+
+- [ ] **Go to…** → the To list starts with **KSP's target**, then Mun and Minmus. With a target set, that entry is picked and
+      names it; change the target in KSP and the entry follows (and the height box takes the new body's parking height)
+- [ ] KSP's target set to Minmus → Plan it → the same burns as picking Minmus from the list
+- [ ] KSP's target set to a craft around Kerbin → "(rendezvous)", no height box; Plan it → the same burns as **Rendezvous with
+      the target**
+- [ ] KSP's target set to Duna → a note that this trip can't be planned here yet
+- [ ] Mun, 30 km → **Plan it** → two burns: Transfer to Mun (~840 m/s) and Capture at Mun (~260 m/s)
+- [ ] **Send to KSP** → the transfer node's predicted path shows a Mun encounter with Pe ≈ 30 km, going the way the Mun spins
+      (KSP's encounter readout under the node)
+- [ ] The capture node also lands on the Mun patch, at the periapsis (KSP may put a node on a later patch, or may not: note which)
+- [ ] Fly the transfer roughly. On the way out, **Plan it** again → a small **Course correction** (or "already on course" with only
+      the capture)
+- [ ] Inside the Mun's sphere of influence: the top line shows "a … km pass, escaping"; **Circularize at periapsis** → node
+      at Pe, and KSP's predicted orbit after it is round at ~30 km
+- [ ] Same, but **Change the apoapsis** to 500 km → "Capture at Mun, apoapsis 500 km", cheaper than circularizing
+- [ ] Minmus, 20 km → a note that it waits about 6 days for a cheaper transfer; tick **Leave at the first chance** → a burn
+      soon, ~130 m/s dearer, with a large normal part
+- [ ] **Keep as a flight** → opens in the Flight pane; both burns show countdowns
+- [ ] Coming home: in a round orbit around the Mun, the To list shows Kerbin, picked by default. 80 km → **Leave Mun for Kerbin**
+      (~260 m/s, from 30 km) and **Capture at Kerbin** (~850 m/s). Sent, KSP's predicted path leaves the Mun with a Kerbin Pe ≈ 80 km
+- [ ] Same with 35 km → no capture burn, and a note that the atmosphere does the braking
+- [ ] After the escape burn, still inside the Mun's sphere, **Plan it** again → a small correction, or only the capture
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date

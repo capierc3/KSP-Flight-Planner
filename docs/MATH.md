@@ -10,7 +10,7 @@ Each section has the formulas, a worked example, the code that implements them a
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
 - **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are
-- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations
+- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
@@ -24,6 +24,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A plane change or an inclined target: §2.3, §4.2
 - A polar or other inclined orbit straight from the launch pad: §2.7
 - A trip to another planet, and its launch window: §3.2, §3.4
+- Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
 - Landing at a crater, flag or waypoint: §2.6, §1.9
 - A rendezvous or docking: §4.1
 - A relay network / constellation: §5.1, §5.2
@@ -113,7 +114,18 @@ r = a·(1 − e·cos E)
 
 Then rotate the in-plane position by ω, i and Ω to get 3D coordinates.
 
-- Code: `Kepler.StateAt`, `Kepler.SolveEccentricAnomaly`
+**Hyperbolas.** A craft faster than escape speed (leaving a body, or flying past a moon it has just reached) is on a hyperbola: a < 0 and e > 1. The same steps work with the hyperbolic anomaly H, and M no longer wraps round:
+
+```
+n = √(μ / |a|³)
+M = e·sinh H − H                    solve for H (Newton's method, starting at asinh(M/e))
+ν = 2·atan( √((e+1)/(e−1)) · tanh(H/2) )
+r = a·(1 − e·cosh H)                (positive, since a < 0)
+```
+
+M < 0 is on the way in, M = 0 is the periapsis, and there's only one periapsis: at t = epoch − M₀/n.
+
+- Code: `Kepler.StateAt`, `Kepler.SolveEccentricAnomaly`, `Kepler.SolveHyperbolicAnomaly`, `Kepler.NextPeriapsisUt`
 - Source: Curtis 3.4 and 4.6; [Kepler's equation (Wikipedia)](https://en.wikipedia.org/wiki/Kepler%27s_equation); orbital elements from the KSP wiki
 
 ### 1.5 Orbital elements from position and velocity
@@ -128,6 +140,7 @@ i = acos(h_z / |h|)
 Ω = atan2(n_y, n_x),  n = ẑ × h         (Ω = 0 for an equatorial orbit)
 ω, ν from the angles of e and r in the plane, measured from the node line
 M = E − e·sin E,  E from ν              mean anomaly at this moment = the new epoch
+                                        (hyperbola: H = 2·atanh(√((e−1)/(e+1))·tan(ν/2)), M = e·sinh H − H)
 ```
 
 - Code: `Kepler.ElementsFrom` (round-trips with `Kepler.StateAt`); tested in `RendezvousTests`
@@ -502,12 +515,14 @@ If the periapsis is in the atmosphere (or below the ground on an airless body), 
 
 Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
 
+**Capturing at a moon.** Once a craft enters a moon's sphere of influence (§1.6), its path around the moon is a hyperbola (§1.4). *Circularize at periapsis* is then the capture burn, at the pass's only periapsis: v_new = √(μ/r_p) as above, with v_now from vis-viva, where a < 0. *Change the apoapsis* burns there too and captures into an ellipse, which is cheaper. A path with no apoapsis can't do the rest (circularize at apoapsis, change the periapsis, match planes, rendezvous or deorbit), and the pane says to capture first. Once the periapsis has passed, the craft is on its way out and there's nothing to burn at.
+
 Worked example — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km), from an 80 km circular orbit:
 
 1. Raise the apoapsis to 250 km: r₀ = 680,000, r₁ = 850,000. v_now = √(μ/r₀) = 2,278.93 m/s and v_new = 2,402.20 m/s, so the burn is **+123.27 m/s** prograde. That's the first Hohmann burn of §2.1, as it should be.
 2. Circularize at the new 250 km apoapsis: v_a = √(2μ·680,000 / (850,000 × 1,530,000)) = 1,921.76 m/s and √(μ/850,000) = 2,038.34 m/s, so **+116.57 m/s**.
 
-- Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`)
+- Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`) and, for capture, `MoonTransferTests.Inside_the_moons_sphere_circularize_at_periapsis_captures`
 - Source: vis-viva (§1.3); Curtis 6.2–6.3 (coplanar maneuvers at an apsis)
 
 ## 3. Going to another planet
@@ -631,6 +646,53 @@ Worked example — the 10,000,000 km "Eye of Kerbol" (r = 10,261,600,000 m), pla
 
 - Code: `CustomLocationOrbits.ToElements`, `CustomLocationOrbits.ToBody`, `CustomLocationOrbits.PhaseAngleFromHome`, `TransferPlanner.PlanAnyTime`
 - Source: Curtis 3.4 (mean anomaly), 8.2 (phase angles), 8.3 (synodic period)
+
+### 3.7 Between a planet and its moons: transfer, course correction and capture
+
+The **From here** pane's *Go to a moon or planet* plans the burns from the craft's live orbit to a round orbit at a height you choose. That's around one of the moons of the body you're orbiting, or, from a moon, back around its planet. It uses patched conics, as KSP flies it: only the planet pulls on the craft until it enters the moon's sphere of influence (§1.6), and only the moon pulls on it after that.
+
+**Going out to a moon:**
+
+1. **First guess: the cheapest intercept of the moon's centre.** As in a rendezvous (§4.4), Lambert's problem is solved over a grid of departure times (one synodic period of your orbit against the moon's) and flight times (0.6–1.4 × the Hohmann time), and the cheapest transfer plus arrival speed wins. This ignores the moon's gravity, so it would hit the moon dead centre.
+2. **Fly it into the sphere of influence.** The path after the burn is followed until its distance to the moon drops below r_SOI. Each step is half the time the gap would take to close at the current closing speed, so the crossing can't be skipped, then it's halved back to within 0.01 s. At the crossing, the craft's position and velocity *relative to the moon* give its path there (§1.5): a hyperbola with periapsis r_p = a·(1 − e).
+3. **Aim for the height.** The prograde part of the burn is tuned until the pass is at the asked height *and goes round the way the moon spins*. Seen from the north, the pass is prograde when (r × v)_z > 0. The quantity solved is the signed periapsis ±r_p − r_target. The sign flips with the direction of the pass, so the function runs smoothly through zero as the aim point sweeps across the moon. The search steps 0.25 m/s outward from the Lambert burn until the sign changes, then halves the step.
+4. **Capture.** At the pass's periapsis, burn retrograde to the round orbit's speed (§2.8): Δv = √(μ_moon / r_p) − √(μ_moon·(2/r_p − 1/a)).
+
+**A moon on a tilted orbit** (Minmus, 6°) is cheapest to reach when it's near the plane of your orbit. Then the transfer needs no plane change. When the two planes are more than 0.5° apart, twelve more departure windows are searched across half the moon's orbit (each half orbit has one crossing of the planes), and the cheapest wins. The pane says how long that waits and what leaving at the first chance would cost. *Leave at the first chance* skips the wait.
+
+**Already on the way.** If the craft's path already reaches the moon's sphere, the first burn is a **course correction** two minutes from now. It's tried two ways, and the cheaper wins: tuning a plain prograde/retrograde burn (for a pass that's too close or too far), and tuning a re-aim at the moon's centre (for a miss out of the plane). A pass within 2 km of the asked height needs no correction, so only the capture is shown.
+
+The capture burn is planned before the craft gets there. Once it's inside the moon's sphere, *Circularize at periapsis* plans it again from the real path. The burn's note says so.
+
+Worked example — Mun (R = 200 km, μ = 6.5138×10¹⁰), from a 100 km circular equatorial orbit around Kerbin, asking for 30 km:
+
+1. Hohmann check: r₁ = 700,000 m, r₂ = 12,000,000 m (the Mun's distance). √(μ/r₁) = 2,246.1 m/s and √(μ·(2/r₁ − 2/(r₁+r₂))) = 3,087.7 m/s, so about **842 m/s**.
+2. The planner's transfer is **+837.7 m/s** prograde, with radial −0.1. It's a little less than the Hohmann figure because it only has to reach the moon's sphere. The pass is at **30.000 km**, prograde and equatorial.
+3. Capture at 30 km: **−260.5 m/s** retrograde leaves a round 30 km orbit.
+4. Burn the transfer 3 m/s too hard, and the pass would hit the Mun (periapsis −193 km). Planned again an hour later, it's a **10.4 m/s retrograde** correction, and the pass is back at 30 km.
+
+Minmus (6° tilt) from 80 km at 20 km: the first chance costs **1,049.9 m/s**, with 440 m/s of it normal. Waiting **6 days 1 hour** (Kerbin days) for Minmus to come near Kerbin's equatorial plane costs **921.0 m/s**, all prograde, which is the Hohmann figure from 80 km. That saves 129 m/s.
+
+**Coming back to the planet.** There's nothing to aim at, so there's no Lambert first guess. The best burn from a round orbit is prograde: it's where the speed you add counts most. Where you burn decides which way you leave the moon, and how hard decides how fast. So:
+
+1. **Try 36 places round the orbit.** At each, search the prograde Δv upward from just under escape speed, √(2μ/r) − v, in 2 m/s steps. Follow the path out to the edge of the moon's sphere. There, add the moon's own position and velocity around the planet to get the path around the planet (§1.5). Then halve the step down to the Δv whose planet periapsis is at the asked height, going round the way the planet spins (the same signed periapsis as above). A badly placed burn throws you forward along the moon's orbit and never comes down, so that place is skipped.
+2. **Narrow down** around the place that needed the least Δv: 9 places across a quarter of the step each side, three times.
+3. **Capture** at the planet's periapsis as above. A height inside the planet's atmosphere plans no capture burn: the air does the braking (a reentry, or an aerobraking pass).
+4. **Already leaving** the moon's sphere? The first burn is a course correction, either along the path or sideways to it (sideways swings where you leave), whichever is cheaper.
+
+Worked example — from a 30 km round equatorial orbit around the Mun, back to 80 km over Kerbin:
+
+1. Estimate with an infinitely large sphere: to fall from the Mun's distance (12,000 km) to a 680 km periapsis, the speed there must be √(2μ·r_p / (r_a·(r_a + r_p))) = 177.7 m/s, against the Mun's 542.5 m/s. So v∞ = 364.8 m/s. At 230 km from the Mun's centre, √(v_esc² + v∞²) − v_circ = √(752.6² + 364.8²) − 532.2 = **304.2 m/s**. (From 14 km this gives 310 m/s, the Δv map's Mun → Kerbin edge.)
+2. The planner's burn is **+260.8 m/s** prograde. It's less because the real sphere is only 2,430 km across: the burn is placed so the craft leaves it about 970 km on Kerbin's side of the Mun, already falling inward at 135 m/s, where 193 m/s of sideways speed is all the periapsis allows.
+3. Capture at 80 km: **−851.9 m/s**. Asking for 35 km instead (inside Kerbin's 70 km atmosphere) needs a 263.5 m/s burn, with no capture.
+4. Burn 5 m/s too hard, and the periapsis is at the surface. Half an hour later, an **8.6 m/s retrograde** correction puts it back at 80 km.
+
+From Minmus (20 km) to 80 km over Kerbin: **159.4 m/s**, which matches the Δv map's Minmus → Kerbin edge of 160 m/s.
+
+Not yet: moon to moon (Mun → Minmus), which is a small transfer around the planet between two spheres.
+
+- Code: `MoonTransfer.Plan`, `MoonTransfer.PlanReturn`, `MoonTransfer.EnterSoi`, `MoonTransfer.LeaveSoi`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `MoonTransferTests`
+- Source: Curtis 8.9–8.10 (patched conics and the sphere of influence); Curtis 5.3 (Lambert's problem); vis-viva (§1.3)
 
 ## 4. Meeting a craft in orbit (rendezvous)
 
