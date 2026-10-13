@@ -322,7 +322,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
 
     public Dictionary<string, CelestialBody> StockBodies()
     {
-        var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock");
+        var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName);
         return system is null ? [] : _bodies.GetBodies(system.Id).ToDictionary(b => b.Name);
     }
 

@@ -734,7 +734,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private IReadOnlyDictionary<string, CelestialBody> _bodies;
 
     private static Dictionary<string, CelestialBody> StockBodies(BodyRepository? bodies) =>
-        bodies?.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
+        bodies?.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock
             ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
             : [];
     private DeltaVMap? _map;

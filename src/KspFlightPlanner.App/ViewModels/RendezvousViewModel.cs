@@ -80,7 +80,7 @@ public sealed class LegRow : ObservableObject
 /// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
 /// <param name="ParkingAltitudeM">The low orbit a launch climbs to (the map's, so the leg's launch step matches).</param>
 public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpan Span, double ParkingAltitudeM, RendezvousLeg? Choice,
-    Action<RendezvousLeg> Save)
+    Action<RendezvousLeg> Save) : LegLink(Owner, Title)
 {
     /// <summary>When the mission reaches the start of the leg, if known: a new plan starts then.</summary>
     public double? EarliestUt { get; init; }
@@ -96,7 +96,7 @@ public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpa
 /// The Rendezvous pane: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
 /// KSC or from a craft already in orbit. Burns are shown as exact maneuver-node values or as instructions to fly by feel.
 /// </summary>
-public sealed class RendezvousViewModel : ObservableObject
+public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 {
     private readonly SaveSync _sync;
     private readonly CustomLocationRepository _locations;
@@ -144,8 +144,6 @@ public sealed class RendezvousViewModel : ObservableObject
     private bool _suspend;
     private int _plotLeg;
     private bool _showDiagram = true;
-    private RendezvousLegLink? _leg;
-    private MissionBuilderViewModel? _mission;
     private bool _startFromMission;
     private RendezvousStart? _missionStart;
 
@@ -199,8 +197,6 @@ public sealed class RendezvousViewModel : ObservableObject
         UseActiveVesselCommand = new RelayCommand(UseActiveVessel, () => CraftFor(ActiveKey) is not null);
         AddGameTargetCommand = new RelayCommand(AddGameTarget, () => AvailableTargets.Any(c => c.Key == TargetKey));
         FlyCommand = new RelayCommand(Fly, () => _plan is not null && _flights is not null);
-        StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
-        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         RefreshDesignChoices();
         RebuildCrafts();
@@ -208,31 +204,21 @@ public sealed class RendezvousViewModel : ObservableObject
 
     // ---------------- Leg mode ----------------
 
-    public RelayCommand StopEditingLegCommand { get; }
-
-    /// <summary>The mission leg being planned; null when the pane is used on its own.</summary>
-    public RendezvousLegLink? Leg => _leg;
-
-    public bool IsEditingLeg => _leg is not null;
-
     /// <summary>The start, targets and what happens afterwards can be changed: not while they come from a mission leg.</summary>
-    public bool IsRouteEditable => _leg is null;
-
-    public string LegTitle => _leg?.Title ?? "";
+    public bool IsRouteEditable => Leg is null;
 
     /// <summary>
     /// Plans a mission leg: start and target from the leg, and the start time and picks it was saved with (or the game's
     /// time and the planner's picks). The start time is fixed rather than following the game, so the plan stays put; every
     /// plan made afterwards is saved into the mission.
     /// </summary>
-    public void EditLeg(RendezvousLegLink link)
+    public override void EditLeg(RendezvousLegLink link)
     {
         var span = link.Span;
-        // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
-        var earliest = link.EarliestUt is { } arrival ? Math.Ceiling(arrival / 60) * 60 : (double?)null;
+        var earliest = link.EarliestUt is { } arrival ? RoundUp(arrival, 60) : (double?)null; // kept to the minute
         // A plan starting before then (the leg before was planned again since) is made again from then, picks and all.
         var choice = link.Choice is { } c && c.TargetLocationId == span.TargetLocationId && !c.StartsBefore(earliest) ? c : null;
-        _leg = null; // don't save anything while it's being set up
+        Leg = null; // don't save anything while it's being set up
         _suspend = true;
         _startFromMission = false;
         _missionStart = null;
@@ -253,23 +239,19 @@ public sealed class RendezvousViewModel : ObservableObject
         _intercepts.Add(choice?.Intercept);
         _suspend = false;
 
-        _leg = link;
+        Leg = link;
         foreach (var name in new[] { nameof(Deorbit), nameof(ParkingAltitudeText), nameof(FollowSaveTime), nameof(ManualStart) })
             OnPropertyChanged(name);
-        foreach (var name in LegProperties.Concat(StartProperties)) OnPropertyChanged(name);
+        NotifyLegChanged();
         RefreshAvailableTargets();
         Recalculate();
     }
 
-    /// <summary>Back to using the pane on its own; the mission keeps the plan last made.</summary>
-    public void StopEditingLeg()
-    {
-        _leg = null;
-        foreach (var name in LegProperties.Concat(StartProperties)) OnPropertyChanged(name);
-    }
+    protected override IEnumerable<string> LegProperties => base.LegProperties.Append(nameof(IsRouteEditable)).Union(StartProperties);
 
-    private static readonly string[] LegProperties =
-        [nameof(Leg), nameof(IsEditingLeg), nameof(IsRouteEditable), nameof(LegTitle)];
+    protected override RendezvousLegLink? FindLink(MissionBuilderViewModel mission, object owner) => mission.RendezvousLinkFor(owner);
+
+    protected override bool LegMoved(RendezvousLegLink shown, RendezvousLegLink current) => current.Span != shown.Span;
 
     private static readonly string[] StartProperties =
     [
@@ -324,7 +306,7 @@ public sealed class RendezvousViewModel : ObservableObject
     /// <summary>Saves the plan into the mission leg being planned (the first leg of the plan is the mission leg).</summary>
     private void SaveLeg(RendezvousRequest request, RendezvousPlan plan)
     {
-        if (_leg is not { } link || plan.Legs.Count == 0) return;
+        if (Leg is not { } link || plan.Legs.Count == 0) return;
         var leg = plan.Legs[0];
         link.Save(new RendezvousLeg(link.Span.TargetLocationId, request.EarliestUt, leg.ArrivalUt, leg.TotalDv, _launchChoice,
             _phasing.Count > 0 ? _phasing[0] : null, _intercepts.Count > 0 ? _intercepts[0] : null));
@@ -376,18 +358,16 @@ public sealed class RendezvousViewModel : ObservableObject
     }
 
     /// <summary>A launch or a craft is picked by hand; where the mission is decides them otherwise.</summary>
-    public bool IsStartEditable => _leg is null && !_startFromMission;
-
-    public bool HasMission => _mission is not null;
+    public bool IsStartEditable => Leg is null && !_startFromMission;
 
     /// <summary>"After stop 2: Kerbin — Low orbit: from Kerbin's 80 km orbit, where the mission gets to".</summary>
     public string MissionStartText => _missionStart?.Text
-        ?? (_mission is null ? "" : Targets.Count == 0 ? $"After {_mission.AddAfterText}. Add a craft to meet to see how the mission gets to it."
-            : $"After {_mission.AddAfterText}: the mission can't get to {Targets[0].Body.Name}'s orbit.");
+        ?? (Mission is null ? "" : Targets.Count == 0 ? $"After {Mission.AddAfterText}. Add a craft to meet to see how the mission gets to it."
+            : $"After {Mission.AddAfterText}: the mission can't get to {Targets[0].Body.Name}'s orbit.");
 
     private void SetStart(bool mission, bool launch)
     {
-        _startFromMission = mission && _mission is not null;
+        _startFromMission = mission && Mission is not null;
         _startFromLaunch = launch;
         if (_startFromMission) ResolveMissionStart();
         else _missionStart = null;
@@ -396,7 +376,7 @@ public sealed class RendezvousViewModel : ObservableObject
     }
 
     /// <summary>Plans a leg to add to the mission: starts where the mission is (its last stop), with no targets yet.</summary>
-    public void StartAdding()
+    public override void StartAdding()
     {
         StopEditingLeg();
         _suspend = true;
@@ -410,7 +390,7 @@ public sealed class RendezvousViewModel : ObservableObject
     /// <summary>The mission's start for the targets' body: sets the launch or craft and the parking orbit to match.</summary>
     private void ResolveMissionStart()
     {
-        _missionStart = _mission is not null && Targets.FirstOrDefault()?.Body.Name is { } body ? _mission.RendezvousStartFor(body) : null;
+        _missionStart = Mission is not null && Targets.FirstOrDefault()?.Body.Name is { } body ? Mission.RendezvousStartFor(body) : null;
         if (_missionStart is not { } start) return;
         _startFromLaunch = start.Kind == RendezvousStartKind.Launch;
         _parkingAltitudeText = Km(start.ParkingAltitudeM);
@@ -422,53 +402,42 @@ public sealed class RendezvousViewModel : ObservableObject
         };
         if (start.EarliestUt is { } arrival)
         {
-            // The start is kept to the minute: round the arrival up so the leg never starts before the mission gets there.
             _followSaveTime = false;
-            SetStartFields(Math.Ceiling(arrival / 60) * 60);
+            SetStartFields(RoundUp(arrival, 60)); // kept to the minute
             OnPropertyChanged(nameof(FollowSaveTime));
             OnPropertyChanged(nameof(ManualStart));
         }
         OnPropertyChanged(nameof(ParkingAltitudeText));
     }
 
-    /// <summary>Links the pane to the mission, so a plan can start where the mission is and be added to it.</summary>
-    public void AttachMission(MissionBuilderViewModel mission)
+    /// <summary>Planning from where the mission is: start again from where it now gets to.</summary>
+    protected override void OnRouteChanged()
     {
-        _mission = mission;
-        mission.RouteChanged += () =>
-        {
-            if (!_startFromMission || _leg is not null) return;
-            ResolveMissionStart();
-            foreach (var name in StartProperties) OnPropertyChanged(name);
-            RefreshAvailableTargets();
-            InputsChanged();
-        };
-        OnPropertyChanged(nameof(HasMission));
+        if (!_startFromMission || Leg is not null) return;
+        ResolveMissionStart();
+        foreach (var name in StartProperties) OnPropertyChanged(name);
+        RefreshAvailableTargets();
+        InputsChanged();
     }
 
     // ---------------- Adding to the mission ----------------
 
-    public RelayCommand AddToMissionCommand { get; }
-
     /// <summary>The Add to mission card shows while planning from where the mission is.</summary>
-    public bool ShowsAddToMission => _startFromMission && _leg is null;
+    public override bool ShowsAddToMission => _startFromMission && Leg is null;
 
-    public bool CanAddToMission =>
+    public override bool CanAddToMission =>
         ShowsAddToMission && _missionStart is not null && Targets.Count > 0 && _plan is { } plan && plan.Legs.Count == Targets.Count;
 
-    public string AddToMissionText => Targets.Count switch
+    public override string AddToMissionText => Targets.Count switch
     {
         0 => "Add the crafts to meet, then add the plan to the mission.",
         1 => $"Adds a stop at {Targets[0].Name}, flown as this rendezvous.",
         var n => $"Adds {n} stops ({string.Join(", ", Targets.Select(t => t.Name))}), each flown as its leg of this plan.",
     };
 
-    /// <summary>The plan was added to the mission: the first new stop, whose leg the pane can now show.</summary>
-    public event Action<StopViewModel>? AddedToMission;
-
-    private void AddToMission()
+    protected override StopViewModel? AddLegToMission()
     {
-        if (!CanAddToMission || _request is not { } request || _plan is not { } plan) return;
+        if (_request is not { } request || _plan is not { } plan) return null;
         var bodies = _sync.StockBodies();
         var legs = Targets.Select((target, i) =>
         {
@@ -478,7 +447,7 @@ public sealed class RendezvousViewModel : ObservableObject
                 : new RendezvousLeg(0, leg.StartUt, leg.ArrivalUt, leg.TotalDv, null, At(_phasing, i), At(_intercepts, i));
             return new RendezvousStopToAdd(LocationFor(target, bodies), picks);
         }).ToList();
-        if (_mission!.AddRendezvousStops(legs) is { } stop) AddedToMission?.Invoke(stop);
+        return Mission!.AddRendezvousStops(legs);
     }
 
     private static T? At<T>(List<T> list, int index) => index < list.Count ? list[index] : default;
@@ -962,8 +931,8 @@ public sealed class RendezvousViewModel : ObservableObject
         {
             if (Targets.Contains(c) || c.Key.StartsWith("parking:")) continue;
             var fits = _startFromMission && RouteBody is null
-                ? _mission?.RendezvousStartFor(c.Body.Name) is { } start && start.Chaser?.Name != c.Name
-                : StartFromCraft && !_startFromMission && _leg is null && Targets.Count == 0 && SelectedChaser is { } chaser
+                ? Mission?.RendezvousStartFor(c.Body.Name) is { } start && start.Chaser?.Name != c.Name
+                : StartFromCraft && !_startFromMission && Leg is null && Targets.Count == 0 && SelectedChaser is { } chaser
                     // The first target can be around another body the map gets the craft to.
                     ? c.Key != chaser.Key && (c.Body.Name == chaser.Body.Name || Approach(chaser.Body.Name, c.Body.Name) is not null)
                     : c.Body.Name == RouteBody && (StartFromLaunch || c.Key != SelectedChaser?.Key);
@@ -999,7 +968,7 @@ public sealed class RendezvousViewModel : ObservableObject
 
     private void TargetsChanged()
     {
-        if (_startFromMission && _leg is null)
+        if (_startFromMission && Leg is null)
         {
             ResolveMissionStart();
             foreach (var name in StartProperties) OnPropertyChanged(name);
@@ -1090,7 +1059,7 @@ public sealed class RendezvousViewModel : ObservableObject
         if (Targets.Count == 0) return null;
         var bodies = _sync.StockBodies();
         if (RouteBody is not { } bodyName || !bodies.TryGetValue(bodyName, out var body)) { error = "Pick where to start from."; return null; }
-        if (_startFromMission && _leg is null && _missionStart is null) { error = MissionStartText; return null; }
+        if (_startFromMission && Leg is null && _missionStart is null) { error = MissionStartText; return null; }
 
         double start;
         if (FollowSaveTime) start = _sync.Save!.Ut + LeadMinutes * 60;

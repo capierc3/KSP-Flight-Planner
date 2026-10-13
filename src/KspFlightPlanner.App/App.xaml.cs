@@ -30,7 +30,7 @@ public partial class App : Application
             var designs = new DesignLibrary(sync);
             var flights = new FlightRepository(database);
             var bakes = new SurfaceBakeRepository(database);
-            var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock") is { } stock
+            var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
             var viewModel = new MainViewModel(

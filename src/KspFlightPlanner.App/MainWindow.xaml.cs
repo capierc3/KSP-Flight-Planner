@@ -32,72 +32,29 @@ public sealed class MainViewModel : ObservableObject
         Events = events;
         events.OpenFlightRequested += _ => RequestPane(Panes.Flight);
 
-        // Leg tools: a mission leg's tool opens in its planner, locked to that leg.
-        mission.TransferRequested += link =>
+        WireLegTool(Transfer, Panes.Transfer, h => mission.TransferRequested += h, h => mission.AddTransferRequested += h);
+        WireLegTool(Rendezvous, Panes.Rendezvous, h => mission.RendezvousRequested += h, h => mission.AddRendezvousRequested += h);
+        WireLegTool(Resonant, Panes.Resonant, h => mission.DeployRequested += h, h => mission.AddDeployRequested += h);
+    }
+
+    /// <summary>
+    /// A mission leg's tool opens in its planner, locked to that leg. Adding a leg: the planner starts where the mission
+    /// is, with its inputs in the Calculators pane; once added, it shows the new leg.
+    /// </summary>
+    private void WireLegTool<TLink>(LegToolViewModel<TLink> tool, string pane, Action<Action<TLink>> onEditRequested,
+        Action<Action> onAddRequested) where TLink : LegLink
+    {
+        tool.AttachMission(Mission);
+        onEditRequested(link =>
         {
-            Transfer.EditLeg(link);
-            RequestPane(Panes.Transfer);
-        };
-        mission.RendezvousRequested += link =>
+            tool.EditLeg(link);
+            RequestPane(pane);
+        });
+        onAddRequested(() =>
         {
-            Rendezvous.EditLeg(link);
-            RequestPane(Panes.Rendezvous);
-        };
-        mission.DeployRequested += link =>
-        {
-            Resonant.EditDeploy(link);
-            RequestPane(Panes.Resonant);
-        };
-        // Adding a leg: its planner starts where the mission is, with its inputs in the Calculators pane; once added, it
-        // shows the new leg.
-        Rendezvous.AttachMission(mission);
-        mission.AddRendezvousRequested += () =>
-        {
-            Rendezvous.StartAdding();
-            ShowCalculator(Panes.Rendezvous);
-        };
-        Rendezvous.AddedToMission += stop =>
-        {
-            if (mission.RendezvousLinkFor(stop) is { } link) Rendezvous.EditLeg(link);
-        };
-        Transfer.AttachMission(mission);
-        mission.AddTransferRequested += () =>
-        {
-            Transfer.StartAdding();
-            ShowCalculator(Panes.Transfer);
-        };
-        Transfer.AddedToMission += stop =>
-        {
-            if (mission.TransferLinkFor(stop) is { } link) Transfer.EditLeg(link);
-        };
-        Resonant.AttachMission(mission);
-        mission.AddDeployRequested += () =>
-        {
-            Resonant.StartAdding();
-            ShowCalculator(Panes.Resonant);
-        };
-        Resonant.AddedToMission += stop =>
-        {
-            if (mission.DeployLinkFor(stop) is { } link) Resonant.EditDeploy(link);
-        };
-        mission.RouteChanged += () =>
-        {
-            if (Transfer.Leg is { } transfer)
-            {
-                if (mission.TransferLinkFor(transfer.Owner) is not { } link) Transfer.StopEditingLeg();
-                else if (link.Span != transfer.Span) Transfer.EditLeg(link);
-            }
-            if (Rendezvous.Leg is { } rendezvous)
-            {
-                if (mission.RendezvousLinkFor(rendezvous.Owner) is not { } link) Rendezvous.StopEditingLeg();
-                else if (link.Span != rendezvous.Span) Rendezvous.EditLeg(link);
-            }
-            if (Resonant.Leg is { } deploy)
-            {
-                if (mission.DeployLinkFor(deploy.Owner) is not { } link) Resonant.StopEditingLeg();
-                else if (link.Body != deploy.Body || link.AltitudeM != deploy.AltitudeM) Resonant.EditDeploy(link);
-            }
-        };
+            tool.StartAdding();
+            ShowCalculator(pane);
+        });
     }
 
     public MissionBuilderViewModel Mission { get; }

@@ -116,7 +116,7 @@ public sealed class LocationsViewModel : ObservableObject
         // Another screen (or the save watcher) changed locations: don't throw away edits in progress.
         var unsaved = keepSelection && Detail is CustomLocationEditorViewModel { IsDirty: true } editor ? editor : null;
 
-        var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == "KSP Stock");
+        var system = _bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName);
         _stock = system is null ? [] : _bodies.GetBodies(system.Id);
         _map = _maps.GetMap();
         var custom = _locations.GetAll();

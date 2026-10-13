@@ -12,9 +12,10 @@ namespace KspFlightPlanner.App.ViewModels;
 /// choices made here are saved back into the mission through <see cref="Save"/>.
 /// </summary>
 /// <param name="Owner">The mission stop, to find the link again when the route changes.</param>
-public sealed record DeployLink(object Owner, string Title, CelestialBody Body, double AltitudeM, DeployStep? Choice, Action<DeployStep> Save);
+public sealed record DeployLink(object Owner, string Title, CelestialBody Body, double AltitudeM, DeployStep? Choice, Action<DeployStep> Save)
+    : LegLink(Owner, Title);
 
-public sealed class ResonantOrbitViewModel : ObservableObject
+public sealed class ResonantOrbitViewModel : LegToolViewModel<DeployLink>
 {
     private readonly BodyRepository _bodies;
     private readonly ConstellationRepository _plans;
@@ -33,7 +34,6 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     private string? _errorText;
     private string _planName = "";
     private SavedConstellation? _selectedPlan;
-    private DeployLink? _leg;
 
     public ResonantOrbitViewModel(BodyRepository bodies, ConstellationRepository plans, SaveSync? sync = null, FlightRepository? flights = null,
         PlannerEvents? events = null)
@@ -43,7 +43,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         _sync = sync;
         _flights = flights;
         _events = events;
-        FlyCommand = new RelayCommand(Fly, () => Result is not null && _flights is not null && SelectedSystem?.Name == StockSystem);
+        FlyCommand = new RelayCommand(Fly, () => Result is not null && _flights is not null && SelectedSystem?.Name == BodyRepository.StockSystemName);
 
         UseSynchronousAltitudeCommand = new RelayCommand(
             () => SetAltitude(SelectedBody?.SynchronousAltitudeM), () => SelectedBody?.SynchronousAltitudeM is not null);
@@ -52,8 +52,6 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         SavePlanCommand = new RelayCommand(SavePlan, () => Result is not null && !string.IsNullOrWhiteSpace(PlanName));
         LoadPlanCommand = new RelayCommand(LoadSelectedPlan, () => SelectedPlan is not null);
         DeletePlanCommand = new RelayCommand(DeleteSelectedPlan, () => SelectedPlan is not null);
-        StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
-        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         foreach (var system in _bodies.GetSystems()) Systems.Add(system);
         SelectedSystem = Systems.FirstOrDefault();
@@ -75,27 +73,18 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     /// <summary>Hands the deployment to the Flight pane, which times the burns from the carrier's real orbit.</summary>
     public RelayCommand FlyCommand { get; }
 
-    public RelayCommand StopEditingLegCommand { get; }
-
     // ---------------- Leg mode ----------------
 
-    /// <summary>The mission stop whose deployment is being planned; null when the calculator is used on its own.</summary>
-    public DeployLink? Leg => _leg;
-
-    public bool IsEditingLeg => _leg is not null;
-
     /// <summary>Body and altitude can be changed: not while they come from a mission stop.</summary>
-    public bool IsOrbitEditable => _leg is null;
-
-    public string LegTitle => _leg?.Title ?? "";
+    public bool IsOrbitEditable => Leg is null;
 
     /// <summary>
     /// Plans the deployment at a mission stop: body and altitude from the stop, the rest from its saved choice. Every
     /// change made afterwards (satellite count, dive orbit, occlusion) is saved into the mission.
     /// </summary>
-    public void EditDeploy(DeployLink link)
+    public override void EditLeg(DeployLink link)
     {
-        _leg = null; // don't save anything while it's being set up
+        Leg = null; // don't save anything while it's being set up
         if (Systems.FirstOrDefault(s => s.Id == link.Body.SystemId) is { } system) SelectedSystem = system;
         SelectedBody = Bodies.FirstOrDefault(b => b.Id == link.Body.Id);
         var choice = link.Choice ?? new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion);
@@ -106,63 +95,43 @@ public sealed class ResonantOrbitViewModel : ObservableObject
         OnPropertyChanged(nameof(PreferDiveOrbit));
         OnPropertyChanged(nameof(UseOcclusion));
         SetAltitude(link.AltitudeM);
-        _leg = link;
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        Leg = link;
+        NotifyLegChanged();
         Recalculate(); // saves the deployment into the mission
     }
 
-    /// <summary>Back to using the calculator on its own; the mission keeps the deployment last planned.</summary>
-    public void StopEditingLeg()
-    {
-        _leg = null;
-        foreach (var name in LegProperties) OnPropertyChanged(name);
-    }
+    protected override IEnumerable<string> LegProperties => [.. base.LegProperties, nameof(IsOrbitEditable)];
 
-    private static readonly string[] LegProperties =
-        [nameof(Leg), nameof(IsEditingLeg), nameof(IsOrbitEditable), nameof(LegTitle), nameof(ShowsAddToMission), nameof(CanAddToMission), nameof(AddToMissionText)];
+    protected override DeployLink? FindLink(MissionBuilderViewModel mission, object owner) => mission.DeployLinkFor(owner);
+
+    protected override bool LegMoved(DeployLink shown, DeployLink current) =>
+        current.Body != shown.Body || current.AltitudeM != shown.AltitudeM;
 
     // ---------------- Adding to the mission ----------------
 
-    private MissionBuilderViewModel? _mission;
-
-    public RelayCommand AddToMissionCommand { get; }
-
-    /// <summary>The deployment was added to the mission: the new stop, whose deployment the calculator can now show.</summary>
-    public event Action<StopViewModel>? AddedToMission;
-
-    /// <summary>Links the calculator to the mission, so the constellation can be added to it as a stop.</summary>
-    public void AttachMission(MissionBuilderViewModel mission)
-    {
-        _mission = mission;
-        mission.RouteChanged += () => OnPropertyChanged(nameof(AddToMissionText));
-        OnPropertyChanged(nameof(ShowsAddToMission));
-    }
-
     /// <summary>Plans a deployment to add: around the body the mission is at, on the stock system.</summary>
-    public void StartAdding()
+    public override void StartAdding()
     {
         StopEditingLeg();
-        if (Systems.FirstOrDefault(s => s.Name == StockSystem) is { } stock && SelectedSystem != stock) SelectedSystem = stock;
-        if (_mission?.AddAfterBody is { } name && Bodies.FirstOrDefault(b => b.Name == name) is { } body && body != SelectedBody)
+        if (Systems.FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock && SelectedSystem != stock) SelectedSystem = stock;
+        if (Mission?.AddAfterBody is { } name && Bodies.FirstOrDefault(b => b.Name == name) is { } body && body != SelectedBody)
             SelectedBody = body;
-        foreach (var n in LegProperties) OnPropertyChanged(n);
+        NotifyLegChanged();
     }
 
-    public bool ShowsAddToMission => _mission is not null && _leg is null;
+    public override bool CanAddToMission => ShowsAddToMission && Result is not null && SelectedSystem?.Name == BodyRepository.StockSystemName;
 
-    public bool CanAddToMission => ShowsAddToMission && Result is not null && SelectedSystem?.Name == StockSystem;
-
-    public string AddToMissionText => _mission is null ? ""
-        : SelectedSystem?.Name != StockSystem ? "Only the stock system's bodies can be added to the mission."
+    public override string AddToMissionText => Mission is null ? ""
+        : SelectedSystem?.Name != BodyRepository.StockSystemName ? "Only the stock system's bodies can be added to the mission."
         : SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude) ? "Pick a body and an orbit."
-        : $"Adds a stop in a {altitude / 1000:#,0.#} km orbit of {body.Name} after {_mission.AddAfterText}, releasing {SatelliteCount} satellites there.";
+        : $"Adds a stop in a {altitude / 1000:#,0.#} km orbit of {body.Name} after {Mission.AddAfterText}, releasing {SatelliteCount} satellites there.";
 
-    private void AddToMission()
+    protected override StopViewModel? AddLegToMission()
     {
-        if (!CanAddToMission || SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude)) return;
-        if (_mission!.AddDeployStop(body, altitude, new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion)) is { } stop)
-            AddedToMission?.Invoke(stop);
-        else ErrorText = $"The mission can't stop in that orbit of {body.Name} (is it inside the atmosphere?).";
+        if (SelectedBody is not { } body || !Format.TryParseDistance(AltitudeText, out var altitude)) return null;
+        var stop = Mission!.AddDeployStop(body, altitude, new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion));
+        if (stop is null) ErrorText = $"The mission can't stop in that orbit of {body.Name} (is it inside the atmosphere?).";
+        return stop;
     }
 
     public StarSystem? SelectedSystem
@@ -262,8 +231,6 @@ public sealed class ResonantOrbitViewModel : ObservableObject
     public string CarrierPeriapsisText => Result is { } r ? Format.Distance(r.CarrierPeriapsisAltitudeM) : "—";
     public string InjectionDeltaVText => Result is { } r ? Format.Speed(r.InjectionDeltaV) : "—";
 
-    private const string StockSystem = "KSP Stock";
-
     /// <summary>
     /// Creates the flight. When the craft being flown in KSP orbits this body it becomes the carrier and the burns are
     /// planned from its orbit straight away; otherwise the Flight pane asks for the carrier.
@@ -316,7 +283,7 @@ public sealed class ResonantOrbitViewModel : ObservableObject
                 Result = ResonantOrbitCalculator.Calculate(new ResonantOrbitRequest(
                     body, SatelliteCount, altitude, PreferDiveOrbit, new OcclusionSettings(UseOcclusion)));
                 foreach (var w in Result.Warnings) Warnings.Add(w);
-                _leg?.Save(new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion));
+                Leg?.Save(new DeployStep(SatelliteCount, PreferDiveOrbit, UseOcclusion));
             }
             catch (Exception ex) when (ex is ArgumentOutOfRangeException or InvalidOperationException)
             {

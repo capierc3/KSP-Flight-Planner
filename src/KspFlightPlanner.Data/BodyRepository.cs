@@ -36,8 +36,8 @@ public sealed class BodyRepository(PlannerDatabase database)
         return WithGameData(connection, WithSurfaceData(connection, ReadBodies(cmd))).FirstOrDefault();
     }
 
-    /// <summary>The system the player's game is (surface bakes are taken from it).</summary>
-    public const string BakedSystemName = "KSP Stock";
+    /// <summary>The stock system: the one the player's game is (surface bakes are taken from it) and the Δv map covers.</summary>
+    public const string StockSystemName = "KSP Stock";
 
     /// <summary>
     /// Lays the player's surface bakes over the stock bodies' wiki values where they agree (<see cref="BakeMerge"/>).
@@ -50,7 +50,7 @@ public sealed class BodyRepository(PlannerDatabase database)
         {
             cmd.CommandText = "SELECT name FROM star_systems WHERE id = $id;";
             cmd.Parameters.AddWithValue("$id", bodies[0].SystemId);
-            if (cmd.ExecuteScalar() as string != BakedSystemName) return bodies;
+            if (cmd.ExecuteScalar() as string != StockSystemName) return bodies;
         }
         var bakes = SurfaceBakeRepository.ReadSummaries(connection);
         return bakes.Count == 0 ? bodies : bodies.Select(b => BakeMerge.Apply(b, bakes.GetValueOrDefault(b.Name))).ToList();

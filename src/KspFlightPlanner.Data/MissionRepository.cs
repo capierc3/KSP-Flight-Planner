@@ -15,7 +15,7 @@ public sealed class DvMapRepository(PlannerDatabase database)
     /// The Δv map for a system with the user's custom locations attached and edits applied,
     /// or null if the system has none.
     /// </summary>
-    public DeltaVMap? GetMap(string systemName = "KSP Stock")
+    public DeltaVMap? GetMap(string systemName = BodyRepository.StockSystemName)
     {
         var nodes = ReadSeededNodes(systemName);
         if (nodes.Count == 0) return null;
@@ -64,7 +64,7 @@ public sealed class DvMapRepository(PlannerDatabase database)
     }
 
     /// <summary>Bodies that can host a custom location (have a low orbit on the map), with their physical data.</summary>
-    public IReadOnlyList<CelestialBodyOption> GetCustomLocationBodies(string systemName = "KSP Stock")
+    public IReadOnlyList<CelestialBodyOption> GetCustomLocationBodies(string systemName = BodyRepository.StockSystemName)
     {
         var nodes = ReadSeededNodes(systemName);
         var bodies = BodiesByName(systemName);

@@ -32,12 +32,13 @@ public sealed record LegSummary(
 /// </summary>
 /// <param name="Owner">The mission stop the leg arrives at, to find the link again when the route changes.</param>
 public sealed record TransferLegLink(object Owner, string Title, TransferSpan Span, TransferLeg? Choice, Action<TransferLeg> Save)
+    : LegLink(Owner, Title)
 {
     /// <summary>When the mission reaches the start of the leg, if known: a new window is searched from then.</summary>
     public double? EarliestUt { get; init; }
 }
 
-public sealed class TransferPlannerViewModel : ObservableObject
+public sealed class TransferPlannerViewModel : LegToolViewModel<TransferLegLink>
 {
     private readonly BodyRepository _bodies;
     private readonly CustomLocationRepository _locations;
@@ -75,7 +76,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
     private TransferPlan? _plan;
     private TransferWindow? _selectedWindow;
 
-    private TransferLegLink? _leg;
     private TransferLeg? _pendingChoice;
 
     private TransferRequest? _returnRequest;
@@ -96,8 +96,6 @@ public sealed class TransferPlannerViewModel : ObservableObject
         events.LocationsChanged += _ => ReloadBodies();
         ResetToBestCommand = new RelayCommand(() => SelectedWindow = _plan?.BestWindow, () => IsCustomSelection);
         ResetReturnToBestCommand = new RelayCommand(() => ReturnWindow = _returnPlan?.BestWindow, () => IsCustomReturnSelection);
-        StopEditingLegCommand = new RelayCommand(StopEditingLeg, () => IsEditingLeg);
-        AddToMissionCommand = new RelayCommand(AddToMission, () => CanAddToMission);
 
         // Only systems with orbital data can plan transfers.
         foreach (var system in bodies.GetSystems())
@@ -117,28 +115,20 @@ public sealed class TransferPlannerViewModel : ObservableObject
     /// <summary>Earliest departure = today in the game (live while connected to KSP, else the save's date).</summary>
     public RelayCommand UseGameDateCommand { get; }
     public RelayCommand ResetReturnToBestCommand { get; }
-    public RelayCommand StopEditingLegCommand { get; }
 
     // ---------------- Leg mode ----------------
 
-    /// <summary>The mission leg whose window is being chosen; null when the planner is used on its own.</summary>
-    public TransferLegLink? Leg => _leg;
-
-    public bool IsEditingLeg => _leg is not null;
-
     /// <summary>The trip (bodies, orbits, arrival, return) can be changed: not while it comes from a mission leg.</summary>
-    public bool IsTripEditable => _leg is null;
-
-    public string LegTitle => _leg?.Title ?? "";
+    public bool IsTripEditable => Leg is null;
 
     /// <summary>
     /// Chooses the window for a mission leg: sets the trip from the leg and shows its saved window (or picks the best one
     /// and saves it). Every window picked afterwards, on the porkchop plot or by changing the earliest date, is saved too.
     /// </summary>
-    public void EditLeg(TransferLegLink link)
+    public override void EditLeg(TransferLegLink link)
     {
         var span = link.Span;
-        _leg = null; // don't save anything while the trip is being set up
+        Leg = null; // don't save anything while the trip is being set up
         if (Systems.FirstOrDefault(s => s.Id == span.Origin.SystemId) is { } system) SelectedSystem = system;
         SelectedOrigin = Origins.FirstOrDefault(b => b.Id == span.Origin.Id);
         _suspendRecalculate = true;
@@ -147,35 +137,33 @@ public sealed class TransferPlannerViewModel : ObservableObject
         ArrivalAltitudeText = Km(span.ArrivalAltitudeM ?? span.Destination.DefaultParkingAltitudeM);
         SelectedArrivalMode = span.Captures ? ArrivalMode.Circularize : ArrivalMode.Flyby;
         PlanReturn = false;
-        // The earliest date is kept to the day: round the arrival up so the window is never before the mission gets there.
+        // The earliest date is kept to the day, so the window is never before the mission gets there.
         var earliest = link.Choice?.EarliestDepartureUt
-            ?? (link.EarliestUt is { } arrival ? Math.Ceiling(arrival / _calendar.SecondsPerDay) * _calendar.SecondsPerDay : (double?)null)
+            ?? (link.EarliestUt is { } arrival ? RoundUp(arrival, _calendar.SecondsPerDay) : (double?)null)
             ?? (_sync?.Save is { } save ? save.Ut : _calendar.ToUniversalTime(EarliestYear, EarliestDay));
         SetEarliest(earliest);
         _suspendRecalculate = false;
 
-        _leg = link;
+        Leg = link;
         _pendingChoice = link.Choice;
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        NotifyLegChanged();
         Recalculate();
     }
 
     /// <summary>Back to using the planner on its own; the mission keeps the window last chosen.</summary>
-    public void StopEditingLeg()
+    public override void StopEditingLeg()
     {
-        _leg = null;
         _pendingChoice = null;
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        base.StopEditingLeg();
     }
 
-    private static readonly string[] LegProperties =
-        [nameof(Leg), nameof(IsEditingLeg), nameof(IsTripEditable), nameof(LegTitle), nameof(ShowsAddToMission), nameof(CanAddToMission), nameof(AddToMissionText)];
+    protected override IEnumerable<string> LegProperties => [.. base.LegProperties, nameof(IsTripEditable)];
+
+    protected override TransferLegLink? FindLink(MissionBuilderViewModel mission, object owner) => mission.TransferLinkFor(owner);
+
+    protected override bool LegMoved(TransferLegLink shown, TransferLegLink current) => current.Span != shown.Span;
 
     // ---------------- Adding to the mission ----------------
-
-    private MissionBuilderViewModel? _mission;
-
-    public RelayCommand AddToMissionCommand { get; }
 
     /// <summary>Hands the chosen outbound window to the Flight pane as burns from the craft's orbit.</summary>
     public RelayCommand FlyCommand { get; }
@@ -189,7 +177,7 @@ public sealed class TransferPlannerViewModel : ObservableObject
     public bool CanFlyReturn => _planReturn && Flyable(_returnRequest, _returnWindow);
 
     private bool Flyable(TransferRequest? request, TransferWindow? window) =>
-        _flights is not null && request is not null && window is not null && SelectedSystem?.Name == "KSP Stock"
+        _flights is not null && request is not null && window is not null && SelectedSystem?.Name == BodyRepository.StockSystemName
         && request.Origin is { IsCustomLocation: false, Orbit: not null } && request.Destination is { IsCustomLocation: false, Orbit: not null };
 
     public string FlyHint => CanFly ? FlyText(_request!) : "Pick a planet or moon to go to (not a custom location) to fly a window";
@@ -259,55 +247,36 @@ public sealed class TransferPlannerViewModel : ObservableObject
         }
     }
 
-    /// <summary>The window was added to the mission: the new stop, whose leg the planner can now show.</summary>
-    public event Action<StopViewModel>? AddedToMission;
-
-    /// <summary>Links the planner to the mission, so the window chosen can be added to it as a leg.</summary>
-    public void AttachMission(MissionBuilderViewModel mission)
-    {
-        _mission = mission;
-        mission.RouteChanged += () =>
-        {
-            OnPropertyChanged(nameof(CanAddToMission));
-            OnPropertyChanged(nameof(AddToMissionText));
-        };
-        OnPropertyChanged(nameof(ShowsAddToMission));
-    }
-
     /// <summary>Chooses a window for a leg to add: from the planet the mission is at, on the stock system.</summary>
-    public void StartAdding()
+    public override void StartAdding()
     {
         StopEditingLeg();
         PlanReturn = false;
-        if (Systems.FirstOrDefault(s => s.Name == "KSP Stock") is { } stock && SelectedSystem != stock) SelectedSystem = stock;
-        if (_mission?.TransferOrigin is { } origin && Origins.FirstOrDefault(b => b.Name == origin) is { } body && body != SelectedOrigin)
+        if (Systems.FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock && SelectedSystem != stock) SelectedSystem = stock;
+        if (Mission?.TransferOrigin is { } origin && Origins.FirstOrDefault(b => b.Name == origin) is { } body && body != SelectedOrigin)
             SelectedOrigin = body;
         if (_sync?.Save is not null) UseGameDate();
-        foreach (var name in LegProperties) OnPropertyChanged(name);
+        NotifyLegChanged();
     }
-
-    public bool ShowsAddToMission => _mission is not null && _leg is null;
 
     /// <summary>The trip leaves the planet the mission is at, to a planet or moon (not a custom location), and has a window.</summary>
-    private bool AddFits => _mission?.TransferOrigin is { } origin && SelectedOrigin?.Name == origin && SelectedSystem?.Name == "KSP Stock"
+    private bool AddFits => Mission?.TransferOrigin is { } origin && SelectedOrigin?.Name == origin && SelectedSystem?.Name == BodyRepository.StockSystemName
         && SelectedDestination is { IsCustomLocation: false };
 
-    public bool CanAddToMission => ShowsAddToMission && AddFits && _request is not null && SelectedWindow is not null;
+    public override bool CanAddToMission => ShowsAddToMission && AddFits && _request is not null && SelectedWindow is not null;
 
-    public string AddToMissionText => _mission is null ? ""
-        : _mission.TransferOrigin is not { } origin ? $"The mission is around the star after {_mission.AddAfterText}: no planet to leave from."
-        : SelectedOrigin?.Name != origin || SelectedSystem?.Name != "KSP Stock" ? $"The mission is at {origin} after {_mission.AddAfterText}: set From to {origin} to add this window."
+    public override string AddToMissionText => Mission is null ? ""
+        : Mission.TransferOrigin is not { } origin ? $"The mission is around the star after {Mission.AddAfterText}: no planet to leave from."
+        : SelectedOrigin?.Name != origin || SelectedSystem?.Name != BodyRepository.StockSystemName ? $"The mission is at {origin} after {Mission.AddAfterText}: set From to {origin} to add this window."
         : SelectedDestination is not { IsCustomLocation: false } dest ? "Pick a planet or moon to go to; custom locations are added as stops instead."
-        : SelectedArrivalMode == ArrivalMode.Flyby ? $"Adds a flyby of {dest.Name} after {_mission.AddAfterText}, flown in the window picked."
-        : $"Adds a stop in {dest.Name}'s {ArrivalAltitudeText} km orbit after {_mission.AddAfterText}, flown in the window picked.";
+        : SelectedArrivalMode == ArrivalMode.Flyby ? $"Adds a flyby of {dest.Name} after {Mission.AddAfterText}, flown in the window picked."
+        : $"Adds a stop in {dest.Name}'s {ArrivalAltitudeText} km orbit after {Mission.AddAfterText}, flown in the window picked.";
 
-    private void AddToMission()
-    {
-        if (!CanAddToMission || _request is not { } request || SelectedWindow is not { } window) return;
-        var stop = _mission!.AddTransferStop(request.Destination, request.Arrival == ArrivalMode.Flyby, request.ArrivalAltitudeM,
-            new TransferLeg(request.EarliestDepartureUt, window.DepartureUt, window.FlightTimeS));
-        if (stop is not null) AddedToMission?.Invoke(stop);
-    }
+    protected override StopViewModel? AddLegToMission() =>
+        _request is { } request && SelectedWindow is { } window
+            ? Mission!.AddTransferStop(request.Destination, request.Arrival == ArrivalMode.Flyby, request.ArrivalAltitudeM,
+                new TransferLeg(request.EarliestDepartureUt, window.DepartureUt, window.FlightTimeS))
+            : null;
 
     private void SetEarliest(double ut)
     {
@@ -490,8 +459,8 @@ public sealed class TransferPlannerViewModel : ObservableObject
             if (!SetProperty(ref _selectedWindow, value)) return;
             Outbound = value is null ? null : Summarize(_request!, value, IsCustomSelection ? "Selected outbound transfer" : "Best launch window",
                 "Wait from earliest", value.DepartureUt - _request!.EarliestDepartureUt);
-            if (value is not null && _leg is not null)
-                _leg.Save(new TransferLeg(_request!.EarliestDepartureUt, value.DepartureUt, value.FlightTimeS));
+            if (value is not null && Leg is not null)
+                Leg.Save(new TransferLeg(_request!.EarliestDepartureUt, value.DepartureUt, value.FlightTimeS));
             OnPropertyChanged(nameof(IsCustomSelection));
             OnPropertyChanged(nameof(CanFly));
             OnPropertyChanged(nameof(CanFlyReturn));
