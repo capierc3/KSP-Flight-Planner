@@ -71,6 +71,7 @@ public sealed class FlightViewModel : ObservableObject
 
     private readonly FlightRepository _flights;
     private readonly SaveSync _sync;
+    private readonly BodyRotation _rotation;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private Flight? _selected;
     private string? _status;
@@ -79,14 +80,17 @@ public sealed class FlightViewModel : ObservableObject
     private bool _busy;
     private (long Id, double Ut)? _autoTried; // the flight and burn last re-planned after
 
-    public FlightViewModel(FlightRepository flights, SaveSync sync, PlannerEvents events)
+    public FlightViewModel(FlightRepository flights, SaveSync sync, PlannerEvents events, BodyRotation rotation)
     {
         _flights = flights;
         _sync = sync;
+        _rotation = rotation;
         events.OpenFlightRequested += id =>
         {
             Reload();
             SelectedFlight = Flights.FirstOrDefault(f => f.Id == id);
+            // A landing sent from a mission comes without burns: plan it now if its craft is already in orbit there.
+            if (_selected is { Kind: FlightKind.Landing, Craft: not null, Burns.Count: 0 }) _ = ReplanAsync();
         };
         events.SaveChanged += Reload; // the open flight closes if it belongs to the last save
         sync.Link.GameUpdated += _ => RefreshLive();
@@ -138,7 +142,7 @@ public sealed class FlightViewModel : ObservableObject
     public bool HasNoSelection => _selected is null;
 
     public string NoSelectionText => Flights.Count == 0
-        ? "No flights yet. For a quick burn or a trip from where you are, use the From here pane. Or plan on the Rendezvous, Resonant Orbits or Transfer Planner tool, then click Fly this plan (or window)."
+        ? "No flights yet. For a quick burn or a trip from where you are, use the From here pane (Land at a spot lands). Or plan on the Rendezvous, Resonant Orbits or Transfer Planner tool, then click Fly this plan (or window), or Fly this landing on a mission's landing spot."
         : "Pick a flight in the Flights pane to see its burns and send them to KSP.";
 
     // ---------------- The game ----------------
@@ -171,6 +175,9 @@ public sealed class FlightViewModel : ObservableObject
         FlightKind.Rendezvous => _selected.Targets.Count == 0 ? "Rendezvous" : $"Rendezvous with {string.Join(", then ", _selected.Targets.Select(t => t.Name))}",
         FlightKind.Resonant => $"Deploy {_selected.SatelliteCount} satellites at {_selected.AltitudeM / 1000:#,0.#} km around {_selected.BodyName}",
         FlightKind.Burns => $"Planned from where the craft was around {_selected.BodyName}. To plan it again, use the From here pane.",
+        FlightKind.Landing => $"Land at {_selected.Landing?.Target.Name} on {_selected.BodyName}" +
+                              $" ({_selected.Landing?.Target.LatitudeDeg:0.###}°, {_selected.Landing?.Target.LongitudeDeg:0.###}°)" +
+                              (_selected.LandSooner ? ", the sooner way" : "") + ". Re-plan from the craft's orbit around " + _selected.BodyName + ".",
         FlightKind.Transfer => $"To {_selected.DestinationName} in the window leaving {_selected.OriginName} {_calendar.FormatDate(_selected.TransferDepartureUt)}, " +
                                $"{_calendar.FormatDuration(_selected.TransferFlightTimeS)} there. Re-plan from wherever the craft is on the way.",
         _ => "",
@@ -359,6 +366,11 @@ public sealed class FlightViewModel : ObservableObject
             await ReplanTransferAsync(f, craft, now);
             return;
         }
+        if (f.Kind == FlightKind.Landing)
+        {
+            await ReplanLandingAsync(f, body, craft, now);
+            return;
+        }
         var orbit = _sync.OrbitOf(craft);
         if (orbit is null || orbit.BodyName != f.BodyName)
         {
@@ -418,6 +430,40 @@ public sealed class FlightViewModel : ObservableObject
         catch (ArgumentException ex)
         {
             Status = $"Couldn't re-plan: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>Plans a landing again from the craft's orbit around the landing body. docs/MATH.md §2.9.</summary>
+    private async Task ReplanLandingAsync(Flight f, CelestialBody body, FlightCraft craft, double now)
+    {
+        if (_sync.OrbitOf(craft) is not { } orbit || orbit.BodyName != body.Name)
+        {
+            Status = $"{craft.Name} isn't in orbit around {body.Name}. Get there first (the From here pane's Go to…), then re-plan.";
+            return;
+        }
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            if (await _rotation.InitialRotationDegAsync(body) is not { } theta0)
+            {
+                Status = BodyRotation.Missing(body);
+                return;
+            }
+            var bake = _rotation.Bake(body.Name);
+            var start = orbit.ToElements();
+            var planned = await Task.Run(() => LandingFlights.Plan(f, body, start, now, theta0, bake));
+            Store(planned);
+            Status = $"Planned from {craft.Name}'s orbit at {_calendar.FormatDate(now)}: {Format.Speed0(planned.Burns.Sum(b => b.DeltaV))} in all.";
+        }
+        catch (ArgumentException ex)
+        {
+            Status = $"Couldn't plan the landing: {ex.Message}";
         }
         finally
         {

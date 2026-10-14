@@ -81,7 +81,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the
   rest from its real orbit. Resonant deployments time the carrier's burn and each satellite's circularize burn from
-  the carrier's real orbit. Flights are kept until you delete them.
+  the carrier's real orbit. Flights are kept until you delete them. **Land at a spot** (From here pane), or *Fly this
+  landing* on a mission's landing spot, times the deorbit burn from the craft's real orbit and the body's rotation, swings
+  the ground track over the spot on the way down, and plans the braking burn.
 
 ## Layout
 

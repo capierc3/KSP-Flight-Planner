@@ -9,7 +9,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, GoTo, MatchPlanes, Rendezvous, Deorbit }
+public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, GoTo, MatchPlanes, Rendezvous, Deorbit, Land }
 
 public sealed record QuickActionOption(QuickAction Action, string Name)
 {
@@ -28,11 +28,11 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
     public override string ToString() => Name;
 }
 
-/// <summary>One way of making a trip, as a row to pick: what it's best at, and when it leaves, how long it takes, its Δv.</summary>
-public sealed record TripOptionRow(TripOption Option, string Text)
-{
-    public string Label => Option.Label;
-}
+/// <summary>
+/// One way of making a trip (<see cref="Option"/>) or a landing (<see cref="Landing"/>), as a row to pick: what it's best
+/// at, and when, how long and its Δv.
+/// </summary>
+public sealed record TripOptionRow(string Label, string Text, TripOption? Option = null, LandingOption? Landing = null);
 
 /// <summary>
 /// Fly mode's From here pane: "I'm here, now I want to do X". Plans a one-off burn (or a rendezvous) from the live orbit
@@ -46,6 +46,7 @@ public sealed class FromHereViewModel : ObservableObject
     private readonly SaveSync _sync;
     private readonly FlightRepository _flights;
     private readonly PlannerEvents _events;
+    private readonly BodyRotation _rotation;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private QuickActionOption _action;
     private string _altitudeText = "";
@@ -65,12 +66,22 @@ public sealed class FromHereViewModel : ObservableObject
     private RendezvousPlan? _plannedRendezvous;
     private FlightCraft? _plannedTarget;
     private CelestialBody? _plannedTo;
+    private LandingLeg? _plannedLanding;
+    private bool _plannedSooner;
 
-    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events)
+    // Land at a spot: the spots on the body the craft is around, and the one picked or typed.
+    private LandingTarget? _spot;
+    private string _latitudeText = "";
+    private string _longitudeText = "";
+    private string _twrText = Landing.DefaultTwr.ToString(CultureInfo.CurrentCulture);
+    private (string? Body, KspSave? Save, string? Target) _spotsFor = ("\0", null, null);
+
+    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events, BodyRotation rotation)
     {
         _sync = sync;
         _flights = flights;
         _events = events;
+        _rotation = rotation;
         _action = Actions[0];
         RefreshDestinations();
         sync.Link.GameUpdated += _ => RefreshLive();
@@ -94,6 +105,7 @@ public sealed class FromHereViewModel : ObservableObject
         new(QuickAction.MatchPlanes, "Match planes with the target"),
         new(QuickAction.Rendezvous, "Rendezvous with the target"),
         new(QuickAction.Deorbit, "Deorbit"),
+        new(QuickAction.Land, "Land at a spot"),
     ];
 
     public ObservableCollection<FlightBurnRow> Burns { get; } = [];
@@ -109,7 +121,8 @@ public sealed class FromHereViewModel : ObservableObject
         {
             if (value is null || !SetProperty(ref _action, value)) return;
             _altitudeText = DefaultAltitude();
-            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination) }) OnPropertyChanged(name);
+            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(OptionsTitle) })
+                OnPropertyChanged(name);
             Clear();
         }
     }
@@ -129,6 +142,47 @@ public sealed class FromHereViewModel : ObservableObject
     };
 
     public bool NeedsDestination => _action.Action == QuickAction.GoTo;
+
+    public bool NeedsSpot => _action.Action == QuickAction.Land;
+
+    public string OptionsTitle => _action.Action == QuickAction.Land ? "Ways to land" : "Ways to go";
+
+    /// <summary>Spots on the body the craft is around: wiki landmarks, then the save's flags, landed craft and KerbNet waypoints.</summary>
+    public IReadOnlyList<LandingTarget> Spots { get; private set; } = [];
+
+    public LandingTarget? SelectedSpot
+    {
+        get => _spot;
+        set
+        {
+            if (!SetProperty(ref _spot, value) || value is null) return;
+            _latitudeText = value.LatitudeDeg.ToString("0.####", CultureInfo.CurrentCulture);
+            _longitudeText = value.LongitudeDeg.ToString("0.####", CultureInfo.CurrentCulture);
+            OnPropertyChanged(nameof(LatitudeText));
+            OnPropertyChanged(nameof(LongitudeText));
+            Clear();
+        }
+    }
+
+    /// <summary>The spot's latitude (north +); typing a position lands there instead of at the spot picked.</summary>
+    public string LatitudeText
+    {
+        get => _latitudeText;
+        set { if (SetProperty(ref _latitudeText, value)) Clear(); }
+    }
+
+    public string LongitudeText
+    {
+        get => _longitudeText;
+        set { if (SetProperty(ref _longitudeText, value)) Clear(); }
+    }
+
+    /// <summary>The lander's thrust-to-weight ratio at the surface, for the braking burn.</summary>
+    public string TwrText
+    {
+        get => _twrText;
+        set { if (SetProperty(ref _twrText, value)) Clear(); }
+    }
 
     /// <summary>
     /// Where the craft can go: KSP's target (a body or a craft) first, then from the body it's around, its moons, nearest
@@ -161,7 +215,8 @@ public sealed class FromHereViewModel : ObservableObject
         set
         {
             if (value is null || !SetProperty(ref _trip, value)) return;
-            ShowTrip(value.Option);
+            if (value.Option is { } trip) ShowTrip(trip);
+            else if (value.Landing is { } landing) ShowLanding(landing);
         }
     }
 
@@ -185,6 +240,9 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.SetPeriapsis => "Burns at the apoapsis, which stays where it is.",
         QuickAction.MatchPlanes => "Target a craft, or a moon of the body you're orbiting, in KSP first. Burns at the cheaper of the next two plane crossings.",
         QuickAction.Rendezvous => "Target a craft in KSP first. Plans the plane match, phasing and intercept, like the Rendezvous tool.",
+        QuickAction.Land => "Pick a spot (or type its latitude and longitude). Tilts your orbit first if it doesn't reach that far north or south, then " +
+                            "waits for a pass close to the spot: a deorbit burn half an orbit before, a small burn on the way down to swing the track " +
+                            "over it, and a braking burn from 1 km above the ground. On a body with air the landing spot is a rough estimate.",
         _ => "Burns retrograde at the next apoapsis to drop the periapsis into the atmosphere (or onto the ground).",
     };
 
@@ -261,6 +319,10 @@ public sealed class FromHereViewModel : ObservableObject
                     if (!TryKm(out var height)) return;
                     _ = PlanTripAsync(body, destination, orbit, now, after, height);
                     return;
+                case QuickAction.Land:
+                    if (LandingFromInputs() is not { } leg) return;
+                    _ = PlanLandingAsync(body, orbit, now, leg);
+                    return;
                 case QuickAction.Deorbit:
                     if (!TryKm(out var periapsis)) return;
                     var deorbit = Rendezvous.Deorbit(body, orbit, after, periapsis);
@@ -309,7 +371,7 @@ public sealed class FromHereViewModel : ObservableObject
             var bodies = _sync.StockBodies().Values.ToList();
             var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies));
             (_plannedBody, _plannedFrom, _plannedUt, _plannedTo) = (from, orbit, now, to);
-            foreach (var option in options) TripOptions.Add(new TripOptionRow(option, OptionText(option, now)));
+            foreach (var option in options) TripOptions.Add(new TripOptionRow(option.Label, OptionText(option, now), option));
             OnPropertyChanged(nameof(HasTripOptions));
             SelectedTrip = TripOptions[0];
         }
@@ -351,6 +413,104 @@ public sealed class FromHereViewModel : ObservableObject
         Status = notes.Count > 0 ? string.Join(" ", notes) : null;
         OnPropertyChanged(nameof(HasBurns));
         RefreshLive();
+    }
+
+    /// <summary>The spot and lander from the inputs; null, with a status, when they don't read.</summary>
+    private LandingLeg? LandingFromInputs()
+    {
+        var culture = CultureInfo.CurrentCulture;
+        if (!double.TryParse(_latitudeText.Trim().TrimEnd('°'), NumberStyles.Float, culture, out var lat) || Math.Abs(lat) > 90
+            || !double.TryParse(_longitudeText.Trim().TrimEnd('°'), NumberStyles.Float, culture, out var lon) || Math.Abs(lon) > 180)
+        {
+            Status = "Pick a spot, or enter its latitude (−90 to 90, north +) and longitude (−180 to 180, east +).";
+            return null;
+        }
+        if (!double.TryParse(_twrText, NumberStyles.Float, culture, out var twr) || twr <= 1)
+        {
+            Status = "Enter the lander's thrust-to-weight ratio at the surface (more than 1).";
+            return null;
+        }
+        var target = _spot is { } s && Math.Abs(s.LatitudeDeg - lat) < 1e-4 && Math.Abs(s.LongitudeDeg - lon) < 1e-4
+            ? s
+            : new LandingTarget("Entered spot", "Entered", lat, lon);
+        return new LandingLeg(target, twr);
+    }
+
+    /// <summary>Plans the ways to land at the spot off the UI thread (it looks at every pass for a turn of the body) and shows the first.</summary>
+    private async Task PlanLandingAsync(CelestialBody body, OrbitalElements orbit, double now, LandingLeg leg)
+    {
+        _busy = true;
+        Status = $"Working out the way down to {leg.Target.Name}…";
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            if (await _rotation.InitialRotationDegAsync(body) is not { } theta0)
+            {
+                Status = BodyRotation.Missing(body);
+                return;
+            }
+            var bake = _rotation.Bake(body.Name);
+            var options = await Task.Run(() => LandingFlights.Options(body, leg, orbit, now, LeadS, theta0, bake));
+            (_plannedBody, _plannedFrom, _plannedUt, _plannedLanding) = (body, orbit, now, leg);
+            foreach (var option in options)
+                TripOptions.Add(new TripOptionRow(option.Label, $"lands in {Duration(option.LandingUt - now)} · {Format.Speed0(option.DeltaV)}", Landing: option));
+            OnPropertyChanged(nameof(HasTripOptions));
+            SelectedTrip = TripOptions[0];
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>Shows one way of landing: its burns, when and how it comes down, and anything to know.</summary>
+    private void ShowLanding(LandingOption option)
+    {
+        Burns.Clear();
+        for (var i = 0; i < option.Burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, option.Burns[i]));
+        _plannedSooner = option.Label != TripOptions[0].Label;
+        var site = option.Site;
+        ResultText = $"{Format.Speed0(option.DeltaV)} in all · lands {_calendar.FormatDate(option.LandingUt)} at {site.Target.Name}, " +
+                     $"coming in {(option.Northbound ? "northbound" : "southbound")}" +
+                     (site.GroundHeightM is { } g ? $" · ground {g:#,0} m{(site.GroundFromBake ? " (from the bake)" : "")}" : "");
+        var notes = option.Warnings.ToList();
+        if (FuelNote() is { } fuel) notes.Add(fuel);
+        Status = notes.Count > 0 ? string.Join(" ", notes) : null;
+        OnPropertyChanged(nameof(HasBurns));
+        RefreshLive();
+    }
+
+    /// <summary>
+    /// Keeps the spot list in step with the body the craft is around, the save (flags, landed craft, waypoints) and
+    /// KSP's target. A landed craft or flag targeted in KSP is picked; else the spot already picked, the save's first
+    /// flag, or the first landmark. A plan on show is left alone.
+    /// </summary>
+    private void RefreshSpots()
+    {
+        var body = Here()?.Body;
+        var target = _sync.Link.Game?.Target?.Name;
+        var key = (body?.Name, _sync.Save, target);
+        if (key == _spotsFor) return;
+        var bodyChanged = key.Item1 != _spotsFor.Body;
+        _spotsFor = key;
+        Spots = body is null ? [] : Landing.Targets(body, _sync.Save);
+        OnPropertyChanged(nameof(Spots));
+        var keep = !bodyChanged && _spot is { } current ? Spots.FirstOrDefault(s => s.Name == current.Name && s.Source == current.Source) : null;
+        var pick = Spots.FirstOrDefault(s => s.Name == target && s.Source is "Flag" or "Landed craft")
+                   ?? keep ?? Spots.FirstOrDefault(s => s.Source == "Flag") ?? Spots.FirstOrDefault();
+        if (pick is null || pick == _spot) return;
+        if (Burns.Count > 0)
+        {
+            _spot = pick;
+            OnPropertyChanged(nameof(SelectedSpot));
+            return;
+        }
+        SelectedSpot = pick;
     }
 
     /// <summary>The craft being flown as the save last recorded it (its parts, fuel and engines), if it's in the save.</summary>
@@ -458,6 +618,7 @@ public sealed class FromHereViewModel : ObservableObject
         _plannedRendezvous = null;
         _plannedTarget = null;
         _plannedTo = null;
+        _plannedLanding = null;
         TripOptions.Clear();
         _trip = null;
         OnPropertyChanged(nameof(SelectedTrip));
@@ -470,6 +631,7 @@ public sealed class FromHereViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CraftText));
         RefreshDestinations();
+        RefreshSpots();
         if (_altitudeText.Length == 0 && NeedsAltitude && DefaultAltitude() is { Length: > 0 } fill)
         {
             _altitudeText = fill;
@@ -586,7 +748,9 @@ public sealed class FromHereViewModel : ObservableObject
         if (_plannedBody is not { } body || _plannedFrom is not { } from) return;
         var burns = Burns.Select(b => b.Burn).ToList();
         var craft = _sync.ActiveCraft;
-        var flight = _plannedRendezvous is { } plan
+        var flight = _plannedLanding is { } landing
+            ? new Flight { Name = $"Land at {landing.Target.Name}", Kind = FlightKind.Landing, Landing = landing, LandSooner = _plannedSooner }
+            : _plannedRendezvous is { } plan
             ? new Flight
             {
                 Name = $"Meet {plan.Legs[0].Target.Name}",

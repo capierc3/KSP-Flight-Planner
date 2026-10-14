@@ -347,9 +347,13 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>"Deorbit 17 m/s + braking 606 m/s …", or why the landing isn't used.</summary>
     public string LandingText { get; private set; } = "";
 
-    internal void SetLanding(bool canLand, LandingPlan? plan, IReadOnlyList<LandingTarget> targets)
+    /// <summary>The body the leg arriving here lands on; null when it doesn't come down from an orbit.</summary>
+    public string? LandingBodyName { get; private set; }
+
+    internal void SetLanding(string? bodyName, LandingPlan? plan, IReadOnlyList<LandingTarget> targets)
     {
-        CanLand = canLand;
+        LandingBodyName = bodyName;
+        CanLand = bodyName is not null;
         if (!targets.SequenceEqual(LandingTargets))
         {
             LandingTargets = targets;
@@ -746,13 +750,15 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     private bool _suspend;
     private readonly SaveSync? _sync;
     private readonly SurfaceBakeRepository? _surfaceBakes;
+    private readonly FlightRepository? _flights;
 
     public MissionBuilderViewModel(DvMapRepository maps, CustomLocationRepository locations,
         PlannerEvents events, DesignLibrary? designs = null, BodyRepository? bodies = null,
         MissionRepository? missions = null, SettingsRepository? settings = null, SaveSync? sync = null,
-        SurfaceBakeRepository? bakes = null)
+        SurfaceBakeRepository? bakes = null, FlightRepository? flights = null)
     {
         _surfaceBakes = bakes;
+        _flights = flights;
         _missions = missions;
         // Flags, landed craft and waypoints in the save are landing spots: keep the pickers in step with the game.
         _sync = sync;
@@ -801,6 +807,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         RemoveDeployCommand = new RelayCommand<StopViewModel>(RemoveDeploy, s => s?.HasDeploy == true);
         AddLandingCommand = new RelayCommand<StopViewModel>(AddLanding, s => s?.OffersLanding == true);
         RemoveLandingCommand = new RelayCommand<StopViewModel>(s => s.Landing = null, s => s?.HasLanding == true);
+        FlyLandingCommand = new RelayCommand<StopViewModel>(FlyLanding, s => _flights is not null && s is { HasLanding: true, LandingBodyName: not null });
         NewMissionCommand = new RelayCommand(() => { if (ConfirmDiscard()) NewMission(); });
         SaveMissionCommand = new RelayCommand(() => SaveMission(), () => _missions is not null && _map is not null);
         SaveMissionAsCommand = new RelayCommand(SaveMissionAs, () => _missions is not null && _map is not null);
@@ -894,6 +901,29 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public RelayCommand<StopViewModel> RemoveDeployCommand { get; }
     public RelayCommand<StopViewModel> AddLandingCommand { get; }
     public RelayCommand<StopViewModel> RemoveLandingCommand { get; }
+    public RelayCommand<StopViewModel> FlyLandingCommand { get; }
+
+    /// <summary>
+    /// Hands the stop's landing to Fly mode as a flight. When the craft being flown is already in orbit around the body,
+    /// it flies it and the Flight pane plans the burns from its orbit at once; otherwise they're planned once it gets there.
+    /// </summary>
+    private void FlyLanding(StopViewModel stop)
+    {
+        if (_flights is null || stop.Landing is not { } leg || stop.LandingBodyName is not { } bodyName) return;
+        var craft = _sync?.ActiveCraft;
+        var there = craft is not null && _sync!.OrbitOf(craft)?.BodyName == bodyName;
+        var flight = new Flight
+        {
+            Name = $"Land at {leg.Target.Name}",
+            Kind = FlightKind.Landing,
+            BodyName = bodyName,
+            Landing = leg,
+            Craft = there ? craft : null,
+            Note = there ? null : $"Once your lander is in orbit around {bodyName}, switch to it in KSP and click \"Use the craft I'm flying\": " +
+                                  "the burns are planned from its real orbit.",
+        };
+        _events.RequestOpenFlight(_flights.Add(flight));
+    }
 
     /// <summary>Starts a landing at a spot: the save's first flag if there is one, else the first landmark, else 0°, 0°.</summary>
     private void AddLanding(StopViewModel stop)
@@ -1019,7 +1049,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _mapSegments = segments;
         Stops[0].SetTools(false, null);
         Stops[0].SetRendezvous(false, false);
-        Stops[0].SetLanding(false, null, []);
+        Stops[0].SetLanding(null, null, []);
         Stops[0].SetLaunch(false, null, false);
         var placed = PlacedLocations();
         _deploys = new DeployResult?[Stops.Count];
@@ -1048,7 +1078,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
             var landingBody = LegTools.FindLanding(segment.Legs) >= 0 ? _bodies.GetValueOrDefault(segment.Legs[^1].To.BodyName) : null;
             var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies, name => _surfaceBakes?.Get(name)) : null;
-            stop.SetLanding(landingBody is not null, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save));
+            stop.SetLanding(landingBody?.Name, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save));
 
             var legs = rendezvous is not null ? LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest)
                 : transfer is not null ? LegTools.ApplyTransfer(segment.Legs, transfer)

@@ -12,6 +12,8 @@ public enum FlightKind
     Burns,
     /// <summary>To another planet or moon in a launch window (Transfer Planner): re-planned from wherever the craft is on the way.</summary>
     Transfer,
+    /// <summary>Land at a chosen spot (From here, or a mission's landing spot): re-planned from the craft's real orbit.</summary>
+    Landing,
 }
 
 /// <summary>One burn of a flight, as a maneuver node.</summary>
@@ -95,6 +97,10 @@ public sealed record Flight
     public double TransferDepartureUt { get; init; }
     public double TransferFlightTimeS { get; init; }
     public ArrivalMode Arrival { get; init; } = ArrivalMode.Circularize;
+
+    // Landing inputs: the spot and lander, and whether to take the sooner pass over the cheapest.
+    public LandingLeg? Landing { get; init; }
+    public bool LandSooner { get; init; }
 
     // Resonant inputs (AltitudeM is also a transfer's arrival height).
     public int SatelliteCount { get; init; }

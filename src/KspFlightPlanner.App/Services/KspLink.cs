@@ -263,6 +263,9 @@ public sealed class KspLink : ObservableObject, IDisposable
             hasSurface ? TryGetSet(() => body.Biomes).OrderBy(b => b, StringComparer.Ordinal).ToList() : []);
     });
 
+    /// <summary>A body's rotation angle at UT 0, in degrees: not on the wiki, and what times a landing (docs/MATH.md §2.9).</summary>
+    public Task<double> InitialRotationAsync(string bodyName) => CallAsync(c => Body(c, bodyName).InitialRotation * RadToDeg);
+
     /// <summary>
     /// Terrain height and biome along one latitude, every <paramref name="stepDeg"/> from 180° W eastward. One trip to the
     /// game per row, so the clock and orbits keep updating between rows.

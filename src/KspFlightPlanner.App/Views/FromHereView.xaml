@@ -23,6 +23,23 @@
                 <TextBlock DockPanel.Dock="Right" Text="km" VerticalAlignment="Center" Margin="6,0,0,0" />
                 <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" Width="90" HorizontalAlignment="Left" />
             </DockPanel>
+            <StackPanel Margin="0,8,0,0" Visibility="{Binding NeedsSpot, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <TextBlock Text="Spot" VerticalAlignment="Center" Width="100" />
+                    <ComboBox ItemsSource="{Binding Spots}" SelectedItem="{Binding SelectedSpot}" MinWidth="180" HorizontalAlignment="Left"
+                              ToolTip="Landmarks from the KSP wiki, then flags, landed craft and KerbNet waypoints from your save. A landed craft or flag targeted in KSP is picked for you." />
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="Latitude, longitude" VerticalAlignment="Center" Width="100" TextWrapping="Wrap" />
+                    <TextBox Text="{Binding LatitudeText, UpdateSourceTrigger=PropertyChanged}" Width="80" ToolTip="Degrees, north +" />
+                    <TextBox Text="{Binding LongitudeText, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="6,0,0,0" HorizontalAlignment="Left" ToolTip="Degrees, east +" />
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="Lander TWR" VerticalAlignment="Center" Width="100" />
+                    <TextBox Text="{Binding TwrText, UpdateSourceTrigger=PropertyChanged}" Width="60" HorizontalAlignment="Left"
+                             ToolTip="Thrust-to-weight ratio at this body's surface; sets the braking burn's length and gravity loss" />
+                </DockPanel>
+            </StackPanel>
             <TextBlock Text="{Binding ActionHint}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,6,0,0" />
             <Button Content="Plan it" Command="{Binding PlanCommand}" HorizontalAlignment="Left" Padding="14,2" Margin="0,10,0,0"
                     ToolTip="Plan from the craft's orbit right now" />
@@ -31,7 +48,7 @@
 
             <!-- Ways of making the trip -->
             <StackPanel Margin="0,10,0,0" Visibility="{Binding HasTripOptions, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="Ways to go" Style="{StaticResource SectionHeader}" Margin="0,0,0,4" />
+                <TextBlock Text="{Binding OptionsTitle}" Style="{StaticResource SectionHeader}" Margin="0,0,0,4" />
                 <ListBox ItemsSource="{Binding TripOptions}" SelectedItem="{Binding SelectedTrip}" BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
@@ -60,6 +77,8 @@
                                         <Run Text="{Binding When, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding Countdown, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding BurnTime, Mode=OneWay}" />
                                     </TextBlock>
                                     <TextBlock Text="{Binding NodeText}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Note}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

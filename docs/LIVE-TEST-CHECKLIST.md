@@ -255,6 +255,32 @@ From a round orbit around Kerbin (80–100 km). See docs/MATH.md §3.7 and §3.8
 
 Notes:
 
+## 10d. Land at a spot (From here, and Fly this landing) ⚠ unverified frame
+
+From a round 30 km orbit around the Mun, inclined about 15°. See docs/MATH.md §2.9. The burns are timed with the Mun's
+rotation at UT 0 (θ₀): from the surface bake if there is one, else asked from the game. If the spot comes out on the other
+side of the Mun, or mirrored east/west, the longitude convention is wrong: note where you came down.
+
+- [ ] **Land at a spot** → the Spot list has the Mun's landmarks, then flags, landed craft and waypoints from the save. A flag
+      targeted in KSP is picked for you
+- [ ] Pick a landmark (or plant a flag first and target it) → **Plan it** → **Deorbit for …**, **Swing the track over …**
+      (a few m/s normal, sometimes none), **Brake to land at …** (~600 m/s for TWR 2). The deorbit is ~17 m/s
+- [ ] **Send to KSP** → the deorbit node's predicted path has its periapsis ~1 km above the spot's ground, a little short of it
+      (KSP's map view: the periapsis marker and the spot/flag line up along the track)
+- [ ] After the deorbit and the track burn, the predicted impact point (KSP shows it on the map, or use a mod like Trajectories)
+      lies on the spot's line, a few tens of km beyond it (the braking burn stops you before that)
+- [ ] Fly the braking burn from the periapsis, holding surface retrograde and level → note how far from the spot you stop
+- [ ] From an equatorial orbit, a spot at 40° N → the first burn is **Tilt the orbit to 41°** at the equator; **Ways to land**
+      lists *Least Δv* (may wait many hours) and *Sooner* (a bigger track burn), when the two differ by more than a few m/s
+- [ ] Not connected and no bake for the body → a note says the body's rotation is needed (Kerbin uses the stock 90°)
+- [ ] **Keep as a flight** → opens in the Flight pane as "Land at …"; **Re-plan from here** plans it again from the real orbit
+- [ ] Plan mode: a mission with a Mun landing spot → **Fly this landing** on the spot's card → Fly mode opens the Flight pane
+      with "Land at …". In Mun orbit with that craft: the burns are planned straight away. Otherwise a note says to click
+      "Use the craft I'm flying" once in orbit there, and doing that plans them
+- [ ] Duna (air) → no braking burn, and the note says the spot is a rough estimate
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date

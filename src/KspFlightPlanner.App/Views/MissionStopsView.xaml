@@ -204,6 +204,9 @@
                                                 </StackPanel>
                                             </Grid>
                                             <TextBlock Text="{Binding LandingText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                            <Button Content="Fly this landing" HorizontalAlignment="Left" Padding="10,1" Margin="0,6,0,0" FontSize="12"
+                                                    Command="{Binding DataContext.FlyLandingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    ToolTip="Make it a flight in Fly mode: the deorbit, track and braking burns are planned from your lander's real orbit, timed to the body's rotation" />
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>

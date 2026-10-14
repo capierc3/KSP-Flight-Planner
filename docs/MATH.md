@@ -9,7 +9,7 @@ Each section has the formulas, a worked example, the code that implements them a
 ## Contents
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are
 - **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
@@ -26,7 +26,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A trip to another planet, and its launch window: §3.2, §3.4
 - Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
 - Burns from where you are to anywhere else (Duna, Mun → Minmus, Mun → Duna), with a choice of windows: §3.8
-- Landing at a crater, flag or waypoint: §2.6, §1.9
+- Landing at a crater, flag or waypoint: §2.6, §1.9; flying it from your real orbit: §2.9
 - A rendezvous or docking: §4.1
 - A relay network / constellation: §5.1, §5.2
 - Why a mission's legs show a given Δv: §6.1, §6.2
@@ -423,7 +423,7 @@ Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to t
 - Step 5: v_p = 583.86 m/s, v_s = 8.96 m/s, cos H = cos 15° / cos 12.4508° = 0.9892, so v_rel = **574.99 m/s**. g = 1.581 m/s², a_h = √(5² − 1.581²) = 4.744 m/s². Braking takes t_b = **121.2 s** over d = **34.8 km**, costing Δv₂ = **606.1 m/s**. That is 31.1 m/s (5.4%) more than v_rel, because of the gravity loss.
 - Total from orbit: 16.9 + 606.1 = **623 m/s**. Compare the Δv map's 580 m/s from its 10 km low orbit, which assumes no particular spot.
 
-Still to come: timing the deorbit burn from the craft's orbit (step 3; the bake now stores θ₀), and a drag model for bodies with air.
+Fly mode times the deorbit burn from the craft's real orbit (step 3): see §2.9. Still to come: a drag model for bodies with air.
 
 - Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
 - Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
@@ -525,6 +525,60 @@ Worked example — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km), from an 80 
 
 - Code: `QuickBurns.Circularize`, `QuickBurns.SetApsis`, `QuickBurns.ApsisUt`, `QuickBurns.ClearOfAtmosphere`; the pane is `FromHereViewModel`; tested in `QuickBurnsTests` (step 1 is `Raising_the_apoapsis_from_low_orbit_is_the_first_hohmann_burn`) and, for capture, `HopsTests.Inside_the_moons_sphere_circularize_at_periapsis_captures`
 - Source: vis-viva (§1.3); Curtis 6.2–6.3 (coplanar maneuvers at an apsis)
+
+### 2.9 Landing at a spot from where you are
+
+§2.6 prices a landing from an idealised circular orbit. Fly mode flies it from the craft's **real** orbit at a real time: **Land at a spot** in the From here pane, a kept "Land at …" flight in the Flight pane, or **Fly this landing** on a mission's landing spot. It is §2.6 with step 3 (timing) done, plus a small burn on the way down to put the track exactly over the spot.
+
+Inputs: the craft's orbit (any closed orbit clear of the ground and air), the spot and lander as in §2.6, and the body's rotation angle at UT 0, θ₀. θ₀ comes from the surface bake when the body has one (§1.9), else from the live game (kRPC `CelestialBody.InitialRotation`), else, for Kerbin only, the stock 90°. Without any of these the landing can't be timed.
+
+**Where the spot is, in the frame orbits are measured in.** The body turns at ω = 2π / T_rot, so at time t the spot's direction is
+
+```
+λ_I(t) = λ + θ₀ + ω·t                      (the same convention as the launch site in §4.5)
+Ŝ(t)   = (cos φ · cos λ_I, cos φ · sin λ_I, sin φ)
+```
+
+**Step 1 — Reach the latitude.** The track reaches latitude i (or 180° − i for a retrograde orbit). If that's less than |φ| + 0.5°, the first burn turns the orbit to i' = |φ| + 1° (§2.6's margin) at the next equator crossing, where turning the velocity about the radius changes the inclination and nothing else: Δv = 2·v·sin(|i' − i| / 2) (§2.3).
+
+**Step 2 — One landing per pass.** For each orbit k over one turn of the body (so the spot passes under both sides of the orbit), the landing time T is found by repeating, until it moves less than half a second:
+
+```
+u_S    = angle of Ŝ(T) in the orbit's plane, from the ascending node
+u_low  = u_S − d / (R + h_s)              the low point, a braking distance d short of the spot
+burn at the craft's next pass of u_low − 180°, at radius r_b:
+  v_new = √(μ · (2/r_b − 1/a)) horizontal,  a = (r_b + r_p) / 2      (§2.6 step 4, for any orbit)
+t_low  = t_burn + π · √(a³ / μ)
+v_rel  = |v_low − ω ẑ × r_low|            speed over the ground at the low point
+t_b, d, Δv₂ from v_rel as in §2.6 step 5
+T      = t_low + t_b
+```
+
+Passes whose deorbit burn would come before the lead time are dropped.
+
+**Step 3 — How far to the side.** The spot is off the orbit's plane (normal n̂) by the angle χ = asin(n̂ · Ŝ(T)), a sideways miss of |χ|·(R + h_s). Successive passes move it by the track shift of §2.6 step 3, so somewhere in a turn of the body there is a pass with almost none.
+
+**Step 4 — Swing the track over the spot.** A plane change moves the points 90° away from it the most and the point 180° away not at all, so the fix is a quarter orbit before the spot, at u_S − 90° on the descent orbit. There the new plane must hold both the craft and the spot: n̂' = (r_c × Ŝ(T)) / |r_c × Ŝ(T)|, on the same side as n̂. The craft keeps its radial speed v_r and its horizontal speed v_h, turned into the new plane:
+
+```
+v' = v_r · r̂_c + v_h · (n̂' × r̂_c)          Δv₃ = |v' − v_c|  (normal, ≈ v_h · |χ|)
+```
+
+It's left out when the miss is under 200 m.
+
+**Step 5 — Brake.** As §2.6 step 5, from the low point. The node is placed half the burn time after the low point, so a pilot starting half the burn early (KSP's usual habit) starts at the low point. Its Δv is Δv₂, gravity loss included. Hold surface retrograde and keep the vertical speed near zero. On a body with air there's no braking burn (§2.6: the air and parachutes do it, and the spot is a rough estimate).
+
+**Choosing a pass.** *Least Δv* is the pass with the smallest Δv₁ + Δv₃ + Δv₂. *Sooner* is the earliest pass costing no more than max(50 m/s, 10%) on top of it. When that costs under 5 m/s more, it's simply the one offered.
+
+Worked example — the Mun from a 30 km circular orbit inclined 15° (Ω = 20°), to the Kerbol arch (12.4508° N, 39.1959° E, ground 2,000 m), lander a_T = 5 m/s², θ₀ = 37°, planned at UT 5,000,000 s with a 120 s lead (`LandingFlightsTests`):
+- No tilt: 15° reaches 12.45° + 0.5°.
+- The first pass comes in northbound and lands 2,628 s after planning. Deorbit at +1,266 s: **16.86 m/s** retrograde, as §2.6's step 4 (the same orbit and periapsis).
+- The track passes **714 m** to the side, so at +2,003 s a **1.96 m/s** normal burn swings it over (≈ v_h·|χ|).
+- Brake node at +2,567 s: **606.08 m/s**, as §2.6's step 5. In all **624.9 m/s**. A later pass with a 661 m miss costs 0.1 m/s less but lands 8 hours later, so only this one is offered.
+- From an *equatorial* 30 km orbit instead: **Tilt the orbit to 13.5°** first (2 × 532.18 × sin 6.73° = **124.65 m/s**). *Least Δv* (748.1 m/s) then waits for a pass 228 m off (a 0.63 m/s fix) and lands about 19 hours later; *Sooner* lands 3.8 hours earlier with an 18.9 km miss and a **51.89 m/s** fix (799.4 m/s).
+
+- Code: `LandingFlights.Options` (steps 1–5), `LandingFlights.Plan` (a Landing flight), `LandingFlights.SiteDirection`; the panes are `FromHereViewModel` (Land at a spot), `FlightViewModel` (re-plan) and `MissionBuilderViewModel.FlyLanding`; θ₀ from `BodyRotation`. Tested in `LandingFlightsTests` (`Mun_landing_comes_down_on_the_spot` checks that the descent's plane holds the spot and its low point is a braking distance short of it)
+- Source: §2.6 and its sources; plane change at a point 90° away: Curtis 6.10 (plane change maneuvers)
 
 ## 3. Going to another planet
 
