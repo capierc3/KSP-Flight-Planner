@@ -9,14 +9,16 @@
         </CollectionViewSource>
     </UserControl.Resources>
 
-    <!-- Every part of the install; locked ones (greyed) only with "Show all parts". -->
+    <!-- Every part of the install; locked ones (greyed) only with "Include locked parts". -->
     <DockPanel Margin="12,10">
+        <TextBlock DockPanel.Dock="Top" Text="Category" Style="{StaticResource Label}" />
         <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}" Margin="0,0,0,6"
                   HorizontalAlignment="Stretch" AutomationProperties.Name="Part category" />
+        <TextBlock DockPanel.Dock="Top" Text="Search" Style="{StaticResource Label}" />
         <TextBox DockPanel.Dock="Top" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"
                  AutomationProperties.Name="Search parts" ToolTip="Search by name or maker" />
-        <CheckBox DockPanel.Dock="Top" Content="Show all parts" IsChecked="{Binding ShowAll}" Margin="0,0,0,6"
-                  ToolTip="Also list the parts this save can't build yet, greyed out" />
+        <CheckBox DockPanel.Dock="Top" Content="Include locked parts" IsChecked="{Binding ShowAll}" Margin="0,0,0,6"
+                  ToolTip="Also list the parts this save hasn't unlocked yet, greyed out" />
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Summary}" Style="{StaticResource Note}" Margin="0,8,0,0" />
         <ListBox ItemsSource="{Binding Source={StaticResource ByCategory}}" Background="Transparent" BorderThickness="0"
                  SelectedItem="{Binding Selected}" SelectionChanged="List_SelectionChanged" IsSynchronizedWithCurrentItem="False"

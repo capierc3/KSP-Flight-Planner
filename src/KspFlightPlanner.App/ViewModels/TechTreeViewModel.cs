@@ -141,8 +141,10 @@ public sealed class TechTreeViewModel : ObservableObject
         get => _selected;
         set
         {
+            // Picking the node that's already selected (another part from the same node) leaves it highlighted.
+            if (ReferenceEquals(_selected, value)) return;
             if (_selected is not null) _selected.IsSelected = false;
-            if (!SetProperty(ref _selected, value)) return;
+            SetProperty(ref _selected, value);
             if (value is not null) value.IsSelected = true;
             OnPropertyChanged(nameof(SelectedParts));
             OnPropertyChanged(nameof(SelectedNeeds));
@@ -251,7 +253,7 @@ public sealed class TechTreeViewModel : ObservableObject
 
 /// <summary>
 /// The Parts pane: every part of the install by category, with what the chosen save can build. By default it lists the
-/// unlocked and planned parts; "Show all parts" adds the rest, greyed out. The picked part shows in the Part pane.
+/// unlocked and planned parts; "Include locked parts" adds the rest, greyed out. The picked part shows in the Part pane.
 /// </summary>
 public sealed class PartsViewModel : ObservableObject
 {
