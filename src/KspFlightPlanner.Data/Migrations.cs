@@ -197,7 +197,11 @@ internal static class Migrations
             cost           REAL NOT NULL DEFAULT 0,
             crew_capacity  INTEGER NOT NULL DEFAULT 0,
             fuel_crossfeed INTEGER NOT NULL DEFAULT 1,   -- 0: fuel can't pass through (decouplers)
-            tech_required  TEXT                          -- the tech node that unlocks it (ksp_tech_nodes.id)
+            tech_required  TEXT,                         -- the tech node that unlocks it (ksp_tech_nodes.id)
+            description    TEXT,
+            bulkhead_profiles TEXT,                      -- sizes it attaches at, comma-separated (size1,srf)
+            crash_tolerance REAL NOT NULL DEFAULT 0,     -- m/s
+            max_temp       REAL NOT NULL DEFAULT 0       -- K
         );
 
         CREATE TABLE ksp_part_resources (      -- what a new part holds (full tanks)

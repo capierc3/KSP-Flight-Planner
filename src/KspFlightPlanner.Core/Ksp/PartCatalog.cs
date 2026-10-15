@@ -46,6 +46,9 @@ public sealed record PartAntenna(string Type, double Power, bool Combinable, dou
 /// <param name="Name">KSP's internal name with '_' written as '.', as saves and craft files write it (microEngine.v2).</param>
 /// <param name="FuelCrossfeed">Whether fuel passes through the part (false for decouplers unless crossfeed is switched on).</param>
 /// <param name="TechRequired">The tech node that unlocks it (<see cref="TechNode.Id"/>).</param>
+/// <param name="BulkheadProfiles">The sizes it attaches at, as KSP lists them: size0 … size4, srf (radial), mk2, mk3.</param>
+/// <param name="CrashToleranceMs">Impact speed it survives (m/s).</param>
+/// <param name="MaxTempK">Temperature it can take before it burns up (K).</param>
 public sealed record KspPart(
     string Name,
     string Title,
@@ -58,7 +61,11 @@ public sealed record KspPart(
     IReadOnlyList<PartEngine> Engines,
     IReadOnlyList<PartAntenna> Antennas,
     bool FuelCrossfeed = true,
-    string? TechRequired = null);
+    string? TechRequired = null,
+    string? Description = null,
+    IReadOnlyList<string>? BulkheadProfiles = null,
+    double CrashToleranceMs = 0,
+    double MaxTempK = 0);
 
 /// <summary>Every part, resource and tech node of a KSP install. Built by <see cref="PartCatalogReader"/>, stored in the planner database.</summary>
 public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResource> resources, IEnumerable<TechNode>? techTree = null)
@@ -112,7 +119,7 @@ public static class PartCatalogReader
     public const string ModuleManagerCache = "ModuleManager.ConfigCache";
 
     /// <summary>Bumped when the reader starts collecting new fields, so stored catalogs are read again.</summary>
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
 
     /// <summary>The tech tree as ModuleManager writes it after patches (what the game loads unless a save points elsewhere).</summary>
     public const string ModuleManagerTechTree = "ModuleManager.TechTree";
@@ -209,7 +216,11 @@ public static class PartCatalogReader
             StripLocalization(p.GetValue("manufacturer")), Number(p.GetValue("mass")), Number(p.GetValue("cost")),
             (int)Number(p.GetValue("CrewCapacity")), resources, engines, antennas,
             FuelCrossfeed: !bool.TryParse(p.GetValue("fuelCrossFeed"), out var crossfeed) || crossfeed,
-            TechRequired: p.GetValue("TechRequired") is { Length: > 0 } tech ? tech.Trim() : null);
+            TechRequired: p.GetValue("TechRequired") is { Length: > 0 } tech ? tech.Trim() : null,
+            Description: StripLocalization(p.GetValue("description")),
+            BulkheadProfiles: (p.GetValue("bulkheadProfiles") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            CrashToleranceMs: Number(p.GetValue("crashTolerance")),
+            MaxTempK: Number(p.GetValue("maxTemp")));
     }
 
     private static KspResource? ReadResource(ConfigNode r) => r.GetValue("name") is { Length: > 0 } name

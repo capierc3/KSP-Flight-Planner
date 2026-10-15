@@ -15,6 +15,9 @@ public sealed record PaneInfo(string Id, string Title, bool IsDocument, WorkMode
 {
     /// <summary>Tool panes open on this side when they aren't in the layout yet.</summary>
     public bool OpensOnRight { get; init; }
+
+    /// <summary>A pane to open as a tab next to, when it's in the layout (otherwise <see cref="OpensOnRight"/> decides).</summary>
+    public string? OpensBeside { get; init; }
 }
 
 /// <summary>Every pane the window can show. The ids are stored in the saved window layouts, so don't rename them.</summary>
@@ -31,6 +34,7 @@ public static class Panes
     public const string Flights = "flights";
     public const string FromHere = "fromhere";
     public const string Parts = "parts";
+    public const string Part = "part";
 
     // Documents
     public const string Legs = "legs";
@@ -57,7 +61,8 @@ public static class Panes
         new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
         new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },
-        new(Parts, "Parts", false, Plan, vm => new PartListView { DataContext = vm.Parts }) { OpensOnRight = true },
+        new(Parts, "Parts", false, Plan, vm => new PartListView { DataContext = vm.Parts }) { OpensOnRight = true, OpensBeside = Rocket },
+        new(Part, "Part", false, Plan, vm => new PartDetailView { DataContext = vm.Parts.Detail }) { OpensOnRight = true, OpensBeside = Notes },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
         new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
 

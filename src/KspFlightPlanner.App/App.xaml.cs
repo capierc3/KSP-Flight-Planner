@@ -52,6 +52,11 @@ public partial class App : Application
                 Parts = new PartsViewModel(availability),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
+            viewModel.Parts.Detail.OpenNodeRequested += id =>
+            {
+                viewModel.TechTree.SelectNode(id);
+                viewModel.RequestPane(Panes.TechTree);
+            };
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }

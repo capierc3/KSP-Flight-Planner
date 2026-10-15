@@ -302,7 +302,7 @@ public partial class MainWindow : Window
     private void ShowPane_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         if (e.Parameter is string id)
-            ShowPane(id, activate: e.OriginalSource is not (Views.LocationListView or Views.VesselListView or Views.FlightListView));
+            ShowPane(id, activate: e.OriginalSource is not (Views.LocationListView or Views.VesselListView or Views.FlightListView or Views.PartListView));
     }
 
     private void SetMode_Executed(object sender, ExecutedRoutedEventArgs e)

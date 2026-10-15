@@ -11,12 +11,15 @@
 
     <!-- Every part of the install; locked ones (greyed) only with "Show all parts". -->
     <DockPanel Margin="12,10">
+        <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}" Margin="0,0,0,6"
+                  HorizontalAlignment="Stretch" AutomationProperties.Name="Part category" />
         <TextBox DockPanel.Dock="Top" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"
                  AutomationProperties.Name="Search parts" ToolTip="Search by name or maker" />
         <CheckBox DockPanel.Dock="Top" Content="Show all parts" IsChecked="{Binding ShowAll}" Margin="0,0,0,6"
                   ToolTip="Also list the parts this save can't build yet, greyed out" />
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Summary}" Style="{StaticResource Note}" Margin="0,8,0,0" />
         <ListBox ItemsSource="{Binding Source={StaticResource ByCategory}}" Background="Transparent" BorderThickness="0"
+                 SelectedItem="{Binding Selected}" SelectionChanged="List_SelectionChanged"
                  VirtualizingPanel.IsVirtualizingWhenGrouping="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.GroupStyle>
                 <GroupStyle>

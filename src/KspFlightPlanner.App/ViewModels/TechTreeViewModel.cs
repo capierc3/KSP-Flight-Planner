@@ -152,6 +152,9 @@ public sealed class TechTreeViewModel : ObservableObject
 
     public bool HasSelection => Selected is not null;
 
+    /// <summary>Selects a node (e.g. the one a part comes from) without changing the plan.</summary>
+    public void SelectNode(string id) => Selected = Nodes.FirstOrDefault(n => n.Id == id) ?? Selected;
+
     /// <summary>The selected node's parts, unlocked ones first.</summary>
     public IReadOnlyList<PartItem> SelectedParts => Selected is null ? [] :
         _parts.Catalog.Parts.Values.Where(p => p.TechRequired == Selected.Id && PartCategories.IsShown(p))
@@ -248,26 +251,50 @@ public sealed class TechTreeViewModel : ObservableObject
 
 /// <summary>
 /// The Parts pane: every part of the install by category, with what the chosen save can build. By default it lists the
-/// unlocked and planned parts; "Show all parts" adds the rest, greyed out.
+/// unlocked and planned parts; "Show all parts" adds the rest, greyed out. The picked part shows in the Part pane.
 /// </summary>
 public sealed class PartsViewModel : ObservableObject
 {
+    public const string AllCategories = "All categories";
+
     private readonly PartAvailability _parts;
     private bool _showAll;
     private string _search = "";
+    private string _category = AllCategories;
     private IReadOnlyList<PartItem> _items = [];
+    private IReadOnlyList<string> _categories = [AllCategories];
+    private PartItem? _selected;
 
     public PartsViewModel(PartAvailability parts)
     {
         _parts = parts;
+        Detail = new PartDetailViewModel(parts);
         parts.Changed += Rebuild;
         Rebuild();
     }
 
+    /// <summary>The Part pane's contents.</summary>
+    public PartDetailViewModel Detail { get; }
+
     public bool ShowAll { get => _showAll; set { if (SetProperty(ref _showAll, value)) Rebuild(); } }
     public string Search { get => _search; set { if (SetProperty(ref _search, value ?? "")) Rebuild(); } }
 
+    /// <summary>"All categories", or one category heading (Engines, Fuel tanks…).</summary>
+    public string Category { get => _category; set { if (SetProperty(ref _category, value ?? AllCategories)) Rebuild(); } }
+
+    public IReadOnlyList<string> Categories { get => _categories; private set => SetProperty(ref _categories, value); }
+
     public IReadOnlyList<PartItem> Items { get => _items; private set => SetProperty(ref _items, value); }
+
+    public PartItem? Selected
+    {
+        get => _selected;
+        set
+        {
+            if (!SetProperty(ref _selected, value)) return;
+            if (value is not null) Detail.Item = value;
+        }
+    }
 
     public string Summary
     {
@@ -275,25 +302,37 @@ public sealed class PartsViewModel : ObservableObject
         {
             var shown = _parts.Catalog.Parts.Values.Where(PartCategories.IsShown).ToList();
             if (shown.Count == 0) return "No part data yet: set the KSP install in Settings.";
-            if (_parts.Research is null) return $"{shown.Count:N0} parts, all unlocked (sandbox or no save chosen).";
+            var listed = Items.Count == shown.Count ? "" : $"Showing {Items.Count:N0} · ";
+            if (_parts.Research is null) return listed + $"{shown.Count:N0} parts, all unlocked (sandbox or no save chosen).";
             var unlocked = shown.Count(p => _parts.StatusOf(p) == PartStatus.Unlocked);
             var planned = shown.Count(p => _parts.StatusOf(p) == PartStatus.Planned);
-            return $"{unlocked:N0} of {shown.Count:N0} parts unlocked" + (planned > 0 ? $", {planned:N0} more planned" : "") + ".";
+            return listed + $"{unlocked:N0} of {shown.Count:N0} parts unlocked" + (planned > 0 ? $", {planned:N0} more planned" : "") + ".";
         }
     }
 
     private void Rebuild()
     {
         var nodes = _parts.Catalog.TechTree.ToDictionary(n => n.Id, n => n.Title);
+        PartItem Item(KspPart p) => new(p, _parts.StatusOf(p), p.TechRequired is { } t ? nodes.GetValueOrDefault(t, t) : null);
+
+        var all = _parts.Catalog.Parts.Values.Where(PartCategories.IsShown).Select(Item).ToList();
+        Categories = [AllCategories, .. all.Select(p => p.Category).Distinct().Order()];
+        if (!Categories.Contains(_category)) Category = AllCategories;
+
         var words = _search.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        Items = _parts.Catalog.Parts.Values
-            .Where(PartCategories.IsShown)
+        Items = all
+            .Where(p => _category == AllCategories || p.Category == _category)
             .Where(p => words.All(w => p.Title.Contains(w, StringComparison.CurrentCultureIgnoreCase) ||
-                                       (p.Manufacturer?.Contains(w, StringComparison.CurrentCultureIgnoreCase) ?? false)))
-            .Select(p => new PartItem(p, _parts.StatusOf(p), p.TechRequired is { } t ? nodes.GetValueOrDefault(t, t) : null))
+                                       (p.Part.Manufacturer?.Contains(w, StringComparison.CurrentCultureIgnoreCase) ?? false)))
             .Where(p => ShowAll || p.Status is PartStatus.Unlocked or PartStatus.Planned)
             .OrderBy(p => p.Category).ThenBy(p => p.Status == PartStatus.Unlocked ? 0 : 1).ThenBy(p => p.Title)
             .ToList();
+
+        // Keep the picked part (with its new status) even when the filter now hides it.
+        var picked = _selected?.Part.Name ?? Detail.Item?.Part.Name;
+        _selected = Items.FirstOrDefault(p => p.Part.Name == picked);
+        OnPropertyChanged(nameof(Selected));
+        if (picked is not null) Detail.Item = all.FirstOrDefault(p => p.Part.Name == picked);
         OnPropertyChanged(nameof(Summary));
     }
 }

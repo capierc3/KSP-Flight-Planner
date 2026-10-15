@@ -16,6 +16,10 @@ public sealed class TechTreeTests : IDisposable
                 title = LV-T45 "Swivel" Liquid Fuel Engine
                 category = Engine
                 TechRequired = basicRocketry
+                description = Gimballed and reliable.
+                bulkheadProfiles = size1, srf
+                crashTolerance = 7
+                maxTemp = 2000
                 mass = 1.5
             }
         }
@@ -107,7 +111,10 @@ public sealed class TechTreeTests : IDisposable
         var loaded = repo.Load();
         Assert.Equal(catalog.TechTree.Select(n => (n.Id, n.Title, n.Cost, n.X, n.Y, string.Join(",", n.Parents))),
             loaded.TechTree.Select(n => (n.Id, n.Title, n.Cost, n.X, n.Y, string.Join(",", n.Parents))));
-        Assert.Equal("basicRocketry", loaded.Part("liquidEngine2.v2")!.TechRequired);
+        var swivel = loaded.Part("liquidEngine2.v2")!;
+        Assert.Equal("basicRocketry", swivel.TechRequired);
+        Assert.Equal(("Gimballed and reliable.", 7.0, 2000.0), (swivel.Description, swivel.CrashToleranceMs, swivel.MaxTempK));
+        Assert.Equal(["size1", "srf"], swivel.BulkheadProfiles);
     }
 
     [Fact]

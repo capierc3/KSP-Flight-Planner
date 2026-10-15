@@ -82,6 +82,7 @@
                     <MenuItem Header="Not_es" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Notes}" />
                     <MenuItem Header="_Rocket" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rocket}" />
                     <MenuItem Header="P_arts" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Parts}" />
+                    <MenuItem Header="Part _details" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Part}" />
                     <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
                     <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />
                     <MenuItem Header="F_lights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
