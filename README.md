@@ -66,13 +66,13 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   wiggle room: a design that flies the route but not every margin is "enough, inside the margin" (amber), not "not enough".
   It also checks the TWR at every landing and lift-off (Kerbin launch, Mun landing and ascent, …) with the stage
   firing then, the mass left at that point, the body's surface gravity and, for atmospheres, the thrust lost to pressure.
-- **KSP save link** — set your KSP folder and save in *Tools › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
+- **KSP save link** — set your KSP folder and save in *File › Settings*, then *File › Import Vessels from Save* (Ctrl+I) turns vessels in orbit
   into placed custom locations linked to the save. While linked, their orbits follow the game: the save file is
   watched and re-read whenever KSP writes it (scene changes, launches, autosave). The planner only reads KSP's files.
-- **Live connection (kRPC)** — *Tools › Connect to KSP* talks to the running game through the
+- **Live connection (kRPC)** — *KSP › Connect to KSP* talks to the running game through the
   [kRPC](https://krpc.github.io/krpc/) mod (install it with CKAN and click *Start server* in its in-game window). The
   status bar shows the link, the game scene and the game date. Address and ports default to kRPC's stock server and can
-  be changed in *Tools › Settings › Live connection*. While connected:
+  be changed in *File › Settings › Live connection*. While connected:
   - the game's live time and (in flight) every vessel's live orbit are laid over the save, so the Rendezvous pane, Vessels
     tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
   - the Rendezvous pane can start from **the craft you're flying** and add **the craft you've targeted**

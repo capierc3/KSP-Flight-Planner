@@ -59,7 +59,7 @@ public sealed class VesselsViewModel : ObservableObject
     public bool ShowAll { get => _showAll; set { if (SetProperty(ref _showAll, value)) Rebuild(); } }
 
     public string Empty => _sync.Save is null
-        ? "No KSP save is linked. Choose your KSP folder and save in Tools › Settings."
+        ? "No KSP save is linked. Choose your KSP folder and save in File › Settings."
         : "No vessels here yet." + (ShowAll ? "" : " Tick \"Show debris, asteroids & flags\" to see everything in the save.");
 
     public bool IsEmpty => Tree.Count == 0;

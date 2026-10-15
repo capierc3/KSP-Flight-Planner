@@ -58,7 +58,7 @@ Worked example — Kerbin: g = 1.00034160493135 × 9.80665 = 9.81 m/s², so μ =
 - Code: `BodySeeder` (μ from the wiki data), `CelestialBody.SurfaceGravity` (g = μ/R²)
 - Source: KSP wiki `<Body>/Param` pages; Eric Meyer's Resonant Orbit Calculator data (`systems.js`)
 
-**Your game's values over the wiki's.** The values above ship with the app (the wiki is the baseline). Once a body has been through Tools › Bake Surface Data, the stock body's values are compared with what your game reported, using the relative difference
+**Your game's values over the wiki's.** The values above ship with the app (the wiki is the baseline). Once a body has been through KSP › Bake Surface Data, the stock body's values are compared with what your game reported, using the relative difference
 
 ```
 difference = |game − wiki| / |wiki|
@@ -228,7 +228,7 @@ Worked example — on the Mun (R = 200,000 m), from the Armstrong memorial (0.70
 - Code: `Landing.SurfaceDistance`; tested in `LandingTests`
 - Source: [Haversine formula (Wikipedia)](https://en.wikipedia.org/wiki/Haversine_formula)
 
-**Heights from the surface bake.** Tools › Bake Surface Data asks the running game (kRPC `SurfaceHeight`, `BiomeAt`) for the terrain height and biome at every grid point: one row per step from 90° S to 90° N, columns from 180° W eastward, wrapping round at 180°. A spot between grid points takes its height from the four around it (bilinear interpolation). With the spot a fraction f_lon of the way east and f_lat of the way north inside its grid cell:
+**Heights from the surface bake.** KSP › Bake Surface Data asks the running game (kRPC `SurfaceHeight`, `BiomeAt`) for the terrain height and biome at every grid point: one row per step from 90° S to 90° N, columns from 180° W eastward, wrapping round at 180°. A spot between grid points takes its height from the four around it (bilinear interpolation). With the spot a fraction f_lon of the way east and f_lat of the way north inside its grid cell:
 
 ```
 south = h_SW + f_lon · (h_SE − h_SW)
@@ -888,7 +888,7 @@ The cheapest cell is refined by zooming in, and drawn as a small porkchop plot y
 
 ### 4.5 When and where to launch
 
-Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. That's the value the app assumes; once Kerbin has been through Tools › Bake Surface Data it uses the game's own (kRPC `CelestialBody.InitialRotation`). The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
+Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. That's the value the app assumes; once Kerbin has been through KSP › Bake Surface Data it uses the game's own (kRPC `CelestialBody.InitialRotation`). The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
 
 ```
 λ(t) = longitude + initial rotation + 360° · t / T_sidereal        KSC: longitude −74.5575°, latitude −0.0972°
@@ -1447,7 +1447,7 @@ Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
 
 ### 8.2 Following the live game (kRPC)
 
-While connected to the game (*Tools › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
+While connected to the game (*KSP › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
 
 **Which save vessel is it?** kRPC has no vessel ids, so live vessels are paired with save vessels by name. A different type adds 100 to the score. Among same-named vessels, the closest orbit wins:
 

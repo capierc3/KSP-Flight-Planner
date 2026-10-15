@@ -157,7 +157,7 @@ public sealed class EngineeringViewModel : ObservableObject
 
     /// <summary>Why nothing is shown: no save, no designs, or the file couldn't be read.</summary>
     public string Empty => _problem
-        ?? (_sync.Save is null && Designs.Count == 0 ? "No KSP save is linked. Choose your KSP folder and save in Tools › Settings."
+        ?? (_sync.Save is null && Designs.Count == 0 ? "No KSP save is linked. Choose your KSP folder and save in File › Settings."
             : Designs.Count == 0 ? "No saved designs yet. Save a ship in the VAB or SPH and it shows up here."
             : "");
 

@@ -153,7 +153,7 @@ public sealed class FlightViewModel : ObservableObject
         get
         {
             var link = _sync.Link;
-            if (!link.IsConnected) return "Not connected to KSP. Use Tools › Connect to KSP to follow the game and send burns.";
+            if (!link.IsConnected) return "Not connected to KSP. Use KSP › Connect to KSP to follow the game and send burns.";
             if (!link.InFlight) return "In KSP, but not flying a craft. Switch to one (or launch) to send burns.";
             var game = link.Game;
             var active = game?.Active;

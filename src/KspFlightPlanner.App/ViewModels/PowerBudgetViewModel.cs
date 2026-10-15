@@ -219,7 +219,7 @@ public sealed class PowerBudgetViewModel : ObservableObject
         var home = system.FirstOrDefault(b => b.IsDefault);
         if (Body is not { } body || home is null || Rows is null)
         {
-            Clear("Link a KSP save in Tools › Settings so the planner knows the bodies.");
+            Clear("Link a KSP save in File › Settings so the planner knows the bodies.");
             return;
         }
         var altitude = (double.TryParse(AltitudeText, NumberStyles.Float, C, out var km) && km >= 0 ? km : 100) * 1000;

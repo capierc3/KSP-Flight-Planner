@@ -691,7 +691,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
     public string EmptyText => Targets.Count == 0
         ? Crafts.Count == 0
-            ? "Nothing in orbit to meet yet. Link your KSP save (Tools › Settings) or place a custom location in the Locations pane."
+            ? "Nothing in orbit to meet yet. Link your KSP save (File › Settings) or place a custom location in the Locations pane."
             : "Add a target (left) to plan meeting it."
         : "";
 
@@ -762,7 +762,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     public IReadOnlyList<Fact> CapacityLines { get; private set; } = [];
 
     public string CapacityHint => StartFromLaunch
-        ? _designs is null || DesignChoices.Count <= 1 ? "Link a KSP save (Tools › Settings) to check one of your saved designs." : "Vacuum Δv of each stage, poured into launch, then each leg."
+        ? _designs is null || DesignChoices.Count <= 1 ? "Link a KSP save (File › Settings) to check one of your saved designs." : "Vacuum Δv of each stage, poured into launch, then each leg."
         : SelectedChaser?.Vessel is null ? "Pick a vessel from your save to compare with what's left in its tanks." : "What's left in its tanks, as in the Vessels pane.";
 
     // Porkchop for one leg.

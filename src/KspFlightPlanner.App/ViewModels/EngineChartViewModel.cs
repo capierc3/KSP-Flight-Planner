@@ -199,7 +199,7 @@ public sealed class EngineChartViewModel : ObservableObject
         var tanks = shown.Where(p => p.Category is "FuelTank" or "Propulsion" && p.Engines.Count == 0).ToList();
         _chart = new EngineChart(engines, tanks, catalog);
         var kinds = _chart.Engines.Count;
-        Summary = catalog.IsEmpty ? "No part data yet: choose your KSP folder in Tools › Settings."
+        Summary = catalog.IsEmpty ? "No part data yet: choose your KSP folder in File › Settings."
             : $"{kinds} rocket engine{(kinds == 1 ? "" : "s")} " + PartsChoice.Value switch
             {
                 ChartParts.All => "(every part, locked or not).",

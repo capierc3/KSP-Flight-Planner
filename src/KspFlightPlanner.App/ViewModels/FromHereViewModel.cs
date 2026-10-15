@@ -252,7 +252,7 @@ public sealed class FromHereViewModel : ObservableObject
         get
         {
             var link = _sync.Link;
-            if (!link.IsConnected) return "Not connected to KSP. Use Tools › Connect to KSP, then fly a craft.";
+            if (!link.IsConnected) return "Not connected to KSP. Use KSP › Connect to KSP, then fly a craft.";
             if (!link.InFlight) return "In KSP, but not flying a craft. Switch to one to plan from where it is.";
             if (link.Game?.Active is not { } active) return "Waiting for the game…";
             if (Here() is not (var body, var orbit)) return $"{active.Name} isn't in a closed orbit, so there's nothing to plan from yet.";

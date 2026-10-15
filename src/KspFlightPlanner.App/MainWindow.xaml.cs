@@ -105,7 +105,7 @@ public sealed class MainViewModel : ObservableObject
 
     public PlannerEvents Events { get; }
 
-    /// <summary>Makes the view model for a Tools › Bake Surface Data window.</summary>
+    /// <summary>Makes the view model for a KSP › Bake Surface Data window.</summary>
     public Func<SurfaceBakeViewModel>? NewSurfaceBake { get; init; }
 
     /// <summary>Planning or flying; each has its own window layout.</summary>
@@ -299,7 +299,7 @@ public partial class MainWindow : Window
 
     private SurfaceBakeWindow? _bakeWindow;
 
-    /// <summary>Tools › Bake Surface Data: one window at a time, left open beside the planner.</summary>
+    /// <summary>KSP › Bake Surface Data: one window at a time, left open beside the planner.</summary>
     private void BakeSurface_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         if (_bakeWindow is { IsLoaded: true })

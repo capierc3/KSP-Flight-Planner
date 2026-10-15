@@ -1271,7 +1271,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     }
 
     public string DesignHint => _designs is null || DesignChoices.Count <= 1
-        ? "Link a KSP save (Tools › Settings) to check one of your saved designs."
+        ? "Link a KSP save (File › Settings) to check one of your saved designs."
         : "Stages fill the phases in order; vacuum Δv (the Δv map already counts atmospheric losses).";
 
     private void RefreshDesignChoices()
