@@ -281,6 +281,29 @@ side of the Mun, or mirrored east/west, the longitude convention is wrong: note 
 
 Notes:
 
+## 10e. Fly a whole mission ⚠ new
+
+A mission Kerbin surface → Minmus surface (with a landing spot) → Kerbin surface, saved. See docs/MATH.md §8.5.
+
+- [ ] Plan mode: **Fly this mission** on the Mission pane (or **Fly** in Saved missions) → Fly mode opens the Flight pane with
+      six steps: Launch to 80 km, Go to Minmus, Land at …, Launch to 10 km around Minmus, Go to Kerbin straight into the
+      atmosphere, Land on Kerbin
+- [ ] Fly mode: the Flights pane's mission picker + **Fly** does the same (missions saved since show when the list opens)
+- [ ] On the pad with the rocket → the craft is picked for you. Step 1 says "launch when you're ready"; step 2 already has a
+      transfer planned from a round 80 km orbit
+- [ ] Launch to a slightly different orbit (say 75 × 78 km) → once it's stable, step 1 turns Done **by itself** and step 2 is
+      planned again from the real orbit; the status says "Step 1 done" and the Δv (was …)
+- [ ] Step 2's burns: **Send all burns** → the transfer node in KSP reaches Minmus with the periapsis near 10 km
+- [ ] Fly the transfer a bit off → Re-plan lights up; **Re-plan from here** plans a course correction
+- [ ] Inside Minmus's sphere of influence → **Re-plan from here** gives the capture at periapsis. Once in orbit, step 2
+      turns Done and the landing (step 3) is planned from the real orbit
+- [ ] Land → step 3 turns Done when the craft is on the ground; step 4 says to launch when ready
+- [ ] Lift off from Minmus to orbit → step 5 (home) is planned from the real orbit, aiming at ~30 km over Kerbin with no capture
+- [ ] **Back a step** → that step stays the one flown, even though the craft has done it; **Next step** moves on
+- [ ] Close and reopen the app mid-mission → the flight comes back on the same step
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date

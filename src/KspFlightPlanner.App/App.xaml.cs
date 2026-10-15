@@ -34,14 +34,15 @@ public partial class App : Application
             var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
+            var missions = new MissionRepository(database);
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights),
+                new MissionBuilderViewModel(maps, locations, events, designs, bodies, missions, settings, sync, bakes, flights),
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync, flights),
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
-                new FlightViewModel(flights, sync, events, rotation),
+                new FlightViewModel(flights, sync, events, rotation, missions),
                 new FromHereViewModel(sync, flights, events, rotation),
                 sync,
                 link,

@@ -256,7 +256,7 @@ public static class LandingFlights
     }
 
     /// <summary>A burn at the next equator crossing that turns the orbit to <paramref name="inclinationDeg"/>, keeping its speed (§2.3).</summary>
-    private static FlightBurn Tilt(CelestialBody body, OrbitalElements orbit, double after, double inclinationDeg)
+    internal static FlightBurn Tilt(CelestialBody body, OrbitalElements orbit, double after, double inclinationDeg)
     {
         var mu = body.Mu;
         var ascending = TimeAtArgumentOfLatitude(orbit, mu, 0, after);

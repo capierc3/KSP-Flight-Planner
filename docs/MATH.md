@@ -15,7 +15,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off
-- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
+- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 Flying a whole mission
 
 **Where to look for…**
 
@@ -32,6 +32,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Why a mission's legs show a given Δv: §6.1, §6.2
 - Whether your rocket is good enough: §7.3, §7.4
 - A vessel imported from your save, or the live game: §8.1, §8.2
+- Flying a whole mission, each step from where the last one left you: §8.5
 
 ## 1. Foundations
 
@@ -1392,6 +1393,40 @@ Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (
 **When the leg hasn't started** (nothing flown yet, or the plane match still to come), Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). If a plane crossing falls inside the lead, the flight's note says so (§4.2). On the Rendezvous pane, a plan that starts from the game's time counts its "in …" times from the game's time, not from the start after the lead. It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made in the Rendezvous pane can change. That's intended: the old choice was for an orbit you're no longer on.
 
 - Code: `FlightViewModel.ReplanRendezvousAsync`
+
+### 8.5 Flying a whole mission
+
+**Fly this mission** (Mission pane), **Fly** (Saved missions) or **Fly** in Fly mode's Flights pane turns a mission's stops into steps, flown in order:
+
+| From → to | Steps |
+|---|---|
+| A surface → anywhere else | **Launch** to the body's low orbit (or the stop's, if that's where it goes), at the stop's launch inclination (§2.7). Flown by hand: no burns |
+| An orbit → an orbit around another body | **Go to** the body (§3.8), arriving at the stop's height; through the leg's chosen launch window (§6.3) if it still lies ahead, else the next good one |
+| → a placed craft | **Go to** its body's low orbit if needed, then **Meet** it (§4.1) |
+| → another orbit around the same body | **Change orbit** (below), when the height, shape or a custom orbit's tilt differs from what the craft is in |
+| → a surface | **Go to** the body's low orbit, then **Land** at the stop's spot (§2.9). With no spot on a body with air, the trip aims straight into the atmosphere (periapsis at 0.43 × its height, as aerobraking in §3.8) and the landing has no burns. With no spot and no air, it's landed by hand |
+| A constellation at a stop | **Release** the satellites (§5.2) after getting there |
+| Anything else (an intercept, an escape orbit) | Flown by hand |
+
+**The cascade.** The step being flown is planned from the craft's real orbit (live from the game, §8.2), no burn sooner than the lead time. Every step after it is planned from where the step before leaves the craft, no burn sooner than 300 s after that step ends (`Rendezvous.BurnGapS`). Each step ends in an orbit: after a trip, the orbit its capture burn leaves (or its path, with no capture); after a meeting, the target's orbit; after a launch still to fly, a round orbit at the launch height and inclination, reached 600 s after lift-off. So a launch that reaches 75 km instead of 80 changes the trip after it, and the trip's new arrival changes the landing after that. A step that can't be planned (a landing at a spot without the body's rotation, §2.9) says why, and the steps after it wait for it.
+
+**Moving on.** The step being flown moves on by itself while connected, then everything from there is planned again: a launch once the craft is in an orbit clear of the atmosphere; a trip once it's in orbit around the destination (or on the ground there, or on its way down when a landing comes next); a landing once it's on the ground there; an orbit change once the orbit is within 2 km of the one asked for at both apsides (and 0.1° of its inclination), or 90 s after its last burn; a meeting or a release 90 s after its last burn. **Next step** and **Back a step** do it by hand; after Back a step, the step stays put until you move on.
+
+**Change orbit.** Two apsis burns (§2.1, §2.8): from the periapsis, move the far side to the new apoapsis; then from there, move the near side to the new periapsis. Going lower all round, the periapsis comes down first. A tilt to a custom orbit's inclination is flown at the equator (§2.3), where the craft is slowest: after going up, before coming down.
+
+Worked example: from a round 80 km Kerbin orbit to a round 250 km one at 10° (μ = 3.5316×10¹² m³/s², R = 600 km):
+
+1. r₁ = 680,000 m, r₂ = 850,000 m, transfer a = 765,000 m
+2. Raise the apoapsis: √(μ/r₁) = 2,278.9 m/s; √(μ(2/r₁ − 1/a)) = 2,402.2 m/s → **123.3 m/s**
+3. Raise the periapsis: √(μ(2/r₂ − 1/a)) = 1,921.8 m/s; √(μ/r₂) = 2,038.4 m/s → **116.6 m/s**
+4. Tilt 10° at 250 km: 2 × 2,038.4 × sin 5° = **355.3 m/s** (at 80 km it would be 397.2 m/s)
+
+595 m/s in all, against 637 m/s tilting first.
+
+The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craft is in that orbit the launch is done, and the Minmus trip is planned from it: transfer 924.5 m/s, capture 159.7 m/s into 10 km. The landing at the spot is planned from that capture orbit: deorbit 5.6 m/s, track 2.2 m/s, braking 190.2 m/s.
+
+- Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
+- Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
 
 ## Sources
 

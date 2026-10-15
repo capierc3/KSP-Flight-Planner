@@ -11,6 +11,8 @@
             <Button Content="＋ New" Command="{Binding NewMissionCommand}" ToolTip="Start a new mission (Ctrl+N)" />
             <Button Content="Open" Command="{Binding OpenMissionCommand}" CommandParameter="{Binding SelectedSavedMission}" Margin="6,0,0,0" />
             <Button Content="Delete" Command="{Binding DeleteMissionCommand}" CommandParameter="{Binding SelectedSavedMission}" Margin="6,0,0,0" />
+            <Button Content="Fly" Command="{Binding FlySavedMissionCommand}" CommandParameter="{Binding SelectedSavedMission}" Margin="6,0,0,0"
+                    ToolTip="Open this mission and fly it in Fly mode, each step planned from your craft's real orbit" />
         </StackPanel>
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,6"
                    Visibility="{Binding HasNoSavedMissions, Converter={StaticResource BoolToVisibility}}"

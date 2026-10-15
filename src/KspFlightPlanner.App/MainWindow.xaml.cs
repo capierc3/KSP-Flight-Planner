@@ -197,6 +197,7 @@ public partial class MainWindow : Window
         };
         viewModel.Mission.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        viewModel.Mission.Alert = message => MessageBox.Show(this, message, "KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
         Closing += (_, e) =>
         {
             if (!viewModel.Mission.ConfirmDiscard())

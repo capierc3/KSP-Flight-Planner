@@ -8,9 +8,16 @@
     <!-- Flights handed over from planning; the selected one opens in the Flight document. -->
     <DockPanel Margin="12,10">
         <Button DockPanel.Dock="Bottom" Content="Delete flight" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+        <!-- Fly a saved mission: it becomes a flight, planned step by step from the craft -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Button DockPanel.Dock="Right" Content="Fly" Command="{Binding FlyMissionCommand}" Margin="6,0,0,0" Padding="12,2"
+                    ToolTip="Fly this saved mission: each step is planned from your craft's real orbit, the rest from where it leaves you" />
+            <ComboBox ItemsSource="{Binding SavedMissions}" SelectedItem="{Binding MissionToFly}" DropDownOpened="Missions_DropDownOpened"
+                      DisplayMemberPath="Name" ToolTip="A saved mission to fly" />
+        </DockPanel>
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
                    Visibility="{Binding HasNoFlights, Converter={StaticResource BoolToVisibility}}"
-                   Text="No flights yet. Plan in the Rendezvous, Resonant Orbits or Transfer Planner pane, then click Fly this plan (or window)." />
+                   Text="No flights yet. Fly a saved mission above, or plan in the Rendezvous, Resonant Orbits or Transfer Planner pane, then click Fly this plan (or window)." />
         <ListBox ItemsSource="{Binding Flights}" SelectedItem="{Binding SelectedFlight}" SelectionChanged="List_SelectionChanged" BorderThickness="0" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate>

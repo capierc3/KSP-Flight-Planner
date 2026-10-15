@@ -18,8 +18,12 @@ public sealed class PlannerEvents
     /// <summary>A planning pane handed a plan to the Flight pane; the argument is the new flight's id.</summary>
     public event Action<long>? OpenFlightRequested;
 
+    /// <summary>Fly mode asked to fly a saved mission; the argument is the mission's id. The Mission pane makes the flight.</summary>
+    public event Action<long>? FlyMissionRequested;
+
     public void RaiseLocationsChanged(object sender) => LocationsChanged?.Invoke(sender);
     public void RaiseSurfaceDataChanged(string bodyName) => SurfaceDataChanged?.Invoke(bodyName);
     public void RaiseSaveChanged() => SaveChanged?.Invoke();
     public void RequestOpenFlight(long flightId) => OpenFlightRequested?.Invoke(flightId);
+    public void RequestFlyMission(long missionId) => FlyMissionRequested?.Invoke(missionId);
 }
