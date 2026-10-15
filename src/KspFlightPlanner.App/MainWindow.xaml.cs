@@ -83,6 +83,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>How far a craft's antennas reach, and from where it can talk home.</summary>
     public required CommNetViewModel CommNet { get; init; }
 
+    /// <summary>Whether a craft's batteries last the night where it's going.</summary>
+    public required PowerBudgetViewModel PowerBudget { get; init; }
+
     /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
     public string? ActiveDocument
     {
@@ -144,6 +147,7 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsResonantInputs));
             OnPropertyChanged(nameof(ShowsEngineChartInputs));
             OnPropertyChanged(nameof(ShowsCommNetInputs));
+            OnPropertyChanged(nameof(ShowsPowerBudgetInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
@@ -153,6 +157,7 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
     public bool ShowsEngineChartInputs => ActiveCalculator == Panes.EngineChart;
     public bool ShowsCommNetInputs => ActiveCalculator == Panes.CommNet;
+    public bool ShowsPowerBudgetInputs => ActiveCalculator == Panes.PowerBudget;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
@@ -169,7 +174,7 @@ public sealed class MainViewModel : ObservableObject
         ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
         // The engineering tools are all inputs: bring them forward with the tool (without taking focus).
-        if (id is Panes.EngineChart or Panes.CommNet && ActiveCalculator != id)
+        if (id is Panes.EngineChart or Panes.CommNet or Panes.PowerBudget && ActiveCalculator != id)
         {
             ActiveCalculator = id;
             RequestPane(Panes.Calculators, activate: false);

@@ -49,6 +49,7 @@ public static class Panes
     public const string Engineering = "engineering";
     public const string EngineChart = "enginechart";
     public const string CommNet = "commnet";
+    public const string PowerBudget = "power";
     public const string Guide = "guide";
 
     private static readonly WorkMode[] Plan = [WorkMode.Plan];
@@ -80,6 +81,7 @@ public static class Panes
         new(Engineering, "Engineering", true, Plan, vm => new EngineeringView { DataContext = vm.Engineering }),
         new(EngineChart, "Engine chart", true, Plan, vm => new EngineChartView { DataContext = vm.EngineChart }),
         new(CommNet, "CommNet", true, Plan, vm => new CommNetView { DataContext = vm.CommNet }),
+        new(PowerBudget, "Power budget", true, Plan, vm => new PowerBudgetView { DataContext = vm.PowerBudget }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];

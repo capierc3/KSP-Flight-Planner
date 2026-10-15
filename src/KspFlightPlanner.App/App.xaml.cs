@@ -55,6 +55,7 @@ public partial class App : Application
                 Engineering = engineering,
                 EngineChart = new EngineChartViewModel(sync, availability),
                 CommNet = new CommNetViewModel(sync, availability, engineering),
+                PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

@@ -230,6 +230,16 @@ internal static class Migrations
             PRIMARY KEY (engine_id, resource_name)
         );
 
+        CREATE TABLE ksp_part_power (          -- electric charge a part makes or uses, one row per module
+            part_name     TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
+            module_index  INTEGER NOT NULL,
+            kind          TEXT    NOT NULL,   -- Solar / Generator / FuelCell / Command / ReactionWheel / Antenna / Light / Lab / Converter / Drill
+            ec_per_s      REAL    NOT NULL,
+            tracking      INTEGER NOT NULL DEFAULT 1,   -- solar panels that turn to follow the Sun
+            inputs        TEXT,               -- fuel cells: what they burn, units/s ("LiquidFuel=0.0016875;Oxidizer=0.0020625")
+            PRIMARY KEY (part_name, module_index)
+        );
+
         CREATE TABLE ksp_part_antennas (
             part_name            TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
             module_index         INTEGER NOT NULL,

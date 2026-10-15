@@ -14,7 +14,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
-- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner)
+- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget)
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
 
 **Where to look for…**
@@ -1383,6 +1383,37 @@ Worked example (the numbers in `CommNetTests`, and the MunLink Shuttle in the pl
 
 - Code: `CommNet` (`CombinedPower`, `RelayPower`, `Range`, `Strength`, `FarthestFromHome`), `KspSaveReader` (`SavedCommNet`); tested in `CommNetTests`
 - Source: KSP 1.12 CommNet (`ModuleDataTransmitter` antennaPower / antennaCombinable / antennaCombinableExponent, the tracking station's DSN levels, `CommNetParams`); the KSP wiki's CommNet page for the combining and strength formulas
+
+### 7.8 Power through the longest night (power budget)
+
+The **Power budget** adds up the electric charge (EC) a craft makes and uses where it's going, and checks its batteries last the longest night there. The part data gives each part's rates: solar panels (`chargeRate`), generators like the RTG, fuel cells (with the propellant they burn), and what probe cores, reaction wheels, antennas, lights, the lab, ISRU converters and drills use. Ion engines burn charge as a propellant at full thrust, ṁ · ratio_EC / Σ(ratio · density).
+
+```
+solar  = chargeRate · (d_home / d)²            (rated at Kerbin's distance from the Sun; d for a moon is its planet's)
+used   = Σ loads switched on                   (only one antenna transmits at a time: the hungriest is counted)
+dark   = generators + fuel cells (up to what's missing)
+needed = (used − dark) · t_night               (when the dark doesn't cover it)
+lasts  = battery / (used − dark)
+refill = needed / (made in the sun − used)     (it must fit in the day)
+```
+
+**The longest night.**
+- **In orbit**, the worst case is the Sun in the orbit's plane. The craft then crosses the body's full shadow, taken as a cylinder as wide as the body: t_night = T · asin(R / a) / π, with T = 2π √(a³ / μ).
+- **On the surface**, night is half a solar day at the equator. The solar day is the rotation measured against the Sun, which the planet moves around once a year: S = P · Y / (Y − P). A moon uses its planet's year. A tidally locked moon turns once per orbit, so its day is about as long as its month.
+
+Worked example (the numbers in `PowerBudgetTests`):
+
+1. 80 km over Kerbin: T = 2π √(680,000³ / 3.5316 × 10¹²) = 1,874.8 s, and t_night = 1,874.8 × asin(600 / 680) / π = **645.0 s**, leaving 1,229.8 s of sunlight
+2. Kerbin's year: Y = 2π √(13,599,840,256³ / 1.1723328 × 10¹⁸) = 9,203,545 s, so its solar day is 21,549.4 × Y / (Y − 21,549.4) = **21,600 s**, KSP's 6-hour day. Night is 3 h
+3. The Mun (P = 138,984.4 s, Kerbin's year): S = 141,115 s, so **70,558 s** of night (19 h 36 min)
+4. A probe there (an OKTO2 at 0.03 EC/s, two Z-100s for 205 EC including the core's 5, and two OX-4W panels at 1.64 EC/s). The night uses 0.03 × 645.0 = **19.35 EC**. The day refills that in 19.35 / (3.28 − 0.03) = **6.0 s**
+5. At Duna the same panels make (13.60 / 20.73)² = **43.1%** of their rating
+6. A Dawn ion engine at full thrust: ṁ = 2 / (4,200 × 9.80665) t/s, × 1.8 / (0.1 × 0.0001) = **8.74 EC/s**
+
+Panels are assumed to face the Sun. Fixed panels (OX-STAT) only do that when the craft is turned to it. A moon's planet can also eclipse it, which isn't counted. Fuel cells only run to cover what's missing, as KSP stops them when the batteries are nearly full.
+
+- Code: `PowerBudget` (`Work`, `InOrbit`, `OnSurface`, `SolarScale`, `EngineEcPerSecond`), `PartCatalogReader` (`PartPower`); tested in `PowerBudgetTests`
+- Source: KSP 1.12 part modules (`ModuleDeployableSolarPanel`, `ModuleGenerator`, `ModuleResourceConverter`, `ModuleCommand`, `ModuleReactionWheel`, `ModuleDataTransmitter` packetResourceCost / packetInterval, `ModuleLight`, `ModuleScienceConverter`, `ModuleResourceHarvester`); the inverse-square solar law; synodic period for the solar day
 
 ## 8. Working with your save and the live game
 

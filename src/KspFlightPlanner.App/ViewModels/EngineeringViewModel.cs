@@ -142,6 +142,14 @@ public sealed class EngineeringViewModel : ObservableObject
     /// <summary>The design's name, for others offering to use it ("" with none).</summary>
     public string DesignTitle => HasDesign ? Title : "";
 
+    /// <summary>
+    /// The design's parts that stay to the end (what flies the long part of the mission) that make, use or store
+    /// electric charge, with how many of each.
+    /// </summary>
+    public IReadOnlyList<(KspPart Part, int Count)> DesignPowerParts =>
+        _breakdown?.Parts.Where(p => p.SeparationStage < 0 && p.Definition is { } d && PowerBudgetViewModel.IsPowerPart(d))
+            .GroupBy(p => p.Name).Select(g => (g.First().Definition!, g.Count())).ToList() ?? [];
+
     /// <summary>The design's parts that carry an antenna (probe cores' internal ones aside), with how many of each.</summary>
     public IReadOnlyList<(KspPart Part, int Count)> DesignAntennas =>
         _breakdown?.Parts.Where(p => p.Definition is { Antennas.Count: > 0 } d && d.Antennas.Any(a => a.Type != "INTERNAL"))
@@ -302,7 +310,7 @@ public sealed class EngineeringViewModel : ObservableObject
             Warnings = [];
         }
 
-        foreach (var name in new[] { nameof(HasDesign), nameof(DesignTitle), nameof(DesignAntennas), nameof(Empty), nameof(Title), nameof(Subtitle), nameof(Headline), nameof(Stages),
+        foreach (var name in new[] { nameof(HasDesign), nameof(DesignTitle), nameof(DesignAntennas), nameof(DesignPowerParts), nameof(Empty), nameof(Title), nameof(Subtitle), nameof(Headline), nameof(Stages),
                      nameof(HasStages), nameof(TwrHeader), nameof(MassShares), nameof(Resources), nameof(HasResources), nameof(Parts),
                      nameof(Warnings), nameof(HasWarnings) })
             OnPropertyChanged(name);

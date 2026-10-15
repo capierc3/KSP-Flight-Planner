@@ -40,6 +40,12 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
             r => (Part: r.GetString(0), Antenna: new PartAntenna(r.GetString(1), r.GetDouble(2), r.GetInt64(3) != 0, r.GetDouble(4))))
             .ToLookup(x => x.Part, x => x.Antenna);
 
+        var power = Query(connection,
+            "SELECT part_name, kind, ec_per_s, tracking, inputs FROM ksp_part_power ORDER BY part_name, module_index;",
+            r => (Part: r.GetString(0), Power: new PartPower(Enum.TryParse<PowerKind>(r.GetString(1), out var kind) ? kind : PowerKind.Converter,
+                r.GetDouble(2), r.GetInt64(3) != 0, r.IsDBNull(4) ? null : ParseInputs(r.GetString(4)))))
+            .ToLookup(x => x.Part, x => x.Power);
+
         var parents = Query(connection, "SELECT node_id, parent_id FROM ksp_tech_parents;", r => (Node: r.GetString(0), Parent: r.GetString(1)))
             .ToLookup(x => x.Node, x => x.Parent);
         var techTree = Query(connection,
@@ -56,10 +62,18 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
                 return new KspPart(name, r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
                     r.GetDouble(4), r.GetDouble(5), r.GetInt32(6), partResources[name].ToList(), engines[name].ToList(), antennas[name].ToList(),
                     r.GetInt64(7) != 0, r.IsDBNull(8) ? null : r.GetString(8), r.IsDBNull(9) ? null : r.GetString(9),
-                    r.IsDBNull(10) ? [] : r.GetString(10).Split(',', StringSplitOptions.RemoveEmptyEntries), r.GetDouble(11), r.GetDouble(12));
+                    r.IsDBNull(10) ? [] : r.GetString(10).Split(',', StringSplitOptions.RemoveEmptyEntries), r.GetDouble(11), r.GetDouble(12),
+                    power[name].ToList());
             });
         return new PartCatalog(parts, resources, techTree);
     }
+
+    /// <summary>"LiquidFuel=0.0016875;Oxidizer=0.0020625" → propellants.</summary>
+    private static List<Propellant> ParseInputs(string text) => text.Split(';', StringSplitOptions.RemoveEmptyEntries)
+        .Select(x => x.Split('='))
+        .Where(x => x.Length == 2)
+        .Select(x => new Propellant(x[0], double.TryParse(x[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0))
+        .ToList();
 
     public PartCatalogInfo? GetInfo()
     {
@@ -101,6 +115,7 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
             """);
         using var propellant = Command(connection, tx, "INSERT OR REPLACE INTO ksp_engine_propellants VALUES ($engine, $name, $ratio);");
         using var antenna = Command(connection, tx, "INSERT INTO ksp_part_antennas VALUES ($part, $index, $type, $power, $comb, $exp);");
+        using var power = Command(connection, tx, "INSERT INTO ksp_part_power VALUES ($part, $index, $kind, $rate, $tracking, $inputs);");
 
         foreach (var p in catalog.Parts.Values)
         {
@@ -123,6 +138,14 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
                 var a = p.Antennas[i];
                 Run(antenna, ("$part", p.Name), ("$index", i), ("$type", a.Type), ("$power", a.Power), ("$comb", a.Combinable ? 1 : 0),
                     ("$exp", a.CombinableExponent));
+            }
+            for (var i = 0; i < p.PowerModules.Count; i++)
+            {
+                var w = p.PowerModules[i];
+                Run(power, ("$part", p.Name), ("$index", i), ("$kind", w.Kind.ToString()), ("$rate", w.EcPerSecond), ("$tracking", w.Tracking ? 1 : 0),
+                    ("$inputs", w.Inputs is { Count: > 0 } inputs
+                        ? string.Join(";", inputs.Select(x => $"{x.Name}={x.Ratio.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}"))
+                        : null));
             }
         }
 
