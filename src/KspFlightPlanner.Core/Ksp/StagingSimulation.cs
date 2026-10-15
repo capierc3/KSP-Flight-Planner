@@ -34,6 +34,9 @@ public sealed record DesignReport(
 
     /// <summary>The first stage's TWR off the launch pad at sea level (0 when it has no engines).</summary>
     public double LaunchTwr => Stages.FirstOrDefault()?.TwrSeaLevel ?? 0;
+
+    /// <summary>Ids of the craft's engine parts that burned propellant in some stage.</summary>
+    public IReadOnlySet<string> FiredEngineIds { get; init; } = new HashSet<string>();
 }
 
 /// <summary>
@@ -105,6 +108,7 @@ public static class StagingSimulation
         var dryMass = parts.Sum(p => p.DryMassT);
 
         var stages = new List<StageResult>();
+        var fired = new HashSet<string>();
         double? launchMass = null;
         for (var stage = craft.FirstStage; stage >= 0; stage--)
         {
@@ -121,7 +125,7 @@ public static class StagingSimulation
             var thrust = active.Sum(e => e.ThrustKn);
             var thrustSeaLevel = active.Sum(e => e.ThrustSeaLevelKn);
             var nextDrop = present.Where(p => p.Craft.SeparationStage == stage - 1).ToHashSet();
-            var result = Burn(active, present, groups, feeds, nextDrop, catalog, startMass);
+            var result = Burn(active, present, groups, feeds, nextDrop, catalog, startMass, fired);
 
             if (result.DeltaVVacuum <= 0 && result.BurnTimeS <= 0) continue;
             stages.Add(new StageResult(stage, startMass, result.EndMass, result.DeltaVVacuum, result.DeltaVSeaLevel, result.BurnTimeS,
@@ -136,7 +140,7 @@ public static class StagingSimulation
         var partCounts = parts.GroupBy(p => p.Definition?.Title ?? p.Craft.Name).Select(g => (g.Key, g.Count()))
             .OrderByDescending(p => p.Item2).ThenBy(p => p.Key).ToList();
         return new DesignReport(craft.Name, craft.Facility, parts.Count, launchMass ?? parts.Sum(p => p.Mass(catalog)), dryMass, stages,
-            resources, partCounts, unknown, notes);
+            resources, partCounts, unknown, notes) { FiredEngineIds = fired };
     }
 
     /// <summary>Parts that share liquid fuel: connected through attachments where both parts allow crossfeed.</summary>
@@ -183,7 +187,7 @@ public static class StagingSimulation
 
     private static (double DeltaVVacuum, double DeltaVSeaLevel, double BurnTimeS, double EndMass) Burn(List<SimEngine> active,
         List<SimPart> present, Dictionary<SimPart, int> groups, Dictionary<int, HashSet<int>> feeds, HashSet<SimPart> nextDrop,
-        PartCatalog catalog, double startMass)
+        PartCatalog catalog, double startMass, HashSet<string> fired)
     {
         // The tanks each engine can draw each propellant from, in drain order: soonest-dropped first.
         List<List<SimPart>> Tiers(SimEngine e, string resource)
@@ -234,6 +238,7 @@ public static class StagingSimulation
             dropInUse |= dropBusy;
 
             var dt = rates.Min(kv => kv.Key.Part.Amounts[kv.Key.Resource] / kv.Value);
+            if (dt > 0) fired.UnionWith(running.Select(e => e.Part.Craft.Id));
             foreach (var ((part, resource), rate) in rates)
                 part.Amounts[resource] = Math.Max(0, part.Amounts[resource] - rate * dt);
 

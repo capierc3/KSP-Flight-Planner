@@ -1,0 +1,25 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.RocketPaneView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:KspFlightPlanner.App.Views">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <!-- The Rocket pane: the mission's rocket, or, while the Engineering document is in front, what's picked there. -->
+    <Grid>
+        <views:RocketView DataContext="{Binding Mission}">
+            <views:RocketView.Style>
+                <Style TargetType="views:RocketView">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding DataContext.ShowsEngineeringDetail, RelativeSource={RelativeSource AncestorType=views:RocketPaneView}}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </views:RocketView.Style>
+        </views:RocketView>
+        <views:EngineeringDetailView DataContext="{Binding Engineering}"
+                                     Visibility="{Binding DataContext.ShowsEngineeringDetail, RelativeSource={RelativeSource AncestorType=views:RocketPaneView}, Converter={StaticResource BoolToVisibility}}" />
+    </Grid>
+</UserControl>

@@ -15,6 +15,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private WorkMode _mode;
     private string? _activeCalculator;
+    private string? _activeDocument;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, FromHereViewModel fromHere, SaveSync sync, KspLink link, PlannerEvents events)
@@ -72,6 +73,19 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Every part, with what the save can build.</summary>
     public required PartsViewModel Parts { get; init; }
+
+    /// <summary>A saved design taken apart; what's picked in it shows in the Rocket pane.</summary>
+    public required EngineeringViewModel Engineering { get; init; }
+
+    /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
+    public string? ActiveDocument
+    {
+        get => _activeDocument;
+        private set { if (SetProperty(ref _activeDocument, value)) OnPropertyChanged(nameof(ShowsEngineeringDetail)); }
+    }
+
+    /// <summary>The Rocket pane shows what's picked in the Engineering document while that document is in front.</summary>
+    public bool ShowsEngineeringDetail => ActiveDocument == Panes.Engineering;
 
     /// <summary>One-off burns planned from where the craft is now.</summary>
     public FromHereViewModel FromHere { get; }
@@ -142,13 +156,15 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
     public void DocumentFocused(string id)
     {
+        ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
     }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
-    public event Action<string>? PaneRequested;
+    /// <remarks>The second argument: also move keyboard focus to it (false just brings it into view).</remarks>
+    public event Action<string, bool>? PaneRequested;
 
-    public void RequestPane(string id) => PaneRequested?.Invoke(id);
+    public void RequestPane(string id, bool activate = true) => PaneRequested?.Invoke(id, activate);
 }
 
 /// <summary>Menu and keyboard commands for the main window.</summary>
@@ -192,7 +208,7 @@ public partial class MainWindow : Window
         _plan.Load();
         _fly.Load();
 
-        viewModel.PaneRequested += id => ShowPane(id);
+        viewModel.PaneRequested += (id, activate) => ShowPane(id, activate);
         SystemEvents.UserPreferenceChanged += UserPreferenceChanged;
         viewModel.Mission.AskToSave = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question) switch

@@ -14,7 +14,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
-- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off
+- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
 
 **Where to look for…**
@@ -1284,6 +1284,36 @@ Worked example (the numbers in `DesignCheckTests`): a lower stage giving 1,000 m
 
 - Code: `DesignCheck.Check` (surface events), `DesignCheck.ThrustAt`, `SurfaceTwr.Rating`; tested in `DesignCheckTests`
 - Source: KSP engine thrust vs. pressure (thrust ∝ Isp at fixed fuel flow, Isp interpolated along `atmosphereCurve`); a linear curve between 0 and 1 atm is a simplification
+
+The Engineering document's stage table uses the same TWR for any body you pick, with each stage's tanks full: `TWR = thrust at the body's surface pressure / (m_start · g_surface)`. Picking a stage lists it for every body with a surface in the Rocket pane. Code: `CraftBreakdown.TwrAt`.
+
+### 7.5 A design taken apart: mass, cost and what each stage drops
+
+The **Engineering** document reads a saved design (.craft) and adds up what it's made of. Each part's mass is its dry mass plus what its tanks hold as loaded. Its cost is KSP's: a part's listed cost is with its tanks full, so the full contents come off and what's actually loaded goes back on.
+
+```
+part mass = dry mass + Σ amount · density
+part cost = listed cost − Σ max amount · unit cost + Σ amount · unit cost
+```
+
+Each part in a .craft carries `sepI`, the stage whose firing drops it (−1 if it stays to the end). Parts are listed by that stage, in firing order. A stage's own decouplers fire as it starts, so in the stage table "Leaves behind" is what the *next* firing drops, the parts that stage used up. "Left at the end" is the mass once the last stage has burned (§7.2).
+
+It also flags:
+- **An engine that never fires with fuel**: the staging (§7.2) never burns it, because no stage lights it while a tank it can draw from still has propellant.
+- **An engine dropped before its own stage fires** (`sepI ≥ istg`): a deployed payload, such as a satellite with its own engine. That's not a mistake, but the payload is flown on its own after it separates, so its Δv isn't counted.
+- **A launch TWR below 1** for a VAB design: it won't leave the pad.
+- **Parts the save hasn't unlocked yet** (from the save's research, as in the tech tree).
+
+Worked example (the numbers in `CraftBreakdownTests`): a pod (0.8 t, √600) on a full tank (0.5 t dry, 90 LF + 110 Ox = 1 t, √500 full) and an engine (1 t, √1,000), with a decoupler (0.05 t, √200) dropping a **half-full** tank and a second engine when stage 0 fires. Fuel costs √0.8 per LF and √0.18 per Ox.
+
+1. A full tank's fuel is worth 90 × 0.8 + 110 × 0.18 = √91.8, so the half-full tank costs 500 − 91.8 + 45.9 = **√454.1**
+2. Dropped when stage 0 fires: decoupler, half-full tank and engine, 0.05 + 1.0 + 1 = **2.05 t** and 200 + 454.1 + 1,000 = **√1,654.1**
+3. Stays to the end: pod, full tank and engine, **3.3 t** and **√2,100**. In all **√3,754.1**
+4. By part type (dry): engines 2 t, tanks 1 t, pod 0.8 t, decoupler 0.05 t (3.85 t), plus 1.5 t in the tanks: 5.35 t at launch
+5. Left at the end: the pod, the empty tank and the engine, **2.3 t**
+
+- Code: `CraftBreakdown.Build`, `StagingSimulation` (which engines fired); tested in `CraftBreakdownTests`
+- Source: KSP 1.12 craft format (`istg`, `sepI`, `RESOURCE` amounts) and part costs (`cost` includes full resources, as in the editor)
 
 ## 8. Working with your save and the live game
 
