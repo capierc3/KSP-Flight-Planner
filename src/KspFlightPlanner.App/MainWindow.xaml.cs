@@ -86,6 +86,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Whether a craft's batteries last the night where it's going.</summary>
     public required PowerBudgetViewModel PowerBudget { get; init; }
 
+    /// <summary>Every flight recorded while connected, and the recorder.</summary>
+    public required FlightLogViewModel FlightLog { get; init; }
+
     /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
     public string? ActiveDocument
     {
@@ -240,6 +243,8 @@ public partial class MainWindow : Window
         };
         viewModel.Mission.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        viewModel.FlightLog.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         Closing += (_, e) =>
         {
             if (!viewModel.Mission.ConfirmDiscard())
@@ -253,6 +258,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             SystemEvents.UserPreferenceChanged -= UserPreferenceChanged;
+            viewModel.FlightLog.Recorder.Dispose(); // stores the flight being recorded
             viewModel.Sync.Dispose();
             viewModel.Link.Dispose();
         };

@@ -37,6 +37,12 @@ public partial class App : Application
                 : [];
             var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights);
             var engineering = new EngineeringViewModel(designs, sync, availability, mission);
+            var flight = new FlightViewModel(flights, sync, events, rotation);
+            var recorder = new FlightRecorder(link, sync, new FlightLogRepository(database))
+            {
+                // A new log is linked to the planner flight being flown with that vessel.
+                FlightFor = name => flight.SelectedFlight is { Craft.Name: var craft } f && craft == name ? f.Id : null,
+            };
             var viewModel = new MainViewModel(
                 mission,
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
@@ -44,7 +50,7 @@ public partial class App : Application
                 new TransferPlannerViewModel(bodies, locations, events, sync, flights),
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
-                new FlightViewModel(flights, sync, events, rotation),
+                flight,
                 new FromHereViewModel(sync, flights, events, rotation),
                 sync,
                 link,
@@ -56,6 +62,7 @@ public partial class App : Application
                 EngineChart = new EngineChartViewModel(sync, availability),
                 CommNet = new CommNetViewModel(sync, availability, engineering),
                 PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
+                FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, events),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

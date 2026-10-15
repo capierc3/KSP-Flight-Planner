@@ -1523,6 +1523,34 @@ Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (
 
 - Code: `FlightViewModel.ReplanRendezvousAsync`
 
+### 8.5 The flight log: Δv a flight used
+
+While connected and flying, the flight log reads the flown vessel twice a second over kRPC streams. The game pushes the values as they change, so reading them costs no calls. Each sample holds game time, MET, situation, stage, altitude, speeds, Ap/Pe, position, attitude, throttle, mass, thrust, the active engines' combined Isp, dynamic pressure, g-force and the warp rate. A flight is told apart from others of the same rocket by its launch time, game time − MET (two within 2 s are the same launch).
+
+**Δv between two samples a and b** (masses in kg, thrust in N, Isp in s, g₀ = 9.80665 m/s²):
+
+```
+Engines off in both                         Δv = 0
+Same stage, mass drop ≤ 1.5 × burnable      Δv = g₀ · Isp · ln(m_a / m_b)          Isp = (Isp_a + Isp_b) / 2
+Otherwise (staged, parts dropped)           Δv = (F_a/m_a + F_b/m_b) / 2 · (t_b − t_a)
+burnable = (F_a + F_b) / 2 / (g₀ · Isp) · (t_b − t_a)       what the engines could have burned in the time
+```
+
+The rocket equation on the mass drop is exact however far apart the samples are, because fuel burned is the mass gone. That holds through physics warp and through a coast that recording thinned out. When parts come off, the mass drop isn't fuel, so the thrust ÷ mass average over the gap is used instead. That's rough over a long gap, but staging gaps are half a second.
+
+**Thinning.** Burning, in the air (q > 0), or a change of stage, situation, body or mass: every sample is kept, and so is the one before. Coasting outside the air: one every 10 s of game time. On-rails warp (faster than ×4) skips physics. The few samples it gives are kept, and a warp of a minute or more is noted as "Data lost in warp" with its length (engines can't fire on rails, so a shorter one loses nothing worth noting). The list sums these into one line per flight. A disconnect, a vessel switch or leaving the flight is noted with the time not recorded once the flight is picked up again.
+
+**How a flight ends.** It ends when the save KSP last wrote, if written after the log's last sample, has no vessel of that name launched then. That's *Recovered* if it was last seen landed or splashed, and *Lost* otherwise. If the game's time goes back before the launch, it's *Reverted*. If it goes back within the flight (a quickload), the samples after that point are dropped.
+
+Worked example: a 10 t craft burns to 8 t on a 300 s engine making 200 kN:
+
+1. Mass flow = 200,000 / (9.80665 × 300) = **67.98 kg/s**, so 2 t takes **29.4 s**
+2. Δv = 9.80665 × 300 × ln(10 / 8) = **656.48 m/s**, the same from two samples 29.4 s apart as from sixty
+3. Staging in the next half second (10 t → 4 t, thrust 200 → 50 kN): the mass drop would claim 2,696 m/s. Thrust ÷ mass gives (20 + 12.5) / 2 × 0.5 = **8.1 m/s**
+
+- Code: `FlightLogMath.DeltaVBetween`, `FlightLogRecorder` and `FlightLogs.EndedIn` (`Core/Ksp/FlightLog.cs`), streamed by `LiveTelemetry`, run by `FlightRecorder`; tested in `FlightLogTests`
+- Source: Tsiolkovsky rocket equation (§7.1); kRPC SpaceCenter API (`Vessel.Mass`, `Thrust`, `SpecificImpulse`, streams)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

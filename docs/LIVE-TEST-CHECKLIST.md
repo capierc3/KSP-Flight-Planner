@@ -281,6 +281,19 @@ side of the Mun, or mirrored east/west, the longitude convention is wrong: note 
 
 Notes:
 
+## 10e. Flight log (View › Flying › Flight log)
+
+- [ ] On the pad the pane says the rocket is on the pad and recording starts at launch
+- [ ] Launch → "Recording <name> · MET … · … m/s used" counts up; Δv used looks close to KSP's own Δv readout drop
+- [ ] Reach orbit → the log in the list says "In orbit of Kerbin", grouped under the rocket's name
+- [ ] Time warp past ×4 for a while → the log shows "Data lost in warp: ×… for …"
+- [ ] Disconnect (KSP › Disconnect) mid-flight, wait, reconnect → "Flight disconnected: … not recorded", same log carries on
+- [ ] Switch to another vessel and back → one log, with the gap noted
+- [ ] Recover a landed vessel → its log says Recovered (after KSP writes the save); revert a launch → Reverted
+- [ ] Turn off "Record a flight log while flying" in Settings → the pane says recording is off; nothing new is logged
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date

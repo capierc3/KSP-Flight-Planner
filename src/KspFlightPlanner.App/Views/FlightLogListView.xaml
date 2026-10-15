@@ -1,0 +1,50 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.FlightLogListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <CollectionViewSource x:Key="LogsByRocket" Source="{Binding Logs}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Rocket" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <!-- Every flight recorded while connected, grouped by rocket (the vessel's name at launch). -->
+    <DockPanel Margin="12,10">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Recorder.Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <Button DockPanel.Dock="Bottom" Content="Delete log" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                   Visibility="{Binding HasNoLogs, Converter={StaticResource BoolToVisibility}}"
+                   Text="No flights recorded yet. Connect to KSP (KSP › Connect to KSP) and launch: each flight is logged from the launch on." />
+        <ListBox ItemsSource="{Binding Source={StaticResource LogsByRocket}}" SelectedItem="{Binding SelectedLog}" IsSynchronizedWithCurrentItem="False"
+                 BorderThickness="0" Background="Transparent" AutomationProperties.Name="Flight logs">
+            <ListBox.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="4,10,0,4" />
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </ListBox.GroupStyle>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Launched}" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="8,2,0,2">
+                        <TextBlock TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding Outcome, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding Launched, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding Figures}" Style="{StaticResource Note}" />
+                        <TextBlock Text="{Binding Gaps}" Style="{StaticResource Note}" Foreground="#FFB74D" TextWrapping="Wrap"
+                                   Visibility="{Binding HasGaps, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

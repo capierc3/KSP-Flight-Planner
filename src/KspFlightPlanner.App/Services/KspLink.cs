@@ -250,8 +250,19 @@ public sealed class KspLink : ObservableObject, IDisposable
     // ---------------- Surface bake (KSP › Bake Surface Data) ----------------
 
     /// <summary>The game's celestial bodies, by the planner's names (Kerbol, not Sun).</summary>
+    /// <summary>Starts streaming the flown vessel's readings (for the flight log); null when not flying one.</summary>
+    public Task<LiveTelemetry?> OpenTelemetryAsync() => CallAsync(LiveTelemetry.Open);
+
+    /// <summary>Stops the readings' streams, if the connection they came over is still up.</summary>
+    public async Task CloseTelemetryAsync(LiveTelemetry telemetry)
+    {
+        if (!IsConnected) return;
+        try { await CallAsync(_ => { telemetry.Close(); return 0; }); }
+        catch (Exception) { /* lost the game meanwhile: the streams went with it */ }
+    }
+
     public Task<IReadOnlyList<string>> BodyNamesAsync() =>
-        CallAsync<IReadOnlyList<string>>(c => c.SpaceCenter().Bodies.Keys.Select(BodyName).ToList());
+        CallAsync<IReadOnlyList<string>>(c => c.SpaceCenter().Bodies.Keys.Select(PlannerBodyName).ToList());
 
     /// <summary>A body's constants and biome names as the game has them.</summary>
     public Task<BakeBodyInfo> ReadBodyAsync(string bodyName) => CallAsync(c =>
@@ -333,7 +344,7 @@ public sealed class KspLink : ObservableObject, IDisposable
                 var space = c.SpaceCenter();
                 var vessels = scene == GameScene.Flight && readVessels ? ReadVessels(space) : null;
                 string? targetBody = null;
-                if (vessels is not null && space.TargetBody is { } body) targetBody = BodyName(body.Name);
+                if (vessels is not null && space.TargetBody is { } body) targetBody = PlannerBodyName(body.Name);
                 var nodes = scene == GameScene.Flight && TryGet(() => space.ActiveVessel) is { } active
                     ? active.Control.Nodes.Select(n => new LiveNode(n.UT, n.Prograde, n.Normal, n.Radial)).ToList()
                     : [];
@@ -420,7 +431,7 @@ public sealed class KspLink : ObservableObject, IDisposable
         catch (RPCException) { return null; }
     }
 
-    private static string SituationName(VesselSituation situation) => situation switch
+    internal static string SituationName(VesselSituation situation) => situation switch
     {
         VesselSituation.PreLaunch => "PRELAUNCH",
         VesselSituation.Orbiting => "ORBITING",
@@ -434,7 +445,7 @@ public sealed class KspLink : ObservableObject, IDisposable
     };
 
     /// <summary>The planner's name for a body (KSP calls Kerbol "Sun").</summary>
-    private static string BodyName(string kspName) => kspName == "Sun" ? "Kerbol" : kspName;
+    internal static string PlannerBodyName(string kspName) => kspName == "Sun" ? "Kerbol" : kspName;
 
     private static async Task<IPAddress> ResolveAsync(string host)
     {

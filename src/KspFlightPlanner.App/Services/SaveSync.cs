@@ -81,6 +81,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
 
     public bool HasSave => Save is not null;
 
+    /// <summary>The save file as KSP last wrote it, without the live game over it.</summary>
+    public KspSave? FileSave => _fileSave;
+
     /// <summary>How the live game matched the save: which vessel is being flown and targeted, and vessels not in the save yet.</summary>
     public LiveMerge? Live { get => _live; private set { if (SetProperty(ref _live, value)) OnPropertyChanged(nameof(IsLive)); } }
 
@@ -218,6 +221,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
             _readAt = DateTime.Now;
             Problem = null;
             ApplyLive(fileChanged: true);
+            OnPropertyChanged(nameof(FileSave));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
         {

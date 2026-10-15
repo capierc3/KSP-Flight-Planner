@@ -97,6 +97,7 @@
                         <MenuItem Header="_Flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
                         <MenuItem Header="F_light" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
                         <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
+                        <MenuItem Header="Flight _log" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightLog}" ToolTip="Every flight recorded while connected" />
                     </MenuItem>
                     <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" ToolTip="Inputs for the tool you looked at last" />
                     <Separator />

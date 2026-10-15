@@ -33,6 +33,7 @@ public static class Panes
     public const string Rocket = "rocket";
     public const string Flights = "flights";
     public const string FromHere = "fromhere";
+    public const string FlightLog = "flightlog";
     public const string Parts = "parts";
     public const string Part = "part";
 
@@ -69,6 +70,7 @@ public static class Panes
         new(Part, "Part", false, Plan, vm => new PartDetailView { DataContext = vm.Parts.Detail }) { OpensOnRight = true, OpensBeside = Notes },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
         new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
+        new(FlightLog, "Flight log", false, [WorkMode.Fly, WorkMode.Plan], vm => new FlightLogListView { DataContext = vm.FlightLog }),
 
         new(Legs, "Legs & phases", true, Plan, vm => new MissionLegsView { DataContext = vm.Mission }),
         new(DvMap, "Δv map", true, Plan, vm => new DvMapView { DataContext = vm.Mission }),

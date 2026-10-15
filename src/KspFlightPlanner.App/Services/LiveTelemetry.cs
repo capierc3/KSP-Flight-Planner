@@ -1,0 +1,124 @@
+using KRPC.Client;
+using KRPC.Client.Services.SpaceCenter;
+using KspFlightPlanner.Core.Ksp;
+
+namespace KspFlightPlanner.App.Services;
+
+/// <summary>
+/// The flown vessel's readings for the flight log, streamed by kRPC: the game pushes them as they change, so reading
+/// one costs nothing on the connection (unlike a call, which costs about a game frame). Opened for one vessel in one
+/// sphere of influence (the surface readings are against that body); when the player switches vessel or the vessel
+/// leaves the body, <see cref="Read"/> returns null and a new one has to be opened.
+/// </summary>
+public sealed class LiveTelemetry
+{
+    private readonly List<IDisposable> _streams = [];
+    private readonly Vessel _vessel;
+    private readonly CelestialBody _body;
+    private readonly Func<double> _ut, _met, _mass, _altitude, _surfaceSpeed, _verticalSpeed, _orbitalSpeed, _apoapsis, _periapsis,
+        _latitude, _longitude, _pitch, _heading, _thrust, _isp, _q, _g, _throttle, _warp;
+    private readonly Func<VesselSituation> _situation;
+    private readonly Func<int> _stage;
+    private readonly Func<Vessel> _active;
+    private readonly Func<CelestialBody> _orbitBody;
+
+    /// <summary>The vessel's name when the streams were opened.</summary>
+    public string VesselName { get; }
+
+    /// <summary>The body the surface readings are against.</summary>
+    public string BodyName { get; }
+
+    private LiveTelemetry(Connection c, Vessel vessel)
+    {
+        var space = c.SpaceCenter();
+        _vessel = vessel;
+        VesselName = vessel.Name;
+        var orbit = vessel.Orbit;
+        _body = orbit.Body;
+        BodyName = KspLink.PlannerBodyName(_body.Name);
+        var flight = vessel.Flight(_body.ReferenceFrame); // speeds against the turning body: surface speeds
+        var control = vessel.Control;
+
+        _active = Add(c.AddStream(() => space.ActiveVessel));
+        _orbitBody = Add(c.AddStream(() => orbit.Body));
+        _ut = Add(c.AddStream(() => space.UT));
+        _warp = AddFloat(c, () => space.WarpRate);
+        _met = Add(c.AddStream(() => vessel.MET));
+        _situation = Add(c.AddStream(() => vessel.Situation));
+        _stage = Add(c.AddStream(() => control.CurrentStage));
+        _mass = AddFloat(c, () => vessel.Mass);
+        _thrust = AddFloat(c, () => vessel.Thrust);
+        _isp = AddFloat(c, () => vessel.SpecificImpulse);
+        _throttle = AddFloat(c, () => control.Throttle);
+        _altitude = Add(c.AddStream(() => flight.MeanAltitude));
+        _surfaceSpeed = Add(c.AddStream(() => flight.Speed));
+        _verticalSpeed = Add(c.AddStream(() => flight.VerticalSpeed));
+        _latitude = Add(c.AddStream(() => flight.Latitude));
+        _longitude = Add(c.AddStream(() => flight.Longitude));
+        _pitch = AddFloat(c, () => flight.Pitch);
+        _heading = AddFloat(c, () => flight.Heading);
+        _q = AddFloat(c, () => flight.DynamicPressure);
+        _g = AddFloat(c, () => flight.GForce);
+        _orbitalSpeed = Add(c.AddStream(() => orbit.Speed));
+        _apoapsis = Add(c.AddStream(() => orbit.ApoapsisAltitude));
+        _periapsis = Add(c.AddStream(() => orbit.PeriapsisAltitude));
+    }
+
+    /// <summary>Opens the streams for the vessel being flown, or returns null when there isn't one. Runs on a worker thread.</summary>
+    internal static LiveTelemetry? Open(Connection c)
+    {
+        Vessel vessel;
+        try { vessel = c.SpaceCenter().ActiveVessel; }
+        catch (RPCException) { return null; }
+        return new LiveTelemetry(c, vessel);
+    }
+
+    /// <summary>
+    /// The vessel now, or null when these streams no longer fit: the player switched vessel, it left the body, or it's gone.
+    /// </summary>
+    public FlightSample? Read()
+    {
+        try
+        {
+            if (_active() != _vessel || _orbitBody() != _body) return null;
+            return new FlightSample(
+                _ut(), _met(), BodyName, KspLink.SituationName(_situation()), _stage(),
+                _altitude(), _surfaceSpeed(), _orbitalSpeed(), _verticalSpeed(), _apoapsis(), _periapsis(),
+                _latitude(), _longitude(), _pitch(), _heading(), _throttle(),
+                _mass(), _thrust(), _isp(), _q(), _g(), _warp());
+        }
+        catch (Exception ex) when (ex is RPCException or System.InvalidOperationException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Stops the game sending the readings. Runs on a worker thread; a stream already gone is fine.</summary>
+    internal void Close()
+    {
+        foreach (var stream in _streams)
+        {
+            try { stream.Dispose(); }
+            catch (Exception) { /* the game or vessel has gone: nothing to stop */ }
+        }
+        _streams.Clear();
+    }
+
+    private Func<T> Add<T>(Stream<T> stream)
+    {
+        _streams.Add(new Remover(stream.Remove));
+        return stream.Get;
+    }
+
+    // kRPC hands many readings over as float; the log keeps doubles.
+    private Func<double> AddFloat(Connection c, System.Linq.Expressions.Expression<Func<float>> read)
+    {
+        var get = Add(c.AddStream(read));
+        return () => get();
+    }
+
+    private sealed class Remover(Action remove) : IDisposable
+    {
+        public void Dispose() => remove();
+    }
+}

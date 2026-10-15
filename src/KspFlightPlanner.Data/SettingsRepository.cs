@@ -32,6 +32,9 @@ public sealed record AppSettings
     /// <summary>How often every vessel's orbit is read while in flight, in seconds (the slow read: it grows with the vessel count).</summary>
     public double KrpcVesselsSeconds { get; init; } = DefaultKrpcVesselsSeconds;
 
+    /// <summary>Record every flight flown while connected (the flight log).</summary>
+    public bool RecordFlights { get; init; } = true;
+
     // kRPC's stock server settings.
     public const string DefaultKrpcAddress = "127.0.0.1";
     public const int DefaultKrpcRpcPort = 50000;
@@ -55,6 +58,7 @@ public sealed class SettingsRepository(PlannerDatabase database)
     private const string KrpcConnectOnStartupKey = "krpc.connect_on_startup";
     private const string KrpcPollSecondsKey = "krpc.poll_seconds";
     private const string KrpcVesselsSecondsKey = "krpc.vessels_seconds";
+    private const string RecordFlightsKey = "flightlog.record";
     private const string LastMissionKey = "app.last_mission_id";
 
     public AppSettings Load()
@@ -73,6 +77,7 @@ public sealed class SettingsRepository(PlannerDatabase database)
                               ?? AppSettings.DefaultKrpcPollSeconds,
             KrpcVesselsSeconds = Seconds(values.GetValueOrDefault(KrpcVesselsSecondsKey), AppSettings.MinKrpcVesselsSeconds, AppSettings.MaxKrpcVesselsSeconds)
                                  ?? AppSettings.DefaultKrpcVesselsSeconds,
+            RecordFlights = values.GetValueOrDefault(RecordFlightsKey) != "0",
         };
     }
 
@@ -87,6 +92,7 @@ public sealed class SettingsRepository(PlannerDatabase database)
         Write(KrpcConnectOnStartupKey, settings.KrpcConnectOnStartup ? "1" : "0");
         Write(KrpcPollSecondsKey, settings.KrpcPollSeconds.ToString(CultureInfo.InvariantCulture));
         Write(KrpcVesselsSecondsKey, settings.KrpcVesselsSeconds.ToString(CultureInfo.InvariantCulture));
+        Write(RecordFlightsKey, settings.RecordFlights ? "1" : "0");
     }
 
     /// <summary>
