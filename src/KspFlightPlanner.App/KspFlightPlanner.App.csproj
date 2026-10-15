@@ -9,7 +9,6 @@
     <AssemblyName>KspFlightPlanner</AssemblyName>
     <Product>KSP Flight Planner</Product>
     <Company>Brick Road Software</Company>
-    <Version>0.1.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 

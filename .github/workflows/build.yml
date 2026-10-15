@@ -1,0 +1,40 @@
+# Tests and publishes every push to main/develop and every pull request. The exe is kept as a
+# workflow artifact named after its version (KspFlightPlanner-1.0.2, KspFlightPlanner-1.0.2-SNAPSHOT).
+name: Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the version is counted from the last v* tag
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Publish
+        run: dotnet publish src/KspFlightPlanner.App -c Release -o out
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Item out/KspFlightPlanner.exe).VersionInfo.ProductVersion.Split('+')[0]
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $v"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KspFlightPlanner-${{ steps.version.outputs.version }}
+          path: out/KspFlightPlanner.exe

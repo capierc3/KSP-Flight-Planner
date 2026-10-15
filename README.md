@@ -104,10 +104,12 @@ dotnet run --project src/KspFlightPlanner.App
 ## Publish a standalone exe
 
 ```
-dotnet publish src/KspFlightPlanner.App -c Release -o publish
+pwsh tools/publish.ps1
 ```
 
-Produces `publish/KspFlightPlanner.exe`, a self-contained single file (no .NET install required).
+Produces a self-contained single-file `KspFlightPlanner.exe` (no .NET install required) in a folder per build —
+`publish/main`, `publish/develop`, `publish/<feature-branch>` or `publish/v1.0.0` for a tagged release — so a branch
+build never overwrites the main one. The version comes from git; see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Database
 

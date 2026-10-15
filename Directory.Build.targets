@@ -1,0 +1,99 @@
+<Project>
+  <!--
+    Build version from git, so every build says what it is (docs/RELEASING.md):
+      commit tagged v1.0.0                    -> 1.0.0            (release)
+      main / develop, 2 commits after v1.0.0  -> 1.0.2
+      any other branch, 2 commits after       -> 1.0.2-SNAPSHOT
+    The informational version adds the branch and commit (1.0.2-SNAPSHOT+fly-this-mission.0dc323a).
+    With no tag yet, VersionFallback is the base and every commit counts. Override the branch with -p:VersionBranch=name.
+  -->
+  <PropertyGroup>
+    <VersionFallback>0.1.0</VersionFallback>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="ComputeGitVersion" BeforeTargets="GetAssemblyVersion">
+    <Exec Command="git describe --tags --match &quot;v[0-9]*&quot; --long --abbrev=7" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitDescribe" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitDescribeExit" />
+    </Exec>
+    <Exec Command="git rev-list --count HEAD" Condition="'$(_GitDescribeExit)' != '0'" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitCount" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitCountExit" />
+    </Exec>
+    <Exec Command="git rev-parse --abbrev-ref HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitBranch" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitBranchExit" />
+    </Exec>
+    <Exec Command="git rev-parse --short=7 HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitSha" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitShaExit" />
+    </Exec>
+
+    <PropertyGroup>
+      <_TagPattern>^v(\d+)\.(\d+)(?:\.(\d+))?-(\d+)-g([0-9a-f]+)$</_TagPattern>
+      <_HasTag>false</_HasTag>
+      <_HasTag Condition="'$(_GitDescribeExit)' == '0' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(_GitDescribe)', '$(_TagPattern)'))">true</_HasTag>
+
+      <!-- Base version and commits since it: from the newest v* tag, else VersionFallback and every commit. -->
+      <_Major Condition="'$(_HasTag)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(_GitDescribe)', '$(_TagPattern)', '$1'))</_Major>
+      <_Minor Condition="'$(_HasTag)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(_GitDescribe)', '$(_TagPattern)', '$2'))</_Minor>
+      <_Patch Condition="'$(_HasTag)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(_GitDescribe)', '$(_TagPattern)', '$3'))</_Patch>
+      <_Height Condition="'$(_HasTag)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(_GitDescribe)', '$(_TagPattern)', '$4'))</_Height>
+      <_Major Condition="'$(_HasTag)' != 'true'">$(VersionFallback.Split('.')[0])</_Major>
+      <_Minor Condition="'$(_HasTag)' != 'true'">$(VersionFallback.Split('.')[1])</_Minor>
+      <_Patch Condition="'$(_HasTag)' != 'true'">$(VersionFallback.Split('.')[2])</_Patch>
+      <_Height Condition="'$(_HasTag)' != 'true' and '$(_GitCountExit)' == '0'">$(_GitCount)</_Height>
+      <_Patch Condition="'$(_Patch)' == ''">0</_Patch>
+      <_Height Condition="'$(_Height)' == ''">0</_Height>
+      <_GitSha Condition="'$(_GitShaExit)' != '0'"></_GitSha>
+
+      <!-- Branch: explicit override, else CI (checkouts there are detached), else the checkout's branch. -->
+      <_Branch>$(VersionBranch)</_Branch>
+      <_Branch Condition="'$(_Branch)' == '' and '$(GITHUB_HEAD_REF)' != ''">$(GITHUB_HEAD_REF)</_Branch>
+      <_Branch Condition="'$(_Branch)' == '' and '$(_GitBranchExit)' == '0' and '$(_GitBranch)' != 'HEAD'">$(_GitBranch)</_Branch>
+      <_Branch Condition="'$(_Branch)' == '' and '$(GITHUB_REF_NAME)' != ''">$(GITHUB_REF_NAME)</_Branch>
+      <_SafeBranch>$([System.Text.RegularExpressions.Regex]::Replace('$(_Branch)', '[^0-9A-Za-z-]+', '-'))</_SafeBranch>
+
+      <BuildChannel>snapshot</BuildChannel>
+      <BuildChannel Condition="'$(_Branch)' == 'main' or '$(_Branch)' == 'develop'">$(_Branch)</BuildChannel>
+      <BuildChannel Condition="'$(_HasTag)' == 'true' and '$(_Height)' == '0'">release</BuildChannel>
+
+      <VersionPrefix>$(_Major).$(_Minor).$([MSBuild]::Add($(_Patch), $(_Height)))</VersionPrefix>
+      <VersionSuffix Condition="'$(BuildChannel)' == 'snapshot'">SNAPSHOT</VersionSuffix>
+      <VersionSuffix Condition="'$(BuildChannel)' != 'snapshot'"></VersionSuffix>
+      <Version>$(VersionPrefix)</Version>
+      <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>
+      <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+      <FileVersion>$(VersionPrefix).0</FileVersion>
+      <_BuildMetadata>$(_GitSha)</_BuildMetadata>
+      <_BuildMetadata Condition="'$(BuildChannel)' != 'release' and '$(_SafeBranch)' != ''">$(_SafeBranch).$(_GitSha)</_BuildMetadata>
+      <InformationalVersion>$(Version)</InformationalVersion>
+      <InformationalVersion Condition="'$(_BuildMetadata)' != ''">$(Version)+$(_BuildMetadata.TrimEnd('.'))</InformationalVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BuildChannel</_Parameter1>
+        <_Parameter2>$(BuildChannel)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BuildBranch</_Parameter1>
+        <_Parameter2>$(_Branch)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <!-- `dotnet msbuild -t:PrintVersion -nologo src/KspFlightPlanner.App` prints what a build here would be. -->
+  <Target Name="PrintVersion" DependsOnTargets="ComputeGitVersion">
+    <Message Importance="high" Text="$(InformationalVersion) [$(BuildChannel)]" />
+  </Target>
+</Project>

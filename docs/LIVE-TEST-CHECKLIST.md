@@ -12,7 +12,7 @@ Easiest way: open `docs/checklist.html` in Edge or Chrome and pick this file. Ti
 
 - [x] Start KSP, load the **Protogen** save
 - [x] kRPC window → **Start server** (auto-accept is already on)
-- [x] Start the planner (`publish\KspFlightPlanner.exe`)
+- [x] Start the planner (`publish\<branch>\KspFlightPlanner.exe`, from `tools/publish.ps1`)
 - [x] Have a craft **in orbit around Kerbin** you don't mind adding/removing maneuver nodes on (a KerbLink relay is fine)
 - [ ] Optional for later sections: a second craft in Kerbin orbit to use as a **target**, and a carrier with a few
       decouplable probes for the **resonant deployment** test

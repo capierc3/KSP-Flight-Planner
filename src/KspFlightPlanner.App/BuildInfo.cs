@@ -3,16 +3,31 @@ using System.Reflection;
 namespace KspFlightPlanner.App;
 
 /// <summary>
-/// Which build is running. A test build of a branch is published with a label in its informational version
-/// ("0.1.0-fly-mode-trips+a99faf9"), so it can be told apart from the main build.
+/// Which build is running. The version comes from git at build time (Directory.Build.targets): a tagged
+/// release is "1.0.0", a develop build "1.0.2", a feature-branch build "1.0.2-SNAPSHOT", each with the branch and
+/// commit after the "+" ("1.0.2-SNAPSHOT+fly-this-mission.0dc323a").
 /// </summary>
 public static class BuildInfo
 {
-    /// <summary>The full version: number, label and commit ("0.1.0-fly-mode-trips+a99faf9").</summary>
-    public static string Version { get; } =
-        Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
+    private static readonly Assembly App = Assembly.GetExecutingAssembly();
 
-    /// <summary>The test build's label ("fly-mode-trips"), or null for a main build.</summary>
-    public static string? Label { get; } = Version.Split('+')[0] is var v && v.IndexOf('-') is var dash and >= 0 ? v[(dash + 1)..] : null;
+    /// <summary>The full version: number, branch and commit ("1.0.2-SNAPSHOT+fly-this-mission.0dc323a").</summary>
+    public static string Version { get; } =
+        App.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? App.GetName().Version?.ToString(3) ?? "";
+
+    /// <summary>The version without the branch and commit ("1.0.2-SNAPSHOT").</summary>
+    public static string ShortVersion { get; } = Version.Split('+')[0];
+
+    /// <summary>"release", "main", "develop" or "snapshot" (a feature branch).</summary>
+    public static string Channel { get; } = Metadata("BuildChannel") ?? "release";
+
+    /// <summary>The branch it was built from, or null if unknown.</summary>
+    public static string? Branch { get; } = Metadata("BuildBranch");
+
+    /// <summary>What the window title shows for a non-release build ("develop 1.0.2", "fly-this-mission 1.0.2-SNAPSHOT"), or null for a release.</summary>
+    public static string? Label { get; } = Channel == "release" ? null : $"{Branch ?? Channel} {ShortVersion}";
+
+    private static string? Metadata(string key) =>
+        App.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == key)?.Value is { Length: > 0 } v ? v : null;
 }
