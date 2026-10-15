@@ -28,6 +28,7 @@ public partial class App : Application
             var link = new KspLink(() => settings.Load());
             var sync = new SaveSync(database, settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
             var designs = new DesignLibrary(sync);
+            var availability = new PartAvailability(sync, new TechPlanRepository(database), events);
             var flights = new FlightRepository(database);
             var bakes = new SurfaceBakeRepository(database);
             var rotation = new BodyRotation(bakes, link);
@@ -47,6 +48,8 @@ public partial class App : Application
                 link,
                 events)
             {
+                TechTree = new TechTreeViewModel(availability),
+                Parts = new PartsViewModel(availability),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             new MainWindow(viewModel).Show();

@@ -67,6 +67,12 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Flying the plans handed over from planning, against the live game.</summary>
     public FlightViewModel Flight { get; }
 
+    /// <summary>The R&amp;D tech tree with the save's research and the player's plan.</summary>
+    public required TechTreeViewModel TechTree { get; init; }
+
+    /// <summary>Every part, with what the save can build.</summary>
+    public required PartsViewModel Parts { get; init; }
+
     /// <summary>One-off burns planned from where the craft is now.</summary>
     public FromHereViewModel FromHere { get; }
     public SaveSync Sync { get; }

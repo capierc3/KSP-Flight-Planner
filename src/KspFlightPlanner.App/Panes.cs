@@ -30,6 +30,7 @@ public static class Panes
     public const string Rocket = "rocket";
     public const string Flights = "flights";
     public const string FromHere = "fromhere";
+    public const string Parts = "parts";
 
     // Documents
     public const string Legs = "legs";
@@ -40,6 +41,7 @@ public static class Panes
     public const string Rendezvous = "rendezvous";
     public const string Resonant = "resonant";
     public const string Flight = "flight";
+    public const string TechTree = "techtree";
     public const string Guide = "guide";
 
     private static readonly WorkMode[] Plan = [WorkMode.Plan];
@@ -55,6 +57,7 @@ public static class Panes
         new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
         new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },
+        new(Parts, "Parts", false, Plan, vm => new PartListView { DataContext = vm.Parts }) { OpensOnRight = true },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
         new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
 
@@ -65,6 +68,7 @@ public static class Panes
         new(Transfer, "Transfer Planner", true, Plan, vm => new TransferPlannerView { DataContext = vm.Transfer }),
         new(Rendezvous, "Rendezvous", true, Plan, vm => new RendezvousView { DataContext = vm.Rendezvous }),
         new(Resonant, "Resonant Orbits", true, Plan, vm => new ResonantOrbitView { DataContext = vm.Resonant }),
+        new(TechTree, "Tech tree", true, Plan, vm => new TechTreeView { DataContext = vm.TechTree }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];

@@ -81,6 +81,7 @@
                     <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" />
                     <MenuItem Header="Not_es" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Notes}" />
                     <MenuItem Header="_Rocket" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rocket}" />
+                    <MenuItem Header="P_arts" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Parts}" />
                     <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
                     <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />
                     <MenuItem Header="F_lights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
@@ -91,6 +92,7 @@
                     <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Transfer}" />
                     <MenuItem Header="Re_ndezvous" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rendezvous}" />
                     <MenuItem Header="Res_onant Orbits" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Resonant}" />
+                    <MenuItem Header="Te_ch tree" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.TechTree}" />
                     <MenuItem Header="Fli_ght" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
                     <Separator />
                     <MenuItem Header="Reset Window _Layout" Command="{x:Static app:MainCommands.ResetLayout}"
