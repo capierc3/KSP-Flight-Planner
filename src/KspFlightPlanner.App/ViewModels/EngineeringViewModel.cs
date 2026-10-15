@@ -139,6 +139,14 @@ public sealed class EngineeringViewModel : ObservableObject
 
     public bool HasDesign => _breakdown is not null && _selected?.Report is not null;
 
+    /// <summary>The design's name, for others offering to use it ("" with none).</summary>
+    public string DesignTitle => HasDesign ? Title : "";
+
+    /// <summary>The design's parts that carry an antenna (probe cores' internal ones aside), with how many of each.</summary>
+    public IReadOnlyList<(KspPart Part, int Count)> DesignAntennas =>
+        _breakdown?.Parts.Where(p => p.Definition is { Antennas.Count: > 0 } d && d.Antennas.Any(a => a.Type != "INTERNAL"))
+            .GroupBy(p => p.Name).Select(g => (g.First().Definition!, g.Count())).ToList() ?? [];
+
     /// <summary>Why nothing is shown: no save, no designs, or the file couldn't be read.</summary>
     public string Empty => _problem
         ?? (_sync.Save is null && Designs.Count == 0 ? "No KSP save is linked. Choose your KSP folder and save in Tools › Settings."
@@ -294,7 +302,7 @@ public sealed class EngineeringViewModel : ObservableObject
             Warnings = [];
         }
 
-        foreach (var name in new[] { nameof(HasDesign), nameof(Empty), nameof(Title), nameof(Subtitle), nameof(Headline), nameof(Stages),
+        foreach (var name in new[] { nameof(HasDesign), nameof(DesignTitle), nameof(DesignAntennas), nameof(Empty), nameof(Title), nameof(Subtitle), nameof(Headline), nameof(Stages),
                      nameof(HasStages), nameof(TwrHeader), nameof(MassShares), nameof(Resources), nameof(HasResources), nameof(Parts),
                      nameof(Warnings), nameof(HasWarnings) })
             OnPropertyChanged(name);

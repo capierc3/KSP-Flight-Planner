@@ -91,6 +91,19 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
 
     /// <summary>What's been researched; null in sandbox, where every part can be used.</summary>
     public SavedResearch? Research { get; init; }
+
+    /// <summary>The game's CommNet settings (difficulty options); stock defaults when the save doesn't say.</summary>
+    public SavedCommNet CommNet { get; init; } = SavedCommNet.Default;
+}
+
+/// <summary>
+/// CommNet as the save has it: the tracking station's level and the difficulty modifiers on antenna range and on the
+/// tracking station's power (docs/MATH.md §7.7).
+/// </summary>
+/// <param name="TrackingStationLevel">1 to 3. Career saves record it; sandbox and science saves have every building upgraded.</param>
+public sealed record SavedCommNet(bool Enabled, int TrackingStationLevel, double RangeModifier, double DsnModifier)
+{
+    public static readonly SavedCommNet Default = new(true, 3, 1, 1);
 }
 
 /// <summary>A custom waypoint: a named spot on a body (degrees, north and east positive).</summary>
@@ -174,7 +187,25 @@ public static class KspSaveReader
         var mode = game.GetValue("Mode") ?? "";
         var research = mode == "SANDBOX" ? null
             : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment") is { } rd ? ReadResearch(rd) : null;
-        return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels) { Waypoints = waypoints, Research = research };
+        return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels)
+        {
+            Waypoints = waypoints, Research = research, CommNet = ReadCommNet(game),
+        };
+    }
+
+    private static SavedCommNet ReadCommNet(ConfigNode game)
+    {
+        var parameters = game.GetNode("PARAMETERS");
+        var settings = parameters?.GetNode("CommNetParams");
+        // The facility's level is stored from 0 to 1 (level 1, 2, 3 → 0, 0.5, 1); only career saves have it.
+        var station = game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ScenarioUpgradeableFacilities")
+            ?.GetNode("SpaceCenter/TrackingStation")?.GetValue("lvl");
+        var level = station is null ? 3 : Math.Clamp((int)Math.Round(Number(station) * 2) + 1, 1, 3);
+        return new SavedCommNet(
+            !string.Equals(parameters?.GetNode("DIFFICULTY")?.GetValue("EnableCommNet"), "False", StringComparison.OrdinalIgnoreCase),
+            level,
+            settings?.GetValue("rangeModifier") is { } range ? Number(range) : 1,
+            settings?.GetValue("DSNModifier") is { } dsn ? Number(dsn) : 1);
     }
 
     /// <summary>Researched tech nodes (state Available) and the parts each lists as usable.</summary>

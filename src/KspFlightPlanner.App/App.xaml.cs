@@ -36,6 +36,7 @@ public partial class App : Application
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
             var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights);
+            var engineering = new EngineeringViewModel(designs, sync, availability, mission);
             var viewModel = new MainViewModel(
                 mission,
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
@@ -51,8 +52,9 @@ public partial class App : Application
             {
                 TechTree = new TechTreeViewModel(availability),
                 Parts = new PartsViewModel(availability),
-                Engineering = new EngineeringViewModel(designs, sync, availability, mission),
+                Engineering = engineering,
                 EngineChart = new EngineChartViewModel(sync, availability),
+                CommNet = new CommNetViewModel(sync, availability, engineering),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

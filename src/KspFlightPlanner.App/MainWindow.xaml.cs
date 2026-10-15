@@ -80,6 +80,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Which engine makes the best stage for a payload and Δv.</summary>
     public required EngineChartViewModel EngineChart { get; init; }
 
+    /// <summary>How far a craft's antennas reach, and from where it can talk home.</summary>
+    public required CommNetViewModel CommNet { get; init; }
+
     /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
     public string? ActiveDocument
     {
@@ -140,6 +143,7 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsRendezvousInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
             OnPropertyChanged(nameof(ShowsEngineChartInputs));
+            OnPropertyChanged(nameof(ShowsCommNetInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
@@ -148,6 +152,7 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
     public bool ShowsEngineChartInputs => ActiveCalculator == Panes.EngineChart;
+    public bool ShowsCommNetInputs => ActiveCalculator == Panes.CommNet;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
@@ -163,8 +168,8 @@ public sealed class MainViewModel : ObservableObject
     {
         ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
-        // The engine chart is all inputs: bring them forward with it (without taking focus).
-        if (id == Panes.EngineChart && ActiveCalculator != id)
+        // The engineering tools are all inputs: bring them forward with the tool (without taking focus).
+        if (id is Panes.EngineChart or Panes.CommNet && ActiveCalculator != id)
         {
             ActiveCalculator = id;
             RequestPane(Panes.Calculators, activate: false);

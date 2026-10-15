@@ -96,6 +96,7 @@
                     <MenuItem Header="Te_ch tree" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.TechTree}" />
                     <MenuItem Header="_Engineering" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Engineering}" />
                     <MenuItem Header="Engine c_hart" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.EngineChart}" />
+                    <MenuItem Header="Comm_Net planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.CommNet}" />
                     <MenuItem Header="Fli_ght" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
                     <Separator />
                     <MenuItem Header="Reset Window _Layout" Command="{x:Static app:MainCommands.ResetLayout}"

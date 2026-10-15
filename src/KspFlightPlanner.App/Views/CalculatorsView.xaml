@@ -11,7 +11,7 @@
         <StackPanel Margin="0,0,18,0">
             <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                        Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
-                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits or Engine chart show here: whichever of them you looked at last." />
+                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits, Engine chart or CommNet planner show here: whichever of them you looked at last." />
 
             <StackPanel DataContext="{Binding Transfer}"
                         Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -342,6 +342,77 @@
                     <ComboBox Grid.Column="2" ItemsSource="{Binding DeltaVRanges}" SelectedItem="{Binding DeltaVRange}" AutomationProperties.Name="Delta-v range" />
                 </Grid>
                 <TextBlock Text="{Binding InputProblem}" Style="{StaticResource Note}" Foreground="#EF5350" Margin="0,6,0,0" />
+            </StackPanel>
+
+            <!-- CommNet planner: the craft's and the relay's antennas, and the game's settings -->
+            <StackPanel DataContext="{Binding CommNet}"
+                        Visibility="{Binding DataContext.ShowsCommNetInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="CommNet planner" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Text="Craft antennas" Style="{StaticResource Label}" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding CraftAntennas}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="48" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding DataContext.AntennaChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          SelectedItem="{Binding Antenna}" AutomationProperties.Name="Antenna" />
+                                <TextBox Grid.Column="1" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="4,0,0,0"
+                                         AutomationProperties.Name="How many" ToolTip="How many of this antenna" />
+                                <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Margin="4,0,0,0" Padding="8,4"
+                                        ToolTip="Remove" AutomationProperties.Name="Remove antenna" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="＋ Add antenna" Command="{Binding AddCraftAntennaCommand}" HorizontalAlignment="Left" AutomationProperties.Name="Add craft antenna" />
+                <Button Content="{Binding UseDesignText}" Command="{Binding UseDesignCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                        ToolTip="Take the antennas from the design open in the Engineering document" />
+
+                <TextBlock Text="Relay antennas" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
+                           Text="A relay satellite to pass the craft's signal on (only relay antennas count). Leave empty for none." />
+                <ItemsControl ItemsSource="{Binding RelayAntennas}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="48" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding DataContext.AntennaChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          SelectedItem="{Binding Antenna}" AutomationProperties.Name="Antenna" />
+                                <TextBox Grid.Column="1" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="4,0,0,0"
+                                         AutomationProperties.Name="How many" ToolTip="How many of this antenna" />
+                                <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Margin="4,0,0,0" Padding="8,4"
+                                        ToolTip="Remove" AutomationProperties.Name="Remove antenna" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="＋ Add antenna" Command="{Binding AddRelayAntennaCommand}" HorizontalAlignment="Left" AutomationProperties.Name="Add relay antenna" />
+
+                <TextBlock Text="Antennas to choose from" Style="{StaticResource Label}" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding PartsChoices}" SelectedItem="{Binding PartsChoice}" AutomationProperties.Name="Antennas to choose from" />
+
+                <TextBlock Text="Tracking station" Style="{StaticResource Label}" />
+                <ComboBox ItemsSource="{Binding Levels}" SelectedItem="{Binding Level}" AutomationProperties.Name="Tracking station" />
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Range ×" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding RangeModifierText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Range modifier"
+                                 ToolTip="The game's Range Modifier (difficulty settings): scales every antenna" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Station power ×" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding DsnModifierText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="DSN modifier"
+                                 ToolTip="The game's DSN Modifier (difficulty settings): scales the tracking station" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="{Binding SaveSettingsText}" Style="{StaticResource Note}" Margin="0,6,0,0" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>
