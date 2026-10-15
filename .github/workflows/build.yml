@@ -1,6 +1,6 @@
 # Runs the tests on every push to main/develop and every pull request ("Test" is the check pull requests
 # must pass), then publishes the exe as a workflow artifact named after its version
-# (KspFlightPlanner-1.0.2, KspFlightPlanner-1.0.2-SNAPSHOT).
+# (KspFlightPlanner-1.0.2.exe, KspFlightPlanner-1.0.2-SNAPSHOT.exe), downloadable without unzipping.
 name: Build
 
 on:
@@ -14,11 +14,11 @@ jobs:
     name: Test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the version is counted from the last v* tag
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -44,7 +44,7 @@ jobs:
             }
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-results
@@ -55,26 +55,28 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Publish
         run: dotnet publish src/KspFlightPlanner.App -c Release -o out
 
-      - name: Read version
+      - name: Name the exe after its version
         id: version
         shell: pwsh
         run: |
           $v = (Get-Item out/KspFlightPlanner.exe).VersionInfo.ProductVersion.Split('+')[0]
-          "version=$v" >> $env:GITHUB_OUTPUT
+          Move-Item out/KspFlightPlanner.exe "out/KspFlightPlanner-$v.exe"
+          "exe=out/KspFlightPlanner-$v.exe" >> $env:GITHUB_OUTPUT
           Write-Host "Built $v"
 
-      - uses: actions/upload-artifact@v4
+      # archive: false uploads the exe itself (downloads unzipped); the artifact takes the file's name.
+      - uses: actions/upload-artifact@v7
         with:
-          name: KspFlightPlanner-${{ steps.version.outputs.version }}
-          path: out/KspFlightPlanner.exe
+          path: ${{ steps.version.outputs.exe }}
+          archive: false

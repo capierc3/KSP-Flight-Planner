@@ -61,4 +61,4 @@ changes. A fix released straight from `main` can take the next patch number (`v1
 
 The **Build** workflow (`.github/workflows/build.yml`) runs on pushes to `main`/`develop` and on pull requests:
 the **Test** job builds the whole solution and runs the tests (results are summarized on the run page), then the
-**Publish** job keeps the exe as a workflow artifact named after its version.
+**Publish** job keeps the exe as a workflow artifact named after its version (`KspFlightPlanner-1.0.2.exe`, not zipped).
