@@ -19,10 +19,10 @@ Easiest way: open `docs/checklist.html` in Edge or Chrome and pick this file. Ti
 
 ## 1. Connecting
 
-- [x] **Tools › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
+- [x] **KSP › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
 - [x] Status bar date **ticks forward** every couple of seconds while time passes in game
 - [ ] Switch scenes (Space Center → Tracking Station → flight): status bar scene name follows
-- [x] **Tools › Disconnect from KSP** → grey dot, "not connected". Connect again works.
+- [x] **KSP › Disconnect from KSP** → grey dot, "not connected". Connect again works.
 - [x] Quit KSP while connected → planner shows "Lost the connection to KSP" in red (it shouldn't freeze or crash)
 - [x] Optional: **Settings › Live connection**: enter a bad port (e.g. `abc`) → red message and OK greyed out;
       **Restore kRPC defaults** puts 127.0.0.1 / 50000 / 50001 back
@@ -138,7 +138,7 @@ lift-off time for a launch rendezvous is off.
 
 Notes:
 
-## 10. Bake surface data (Tools › Bake Surface Data…) ✅ baked 2026-10-09
+## 10. Bake surface data (KSP › Bake Surface Data…) ✅ baked 2026-10-09
 
 Done: all 17 bodies baked at **1°** in about **22 minutes** (from the bake timestamps). Results, read from the
 planner's database:
@@ -187,7 +187,7 @@ Notes:
 
 ## 10b. From here (Fly mode, right side) — no plan needed
 
-Fly mode's default layout changed, so your Fly panes start from the default once. **View › From here** reopens the pane.
+Fly mode's default layout changed, so your Fly panes start from the default once. **View › Flying › From here** reopens the pane.
 
 - [ ] The top line shows the craft, its orbit and the target, and follows the game as you switch craft or target
 - [ ] **Circularize at apoapsis** on an elliptical orbit → **Send to KSP** → the node sits on the Ap marker, and KSP's

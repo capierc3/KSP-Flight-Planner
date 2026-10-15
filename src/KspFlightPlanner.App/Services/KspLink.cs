@@ -247,7 +247,7 @@ public sealed class KspLink : ObservableObject, IDisposable
         return sent;
     }
 
-    // ---------------- Surface bake (Tools › Bake Surface Data) ----------------
+    // ---------------- Surface bake (KSP › Bake Surface Data) ----------------
 
     /// <summary>The game's celestial bodies, by the planner's names (Kerbol, not Sun).</summary>
     public Task<IReadOnlyList<string>> BodyNamesAsync() =>

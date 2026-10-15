@@ -181,7 +181,7 @@ public sealed class TechTreeViewModel : ObservableObject
         get
         {
             var c = CultureInfo.CurrentCulture;
-            if (_parts.Catalog.TechTree.Count == 0) return "No tech tree yet: set the KSP install in Settings, then Tools › Read Part Data Again.";
+            if (_parts.Catalog.TechTree.Count == 0) return "No tech tree yet: set the KSP install in Settings, then KSP › Read Part Data Again.";
             if (_parts.Research is not { } research) return "Sandbox (or no save chosen): every part is unlocked, so there's nothing to plan.";
             var researched = Nodes.Count(n => n.Status == TechStatus.Researched);
             var text = $"{researched} of {Nodes.Count} nodes researched · {research.Science.ToString("N0", c)} science in the bank";

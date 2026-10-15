@@ -11,7 +11,7 @@
         <StackPanel Margin="0,0,18,0">
             <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                        Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
-                       Text="Inputs for the Transfer Planner, Rendezvous or Resonant Orbits show here: whichever of them you looked at last." />
+                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits, Engine chart, CommNet planner or Power budget show here: whichever of them you looked at last." />
 
             <StackPanel DataContext="{Binding Transfer}"
                         Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -278,6 +278,195 @@
                     <TextBox Grid.Column="1" Text="{Binding DeorbitAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
                 </Grid>
                 </StackPanel>
+            </StackPanel>
+
+            <!-- Engine chart: the stage to size -->
+            <StackPanel DataContext="{Binding EngineChart}"
+                        Visibility="{Binding DataContext.ShowsEngineChartInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Engine chart" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Text="The stage to size: what it pushes, the Δv it gives and where it fires." />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Payload (t)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding PayloadText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Payload"
+                                 ToolTip="Everything above this stage: later stages, the probe or crew pod, the lander…" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Δv (m/s)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding DeltaVText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Delta-v"
+                                 ToolTip="Vacuum Δv this stage must give (take it from the mission's phases or the Δv map)" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Fires" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding Body}" AutomationProperties.Name="Fires"
+                                  ToolTip="In space: no air, TWR against Kerbin's gravity. On a body: its gravity and surface air (lifting off or landing)." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Least TWR" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding MinTwrText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Least TWR"
+                                 ToolTip="With full tanks. About 1.3 or more to lift off; 0.3 to 0.5 is plenty in space" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Engines" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding MaxEnginesChoices}" SelectedItem="{Binding MaxEngines}" AutomationProperties.Name="Engines"
+                                  ToolTip="The most engines of one kind on the stage" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Best is" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding Goals}" SelectedItem="{Binding Goal}" AutomationProperties.Name="Best is" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="Parts" Style="{StaticResource Label}" />
+                <ComboBox ItemsSource="{Binding PartsChoices}" SelectedItem="{Binding PartsChoice}" AutomationProperties.Name="Parts"
+                          ToolTip="Engines and tanks to choose from: what this save can build, or with your research plan, or everything" />
+                <TextBlock Text="Chart shows" Style="{StaticResource Label}" Margin="0,8,0,0" FontWeight="SemiBold" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox ItemsSource="{Binding PayloadRanges}" SelectedItem="{Binding PayloadRange}" AutomationProperties.Name="Payload range" />
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding DeltaVRanges}" SelectedItem="{Binding DeltaVRange}" AutomationProperties.Name="Delta-v range" />
+                </Grid>
+                <TextBlock Text="{Binding InputProblem}" Style="{StaticResource Note}" Foreground="#EF5350" Margin="0,6,0,0" />
+            </StackPanel>
+
+            <!-- CommNet planner: the craft's and the relay's antennas, and the game's settings -->
+            <StackPanel DataContext="{Binding CommNet}"
+                        Visibility="{Binding DataContext.ShowsCommNetInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="CommNet planner" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Text="Craft antennas" Style="{StaticResource Label}" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding CraftAntennas}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="48" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding DataContext.AntennaChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          SelectedItem="{Binding Antenna}" AutomationProperties.Name="Antenna" />
+                                <TextBox Grid.Column="1" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="4,0,0,0"
+                                         AutomationProperties.Name="How many" ToolTip="How many of this antenna" />
+                                <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Margin="4,0,0,0" Padding="8,4"
+                                        ToolTip="Remove" AutomationProperties.Name="Remove antenna" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="＋ Add antenna" Command="{Binding AddCraftAntennaCommand}" HorizontalAlignment="Left" AutomationProperties.Name="Add craft antenna" />
+                <Button Content="{Binding UseDesignText}" Command="{Binding UseDesignCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                        ToolTip="Take the antennas from the design open in the Engineering document" />
+
+                <TextBlock Text="Relay antennas" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
+                           Text="A relay satellite to pass the craft's signal on (only relay antennas count). Leave empty for none." />
+                <ItemsControl ItemsSource="{Binding RelayAntennas}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="48" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding DataContext.AntennaChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          SelectedItem="{Binding Antenna}" AutomationProperties.Name="Antenna" />
+                                <TextBox Grid.Column="1" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="4,0,0,0"
+                                         AutomationProperties.Name="How many" ToolTip="How many of this antenna" />
+                                <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Margin="4,0,0,0" Padding="8,4"
+                                        ToolTip="Remove" AutomationProperties.Name="Remove antenna" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="＋ Add antenna" Command="{Binding AddRelayAntennaCommand}" HorizontalAlignment="Left" AutomationProperties.Name="Add relay antenna" />
+
+                <TextBlock Text="Antennas to choose from" Style="{StaticResource Label}" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding PartsChoices}" SelectedItem="{Binding PartsChoice}" AutomationProperties.Name="Antennas to choose from" />
+
+                <TextBlock Text="Tracking station" Style="{StaticResource Label}" />
+                <ComboBox ItemsSource="{Binding Levels}" SelectedItem="{Binding Level}" AutomationProperties.Name="Tracking station" />
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Range ×" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding RangeModifierText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Range modifier"
+                                 ToolTip="The game's Range Modifier (difficulty settings): scales every antenna" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Station power ×" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding DsnModifierText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="DSN modifier"
+                                 ToolTip="The game's DSN Modifier (difficulty settings): scales the tracking station" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="{Binding SaveSettingsText}" Style="{StaticResource Note}" Margin="0,6,0,0" />
+            </StackPanel>
+
+            <!-- Power budget: the craft's power parts, where it is, and what's switched on -->
+            <StackPanel DataContext="{Binding PowerBudget}"
+                        Visibility="{Binding DataContext.ShowsPowerBudgetInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Power budget" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Text="Parts" Style="{StaticResource Label}" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="48" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding DataContext.PartChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          SelectedItem="{Binding Part}" AutomationProperties.Name="Power part" />
+                                <TextBox Grid.Column="1" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged, Delay=300}" Margin="4,0,0,0"
+                                         AutomationProperties.Name="How many" ToolTip="How many of this part" />
+                                <Button Grid.Column="2" Content="✕" Command="{Binding RemoveCommand}" Margin="4,0,0,0" Padding="8,4"
+                                        ToolTip="Remove" AutomationProperties.Name="Remove part" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="＋ Add part" Command="{Binding AddPartCommand}" AutomationProperties.Name="Add power part" />
+                    <Button Content="{Binding UseDesignText}" Command="{Binding UseDesignCommand}" Margin="6,0,0,0"
+                            ToolTip="Take the power parts that stay to the end of the design open in the Engineering document" />
+                </StackPanel>
+                <TextBlock Text="Parts to choose from" Style="{StaticResource Label}" Margin="0,10,0,3" />
+                <ComboBox ItemsSource="{Binding PartsChoices}" SelectedItem="{Binding PartsChoice}" AutomationProperties.Name="Power parts to choose from" />
+
+                <TextBlock Text="Where" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding Body}" DisplayMemberPath="Name" AutomationProperties.Name="Body" />
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" />
+                    </Grid.ColumnDefinitions>
+                    <RadioButton Content="In orbit at (km)" IsChecked="{Binding InOrbit}" GroupName="PowerWhere" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="2" Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=300}" IsEnabled="{Binding InOrbit}"
+                             AutomationProperties.Name="Orbit altitude" />
+                </Grid>
+                <RadioButton Content="On the surface" IsChecked="{Binding OnSurface}" GroupName="PowerWhere" Margin="0,4,0,0" />
+
+                <TextBlock Text="Switched on" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <ItemsControl ItemsSource="{Binding Loads}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Title}" IsChecked="{Binding IsOn}" ToolTip="{Binding Hint}" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <CheckBox Content="Run fuel cells when short" IsChecked="{Binding FuelCells}" Margin="0,6,0,0"
+                          ToolTip="Fuel cells burn liquid fuel and oxidizer to cover what the panels and generators can't" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

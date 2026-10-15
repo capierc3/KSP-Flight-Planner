@@ -35,8 +35,10 @@ public partial class App : Application
             var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
+            var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights);
+            var engineering = new EngineeringViewModel(designs, sync, availability, mission);
             var viewModel = new MainViewModel(
-                new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights),
+                mission,
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
                 new VesselsViewModel(sync, designs),
                 new TransferPlannerViewModel(bodies, locations, events, sync, flights),
@@ -50,6 +52,10 @@ public partial class App : Application
             {
                 TechTree = new TechTreeViewModel(availability),
                 Parts = new PartsViewModel(availability),
+                Engineering = engineering,
+                EngineChart = new EngineChartViewModel(sync, availability),
+                CommNet = new CommNetViewModel(sync, availability, engineering),
+                PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
@@ -62,11 +68,22 @@ public partial class App : Application
                 shownPart = part.Name;
                 if (part.TechRequired is { } node) viewModel.TechTree.SelectNode(node);
             };
-            viewModel.Parts.Detail.OpenNodeRequested += id =>
+            void OpenNode(string id)
             {
                 viewModel.TechTree.SelectNode(id);
                 viewModel.RequestPane(Panes.TechTree);
-            };
+            }
+            viewModel.Parts.Detail.OpenNodeRequested += OpenNode;
+            // Picking in the Engineering document brings the Rocket pane (a stage) or the Part pane (a part) into view,
+            // leaving keyboard focus in the document's list.
+            viewModel.Engineering.StagePicked += () => viewModel.RequestPane(Panes.Rocket, activate: false);
+            void ShowPart(PartItem item)
+            {
+                viewModel.Parts.Detail.Item = item;
+                viewModel.RequestPane(Panes.Part, activate: false);
+            }
+            viewModel.Engineering.PartPicked += ShowPart;
+            viewModel.EngineChart.PartPicked += ShowPart;
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }

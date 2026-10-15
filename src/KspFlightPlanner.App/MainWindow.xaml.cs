@@ -15,6 +15,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private WorkMode _mode;
     private string? _activeCalculator;
+    private string? _activeDocument;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, FromHereViewModel fromHere, SaveSync sync, KspLink link, PlannerEvents events)
@@ -73,6 +74,28 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Every part, with what the save can build.</summary>
     public required PartsViewModel Parts { get; init; }
 
+    /// <summary>A saved design taken apart; what's picked in it shows in the Rocket pane.</summary>
+    public required EngineeringViewModel Engineering { get; init; }
+
+    /// <summary>Which engine makes the best stage for a payload and Δv.</summary>
+    public required EngineChartViewModel EngineChart { get; init; }
+
+    /// <summary>How far a craft's antennas reach, and from where it can talk home.</summary>
+    public required CommNetViewModel CommNet { get; init; }
+
+    /// <summary>Whether a craft's batteries last the night where it's going.</summary>
+    public required PowerBudgetViewModel PowerBudget { get; init; }
+
+    /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
+    public string? ActiveDocument
+    {
+        get => _activeDocument;
+        private set { if (SetProperty(ref _activeDocument, value)) OnPropertyChanged(nameof(ShowsEngineeringDetail)); }
+    }
+
+    /// <summary>The Rocket pane shows what's picked in the Engineering document while that document is in front.</summary>
+    public bool ShowsEngineeringDetail => ActiveDocument == Panes.Engineering;
+
     /// <summary>One-off burns planned from where the craft is now.</summary>
     public FromHereViewModel FromHere { get; }
     public SaveSync Sync { get; }
@@ -82,7 +105,7 @@ public sealed class MainViewModel : ObservableObject
 
     public PlannerEvents Events { get; }
 
-    /// <summary>Makes the view model for a Tools › Bake Surface Data window.</summary>
+    /// <summary>Makes the view model for a KSP › Bake Surface Data window.</summary>
     public Func<SurfaceBakeViewModel>? NewSurfaceBake { get; init; }
 
     /// <summary>Planning or flying; each has its own window layout.</summary>
@@ -122,6 +145,9 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsTransferInputs));
             OnPropertyChanged(nameof(ShowsRendezvousInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
+            OnPropertyChanged(nameof(ShowsEngineChartInputs));
+            OnPropertyChanged(nameof(ShowsCommNetInputs));
+            OnPropertyChanged(nameof(ShowsPowerBudgetInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
@@ -129,6 +155,9 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsTransferInputs => ActiveCalculator == Panes.Transfer;
     public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
+    public bool ShowsEngineChartInputs => ActiveCalculator == Panes.EngineChart;
+    public bool ShowsCommNetInputs => ActiveCalculator == Panes.CommNet;
+    public bool ShowsPowerBudgetInputs => ActiveCalculator == Panes.PowerBudget;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
@@ -142,13 +171,21 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
     public void DocumentFocused(string id)
     {
+        ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
+        // The engineering tools are all inputs: bring them forward with the tool (without taking focus).
+        if (id is Panes.EngineChart or Panes.CommNet or Panes.PowerBudget && ActiveCalculator != id)
+        {
+            ActiveCalculator = id;
+            RequestPane(Panes.Calculators, activate: false);
+        }
     }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
-    public event Action<string>? PaneRequested;
+    /// <remarks>The second argument: also move keyboard focus to it (false just brings it into view).</remarks>
+    public event Action<string, bool>? PaneRequested;
 
-    public void RequestPane(string id) => PaneRequested?.Invoke(id);
+    public void RequestPane(string id, bool activate = true) => PaneRequested?.Invoke(id, activate);
 }
 
 /// <summary>Menu and keyboard commands for the main window.</summary>
@@ -192,7 +229,7 @@ public partial class MainWindow : Window
         _plan.Load();
         _fly.Load();
 
-        viewModel.PaneRequested += id => ShowPane(id);
+        viewModel.PaneRequested += (id, activate) => ShowPane(id, activate);
         SystemEvents.UserPreferenceChanged += UserPreferenceChanged;
         viewModel.Mission.AskToSave = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question) switch
@@ -262,7 +299,7 @@ public partial class MainWindow : Window
 
     private SurfaceBakeWindow? _bakeWindow;
 
-    /// <summary>Tools › Bake Surface Data: one window at a time, left open beside the planner.</summary>
+    /// <summary>KSP › Bake Surface Data: one window at a time, left open beside the planner.</summary>
     private void BakeSurface_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         if (_bakeWindow is { IsLoaded: true })

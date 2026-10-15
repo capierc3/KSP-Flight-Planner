@@ -17,6 +17,14 @@ internal static class Units
         return $"{scaled}  ({metres.ToString("#,0", Culture)} m)";
     }
 
+    /// <summary>A range or distance in its biggest whole unit: "5 km", "31.6 Mm", "2 Gm", "35.4 Gm".</summary>
+    public static string Scaled(double metres)
+    {
+        var abs = Math.Abs(metres);
+        var (value, unit) = abs >= 1e9 ? (metres / 1e9, "Gm") : abs >= 1e6 ? (metres / 1e6, "Mm") : abs >= 1e3 ? (metres / 1e3, "km") : (metres, "m");
+        return value.ToString(Math.Abs(value) < 10 ? "0.##" : Math.Abs(value) < 100 ? "0.#" : "#,0", Culture) + " " + unit;
+    }
+
     public static string Km(double metres) => (metres / 1000).ToString("#,0.###", Culture) + " km";
 
     public static string Speed(double metresPerSecond) => metresPerSecond.ToString("#,0.0", Culture) + " m/s";

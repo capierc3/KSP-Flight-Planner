@@ -204,7 +204,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
             Save = null;
             Live = null;
             Problem = null;
-            Status = "No KSP save chosen — Tools › Settings to link one.";
+            Status = "No KSP save chosen — File › Settings to link one.";
             NewVessels = 0;
             return;
         }

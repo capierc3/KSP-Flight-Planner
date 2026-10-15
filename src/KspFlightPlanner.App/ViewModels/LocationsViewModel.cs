@@ -363,9 +363,9 @@ public sealed class BodyDetailViewModel
                 .Select(m => new Fact(m.Name, $"{Units.LatLon(m.LatitudeDeg, m.LongitudeDeg)} · {m.Kind}" + (m.Note is { } n ? $" · {n}" : "")))
                 .ToList()));
 
-        // Sampled from the player's game (Tools › Bake Surface Data)
+        // Sampled from the player's game (KSP › Bake Surface Data)
         groups.Add(new FactGroup("From your game (surface bake)", bake is null
-            ? [new("Not baked", "Connect to KSP, then Tools › Bake Surface Data")]
+            ? [new("Not baked", "Connect to KSP, then KSP › Bake Surface Data")]
             : BakeFacts(body, bake)));
 
         // Moons

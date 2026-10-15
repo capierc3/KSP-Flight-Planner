@@ -14,7 +14,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
-- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off
+- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget)
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
 
 **Where to look for…**
@@ -58,7 +58,7 @@ Worked example — Kerbin: g = 1.00034160493135 × 9.80665 = 9.81 m/s², so μ =
 - Code: `BodySeeder` (μ from the wiki data), `CelestialBody.SurfaceGravity` (g = μ/R²)
 - Source: KSP wiki `<Body>/Param` pages; Eric Meyer's Resonant Orbit Calculator data (`systems.js`)
 
-**Your game's values over the wiki's.** The values above ship with the app (the wiki is the baseline). Once a body has been through Tools › Bake Surface Data, the stock body's values are compared with what your game reported, using the relative difference
+**Your game's values over the wiki's.** The values above ship with the app (the wiki is the baseline). Once a body has been through KSP › Bake Surface Data, the stock body's values are compared with what your game reported, using the relative difference
 
 ```
 difference = |game − wiki| / |wiki|
@@ -228,7 +228,7 @@ Worked example — on the Mun (R = 200,000 m), from the Armstrong memorial (0.70
 - Code: `Landing.SurfaceDistance`; tested in `LandingTests`
 - Source: [Haversine formula (Wikipedia)](https://en.wikipedia.org/wiki/Haversine_formula)
 
-**Heights from the surface bake.** Tools › Bake Surface Data asks the running game (kRPC `SurfaceHeight`, `BiomeAt`) for the terrain height and biome at every grid point: one row per step from 90° S to 90° N, columns from 180° W eastward, wrapping round at 180°. A spot between grid points takes its height from the four around it (bilinear interpolation). With the spot a fraction f_lon of the way east and f_lat of the way north inside its grid cell:
+**Heights from the surface bake.** KSP › Bake Surface Data asks the running game (kRPC `SurfaceHeight`, `BiomeAt`) for the terrain height and biome at every grid point: one row per step from 90° S to 90° N, columns from 180° W eastward, wrapping round at 180°. A spot between grid points takes its height from the four around it (bilinear interpolation). With the spot a fraction f_lon of the way east and f_lat of the way north inside its grid cell:
 
 ```
 south = h_SW + f_lon · (h_SE − h_SW)
@@ -888,7 +888,7 @@ The cheapest cell is refined by zooming in, and drawn as a small porkchop plot y
 
 ### 4.5 When and where to launch
 
-Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. That's the value the app assumes; once Kerbin has been through Tools › Bake Surface Data it uses the game's own (kRPC `CelestialBody.InitialRotation`). The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
+Kerbin turns under the fixed (inertial) frame the orbits are measured in. KSP stores each body's starting rotation; Kerbin starts at **90°**. That's the value the app assumes; once Kerbin has been through KSP › Bake Surface Data it uses the game's own (kRPC `CelestialBody.InitialRotation`). The launch site's longitude in the inertial frame, comparable with a target's LAN (Ω), is:
 
 ```
 λ(t) = longitude + initial rotation + 360° · t / T_sidereal        KSC: longitude −74.5575°, latitude −0.0972°
@@ -1285,6 +1285,136 @@ Worked example (the numbers in `DesignCheckTests`): a lower stage giving 1,000 m
 - Code: `DesignCheck.Check` (surface events), `DesignCheck.ThrustAt`, `SurfaceTwr.Rating`; tested in `DesignCheckTests`
 - Source: KSP engine thrust vs. pressure (thrust ∝ Isp at fixed fuel flow, Isp interpolated along `atmosphereCurve`); a linear curve between 0 and 1 atm is a simplification
 
+The Engineering document's stage table uses the same TWR for any body you pick, with each stage's tanks full: `TWR = thrust at the body's surface pressure / (m_start · g_surface)`. Picking a stage lists it for every body with a surface in the Rocket pane. Code: `CraftBreakdown.TwrAt`.
+
+### 7.5 A design taken apart: mass, cost and what each stage drops
+
+The **Engineering** document reads a saved design (.craft) and adds up what it's made of. Each part's mass is its dry mass plus what its tanks hold as loaded. Its cost is KSP's: a part's listed cost is with its tanks full, so the full contents come off and what's actually loaded goes back on.
+
+```
+part mass = dry mass + Σ amount · density
+part cost = listed cost − Σ max amount · unit cost + Σ amount · unit cost
+```
+
+Each part in a .craft carries `sepI`, the stage whose firing drops it (−1 if it stays to the end). Parts are listed by that stage, in firing order. A stage's own decouplers fire as it starts, so in the stage table "Leaves behind" is what the *next* firing drops, the parts that stage used up. "Left at the end" is the mass once the last stage has burned (§7.2).
+
+It also flags:
+- **An engine that never fires with fuel**: the staging (§7.2) never burns it, because no stage lights it while a tank it can draw from still has propellant.
+- **An engine dropped before its own stage fires** (`sepI ≥ istg`): a deployed payload, such as a satellite with its own engine. That's not a mistake, but the payload is flown on its own after it separates, so its Δv isn't counted.
+- **A launch TWR below 1** for a VAB design: it won't leave the pad.
+- **Parts the save hasn't unlocked yet** (from the save's research, as in the tech tree).
+
+Worked example (the numbers in `CraftBreakdownTests`): a pod (0.8 t, √600) on a full tank (0.5 t dry, 90 LF + 110 Ox = 1 t, √500 full) and an engine (1 t, √1,000), with a decoupler (0.05 t, √200) dropping a **half-full** tank and a second engine when stage 0 fires. Fuel costs √0.8 per LF and √0.18 per Ox.
+
+1. A full tank's fuel is worth 90 × 0.8 + 110 × 0.18 = √91.8, so the half-full tank costs 500 − 91.8 + 45.9 = **√454.1**
+2. Dropped when stage 0 fires: decoupler, half-full tank and engine, 0.05 + 1.0 + 1 = **2.05 t** and 200 + 454.1 + 1,000 = **√1,654.1**
+3. Stays to the end: pod, full tank and engine, **3.3 t** and **√2,100**. In all **√3,754.1**
+4. By part type (dry): engines 2 t, tanks 1 t, pod 0.8 t, decoupler 0.05 t (3.85 t), plus 1.5 t in the tanks: 5.35 t at launch
+5. Left at the end: the pod, the empty tank and the engine, **2.3 t**
+
+- Code: `CraftBreakdown.Build`, `StagingSimulation` (which engines fired); tested in `CraftBreakdownTests`
+- Source: KSP 1.12 craft format (`istg`, `sepI`, `RESOURCE` amounts) and part costs (`cost` includes full resources, as in the editor)
+
+### 7.6 Which engine for a stage? (engine chart)
+
+The **Engine chart** sizes one stage around each engine and picks the one that comes out lightest (or cheapest). The stage pushes a payload P (everything above it) through a vacuum Δv. A liquid-fuel stage gets exactly the propellant and tankage that takes. Tank dry mass is a fixed share k of the propellant, taken from the lightest tank that holds the engine's exact mix (stock liquid fuel + oxidizer tanks: k = 1/8).
+
+```
+r   = e^(Δv / (Isp_vac · g₀)) − 1                         (propellant ÷ mass at burnout)
+m_p = r · (P + n·m_engine) / (1 − r·k)                    (propellant for n engines)
+m₀  = P + n·m_engine + k·m_p + m_p                        (the stage with payload, full)
+TWR = n · F(p) / (m₀ · g)                                 (F at the air pressure p where it fires, §7.4)
+```
+
+From m_p = r · (P + n·m_e + k·m_p): the burnout mass is everything but the propellant, and the rocket equation (§7.1) needs m₀ / m_burnout = r + 1.
+
+- Liquid engines can't give more than **Isp · g₀ · ln(1 + 1/k)**, however big the tanks: at k = 1/8 that's ln 9. Past it, each tank adds more dry mass than the Δv it brings (r·k ≥ 1).
+- An engine with its own tank (the Twin-Boar) uses that fuel first and only adds tanks for the rest.
+- **Solid boosters** carry their own fuel and burn all of it, so only their number n can change: Δv = Isp · g₀ · ln((P + n·m_full) / (P + n·m_dry)).
+- Each engine is tried at 1 up to the most engines allowed. A count only counts if its TWR (full tanks, at the place picked) is at least the least TWR asked for. Each engine shows at its best count, and the best engine wins the chart's cell.
+- Cost is the engines plus full tanks, at the tank's cost per tonne of propellant. "Lightest" compares m₀ and "cheapest" compares cost.
+- Δv uses vacuum Isp, as the Δv map's figures already include losses. On a body with air, only the thrust (and so the TWR) drops, which rules out vacuum engines like the Terrier for lift-off.
+
+Worked example (the numbers in `EngineChartTests`): a Terrier (0.5 t, 60 kN, Isp 345 s vacuum / 85 s sea level, √390) under a 2 t payload, 1,000 m/s in space, with FL-T400 tanks (0.25 t dry for 2 t of propellant, √500 full).
+
+1. k = 0.25 / 2 = **0.125**, at √500 / 2 = **√250 per tonne** of propellant
+2. r = e^(1,000 / (345 × 9.80665)) − 1 = **0.34389**
+3. m_p = 0.34389 × (2 + 0.5) / (1 − 0.34389 / 8) = **0.8983 t**, in **0.1123 t** of tanks
+4. m₀ = 2 + 0.5 + 0.1123 + 0.8983 = **3.5106 t**. Check: 345 × 9.80665 × ln(3.5106 / 2.6123) = 1,000 m/s
+5. TWR in space = 60 / (3.5106 × 9.81) = **1.74**. Cost √390 + 0.8983 × √250 = **√614.59**
+6. The most the Terrier can give: 345 × 9.80665 × ln 9 = **7,434 m/s**
+
+Off the pad it's another story. With 10 t on Kerbin (1 atm) and a least TWR of 1.3, one Reliant (240 kN vacuum, Isp 310 / 265 s, so 205.2 kN at sea level) gives 1.27 at 16.43 t. That's too low, so the stage takes **2 Reliants**: 18.26 t, TWR 2.29. A Hammer booster (0.75 t + 2.8125 t of solid fuel, Isp 195 s) under 1 t gives 195 × 9.80665 × ln(4.5625 / 1.75) = **1,832 m/s**.
+
+- Code: `EngineChart` (`Options`, `Best`, `TankFor`, `ThrustAt`); tested in `EngineChartTests`
+- Source: Tsiolkovsky rocket equation solved for propellant with a fixed tank fraction (the method behind community "best engine" charts such as Cuky's); KSP 1.12 stock tank masses (dry = 1/8 of the propellant)
+
+### 7.7 Antenna range and signal (CommNet planner)
+
+The **CommNet planner** works out how far a craft's antennas reach, and whether it can talk home from each body. It follows KSP's CommNet rules.
+
+**A vessel's antenna power.** Every antenna has a power rating in metres. Antennas that combine add up, but with diminishing returns:
+
+```
+P = P_max · (ΣP / P_max)^e        e = Σ(P_i · e_i) / ΣP_i      (the power-weighted average combinability exponent)
+```
+
+An antenna that doesn't combine (the DTS-M1, for one) counts on its own, and the vessel uses whichever is stronger. A probe core's internal antenna is only used when there's no other antenna. Only **relay** antennas pass other vessels' signals on, so a relay's power for that is worked out from its relay antennas alone. The game's *Range Modifier* setting scales every antenna.
+
+**Range and signal strength.** Two antennas can talk up to the geometric mean of their powers. The tracking station counts as an antenna of 2 Gm, 50 Gm or 250 Gm at levels 1, 2 and 3, scaled by the *DSN Modifier* setting. Signal strength falls smoothly with distance:
+
+```
+range    = √(P₁ · P₂)
+x        = 1 − d / range        (clamped to 0…1)
+strength = x² · (3 − 2x)        (100% close by, 50% at half the range, 0 at the range)
+```
+
+**How far a body gets from home.** Two bodies around the same parent are farthest apart on opposite sides of it, each at its apoapsis, a(1 + e). A moon adds its own apoapsis to its planet's. Home's moons are just their apoapsis away. The planner checks each body at its farthest, since that's the worst case for a craft there.
+
+The planner reads the tracking station's level and both modifiers from the save. Career saves record the level; sandbox and science saves have every building upgraded, so it's level 3. Planets and moons blocking the line of sight aren't counted.
+
+Worked example (the numbers in `CommNetTests`, and the MunLink Shuttle in the planner):
+
+1. Two Communotron 16s (500 km, exponent 1): 500 km × (1,000 / 500)¹ = **1,000 km**. Two HG-55s (15 Gm, exponent 0.75): 15 × 2^0.75 = **25.227 Gm**
+2. A Communotron 16 to a level 1 tracking station: √(500 km × 2 Gm) = **31.62 Mm**, so it loses Kerbin's signal past about 31 Mm
+3. Three RA-2 relays (2 Gm, exponent 0.75): 2 × 3^0.75 = **4.56 Gm**, so √(4.56 Gm × 250 Gm) = **33.8 Gm** to a level 3 tracking station
+4. Duna at its farthest: 20,726,155,264 × 1.051 + 13,599,840,256 = **35.4 Gm**. That's past 33.8 Gm, so out of range
+5. Moho at its farthest: 5,263,138,304 × 1.2 + 13,599,840,256 = 19.9 Gm. x = 1 − 19.9 / 33.8 = 0.410, so strength = 0.410² × (3 − 2 × 0.410) = **37%**
+
+- Code: `CommNet` (`CombinedPower`, `RelayPower`, `Range`, `Strength`, `FarthestFromHome`), `KspSaveReader` (`SavedCommNet`); tested in `CommNetTests`
+- Source: KSP 1.12 CommNet (`ModuleDataTransmitter` antennaPower / antennaCombinable / antennaCombinableExponent, the tracking station's DSN levels, `CommNetParams`); the KSP wiki's CommNet page for the combining and strength formulas
+
+### 7.8 Power through the longest night (power budget)
+
+The **Power budget** adds up the electric charge (EC) a craft makes and uses where it's going, and checks its batteries last the longest night there. The part data gives each part's rates: solar panels (`chargeRate`), generators like the RTG, fuel cells (with the propellant they burn), and what probe cores, reaction wheels, antennas, lights, the lab, ISRU converters and drills use. Ion engines burn charge as a propellant at full thrust, ṁ · ratio_EC / Σ(ratio · density).
+
+```
+solar  = chargeRate · (d_home / d)²            (rated at Kerbin's distance from the Sun; d for a moon is its planet's)
+used   = Σ loads switched on                   (only one antenna transmits at a time: the hungriest is counted)
+dark   = generators + fuel cells (up to what's missing)
+needed = (used − dark) · t_night               (when the dark doesn't cover it)
+lasts  = battery / (used − dark)
+refill = needed / (made in the sun − used)     (it must fit in the day)
+```
+
+**The longest night.**
+- **In orbit**, the worst case is the Sun in the orbit's plane. The craft then crosses the body's full shadow, taken as a cylinder as wide as the body: t_night = T · asin(R / a) / π, with T = 2π √(a³ / μ).
+- **On the surface**, night is half a solar day at the equator. The solar day is the rotation measured against the Sun, which the planet moves around once a year: S = P · Y / (Y − P). A moon uses its planet's year. A tidally locked moon turns once per orbit, so its day is about as long as its month.
+
+Worked example (the numbers in `PowerBudgetTests`):
+
+1. 80 km over Kerbin: T = 2π √(680,000³ / 3.5316 × 10¹²) = 1,874.8 s, and t_night = 1,874.8 × asin(600 / 680) / π = **645.0 s**, leaving 1,229.8 s of sunlight
+2. Kerbin's year: Y = 2π √(13,599,840,256³ / 1.1723328 × 10¹⁸) = 9,203,545 s, so its solar day is 21,549.4 × Y / (Y − 21,549.4) = **21,600 s**, KSP's 6-hour day. Night is 3 h
+3. The Mun (P = 138,984.4 s, Kerbin's year): S = 141,115 s, so **70,558 s** of night (19 h 36 min)
+4. A probe there (an OKTO2 at 0.03 EC/s, two Z-100s for 205 EC including the core's 5, and two OX-4W panels at 1.64 EC/s). The night uses 0.03 × 645.0 = **19.35 EC**. The day refills that in 19.35 / (3.28 − 0.03) = **6.0 s**
+5. At Duna the same panels make (13.60 / 20.73)² = **43.1%** of their rating
+6. A Dawn ion engine at full thrust: ṁ = 2 / (4,200 × 9.80665) t/s, × 1.8 / (0.1 × 0.0001) = **8.74 EC/s**
+
+Panels are assumed to face the Sun. Fixed panels (OX-STAT) only do that when the craft is turned to it. A moon's planet can also eclipse it, which isn't counted. Fuel cells only run to cover what's missing, as KSP stops them when the batteries are nearly full.
+
+- Code: `PowerBudget` (`Work`, `InOrbit`, `OnSurface`, `SolarScale`, `EngineEcPerSecond`), `PartCatalogReader` (`PartPower`); tested in `PowerBudgetTests`
+- Source: KSP 1.12 part modules (`ModuleDeployableSolarPanel`, `ModuleGenerator`, `ModuleResourceConverter`, `ModuleCommand`, `ModuleReactionWheel`, `ModuleDataTransmitter` packetResourceCost / packetInterval, `ModuleLight`, `ModuleScienceConverter`, `ModuleResourceHarvester`); the inverse-square solar law; synodic period for the solar day
+
 ## 8. Working with your save and the live game
 
 Reading orbits from a KSP save or from the running game, and tracking how far a flight has drifted from its plan.
@@ -1317,7 +1447,7 @@ Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
 
 ### 8.2 Following the live game (kRPC)
 
-While connected to the game (*Tools › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
+While connected to the game (*KSP › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block (§8.1) with i, Ω and ω × 180/π.
 
 **Which save vessel is it?** kRPC has no vessel ids, so live vessels are paired with save vessels by name. A different type adds 100 to the score. Among same-named vessels, the closest orbit wins:
 

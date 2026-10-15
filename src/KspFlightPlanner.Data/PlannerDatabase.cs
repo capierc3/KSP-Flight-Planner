@@ -87,6 +87,7 @@ public sealed class PlannerDatabase
         "ksp_part_engines",
         "ksp_engine_propellants",
         "ksp_part_antennas",
+        "ksp_part_power",
         "ksp_tech_nodes",
         "ksp_tech_parents",
         // Sampled from the running game; baking again needs KSP and takes minutes.
