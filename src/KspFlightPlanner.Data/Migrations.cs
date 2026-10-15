@@ -196,7 +196,12 @@ internal static class Migrations
             mass_t         REAL NOT NULL,    -- dry
             cost           REAL NOT NULL DEFAULT 0,
             crew_capacity  INTEGER NOT NULL DEFAULT 0,
-            fuel_crossfeed INTEGER NOT NULL DEFAULT 1    -- 0: fuel can't pass through (decouplers)
+            fuel_crossfeed INTEGER NOT NULL DEFAULT 1,   -- 0: fuel can't pass through (decouplers)
+            tech_required  TEXT,                         -- the tech node that unlocks it (ksp_tech_nodes.id)
+            description    TEXT,
+            bulkhead_profiles TEXT,                      -- sizes it attaches at, comma-separated (size1,srf)
+            crash_tolerance REAL NOT NULL DEFAULT 0,     -- m/s
+            max_temp       REAL NOT NULL DEFAULT 0       -- K
         );
 
         CREATE TABLE ksp_part_resources (      -- what a new part holds (full tanks)
@@ -233,6 +238,31 @@ internal static class Migrations
             combinable           INTEGER NOT NULL,
             combinable_exponent  REAL    NOT NULL,
             PRIMARY KEY (part_name, module_index)
+        );
+
+        -- The R&D tech tree of the install (RDNode), read with the parts.
+        CREATE TABLE ksp_tech_nodes (
+            id             TEXT PRIMARY KEY,
+            sort_order     INTEGER NOT NULL,   -- as GameData lists them
+            title          TEXT NOT NULL,
+            description    TEXT,
+            cost           REAL NOT NULL,      -- science
+            x              REAL NOT NULL,      -- position in the R&D building, y up
+            y              REAL NOT NULL,
+            any_to_unlock  INTEGER NOT NULL    -- 1: one researched parent is enough
+        );
+
+        CREATE TABLE ksp_tech_parents (
+            node_id    TEXT NOT NULL REFERENCES ksp_tech_nodes(id) ON DELETE CASCADE,
+            parent_id  TEXT NOT NULL,
+            PRIMARY KEY (node_id, parent_id)
+        );
+
+        -- Tech nodes the player plans to research next, per KSP save ('' when no save is chosen).
+        CREATE TABLE tech_plans (
+            ksp_save  TEXT NOT NULL,
+            node_id   TEXT NOT NULL,
+            PRIMARY KEY (ksp_save, node_id)
         );
 
         -- Surface data sampled from the running game over kRPC ("baked"), per body of the user's install.

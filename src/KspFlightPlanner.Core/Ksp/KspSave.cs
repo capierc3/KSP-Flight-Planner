@@ -88,6 +88,9 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
 {
     /// <summary>Waypoints the player placed (KerbNet or the map), from the ScenarioCustomWaypoints scenario.</summary>
     public IReadOnlyList<SavedWaypoint> Waypoints { get; init; } = [];
+
+    /// <summary>What's been researched; null in sandbox, where every part can be used.</summary>
+    public SavedResearch? Research { get; init; }
 }
 
 /// <summary>A custom waypoint: a named spot on a body (degrees, north and east positive).</summary>
@@ -168,7 +171,19 @@ public static class KspSaveReader
                 Number(w.GetValue("latitude")), Number(w.GetValue("longitude"))))
             .Where(w => w.BodyName.Length > 0 && double.IsFinite(w.LatitudeDeg) && double.IsFinite(w.LongitudeDeg))
             .ToList();
-        return new KspSave(title, game.GetValue("Mode") ?? "", Number(flight?.GetValue("UT")), vessels) { Waypoints = waypoints };
+        var mode = game.GetValue("Mode") ?? "";
+        var research = mode == "SANDBOX" ? null
+            : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment") is { } rd ? ReadResearch(rd) : null;
+        return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels) { Waypoints = waypoints, Research = research };
+    }
+
+    /// <summary>Researched tech nodes (state Available) and the parts each lists as usable.</summary>
+    private static SavedResearch ReadResearch(ConfigNode rd)
+    {
+        var researched = rd.GetNodes("Tech").Where(t => t.GetValue("state") == "Available").ToList();
+        return new SavedResearch(Number(rd.GetValue("sci")),
+            researched.Select(t => t.GetValue("id")).OfType<string>().ToHashSet(),
+            researched.SelectMany(t => t.Values.Where(v => v.Key == "part").Select(v => PartCatalog.NormalizeName(v.Value))).ToHashSet());
     }
 
     private static SavedVessel ReadVessel(ConfigNode v)

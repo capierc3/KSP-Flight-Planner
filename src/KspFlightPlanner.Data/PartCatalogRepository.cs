@@ -40,15 +40,25 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
             r => (Part: r.GetString(0), Antenna: new PartAntenna(r.GetString(1), r.GetDouble(2), r.GetInt64(3) != 0, r.GetDouble(4))))
             .ToLookup(x => x.Part, x => x.Antenna);
 
-        var parts = Query(connection, "SELECT name, title, category, manufacturer, mass_t, cost, crew_capacity, fuel_crossfeed FROM ksp_parts;",
+        var parents = Query(connection, "SELECT node_id, parent_id FROM ksp_tech_parents;", r => (Node: r.GetString(0), Parent: r.GetString(1)))
+            .ToLookup(x => x.Node, x => x.Parent);
+        var techTree = Query(connection,
+            "SELECT id, title, description, cost, x, y, any_to_unlock FROM ksp_tech_nodes ORDER BY sort_order;",
+            r => new TechNode(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), r.GetDouble(3), r.GetDouble(4), r.GetDouble(5),
+                parents[r.GetString(0)].ToList(), r.GetInt64(6) != 0));
+
+        var parts = Query(connection,
+            "SELECT name, title, category, manufacturer, mass_t, cost, crew_capacity, fuel_crossfeed, tech_required, description, " +
+            "bulkhead_profiles, crash_tolerance, max_temp FROM ksp_parts;",
             r =>
             {
                 var name = r.GetString(0);
                 return new KspPart(name, r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
                     r.GetDouble(4), r.GetDouble(5), r.GetInt32(6), partResources[name].ToList(), engines[name].ToList(), antennas[name].ToList(),
-                    r.GetInt64(7) != 0);
+                    r.GetInt64(7) != 0, r.IsDBNull(8) ? null : r.GetString(8), r.IsDBNull(9) ? null : r.GetString(9),
+                    r.IsDBNull(10) ? [] : r.GetString(10).Split(',', StringSplitOptions.RemoveEmptyEntries), r.GetDouble(11), r.GetDouble(12));
             });
-        return new PartCatalog(parts, resources);
+        return new PartCatalog(parts, resources, techTree);
     }
 
     public PartCatalogInfo? GetInfo()
@@ -76,14 +86,14 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
     {
         using var connection = database.Open();
         using var tx = connection.BeginTransaction();
-        Execute(connection, tx, "DELETE FROM ksp_parts; DELETE FROM ksp_resources;"); // child rows cascade
+        Execute(connection, tx, "DELETE FROM ksp_parts; DELETE FROM ksp_resources; DELETE FROM ksp_tech_nodes;"); // child rows cascade
 
         using (var cmd = Command(connection, tx, "INSERT INTO ksp_resources VALUES ($name, $display, $density, $cost, $flow);"))
             foreach (var r in catalog.Resources.Values)
                 Run(cmd, ("$name", r.Name), ("$display", r.DisplayName), ("$density", r.DensityT), ("$cost", r.UnitCost), ("$flow", r.FlowMode));
 
         using var part = Command(connection, tx,
-            "INSERT INTO ksp_parts VALUES ($name, $title, $category, $maker, $mass, $cost, $crew, $crossfeed);");
+            "INSERT INTO ksp_parts VALUES ($name, $title, $category, $maker, $mass, $cost, $crew, $crossfeed, $tech, $desc, $sizes, $crash, $temp);");
         using var resource = Command(connection, tx, "INSERT OR REPLACE INTO ksp_part_resources VALUES ($part, $name, $amount, $max);");
         using var engine = Command(connection, tx, """
             INSERT INTO ksp_part_engines (part_name, module_index, engine_id, max_thrust_kn, isp_vacuum_s, isp_sea_level_s)
@@ -95,7 +105,8 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
         foreach (var p in catalog.Parts.Values)
         {
             Run(part, ("$name", p.Name), ("$title", p.Title), ("$category", p.Category), ("$maker", p.Manufacturer), ("$mass", p.MassT),
-                ("$cost", p.Cost), ("$crew", p.CrewCapacity), ("$crossfeed", p.FuelCrossfeed ? 1 : 0));
+                ("$cost", p.Cost), ("$crew", p.CrewCapacity), ("$crossfeed", p.FuelCrossfeed ? 1 : 0), ("$tech", p.TechRequired),
+                ("$desc", p.Description), ("$sizes", string.Join(",", p.BulkheadProfiles ?? [])), ("$crash", p.CrashToleranceMs), ("$temp", p.MaxTempK));
             foreach (var r in p.Resources)
                 Run(resource, ("$part", p.Name), ("$name", r.Name), ("$amount", r.Amount), ("$max", r.MaxAmount));
             for (var i = 0; i < p.Engines.Count; i++)
@@ -114,6 +125,16 @@ public sealed class PartCatalogRepository(PlannerDatabase database)
                     ("$exp", a.CombinableExponent));
             }
         }
+
+        using (var node = Command(connection, tx, "INSERT OR REPLACE INTO ksp_tech_nodes VALUES ($id, $order, $title, $desc, $cost, $x, $y, $any);"))
+        using (var parent = Command(connection, tx, "INSERT OR IGNORE INTO ksp_tech_parents VALUES ($id, $parent);"))
+            for (var i = 0; i < catalog.TechTree.Count; i++)
+            {
+                var n = catalog.TechTree[i];
+                Run(node, ("$id", n.Id), ("$order", i), ("$title", n.Title), ("$desc", n.Description), ("$cost", n.Cost), ("$x", n.X), ("$y", n.Y),
+                    ("$any", n.AnyToUnlock ? 1 : 0));
+                foreach (var p in n.Parents) Run(parent, ("$id", n.Id), ("$parent", p));
+            }
 
         using (var meta = Command(connection, tx,
                    "INSERT INTO app_settings (key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = $value;"))

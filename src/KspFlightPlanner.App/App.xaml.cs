@@ -28,6 +28,7 @@ public partial class App : Application
             var link = new KspLink(() => settings.Load());
             var sync = new SaveSync(database, settings, bodies, locations, new PartData(new PartCatalogRepository(database)), events, link);
             var designs = new DesignLibrary(sync);
+            var availability = new PartAvailability(sync, new TechPlanRepository(database), events);
             var flights = new FlightRepository(database);
             var bakes = new SurfaceBakeRepository(database);
             var rotation = new BodyRotation(bakes, link);
@@ -47,7 +48,24 @@ public partial class App : Application
                 link,
                 events)
             {
+                TechTree = new TechTreeViewModel(availability),
+                Parts = new PartsViewModel(availability),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
+            };
+            // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
+            // moves it: the Part pane also refreshes when the plan changes, and that mustn't undo a pick in the tree.
+            string? shownPart = null;
+            viewModel.Parts.Detail.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(PartDetailViewModel.Item) || viewModel.Parts.Detail.Item?.Part is not { } part) return;
+                if (part.Name == shownPart) return;
+                shownPart = part.Name;
+                if (part.TechRequired is { } node) viewModel.TechTree.SelectNode(node);
+            };
+            viewModel.Parts.Detail.OpenNodeRequested += id =>
+            {
+                viewModel.TechTree.SelectNode(id);
+                viewModel.RequestPane(Panes.TechTree);
             };
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
