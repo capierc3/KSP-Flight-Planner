@@ -12,6 +12,22 @@ namespace KspFlightPlanner.App.ViewModels;
 public sealed record TwrBody(string Name, double SurfaceGravity, double PressureAtm)
 {
     public override string ToString() => Name;
+
+    /// <summary>Firing in space: no air, and TWR measured against Kerbin's surface gravity (as KSP's readouts do).</summary>
+    public static readonly TwrBody InSpace = new("In space", 9.81, 0);
+
+    /// <summary>The stock bodies with a surface, in KSP's order, and the home world among them.</summary>
+    public static (IReadOnlyList<TwrBody> Bodies, TwrBody Home) Stock(SaveSync sync)
+    {
+        var bodies = sync.StockBodies().Values
+            // Stars and gas giants have nothing to stand on.
+            .Where(b => b.BodyClass != "Star" && b.Name != "Jool")
+            .OrderBy(b => Array.IndexOf(SavedOrbit.StockBodyOrder, b.Name) is var i and >= 0 ? i : int.MaxValue).ThenBy(b => b.Name)
+            .Select(b => (Body: b, Twr: new TwrBody(b.Name, b.SurfaceGravity, b.Atmosphere?.SeaLevelPressureAtm ?? 0)))
+            .ToList();
+        var home = bodies.FirstOrDefault(b => b.Body.IsDefault).Twr ?? bodies.Select(b => b.Twr).FirstOrDefault() ?? new TwrBody("Kerbin", 9.81, 1);
+        return (bodies.Count == 0 ? [home] : bodies.Select(b => b.Twr).ToList(), home);
+    }
 }
 
 /// <summary>One stage of the design in the Engineering table, in firing order.</summary>
@@ -231,15 +247,7 @@ public sealed class EngineeringViewModel : ObservableObject
 
     private void RefreshBodies()
     {
-        var bodies = _sync.StockBodies().Values
-            // Stars and gas giants have nothing to stand on.
-            .Where(b => b.BodyClass != "Star" && b.Name != "Jool")
-            .OrderBy(b => Array.IndexOf(SavedOrbit.StockBodyOrder, b.Name) is var i and >= 0 ? i : int.MaxValue).ThenBy(b => b.Name)
-            .Select(b => (Body: b, Twr: new TwrBody(b.Name, b.SurfaceGravity, b.Atmosphere?.SeaLevelPressureAtm ?? 0)))
-            .ToList();
-        Bodies = bodies.Select(b => b.Twr).ToList();
-        _body = bodies.FirstOrDefault(b => b.Body.IsDefault).Twr ?? Bodies.FirstOrDefault() ?? new TwrBody("Kerbin", 9.81, 1);
-        if (Bodies.Count == 0) Bodies = [_body];
+        (Bodies, _body) = TwrBody.Stock(_sync);
         OnPropertyChanged(nameof(Bodies));
         OnPropertyChanged(nameof(SelectedBody));
     }

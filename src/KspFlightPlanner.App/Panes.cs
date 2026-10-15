@@ -47,6 +47,7 @@ public static class Panes
     public const string Flight = "flight";
     public const string TechTree = "techtree";
     public const string Engineering = "engineering";
+    public const string EngineChart = "enginechart";
     public const string Guide = "guide";
 
     private static readonly WorkMode[] Plan = [WorkMode.Plan];
@@ -76,6 +77,7 @@ public static class Panes
         new(Resonant, "Resonant Orbits", true, Plan, vm => new ResonantOrbitView { DataContext = vm.Resonant }),
         new(TechTree, "Tech tree", true, Plan, vm => new TechTreeView { DataContext = vm.TechTree }),
         new(Engineering, "Engineering", true, Plan, vm => new EngineeringView { DataContext = vm.Engineering }),
+        new(EngineChart, "Engine chart", true, Plan, vm => new EngineChartView { DataContext = vm.EngineChart }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];

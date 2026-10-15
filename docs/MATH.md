@@ -14,7 +14,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
-- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops
+- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart)
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
 
 **Where to look for…**
@@ -1314,6 +1314,40 @@ Worked example (the numbers in `CraftBreakdownTests`): a pod (0.8 t, √600) on 
 
 - Code: `CraftBreakdown.Build`, `StagingSimulation` (which engines fired); tested in `CraftBreakdownTests`
 - Source: KSP 1.12 craft format (`istg`, `sepI`, `RESOURCE` amounts) and part costs (`cost` includes full resources, as in the editor)
+
+### 7.6 Which engine for a stage? (engine chart)
+
+The **Engine chart** sizes one stage around each engine and picks the one that comes out lightest (or cheapest). The stage pushes a payload P (everything above it) through a vacuum Δv. A liquid-fuel stage gets exactly the propellant and tankage that takes. Tank dry mass is a fixed share k of the propellant, taken from the lightest tank that holds the engine's exact mix (stock liquid fuel + oxidizer tanks: k = 1/8).
+
+```
+r   = e^(Δv / (Isp_vac · g₀)) − 1                         (propellant ÷ mass at burnout)
+m_p = r · (P + n·m_engine) / (1 − r·k)                    (propellant for n engines)
+m₀  = P + n·m_engine + k·m_p + m_p                        (the stage with payload, full)
+TWR = n · F(p) / (m₀ · g)                                 (F at the air pressure p where it fires, §7.4)
+```
+
+From m_p = r · (P + n·m_e + k·m_p): the burnout mass is everything but the propellant, and the rocket equation (§7.1) needs m₀ / m_burnout = r + 1.
+
+- Liquid engines can't give more than **Isp · g₀ · ln(1 + 1/k)**, however big the tanks: at k = 1/8 that's ln 9. Past it, each tank adds more dry mass than the Δv it brings (r·k ≥ 1).
+- An engine with its own tank (the Twin-Boar) uses that fuel first and only adds tanks for the rest.
+- **Solid boosters** carry their own fuel and burn all of it, so only their number n can change: Δv = Isp · g₀ · ln((P + n·m_full) / (P + n·m_dry)).
+- Each engine is tried at 1 up to the most engines allowed. A count only counts if its TWR (full tanks, at the place picked) is at least the least TWR asked for. Each engine shows at its best count, and the best engine wins the chart's cell.
+- Cost is the engines plus full tanks, at the tank's cost per tonne of propellant. "Lightest" compares m₀ and "cheapest" compares cost.
+- Δv uses vacuum Isp, as the Δv map's figures already include losses. On a body with air, only the thrust (and so the TWR) drops, which rules out vacuum engines like the Terrier for lift-off.
+
+Worked example (the numbers in `EngineChartTests`): a Terrier (0.5 t, 60 kN, Isp 345 s vacuum / 85 s sea level, √390) under a 2 t payload, 1,000 m/s in space, with FL-T400 tanks (0.25 t dry for 2 t of propellant, √500 full).
+
+1. k = 0.25 / 2 = **0.125**, at √500 / 2 = **√250 per tonne** of propellant
+2. r = e^(1,000 / (345 × 9.80665)) − 1 = **0.34389**
+3. m_p = 0.34389 × (2 + 0.5) / (1 − 0.34389 / 8) = **0.8983 t**, in **0.1123 t** of tanks
+4. m₀ = 2 + 0.5 + 0.1123 + 0.8983 = **3.5106 t**. Check: 345 × 9.80665 × ln(3.5106 / 2.6123) = 1,000 m/s
+5. TWR in space = 60 / (3.5106 × 9.81) = **1.74**. Cost √390 + 0.8983 × √250 = **√614.59**
+6. The most the Terrier can give: 345 × 9.80665 × ln 9 = **7,434 m/s**
+
+Off the pad it's another story. With 10 t on Kerbin (1 atm) and a least TWR of 1.3, one Reliant (240 kN vacuum, Isp 310 / 265 s, so 205.2 kN at sea level) gives 1.27 at 16.43 t. That's too low, so the stage takes **2 Reliants**: 18.26 t, TWR 2.29. A Hammer booster (0.75 t + 2.8125 t of solid fuel, Isp 195 s) under 1 t gives 195 × 9.80665 × ln(4.5625 / 1.75) = **1,832 m/s**.
+
+- Code: `EngineChart` (`Options`, `Best`, `TankFor`, `ThrustAt`); tested in `EngineChartTests`
+- Source: Tsiolkovsky rocket equation solved for propellant with a fixed tank fraction (the method behind community "best engine" charts such as Cuky's); KSP 1.12 stock tank masses (dry = 1/8 of the propellant)
 
 ## 8. Working with your save and the live game
 

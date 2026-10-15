@@ -11,7 +11,7 @@
         <StackPanel Margin="0,0,18,0">
             <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                        Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
-                       Text="Inputs for the Transfer Planner, Rendezvous or Resonant Orbits show here: whichever of them you looked at last." />
+                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits or Engine chart show here: whichever of them you looked at last." />
 
             <StackPanel DataContext="{Binding Transfer}"
                         Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -278,6 +278,70 @@
                     <TextBox Grid.Column="1" Text="{Binding DeorbitAltitudeText, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
                 </Grid>
                 </StackPanel>
+            </StackPanel>
+
+            <!-- Engine chart: the stage to size -->
+            <StackPanel DataContext="{Binding EngineChart}"
+                        Visibility="{Binding DataContext.ShowsEngineChartInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Engine chart" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Text="The stage to size: what it pushes, the Δv it gives and where it fires." />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Payload (t)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding PayloadText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Payload"
+                                 ToolTip="Everything above this stage: later stages, the probe or crew pod, the lander…" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Δv (m/s)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding DeltaVText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Delta-v"
+                                 ToolTip="Vacuum Δv this stage must give (take it from the mission's phases or the Δv map)" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Fires" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding Body}" AutomationProperties.Name="Fires"
+                                  ToolTip="In space: no air, TWR against Kerbin's gravity. On a body: its gravity and surface air (lifting off or landing)." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Least TWR" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding MinTwrText, UpdateSourceTrigger=PropertyChanged, Delay=300}" AutomationProperties.Name="Least TWR"
+                                 ToolTip="With full tanks. About 1.3 or more to lift off; 0.3 to 0.5 is plenty in space" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Engines" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding MaxEnginesChoices}" SelectedItem="{Binding MaxEngines}" AutomationProperties.Name="Engines"
+                                  ToolTip="The most engines of one kind on the stage" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Best is" Style="{StaticResource Label}" />
+                        <ComboBox ItemsSource="{Binding Goals}" SelectedItem="{Binding Goal}" AutomationProperties.Name="Best is" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="Parts" Style="{StaticResource Label}" />
+                <ComboBox ItemsSource="{Binding PartsChoices}" SelectedItem="{Binding PartsChoice}" AutomationProperties.Name="Parts"
+                          ToolTip="Engines and tanks to choose from: what this save can build, or with your research plan, or everything" />
+                <TextBlock Text="Chart shows" Style="{StaticResource Label}" Margin="0,8,0,0" FontWeight="SemiBold" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox ItemsSource="{Binding PayloadRanges}" SelectedItem="{Binding PayloadRange}" AutomationProperties.Name="Payload range" />
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding DeltaVRanges}" SelectedItem="{Binding DeltaVRange}" AutomationProperties.Name="Delta-v range" />
+                </Grid>
+                <TextBlock Text="{Binding InputProblem}" Style="{StaticResource Note}" Foreground="#EF5350" Margin="0,6,0,0" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

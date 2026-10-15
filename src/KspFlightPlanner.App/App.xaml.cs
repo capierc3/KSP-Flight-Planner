@@ -52,6 +52,7 @@ public partial class App : Application
                 TechTree = new TechTreeViewModel(availability),
                 Parts = new PartsViewModel(availability),
                 Engineering = new EngineeringViewModel(designs, sync, availability, mission),
+                EngineChart = new EngineChartViewModel(sync, availability),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
@@ -73,11 +74,13 @@ public partial class App : Application
             // Picking in the Engineering document brings the Rocket pane (a stage) or the Part pane (a part) into view,
             // leaving keyboard focus in the document's list.
             viewModel.Engineering.StagePicked += () => viewModel.RequestPane(Panes.Rocket, activate: false);
-            viewModel.Engineering.PartPicked += item =>
+            void ShowPart(PartItem item)
             {
                 viewModel.Parts.Detail.Item = item;
                 viewModel.RequestPane(Panes.Part, activate: false);
-            };
+            }
+            viewModel.Engineering.PartPicked += ShowPart;
+            viewModel.EngineChart.PartPicked += ShowPart;
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }

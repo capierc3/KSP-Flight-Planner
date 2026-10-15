@@ -77,6 +77,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>A saved design taken apart; what's picked in it shows in the Rocket pane.</summary>
     public required EngineeringViewModel Engineering { get; init; }
 
+    /// <summary>Which engine makes the best stage for a payload and Δv.</summary>
+    public required EngineChartViewModel EngineChart { get; init; }
+
     /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
     public string? ActiveDocument
     {
@@ -136,6 +139,7 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsTransferInputs));
             OnPropertyChanged(nameof(ShowsRendezvousInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
+            OnPropertyChanged(nameof(ShowsEngineChartInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
@@ -143,6 +147,7 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsTransferInputs => ActiveCalculator == Panes.Transfer;
     public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
+    public bool ShowsEngineChartInputs => ActiveCalculator == Panes.EngineChart;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
@@ -158,6 +163,12 @@ public sealed class MainViewModel : ObservableObject
     {
         ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
+        // The engine chart is all inputs: bring them forward with it (without taking focus).
+        if (id == Panes.EngineChart && ActiveCalculator != id)
+        {
+            ActiveCalculator = id;
+            RequestPane(Panes.Calculators, activate: false);
+        }
     }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>

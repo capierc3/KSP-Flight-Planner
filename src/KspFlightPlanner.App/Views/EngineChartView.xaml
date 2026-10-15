@@ -1,0 +1,131 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.EngineChartView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="Mono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ColumnHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <ControlTemplate x:Key="PlainList" TargetType="ListBox">
+            <ItemsPresenter />
+        </ControlTemplate>
+    </UserControl.Resources>
+
+    <!-- Which engine makes the lightest (or cheapest) stage for each payload and Δv; inputs in the Calculators pane. -->
+    <ScrollViewer Padding="24,12,8,16" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,16,0">
+            <TextBlock Text="Engine chart" FontSize="20" FontWeight="Bold" />
+            <TextBlock Style="{StaticResource Note}" FontSize="13"
+                       Text="The engine that makes the best stage for each payload and Δv, with the TWR, place and parts set in the Calculators pane. Click the chart to pick a payload and Δv." />
+            <TextBlock Text="{Binding Summary}" Style="{StaticResource Note}" Margin="0,2,0,0" />
+
+            <controls:EngineChartPlotView x:Name="Chart" Height="380" Margin="0,12,0,0" Plot="{Binding Plot}" Marker="{Binding Marker}"
+                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}" Cursor="Cross"
+                                          AutomationProperties.Name="Engine chart" />
+
+            <!-- Legend: the engines that win somewhere, biggest share first -->
+            <ItemsControl ItemsSource="{Binding Plot.Legend}" Margin="56,6,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                            <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Color}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Title}" Margin="6,0,4,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Share}" Style="{StaticResource Note}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Style="{StaticResource Note}" Margin="56,4,0,0"
+                       Text="Grey: nothing can do it. Each stage gets the propellant and tanks it needs (solid boosters only come whole), starting with full tanks for the TWR. How it's worked out: Math guide §7.6." />
+
+            <!-- Every engine sized for the payload and Δv typed in -->
+            <TextBlock Text="{Binding OptionsTitle}" Style="{StaticResource SectionHeader}" />
+            <TextBlock Text="{Binding OptionsEmpty}" Style="{StaticResource Note}" />
+            <StackPanel Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}">
+                <Grid Margin="12,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="200" /><ColumnDefinition Width="50" /><ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="60" /><ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="80" /><ColumnDefinition Width="220" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Engine" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="1" Text="Count" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="2" Text="Stage" Style="{StaticResource ColumnHeader}" ToolTip="Engines, tanks and propellant: everything but the payload" />
+                    <TextBlock Grid.Column="3" Text="With payload" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="4" Text="Propellant" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="5" Text="TWR" Style="{StaticResource ColumnHeader}" ToolTip="At ignition, full, where the stage fires" />
+                    <TextBlock Grid.Column="6" Text="Burn" Style="{StaticResource ColumnHeader}" ToolTip="At full thrust" />
+                    <TextBlock Grid.Column="7" Text="Cost" Style="{StaticResource ColumnHeader}" ToolTip="Engines and full tanks" />
+                </Grid>
+                <ListBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" Template="{StaticResource PlainList}"
+                         AutomationProperties.Name="Engines">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding Engine}" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsUnlocked}" Value="False">
+                                    <Setter Property="Opacity" Value="0.6" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MinWidth="200" /><ColumnDefinition Width="50" /><ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="60" /><ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="80" /><ColumnDefinition Width="220" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                    <Run Text="{Binding Engine, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Status, Mode=OneWay}" FontStyle="Italic"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </TextBlock>
+                                <TextBlock Grid.Column="1" Text="{Binding Count}" Style="{StaticResource Mono}" />
+                                <TextBlock Grid.Column="2" Text="{Binding StageMass}" Style="{StaticResource Mono}" FontWeight="Bold" />
+                                <TextBlock Grid.Column="3" Text="{Binding TotalMass}" Style="{StaticResource Mono}" />
+                                <TextBlock Grid.Column="4" Text="{Binding Propellant}" Style="{StaticResource Mono}" />
+                                <TextBlock Grid.Column="5" Text="{Binding Twr}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Rating}" Value="Good">
+                                                    <Setter Property="Foreground" Value="#66BB6A" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Rating}" Value="Low">
+                                                    <Setter Property="Foreground" Value="#FFB300" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Rating}" Value="TooLow">
+                                                    <Setter Property="Foreground" Value="#EF5350" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Grid.Column="6" Text="{Binding BurnTime}" Style="{StaticResource Mono}" />
+                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Mono}" />
+                                <TextBlock Grid.Column="8" Text="{Binding Note}" Style="{StaticResource Note}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                           Text="Best first. Each engine at the count that does best (up to the most allowed). Pick one to see it in the Part pane." />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
