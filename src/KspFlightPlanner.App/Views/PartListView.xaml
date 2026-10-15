@@ -19,7 +19,7 @@
                   ToolTip="Also list the parts this save can't build yet, greyed out" />
         <TextBlock DockPanel.Dock="Bottom" Text="{Binding Summary}" Style="{StaticResource Note}" Margin="0,8,0,0" />
         <ListBox ItemsSource="{Binding Source={StaticResource ByCategory}}" Background="Transparent" BorderThickness="0"
-                 SelectedItem="{Binding Selected}" SelectionChanged="List_SelectionChanged"
+                 SelectedItem="{Binding Selected}" SelectionChanged="List_SelectionChanged" IsSynchronizedWithCurrentItem="False"
                  VirtualizingPanel.IsVirtualizingWhenGrouping="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.GroupStyle>
                 <GroupStyle>

@@ -126,7 +126,7 @@
                 <Grid Width="{Binding Width}" Height="{Binding Height}" HorizontalAlignment="Left" VerticalAlignment="Top">
                     <Path Data="{Binding Links}" Stroke="#46526E" StrokeThickness="1.5" />
                     <Path Data="{Binding PlannedLinks}" Stroke="#4FC3F7" StrokeThickness="2.5" />
-                    <ItemsControl ItemsSource="{Binding Nodes}">
+                    <ItemsControl x:Name="NodeList" ItemsSource="{Binding Nodes}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <Canvas />

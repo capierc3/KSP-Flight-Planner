@@ -52,6 +52,16 @@ public partial class App : Application
                 Parts = new PartsViewModel(availability),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
+            // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
+            // moves it: the Part pane also refreshes when the plan changes, and that mustn't undo a pick in the tree.
+            string? shownPart = null;
+            viewModel.Parts.Detail.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(PartDetailViewModel.Item) || viewModel.Parts.Detail.Item?.Part is not { } part) return;
+                if (part.Name == shownPart) return;
+                shownPart = part.Name;
+                if (part.TechRequired is { } node) viewModel.TechTree.SelectNode(node);
+            };
             viewModel.Parts.Detail.OpenNodeRequested += id =>
             {
                 viewModel.TechTree.SelectNode(id);
