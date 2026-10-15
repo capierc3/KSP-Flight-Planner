@@ -1,0 +1,136 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.FlightReportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:KspFlightPlanner.App.Controls"
+             xmlns:vm="clr-namespace:KspFlightPlanner.App.ViewModels">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="Mono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ColumnHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <!-- A row of a table: when, what, how much -->
+        <DataTemplate x:Key="ReportRowTemplate" DataType="{x:Type vm:ReportRow}">
+            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding When}" Style="{StaticResource Mono}" />
+                    <TextBlock Grid.Column="1" Text="{Binding What}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Value}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- One logged flight: where the Δv went, how the ascent and landings went, charts and the timeline. -->
+    <ScrollViewer Padding="24,12,8,16" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,16,0">
+            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" FontSize="13" TextWrapping="Wrap" />
+
+            <StackPanel Visibility="{Binding HasLog, Converter={StaticResource BoolToVisibility}}">
+                <!-- Headlines -->
+                <ItemsControl ItemsSource="{Binding Cards}" Margin="0,12,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,10,10" Padding="14,8" CornerRadius="4" BorderThickness="1" Width="220"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource ColumnHeader}" />
+                                    <TextBlock Text="{Binding Value}" FontFamily="Cascadia Mono, Consolas" FontSize="17" FontWeight="Bold" />
+                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- The flight from above a body -->
+                <TextBlock Text="Map" Style="{StaticResource SectionHeader}" />
+                <TextBlock Text="{Binding MapNote}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                <StackPanel Visibility="{Binding HasMap, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="Around" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ComboBox ItemsSource="{Binding MapBodies}" SelectedItem="{Binding MapBody}" Width="140" AutomationProperties.Name="Map around" />
+                        <TextBlock Style="{StaticResource Note}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Text="Orange: burning · blue: coasting · dashed: worked out from the orbit. Wheel to zoom, drag to move, double-click to fit." />
+                    </StackPanel>
+                    <controls:FlightMapCanvas Map="{Binding Map}" Height="460" />
+                </StackPanel>
+
+                <!-- Chart: what, and which part of the flight -->
+                <TextBlock Text="Charts" Style="{StaticResource SectionHeader}" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <ComboBox ItemsSource="{x:Static vm:FlightReportViewModel.ChartKinds}" SelectedItem="{Binding ChartKind}" Width="170"
+                              AutomationProperties.Name="Chart" />
+                    <ComboBox ItemsSource="{Binding Ranges}" SelectedItem="{Binding Range}" Width="260" Margin="8,0,0,0"
+                              AutomationProperties.Name="Part of the flight" />
+                </StackPanel>
+                <controls:LineChartView Data="{Binding Chart}" Height="300" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="Upright dashed lines: staging, sphere-of-influence and situation changes (hover for which). Shaded: warp or not recorded. A dashed curve is the path worked out from the orbit where there are no samples (on rails the craft follows its orbit exactly)." />
+
+                <StackPanel Visibility="{Binding HasAscentProfile, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Ascent profile" Style="{StaticResource SectionHeader}" />
+                    <controls:LineChartView Data="{Binding AscentProfile}" Height="240" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <!-- Where the Δv went -->
+                <Grid Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" MaxWidth="620" /><ColumnDefinition Width="24" /><ColumnDefinition Width="2*" MaxWidth="360" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Burns" Style="{StaticResource SectionHeader}" />
+                        <TextBlock Text="No burns recorded.">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasBurns}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ItemsControl ItemsSource="{Binding Burns}" ItemTemplate="{StaticResource ReportRowTemplate}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Δv by body and stage" Style="{StaticResource SectionHeader}" />
+                        <ItemsControl ItemsSource="{Binding DeltaVSplit}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" /><ColumnDefinition Width="100" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding What}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="Timeline" Style="{StaticResource SectionHeader}" />
+                <ItemsControl ItemsSource="{Binding Timeline}" ItemTemplate="{StaticResource ReportRowTemplate}" MaxWidth="620" HorizontalAlignment="Left" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

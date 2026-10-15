@@ -62,7 +62,8 @@ public partial class App : Application
                 EngineChart = new EngineChartViewModel(sync, availability),
                 CommNet = new CommNetViewModel(sync, availability, engineering),
                 PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
-                FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, events),
+                FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, events,
+                    new FlightReportViewModel(new FlightLogRepository(database), sync)),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

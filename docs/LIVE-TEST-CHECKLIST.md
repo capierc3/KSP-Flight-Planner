@@ -291,6 +291,11 @@ Notes:
 - [ ] Switch to another vessel and back → one log, with the gap noted
 - [ ] Recover a landed vessel → its log says Recovered (after KSP writes the save); revert a launch → Reverted
 - [ ] Turn off "Record a flight log while flying" in Settings → the pane says recording is off; nothing new is logged
+- [ ] Pick a log → the Flight report opens: Δv to orbit, ascent losses, max Q/g, a card per touchdown
+- [ ] Charts: switch kind (altitude, speed, Δv used…) and part of the flight (ascent, each landing); hover shows values and staging lines
+- [ ] Burns table matches what you flew; the Δv by stage looks right against the design's stages
+- [ ] A Mun trip with long warps: no "Switched to another vessel" at the SOI changes; warp shows as a dashed curve on the altitude chart
+- [ ] Map › Around Kerbin: the path goes out to the Mun's orbit and meets the Mun where it was; Around Mun shows the flyby or capture
 
 Notes:
 

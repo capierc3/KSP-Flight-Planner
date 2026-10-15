@@ -72,10 +72,11 @@ public sealed class FlightLogViewModel : ObservableObject
     private readonly FlightLogRepository _logs;
     private FlightLogItem? _selected;
 
-    public FlightLogViewModel(FlightLogRepository logs, FlightRecorder recorder, PlannerEvents events)
+    public FlightLogViewModel(FlightLogRepository logs, FlightRecorder recorder, PlannerEvents events, FlightReportViewModel report)
     {
         _logs = logs;
         Recorder = recorder;
+        Report = report;
         recorder.LogsChanged += Refresh;
         events.SaveChanged += Refresh;
         DeleteCommand = new RelayCommand(Delete, () => _selected is not null);
@@ -83,6 +84,9 @@ public sealed class FlightLogViewModel : ObservableObject
     }
 
     public FlightRecorder Recorder { get; }
+
+    /// <summary>The picked flight, in the Flight report document.</summary>
+    public FlightReportViewModel Report { get; }
     public ObservableCollection<FlightLogItem> Logs { get; } = [];
     public bool HasNoLogs => Logs.Count == 0;
     public RelayCommand DeleteCommand { get; }
@@ -90,7 +94,11 @@ public sealed class FlightLogViewModel : ObservableObject
     /// <summary>Asks before deleting; the view supplies the dialog.</summary>
     public Func<string, bool> Confirm { get; set; } = _ => true;
 
-    public FlightLogItem? SelectedLog { get => _selected; set => SetProperty(ref _selected, value); }
+    public FlightLogItem? SelectedLog
+    {
+        get => _selected;
+        set { if (SetProperty(ref _selected, value) && value is not null) Report.Show(value.Id); }
+    }
 
     private void Refresh()
     {
@@ -100,6 +108,8 @@ public sealed class FlightLogViewModel : ObservableObject
             Logs.Add(new FlightLogItem(log));
         SelectedLog = Logs.FirstOrDefault(l => l.Id == keep);
         OnPropertyChanged(nameof(HasNoLogs));
+        // The report follows a flight still being recorded, and lets go of a deleted one.
+        if (Report.LogId is { } shown) Report.Show(Logs.Any(l => l.Id == shown) ? shown : null);
     }
 
     private void Delete()

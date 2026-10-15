@@ -1,3 +1,5 @@
+using KspFlightPlanner.Core.Models;
+
 namespace KspFlightPlanner.Core.Ksp;
 
 /// <summary>
@@ -26,7 +28,27 @@ public sealed record FlightSample(
     double IspS,
     double DynamicPressurePa,
     double GForce,
-    double WarpRate);
+    double WarpRate)
+{
+    // The orbit's shape and where along it the craft is (the orbit around Body), so a stretch on rails can be worked out
+    // again (FlightLogs.FillGaps). NaN in logs recorded before they were kept.
+    public double SemiMajorAxisM { get; init; } = double.NaN;
+    public double Eccentricity { get; init; } = double.NaN;
+    public double MeanAnomalyRad { get; init; } = double.NaN;
+
+    // Which way the orbit faces, in the same frame as the bodies' orbits (the save's), so the craft can be placed in
+    // space for the flight map. NaN in logs recorded before they were kept.
+    public double InclinationDeg { get; init; } = double.NaN;
+    public double LanDeg { get; init; } = double.NaN;
+    public double ArgumentOfPeriapsisDeg { get; init; } = double.NaN;
+
+    public bool HasOrbit => !double.IsNaN(SemiMajorAxisM) && !double.IsNaN(Eccentricity) && !double.IsNaN(MeanAnomalyRad);
+
+    /// <summary>The whole orbit (shape and which way it faces), with this moment as its epoch; null if not all of it was kept.</summary>
+    public OrbitalElements? Elements => HasOrbit && !double.IsNaN(InclinationDeg) && !double.IsNaN(LanDeg) && !double.IsNaN(ArgumentOfPeriapsisDeg)
+        ? new OrbitalElements(SemiMajorAxisM, Eccentricity, InclinationDeg, LanDeg, ArgumentOfPeriapsisDeg, MeanAnomalyRad, Ut)
+        : null;
+}
 
 public enum FlightLogEventKind
 {
@@ -313,6 +335,7 @@ public static class FlightLogMath
         var accel = (a.ThrustN / a.MassKg + b.ThrustN / b.MassKg) / 2 * dt;
 
         var isp = a.IspS > 0 && b.IspS > 0 ? (a.IspS + b.IspS) / 2 : Math.Max(a.IspS, b.IspS);
+        if (a.Stage == b.Stage && isp > 0 && b.MassKg >= a.MassKg) return 0; // no fuel gone: the engines were only just lit or cut
         if (a.Stage != b.Stage || isp <= 0 || b.MassKg >= a.MassKg) return accel;
         var couldBurn = (a.ThrustN + b.ThrustN) / 2 / (isp * VesselAnalysis.G0) * dt;
         if (a.MassKg - b.MassKg > DroppedPartsFactor * couldBurn + 1) return accel;

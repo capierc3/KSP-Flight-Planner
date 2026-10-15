@@ -1531,6 +1531,7 @@ While connected and flying, the flight log reads the flown vessel twice a second
 
 ```
 Engines off in both                         Δv = 0
+Same stage, no mass gone                    Δv = 0                                  (engines only just lit or cut)
 Same stage, mass drop ≤ 1.5 × burnable      Δv = g₀ · Isp · ln(m_a / m_b)          Isp = (Isp_a + Isp_b) / 2
 Otherwise (staged, parts dropped)           Δv = (F_a/m_a + F_b/m_b) / 2 · (t_b − t_a)
 burnable = (F_a + F_b) / 2 / (g₀ · Isp) · (t_b − t_a)       what the engines could have burned in the time
@@ -1550,6 +1551,78 @@ Worked example: a 10 t craft burns to 8 t on a 300 s engine making 200 kN:
 
 - Code: `FlightLogMath.DeltaVBetween`, `FlightLogRecorder` and `FlightLogs.EndedIn` (`Core/Ksp/FlightLog.cs`), streamed by `LiveTelemetry`, run by `FlightRecorder`; tested in `FlightLogTests`
 - Source: Tsiolkovsky rocket equation (§7.1); kRPC SpaceCenter API (`Vessel.Mass`, `Thrust`, `SpecificImpulse`, streams)
+
+### 8.6 The flight report: ascent losses, burns and touchdowns
+
+The Flight report works through a log's samples (§8.5). Each step's Δv is added to running totals: by burn, by stage (the stage firing at the step's start), and by the body the craft was around.
+
+**Burns.** A burn is a run of samples with thrust. Two runs less than 3 s apart, around the same body, are one burn (a staging pause or a throttle blip). It counts the step into its first sample (throttling up) and the step out of its last (the engines seen off).
+
+**Ascent losses.** The ascent runs from the launch to the first sample in orbit around the launch body. That's KSP's ORBITING, with periapsis above the air, so the circularization burn is included. Along the path, speed changes by thrust less drag less gravity's pull along it:
+
+```
+dv/dt = (F/m)·cos α − D/m − g·sin γ          α: thrust off the path, γ: climb angle
+sin γ = vertical speed / orbital speed        g = μ / (R + h)²
+gravity loss        = ∫ g·sin γ dt            (trapezoids between samples)
+drag & steering     = Δv spent − (v_end − v_start) − gravity loss
+```
+
+Speeds are orbital, so the planet's spin that the pad already gives counts as speed you had, not speed gained. Drag isn't read from the game, so drag and steering (cos α < 1) come out together as what's left over. Max Q is the highest dynamic pressure on the way up.
+
+**Touchdowns.** A touchdown is the first sample landed or splashed after flying. It shows the vertical and surface speeds from the sample before (the moment before contact). Its descent Δv is spent from the last sample in orbit around that body, or entering its sphere of influence, to touchdown.
+
+**Ascent profile.** Altitude against distance along the ground from the pad, from latitude and longitude (haversine):
+
+```
+a = sin²(Δφ/2) + cos φ₁ · cos φ₂ · sin²(Δλ/2)
+downrange = 2R · asin √a
+```
+
+Worked example: straight up from Kerbin's pad at 100 m/s for 2 s, then reaching 110 m/s:
+
+1. g = 3.5316×10¹² / 600,000² = **9.81 m/s²**, sin γ = 1 throughout, so gravity loss = 9.81 × 2 = **19.62 m/s**
+2. 10 t → 9.864 t on a 300 s engine: spent = 9.80665 × 300 × ln(10 / 9.864) = **40.29 m/s**
+3. Gained 110 − 100 = 10 m/s, so drag & steering = 40.29 − 10 − 19.62 = **10.67 m/s**
+4. 10° of longitude along Kerbin's equator: 2 × 600 km × asin(sin 5°) = **104.7 km** downrange
+
+- Code: `FlightAnalysis.Analyze`, `FlightAnalysis.GravityAlongPath`, `FlightAnalysis.Downrange` (`Core/Ksp/FlightAnalysis.cs`), shown by `FlightReportViewModel`; tested in `FlightAnalysisTests`
+- Source: equations of motion along the flight path, Curtis 11.2 (gravity and drag losses); haversine formula
+
+### 8.7 Filling a warp from the orbit
+
+On-rails warp moves the craft along its orbit with Kepler's equation. Nothing else acts on it: no thrust, no drag (KSP won't rails-warp in the air). So where the log has a gap, the path can be worked out exactly from the orbit recorded with the sample before it. Each sample keeps the orbit's semi-major axis a, eccentricity e and the mean anomaly M₀ at that moment. A gap over 30 s is filled with up to 200 points:
+
+```
+n = √(μ / |a|³)                       mean motion
+M(t) = M₀ + n·(t − t₀)
+ellipse:   M = E − e·sin E,    r = a·(1 − e·cos E)
+hyperbola: M = e·sinh H − H,   r = a·(1 − e·cosh H)     (a < 0)
+v = √(μ·(2/r − 1/a))                  vis-viva
+altitude = r − R
+```
+
+A gap that crosses into another body's sphere of influence is filled forward from the sample before it, until r passes the old body's sphere. It's also filled back from the sample after it, on its orbit around the new body, until r passes that sphere. A gap where the mass changed (a burn while not recorded), or that starts or ends in the air or on the ground, is left empty. The charts draw the worked-out path dashed. A change of sphere of influence isn't a gap in the log: the recorder keeps the same flight and reads against the new body.
+
+Worked example: a 100 km circular Kerbin orbit (a = 700,000 m, e = 0) warped through for 1,000 s is filled every 10 s at 100 km and √(3.5316×10¹² / 700,000) = **2,246.1 m/s**. On an ellipse with a = 1,000 km and e = 0.5, half an orbit (π·√(a³/μ) = **1,671.7 s**) after periapsis it's at a·(1 + e) = 1,500 km from the centre (900 km up), going √(μ·(2/1.5×10⁶ − 1/10⁶)) = **1,085.0 m/s**.
+
+- Code: `FlightAnalysis.FillGaps`, `FlightAnalysis.Along` (`Core/Ksp/FlightAnalysis.cs`), `Kepler.SolveEccentricAnomaly`/`SolveHyperbolicAnomaly`; orbit read by `LiveTelemetry`; tested in `FlightAnalysisTests`
+- Source: Kepler's equation and vis-viva, Curtis 3.4 and 3.5 (hyperbolic); KSP patched conics (on-rails orbits)
+
+### 8.8 The flight map
+
+Each sample also keeps which way its orbit faces (inclination i, ascending node Ω, argument of periapsis ω, as kRPC gives them, in the same frame as the save and the bodies' orbits). With a, e and the mean anomaly (§8.7), that's the whole orbit with the sample's time as its epoch. So the craft's position is Kepler's position on it (§1.4), relative to the body it's around. The map looks down on a body's equator: it draws x and y and drops z.
+
+```
+craft around B, map of B:      p = StateAt(sample's orbit, μ_B, t)
+craft around moon M of B:      p = StateAt(M's orbit, μ_B, t) + StateAt(sample's orbit, μ_M, t)
+```
+
+A planet's map shows its moons' orbits, and each moon where it was when the craft entered and left its sphere of influence (with that sphere drawn round it). Stretches filled from the orbit (§8.7) are placed the same way and drawn dashed. Burning is orange, coasting blue. A moon's own map shows only the part of the flight around it.
+
+Worked example: a sample on a circular equatorial 100 km Kerbin orbit (a = 700,000 m, e = 0, i = Ω = ω = 0) with mean anomaly 0 at t₀ is at (700 km, 0). 20 s later it has gone n·20 = √(3.5316×10¹² / 700,000³)·20 = **0.0642 rad** round, to (698.6 km, 44.9 km), still 700 km from the centre.
+
+- Code: `FlightMap.Build`, `FlightMap.Views`, `FlightAnalysis.PositionAt` (`Core/Ksp/`), drawn by `FlightMapCanvas`; tested in `FlightMapTests` (a simulated Mun flyby with patched conics)
+- Source: Curtis 4.6 (orbital elements to position); patched conics, Curtis 8.6
 
 ## Sources
 

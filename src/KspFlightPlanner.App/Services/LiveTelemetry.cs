@@ -4,6 +4,19 @@ using KspFlightPlanner.Core.Ksp;
 
 namespace KspFlightPlanner.App.Services;
 
+/// <summary>Why <see cref="LiveTelemetry.Read"/> had nothing: the streams no longer fit what's being flown.</summary>
+public enum TelemetryEnd
+{
+    /// <summary>The player switched to another vessel (or the scene reloaded it, e.g. a quickload).</summary>
+    OtherVessel,
+
+    /// <summary>The vessel crossed into another body's sphere of influence: same flight, readings against the new body.</summary>
+    OtherBody,
+
+    /// <summary>A reading failed: the vessel is gone, or the game is between scenes.</summary>
+    Lost,
+}
+
 /// <summary>
 /// The flown vessel's readings for the flight log, streamed by kRPC: the game pushes them as they change, so reading
 /// one costs nothing on the connection (unlike a call, which costs about a game frame). Opened for one vessel in one
@@ -16,7 +29,7 @@ public sealed class LiveTelemetry
     private readonly Vessel _vessel;
     private readonly CelestialBody _body;
     private readonly Func<double> _ut, _met, _mass, _altitude, _surfaceSpeed, _verticalSpeed, _orbitalSpeed, _apoapsis, _periapsis,
-        _latitude, _longitude, _pitch, _heading, _thrust, _isp, _q, _g, _throttle, _warp;
+        _latitude, _longitude, _pitch, _heading, _thrust, _isp, _q, _g, _throttle, _warp, _sma, _ecc, _meanAnomaly, _inc, _lan, _argPe;
     private readonly Func<VesselSituation> _situation;
     private readonly Func<int> _stage;
     private readonly Func<Vessel> _active;
@@ -62,6 +75,12 @@ public sealed class LiveTelemetry
         _orbitalSpeed = Add(c.AddStream(() => orbit.Speed));
         _apoapsis = Add(c.AddStream(() => orbit.ApoapsisAltitude));
         _periapsis = Add(c.AddStream(() => orbit.PeriapsisAltitude));
+        _sma = Add(c.AddStream(() => orbit.SemiMajorAxis));
+        _ecc = Add(c.AddStream(() => orbit.Eccentricity));
+        _meanAnomaly = Add(c.AddStream(() => orbit.MeanAnomaly));
+        _inc = Add(c.AddStream(() => orbit.Inclination));
+        _lan = Add(c.AddStream(() => orbit.LongitudeOfAscendingNode));
+        _argPe = Add(c.AddStream(() => orbit.ArgumentOfPeriapsis));
     }
 
     /// <summary>Opens the streams for the vessel being flown, or returns null when there isn't one. Runs on a worker thread.</summary>
@@ -74,18 +93,29 @@ public sealed class LiveTelemetry
     }
 
     /// <summary>
-    /// The vessel now, or null when these streams no longer fit: the player switched vessel, it left the body, or it's gone.
+    /// The vessel now, or null when these streams no longer fit (<paramref name="end"/> says why): the player switched
+    /// vessel, it left the body, or it's gone.
     /// </summary>
-    public FlightSample? Read()
+    public FlightSample? Read(out TelemetryEnd end)
     {
+        end = TelemetryEnd.Lost;
         try
         {
-            if (_active() != _vessel || _orbitBody() != _body) return null;
+            if (_active() != _vessel) { end = TelemetryEnd.OtherVessel; return null; }
+            if (_orbitBody() != _body) { end = TelemetryEnd.OtherBody; return null; }
             return new FlightSample(
                 _ut(), _met(), BodyName, KspLink.SituationName(_situation()), _stage(),
                 _altitude(), _surfaceSpeed(), _orbitalSpeed(), _verticalSpeed(), _apoapsis(), _periapsis(),
                 _latitude(), _longitude(), _pitch(), _heading(), _throttle(),
-                _mass(), _thrust(), _isp(), _q(), _g(), _warp());
+                _mass(), _thrust(), _isp(), _q(), _g(), _warp())
+            {
+                SemiMajorAxisM = _sma(),
+                Eccentricity = _ecc(),
+                MeanAnomalyRad = _meanAnomaly(),
+                InclinationDeg = _inc() * RadToDeg,
+                LanDeg = _lan() * RadToDeg,
+                ArgumentOfPeriapsisDeg = _argPe() * RadToDeg,
+            };
         }
         catch (Exception ex) when (ex is RPCException or System.InvalidOperationException or ObjectDisposedException)
         {
@@ -103,6 +133,8 @@ public sealed class LiveTelemetry
         }
         _streams.Clear();
     }
+
+    private const double RadToDeg = 180 / Math.PI;
 
     private Func<T> Add<T>(Stream<T> stream)
     {

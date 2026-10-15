@@ -18,6 +18,7 @@
                    Visibility="{Binding HasNoLogs, Converter={StaticResource BoolToVisibility}}"
                    Text="No flights recorded yet. Connect to KSP (KSP › Connect to KSP) and launch: each flight is logged from the launch on." />
         <ListBox ItemsSource="{Binding Source={StaticResource LogsByRocket}}" SelectedItem="{Binding SelectedLog}" IsSynchronizedWithCurrentItem="False"
+                 SelectionChanged="List_SelectionChanged"
                  BorderThickness="0" Background="Transparent" AutomationProperties.Name="Flight logs">
             <ListBox.GroupStyle>
                 <GroupStyle>

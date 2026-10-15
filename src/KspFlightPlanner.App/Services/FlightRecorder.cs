@@ -110,10 +110,26 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             return;
         }
 
-        var sample = _telemetry.Read();
+        var sample = _telemetry.Read(out var end);
         if (sample is null)
         {
-            // Another vessel, another body, or the vessel's gone: open again for whatever is flown now.
+            if (end == TelemetryEnd.OtherBody)
+            {
+                // Same flight, now around another body: read against that one, and carry on with the same log.
+                var stale = _telemetry;
+                _telemetry = null;
+                _ = _link.CloseTelemetryAsync(stale);
+                _ = OpenAsync();
+                return;
+            }
+            // Another vessel, or this one's gone: open again for whatever is flown now.
+            Leave(FlightLogEventKind.SwitchedAway, end == TelemetryEnd.OtherVessel ? "Switched to another vessel" : "Lost the vessel's readings");
+            return;
+        }
+        if (_recorder is { } current && !(_telemetry.VesselName == current.VesselName
+                                          && Math.Abs(sample.Ut - sample.MetS - current.LaunchUt) <= FlightLogs.SameLaunchS))
+        {
+            // Reopened after a change of body, but the player has switched vessel meanwhile.
             Leave(FlightLogEventKind.SwitchedAway, "Switched to another vessel");
             return;
         }
