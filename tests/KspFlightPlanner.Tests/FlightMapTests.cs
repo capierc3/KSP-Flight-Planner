@@ -68,6 +68,11 @@ public sealed class FlightMapTests : IDisposable
         Assert.Contains(map.Segments, s => s[^1].Leg == MapLeg.Filled);
         Assert.Equal("Launch", map.Marks[0].Label);
 
+        // Filling the way out, the craft is around Kerbin only until it reaches the Mun's sphere (where the Mun was then).
+        var filledWithMoons = FlightAnalysis.FillGaps(log.Samples, Body, Parent);
+        foreach (var f in filledWithMoons.Where(f => f.Body == "Kerbin" && f.Position is not null))
+            Assert.True((f.Position!.Value - Kepler.StateAt(mun.Orbit!, _bodies["Kerbin"].Mu, f.Ut).Position).Length > mun.SoiRadiusM);
+
         var munMap = FlightMap.Build(log, filled, "Mun", Body, Parent)!;
         Assert.All(munMap.Segments.SelectMany(s => s), p => Assert.Equal("Mun", p.Body));
     }

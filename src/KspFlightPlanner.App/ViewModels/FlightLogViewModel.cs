@@ -44,7 +44,7 @@ public sealed class FlightLogItem(FlightLogSummary log)
             // Short warps from logs stored before they were skipped have no length; leave them out.
             var warps = Log.Events.Where(e => e.Kind == FlightLogEventKind.Warp && e.DurationS >= FlightLogRecorder.NotableWarpS).ToList();
             if (warps.Count > 0)
-                lines.Add($"Data lost in warp: {FlightLogs.Duration(warps.Sum(w => w.DurationS))}" + (warps.Count > 1 ? $" over {warps.Count} warps" : ""));
+                lines.Add($"Time warp: {FlightLogs.Duration(warps.Sum(w => w.DurationS))}" + (warps.Count > 1 ? $" over {warps.Count} warps" : "") + " (path worked out from the orbit)");
 
             var gaps = Log.Events.Where(e => e.Kind is FlightLogEventKind.Reconnected or FlightLogEventKind.Returned).ToList();
             if (gaps.Count > 0)
@@ -72,11 +72,13 @@ public sealed class FlightLogViewModel : ObservableObject
     private readonly FlightLogRepository _logs;
     private FlightLogItem? _selected;
 
-    public FlightLogViewModel(FlightLogRepository logs, FlightRecorder recorder, PlannerEvents events, FlightReportViewModel report)
+    public FlightLogViewModel(FlightLogRepository logs, FlightRecorder recorder, PlannerEvents events, FlightReportViewModel report,
+        FlightCompareViewModel compare)
     {
         _logs = logs;
         Recorder = recorder;
         Report = report;
+        Compare = compare;
         recorder.LogsChanged += Refresh;
         events.SaveChanged += Refresh;
         DeleteCommand = new RelayCommand(Delete, () => _selected is not null);
@@ -87,6 +89,15 @@ public sealed class FlightLogViewModel : ObservableObject
 
     /// <summary>The picked flight, in the Flight report document.</summary>
     public FlightReportViewModel Report { get; }
+
+    /// <summary>A rocket's flights side by side, in the Compare flights document.</summary>
+    public FlightCompareViewModel Compare { get; }
+
+    /// <summary>Puts the picked flight's rocket in the Compare flights document.</summary>
+    public void CompareSelected()
+    {
+        if (_selected is { } item) Compare.Show(item.Rocket);
+    }
     public ObservableCollection<FlightLogItem> Logs { get; } = [];
     public bool HasNoLogs => Logs.Count == 0;
     public RelayCommand DeleteCommand { get; }
@@ -97,8 +108,15 @@ public sealed class FlightLogViewModel : ObservableObject
     public FlightLogItem? SelectedLog
     {
         get => _selected;
-        set { if (SetProperty(ref _selected, value) && value is not null) Report.Show(value.Id); }
+        set
+        {
+            if (!SetProperty(ref _selected, value)) return;
+            OnPropertyChanged(nameof(HasSelection));
+            if (value is not null) Report.Show(value.Id);
+        }
     }
+
+    public bool HasSelection => _selected is not null;
 
     private void Refresh()
     {
@@ -108,6 +126,7 @@ public sealed class FlightLogViewModel : ObservableObject
             Logs.Add(new FlightLogItem(log));
         SelectedLog = Logs.FirstOrDefault(l => l.Id == keep);
         OnPropertyChanged(nameof(HasNoLogs));
+        Compare.Refresh();
         // The report follows a flight still being recorded, and lets go of a deleted one.
         if (Report.LogId is { } shown) Report.Show(Logs.Any(l => l.Id == shown) ? shown : null);
     }

@@ -253,6 +253,9 @@ public sealed class KspLink : ObservableObject, IDisposable
     /// <summary>Starts streaming the flown vessel's readings (for the flight log); null when not flying one.</summary>
     public Task<LiveTelemetry?> OpenTelemetryAsync() => CallAsync(LiveTelemetry.Open);
 
+    /// <summary>How many parts the vessel being flown has (with launch clamps, on the pad).</summary>
+    public Task<int> ActiveVesselPartCountAsync() => CallAsync(c => c.SpaceCenter().ActiveVessel.Parts.All.Count);
+
     /// <summary>Stops the readings' streams, if the connection they came over is still up.</summary>
     public async Task CloseTelemetryAsync(LiveTelemetry telemetry)
     {

@@ -38,11 +38,24 @@ public partial class App : Application
             var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights);
             var engineering = new EngineeringViewModel(designs, sync, availability, mission);
             var flight = new FlightViewModel(flights, sync, events, rotation);
+            var logs = new FlightLogRepository(database);
+            // The Rocket pane says how the picked design has flown: the flight log keeps rockets by their name at launch.
+            mission.FlightHistory = name =>
+            {
+                var flown = logs.GetAll().Where(l => l.VesselName == name).Select(l => logs.Get(l.Id)?.WithoutRailsSamples()).OfType<Core.Ksp.FlightLog>().ToList();
+                if (flown.Count == 0) return null;
+                var bodies = sync.StockBodies();
+                var toOrbit = flown.Select(l => Core.Ksp.FlightAnalysis.Analyze(l, b => bodies.GetValueOrDefault(b)).Ascent)
+                    .Where(a => a is { ReachedOrbit: true }).Select(a => a!.DeltaVSpent).ToList();
+                return $"Flown {(flown.Count == 1 ? "once" : $"{flown.Count} times")}" +
+                       (toOrbit.Count > 0 ? $" · Δv to orbit {toOrbit.Average():N0} m/s on average, best {toOrbit.Min():N0}" : "");
+            };
             var recorder = new FlightRecorder(link, sync, new FlightLogRepository(database))
             {
                 // A new log is linked to the planner flight being flown with that vessel.
                 FlightFor = name => flight.SelectedFlight is { Craft.Name: var craft } f && craft == name ? f.Id : null,
             };
+            recorder.LogsChanged += mission.RefreshFlown;
             var viewModel = new MainViewModel(
                 mission,
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
@@ -63,7 +76,8 @@ public partial class App : Application
                 CommNet = new CommNetViewModel(sync, availability, engineering),
                 PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
                 FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, events,
-                    new FlightReportViewModel(new FlightLogRepository(database), sync)),
+                    new FlightReportViewModel(new FlightLogRepository(database), sync),
+                    new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

@@ -20,7 +20,7 @@ public sealed class FlightLogRepository(PlannerDatabase database)
     };
 
     private const string SummaryColumns = "id, vessel_name, launch_ut, joined_at_met, outcome, last_ut, delta_v_used, max_altitude_m, " +
-                                          "last_situation, last_body, events_json, route";
+                                          "last_situation, last_body, events_json, route, launch_parts, launch_mass_kg";
 
     /// <summary>Every log without its samples, the latest launch first.</summary>
     public IReadOnlyList<FlightLogSummary> GetAll()
@@ -33,20 +33,21 @@ public sealed class FlightLogRepository(PlannerDatabase database)
         var list = new List<FlightLogSummary>();
         while (reader.Read()) list.Add(ReadSummary(reader));
         reader.Close();
-        return list.Select(l => l.Route is null ? FillRoute(l) : l).ToList();
+        return list.Select(l => l.Route is null || l.FromLaunch && l.LaunchMassKg <= 0 ? FillDerived(l) : l).ToList();
     }
 
-    /// <summary>A log stored before routes were: works its route out from the samples once and keeps it.</summary>
-    private FlightLogSummary FillRoute(FlightLogSummary summary)
+    /// <summary>A log stored before its route and launch mass were: works them out from the samples once and keeps them.</summary>
+    private FlightLogSummary FillDerived(FlightLogSummary summary)
     {
         if (Get(summary.Id) is not { } log) return summary;
         using var connection = database.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE flight_logs SET route = $route WHERE id = $id;";
+        cmd.CommandText = "UPDATE flight_logs SET route = $route, launch_mass_kg = $mass WHERE id = $id;";
         cmd.Parameters.AddWithValue("$id", summary.Id);
         cmd.Parameters.AddWithValue("$route", log.Route);
+        cmd.Parameters.AddWithValue("$mass", log.LaunchMassKg);
         cmd.ExecuteNonQuery();
-        return summary with { Route = log.Route };
+        return summary with { Route = log.Route, LaunchMassKg = log.LaunchMassKg };
     }
 
     /// <summary>A whole log, samples and all.</summary>
@@ -65,14 +66,14 @@ public sealed class FlightLogRepository(PlannerDatabase database)
         cmd.CommandText = log.Id == 0
             ? """
               INSERT INTO flight_logs (vessel_name, launch_ut, joined_at_met, outcome, flight_id, last_ut, delta_v_used, max_altitude_m,
-                                       last_situation, last_body, route, events_json, samples, ksp_save, created_utc, updated_utc)
-              VALUES ($name, $launch, $joined, $outcome, $flight, $last, $dv, $maxalt, $situation, $body, $route, $events, $samples, $active_save, $now, $now)
+                                       last_situation, last_body, route, launch_parts, launch_mass_kg, events_json, samples, ksp_save, created_utc, updated_utc)
+              VALUES ($name, $launch, $joined, $outcome, $flight, $last, $dv, $maxalt, $situation, $body, $route, $parts, $mass, $events, $samples, $active_save, $now, $now)
               RETURNING id;
               """
             : """
               UPDATE flight_logs SET vessel_name = $name, launch_ut = $launch, joined_at_met = $joined, outcome = $outcome,
                   flight_id = $flight, last_ut = $last, delta_v_used = $dv, max_altitude_m = $maxalt, last_situation = $situation,
-                  last_body = $body, route = $route, events_json = $events, samples = $samples, updated_utc = $now
+                  last_body = $body, route = $route, launch_parts = $parts, launch_mass_kg = $mass, events_json = $events, samples = $samples, updated_utc = $now
               WHERE id = $id RETURNING id;
               """;
         database.AddSave(cmd);
@@ -88,6 +89,8 @@ public sealed class FlightLogRepository(PlannerDatabase database)
         cmd.Parameters.AddWithValue("$situation", (object?)log.LastSituation ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$body", (object?)log.LastBody ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$route", log.Route);
+        cmd.Parameters.AddWithValue("$parts", (object?)log.LaunchPartCount ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$mass", log.LaunchMassKg);
         cmd.Parameters.AddWithValue("$events", JsonSerializer.Serialize(log.Events, Json));
         cmd.Parameters.AddWithValue("$samples", Pack(log.Samples));
         cmd.Parameters.AddWithValue("$now", now);
@@ -124,7 +127,8 @@ public sealed class FlightLogRepository(PlannerDatabase database)
                 LaunchUt = summary.LaunchUt,
                 JoinedAtMetS = summary.JoinedAtMetS,
                 Outcome = summary.Outcome,
-                FlightId = reader.IsDBNull(12) ? null : reader.GetInt64(12),
+                FlightId = reader.IsDBNull(14) ? null : reader.GetInt64(14),
+                LaunchPartCount = summary.LaunchPartCount,
                 Samples = samples,
                 Events = summary.Events,
             });
@@ -144,6 +148,8 @@ public sealed class FlightLogRepository(PlannerDatabase database)
             reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), events)
         {
             Route = reader.IsDBNull(11) ? null : reader.GetString(11),
+            LaunchPartCount = reader.IsDBNull(12) ? null : reader.GetInt32(12),
+            LaunchMassKg = reader.GetDouble(13),
         };
     }
 

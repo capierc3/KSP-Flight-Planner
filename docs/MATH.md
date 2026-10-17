@@ -1539,7 +1539,7 @@ burnable = (F_a + F_b) / 2 / (g₀ · Isp) · (t_b − t_a)       what the engin
 
 The rocket equation on the mass drop is exact however far apart the samples are, because fuel burned is the mass gone. That holds through physics warp and through a coast that recording thinned out. When parts come off, the mass drop isn't fuel, so the thrust ÷ mass average over the gap is used instead. That's rough over a long gap, but staging gaps are half a second.
 
-**Thinning.** Burning, in the air (q > 0), or a change of stage, situation, body or mass: every sample is kept, and so is the one before. Coasting outside the air: one every 10 s of game time. On-rails warp (faster than ×4) skips physics. The few samples it gives are kept, and a warp of a minute or more is noted as "Data lost in warp" with its length (engines can't fire on rails, so a shorter one loses nothing worth noting). The list sums these into one line per flight. A disconnect, a vessel switch or leaving the flight is noted with the time not recorded once the flight is picked up again.
+**Thinning.** Burning, in the air (q > 0), or a change of stage, situation, body or mass: every sample is kept, and so is the one before. Coasting outside the air: one every 10 s of game time. On-rails warp (faster than ×4) skips physics and moves the craft along its orbit. kRPC doesn't refresh every reading in the same frame there, so a sample's time, MET and orbit can be from moments far apart (at ×1,000, one frame is 20 s). Samples on rails aren't kept: the last one before the warp is, and the stretch is worked out from the orbit (§8.7). A warp of a minute or more is noted with its length. The same skew is why the recorder tells the flown vessel by kRPC's object id, not by game time − MET, and only matches a flight by its launch time out of warp. A disconnect, a vessel switch or leaving the flight is noted with the time not recorded once the flight is picked up again.
 
 **How a flight ends.** It ends when the save KSP last wrote, if written after the log's last sample, has no vessel of that name launched then. That's *Recovered* if it was last seen landed or splashed, and *Lost* otherwise. If the game's time goes back before the launch, it's *Reverted*. If it goes back within the flight (a quickload), the samples after that point are dropped.
 
@@ -1623,6 +1623,76 @@ Worked example: a sample on a circular equatorial 100 km Kerbin orbit (a = 700,0
 
 - Code: `FlightMap.Build`, `FlightMap.Views`, `FlightAnalysis.PositionAt` (`Core/Ksp/`), drawn by `FlightMapCanvas`; tested in `FlightMapTests` (a simulated Mun flyby with patched conics)
 - Source: Curtis 4.6 (orbital elements to position); patched conics, Curtis 8.6
+
+### 8.9 Comparing a rocket's flights
+
+A rocket is the vessel's name at launch. The Compare flights document puts its flights side by side. Each row shows Δv used, Δv to orbit, time to orbit, ascent losses (gravity, and drag & steering, §8.6), max Q, max g and touchdown speed (vertical, the moment before contact, of the last touchdown). Lower is better for every one of these, so the lowest in each column is picked out.
+
+**Versions of the design.** The same name can fly a changed rocket. On the pad, the recorder counts the vessel's parts (with its launch clamps). With the mass at the first sample after lift-off, that's the design's fingerprint. Flights are lettered A, B… in the order first flown. A flight joins a version when it has the same part count (or either count is unknown) and a launch mass within 1 %:
+
+```
+same version ⇔ (parts₁ = parts₂ or either unknown) and |m₁ − m₂| ≤ 0.01 · m₁
+```
+
+1 % lets a little more or less fuel, or a kerbal, count as the same rocket, while a new tank or engine doesn't. A flight joined under way has no launch to go by and gets "—".
+
+**Overlaid charts.** For the ascent and the whole flight, MET lines the flights up at launch. For a landing, the time since its descent began (the last sample in orbit, §8.6) lines them up, and Δv used counts from that moment.
+
+Worked example: three flights of Kerbal X at 30.0 t (42 parts), 30.2 t (42 parts) and 33.0 t (42 parts). 30.2 is within 1 % of 30.0 (0.3 t), so it's version **A**. 33.0 isn't (3 t over), so it's **B**. Their Δv to orbit of 3,400, 3,350 and 3,520 m/s have the 3,350 picked out, but the summary warns that two versions are being compared.
+
+- Code: `FlightComparison.Designs`, `FlightComparison.Figures`, `FlightComparison.Best` (`Core/Ksp/FlightComparison.cs`), shown by `FlightCompareViewModel`; the Rocket pane's line comes from the same analysis; tested in `FlightComparisonTests`
+
+### 8.10 Ascent coach: what the climb did
+
+The Flight report reads the climb to orbit (§8.6) sample by sample. Pitch is read against the local horizon (kRPC's surface frame). Logs from before 2026-10-15 read it against the planet's axes, which isn't a pitch, so for those the pitch figures are left out.
+
+```
+climb angle   γ = asin(vertical speed / surface speed)        (prograde, over the ground; from 50 m/s up)
+off prograde  δ = pitch − γ                                   (+ above prograde: turning slower than the path)
+steering loss = ∫ (F/m)·(1 − cos δ) dt                         (thrust not along the path)
+drag loss     = drag & steering (§8.6) − steering loss         (never below 0)
+launch TWR    = F / (m · g₀),  g₀ = μ / R²                     (first sample with thrust)
+```
+
+Rules of thumb for Kerbin-like climbs, with the figure each one is judged on:
+
+| Advice | Judged on | Good | Called out |
+|---|---|---|---|
+| Launch TWR | F/(m·g₀) on the pad | 1.25–2.2 | below 1.25 (gravity loss), above 2.2 (drag) |
+| Turn start | surface speed when pitch first < 85° | 20–120 m/s | over 120 m/s late, under 20 m/s early |
+| 45° | altitude when pitch first ≤ 45° | 5–15 km | over 15 km late, under 5 km early |
+| Prograde | mean δ while q ≥ 1 kPa | within ±3° | above (+) or below (−) prograde |
+| Max Q | highest q on the way up | ≤ 25 kPa | over 25 kPa: too fast low down |
+
+Worked example: 10° off prograde at a thrust acceleration of 20 m/s² for 10 s costs 20 × (1 − cos 10°) × 10 = **3.04 m/s**.
+
+- Code: `AscentCoach.Diagnose`, `AscentCoach.ProgradePitch` (`Core/Ksp/AscentCoach.cs`); tested in `AscentCoachTests`
+
+### 8.11 Ascent coach: the best climb for this rocket
+
+The climb is flown again in a model fitted to the flight, with other steering. The model is 2D, over the equator, eastward, on a turning planet, in the frame that doesn't turn, stepped every 0.1 s:
+
+```
+a = −μ/r² r̂  +  (F/m) n̂  −  (q · A(v_air) / m) v̂_air          q = ½ ρ v_air²,  v_air = v − ω × r
+```
+
+- **Fuel.** The engines burn fuel at the rate they did (KSP engines burn at a fixed rate; only thrust changes with Isp). So the model follows the flight's mass and fuel flow against **burn time**, staging where the flight did: ṁ = F/(Isp·g₀) from each sample.
+- **Thrust** = ṁ · g₀ · Isp(p). Isp against pressure is a straight line fitted per stage to what the flight saw (constant if a stage only flew in vacuum).
+- **Air density** per atm of pressure, from the flight: ρ = 2q/v², in 5 km bands.
+- **Drag area** A, from the flight, in the frame that doesn't turn, where only thrust, drag and gravity act. Along the orbital velocity:
+  ```
+  dv/dt = (F cos τ − D cos β)/m − g · v_vertical/v      ⇒   D = (F cos τ − m (dv/dt + g · v_vertical/v)) / cos β
+  A = Σ D / Σ q   per 100 m/s band of air speed (q ≥ 1 kPa; bands with too little air take the nearest)
+  ```
+  β is between the airflow and the orbital velocity (they differ by the planet's spin, eastward). τ is between the nose and the orbital velocity. Without a usable pitch the nose is taken as along the path, so steering is counted with drag. Fast bands are flown high, where q is small, so their fit is mostly noise. KSP's drag falls past Mach 1 but not to nothing, so no band is taken below 40 % of the largest subsonic one (100–400 m/s).
+- **Fuel past the recording.** The recording only shows fuel burned up to orbit. A climb flown differently may need a little more, so past it the last stage keeps burning at its last rate, for up to 50 % more burn time.
+- **Pitch programs.** Straight up to a speed v₀, then pitch = 90° · (1 − f^k), with f the share of the climb from there to an altitude H, level after it. In thick air (q ≥ 1 kPa) the nose is kept within 5° of prograde, since a real rocket flips further off. Each program burns until the apoapsis is the flown one, coasts to it, then burns level until the periapsis is the flown one. A grid of v₀ (30–140 m/s), H (20–80 km) and k (0.3–1.2) is tried, then a finer one round the best.
+- **Calibration.** The flown pitch, against burn time, is flown through the same model too. Gain = replay − best, so the model's own error (drag, Isp) mostly cancels. Best for this rocket ≈ flown − gain. The replay's difference from the real flight is shown as the model check. Without a usable pitch there's no replay, and the gain is the real flight − best, marked rough.
+
+Checked against a rocket whose drag area (1.5 m²) and engines are known: the fit finds 1.50 m², and the replay comes within 0.8 % of the flown Δv (3,310 against 3,286 m/s).
+
+- Code: `AscentSimulator.For`, `AscentSimulator.Fly`, `AscentSimulator.Optimize` (`Core/Ksp/AscentSimulator.cs`), shown by `FlightReportViewModel`; tested in `AscentCoachTests` (a known rocket flown with plain physics)
+- Source: equations of motion along the flight path, Curtis 11.2; KSP engines (fixed fuel flow, Isp against pressure), KSP wiki *Specific impulse*
 
 ## Sources
 

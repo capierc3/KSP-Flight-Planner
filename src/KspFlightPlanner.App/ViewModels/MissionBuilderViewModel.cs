@@ -1183,8 +1183,18 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             // The picker passes through null while the list is refilled; that isn't the user clearing the choice.
             if (value is not null) _designPath = value.Design is null ? null : value.Path;
             Recalculate();
+            OnPropertyChanged(nameof(FlownText));
         }
     }
+
+    /// <summary>What the flight log has on a rocket of this name (set by the app), or null when it hasn't flown.</summary>
+    public Func<string, string?> FlightHistory { get; set; } = _ => null;
+
+    /// <summary>How the picked design has flown so far, from the flight log; null if it hasn't.</summary>
+    public string? FlownText => SelectedDesign?.Design?.Report?.Name is { } name ? FlightHistory(name) : null;
+
+    /// <summary>The flight log changed: the picked design's history may have too.</summary>
+    public void RefreshFlown() => OnPropertyChanged(nameof(FlownText));
 
     public bool HasDesign => _check is not null;
 

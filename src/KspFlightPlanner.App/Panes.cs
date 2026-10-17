@@ -47,6 +47,7 @@ public static class Panes
     public const string Resonant = "resonant";
     public const string Flight = "flight";
     public const string FlightReport = "flightreport";
+    public const string FlightCompare = "flightcompare";
     public const string TechTree = "techtree";
     public const string Engineering = "engineering";
     public const string EngineChart = "enginechart";
@@ -87,6 +88,7 @@ public static class Panes
         new(PowerBudget, "Power budget", true, Plan, vm => new PowerBudgetView { DataContext = vm.PowerBudget }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
         new(FlightReport, "Flight report", true, [WorkMode.Fly, WorkMode.Plan], vm => new FlightReportView { DataContext = vm.FlightLog.Report }),
+        new(FlightCompare, "Compare flights", true, [WorkMode.Plan, WorkMode.Fly], vm => new FlightCompareView { DataContext = vm.FlightLog.Compare }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];
 

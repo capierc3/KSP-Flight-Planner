@@ -13,7 +13,11 @@
     <!-- Every flight recorded while connected, grouped by rocket (the vessel's name at launch). -->
     <DockPanel Margin="12,10">
         <TextBlock DockPanel.Dock="Top" Text="{Binding Recorder.Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,8" />
-        <Button DockPanel.Dock="Bottom" Content="Delete log" Command="{Binding DeleteCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+            <Button Content="Compare this rocket" Click="Compare_Click" IsEnabled="{Binding HasSelection}"
+                    ToolTip="This rocket's flights side by side" />
+            <Button Content="Delete log" Command="{Binding DeleteCommand}" Margin="8,0,0,0" />
+        </StackPanel>
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6"
                    Visibility="{Binding HasNoLogs, Converter={StaticResource BoolToVisibility}}"
                    Text="No flights recorded yet. Connect to KSP (KSP › Connect to KSP) and launch: each flight is logged from the launch on." />

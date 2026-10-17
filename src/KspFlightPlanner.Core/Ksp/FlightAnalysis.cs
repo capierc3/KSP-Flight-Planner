@@ -176,7 +176,8 @@ public static class FlightAnalysis
     /// the old body's sphere, and back from the sample after it until it entered the new one. Gaps where the mass changed
     /// (a burn while not recorded), in the air or on the ground aren't filled. docs/MATH.md §8.7.
     /// </summary>
-    public static IReadOnlyList<FilledPoint> FillGaps(IReadOnlyList<FlightSample> s, Func<string, CelestialBody?> body)
+    public static IReadOnlyList<FilledPoint> FillGaps(IReadOnlyList<FlightSample> s, Func<string, CelestialBody?> body,
+        Func<CelestialBody, CelestialBody?>? parent = null)
     {
         var points = new List<FilledPoint>();
         for (var i = 1; i < s.Count; i++)
@@ -184,27 +185,44 @@ public static class FlightAnalysis
             var (a, b) = (s[i - 1], s[i]);
             if (b.Ut - a.Ut <= FillAfterS || !Coasting(a) || !Coasting(b) || Math.Abs(a.MassKg - b.MassKg) > 1e-3 * a.MassKg) continue;
             var step = Math.Max(FillAfterS / 3, (b.Ut - a.Ut) / FillPointsPerGap);
+            var other = a.Body == b.Body ? null : body(b.Body);
             if (a.HasOrbit && body(a.Body) is { } from)
                 for (var t = a.Ut + step; t < b.Ut; t += step)
                 {
                     var p = Along(a, from, t);
-                    if (a.Body != b.Body && p.R > from.SoiRadiusM) break;
-                    points.Add(new FilledPoint(t, a.MetS + (t - a.Ut), a.Body, p.R - from.EquatorialRadiusM, p.V) { Position = PositionAt(a, from, t) });
+                    var at = PositionAt(a, from, t);
+                    if (other is not null && !Inside(from, other, p.R, at, t, parent)) break;
+                    points.Add(new FilledPoint(t, a.MetS + (t - a.Ut), a.Body, p.R - from.EquatorialRadiusM, p.V) { Position = at });
                 }
-            if (a.Body != b.Body && b.HasOrbit && body(b.Body) is { } to)
+            if (other is not null && b.HasOrbit && body(b.Body) is { } to && body(a.Body) is { } left)
             {
                 var back = new List<FilledPoint>();
                 for (var t = b.Ut - step; t > a.Ut; t -= step)
                 {
                     var p = Along(b, to, t);
-                    if (p.R > to.SoiRadiusM) break;
-                    back.Add(new FilledPoint(t, b.MetS - (b.Ut - t), b.Body, p.R - to.EquatorialRadiusM, p.V) { Position = PositionAt(b, to, t) });
+                    var at = PositionAt(b, to, t);
+                    if (!Inside(to, left, p.R, at, t, parent)) break;
+                    back.Add(new FilledPoint(t, b.MetS - (b.Ut - t), b.Body, p.R - to.EquatorialRadiusM, p.V) { Position = at });
                 }
                 back.Reverse();
                 points.AddRange(back);
             }
         }
         return points;
+    }
+
+    /// <summary>
+    /// Whether a craft <paramref name="r"/> from the centre of <paramref name="around"/> (at <paramref name="at"/>, when
+    /// known) is still in its sphere of influence rather than <paramref name="other"/>'s: inside its own sphere, and, when
+    /// the other is one of its moons, outside the moon's (where the moon was then; without a position, short of the
+    /// moon's orbit less its sphere).
+    /// </summary>
+    private static bool Inside(CelestialBody around, CelestialBody other, double r, Vector3d? at, double ut, Func<CelestialBody, CelestialBody?>? parent)
+    {
+        if (r > around.SoiRadiusM) return false;
+        if (other.Orbit is not { } moonOrbit || parent?.Invoke(other)?.Name != around.Name) return true;
+        if (at is { } p) return (p - Kepler.StateAt(moonOrbit, around.Mu, ut).Position).Length > other.SoiRadiusM;
+        return r < Math.Abs(moonOrbit.SemiMajorAxisM) - other.SoiRadiusM;
     }
 
     /// <summary>Where the craft is (relative to its body) at <paramref name="ut"/> on the orbit of <paramref name="x"/>, if all of it was kept.</summary>

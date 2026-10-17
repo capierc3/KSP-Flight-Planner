@@ -99,7 +99,7 @@ public sealed class FlightLogTests : IDisposable
     }
 
     [Fact]
-    public void Rails_warp_is_noted_as_data_lost_unless_it_was_short()
+    public void Rails_warp_is_noted_unless_short_and_its_samples_are_not_kept()
     {
         var recorder = new FlightLogRecorder("Kerbal X", At(100, "ORBITING"), null);
         recorder.Add(At(100.5, "ORBITING", warp: 5));
@@ -110,8 +110,21 @@ public sealed class FlightLogTests : IDisposable
         recorder.Add(At(7_302, "ORBITING", warp: 4)); // physics warp: still recorded
 
         var warp = Assert.Single(recorder.Log.Events, e => e.Kind == FlightLogEventKind.Warp);
-        Assert.Equal("Data lost in warp: ×1,000 for 2h 00m", warp.Text);
+        Assert.Equal("Time warp ×1,000 for 2h 00m: path worked out from the orbit", warp.Text);
         Assert.Equal(7_200, warp.DurationS);
+
+        // On rails kRPC's readings can be from different moments: only samples at ×4 or less are kept, the last before
+        // the warp included (to fill the warp from).
+        Assert.Equal([100, 101, 7_301], recorder.Log.Samples.Select(s => s.MetS)); // 7,302 waits, coasting (thinned)
+    }
+
+    [Fact]
+    public void Samples_stored_on_rails_by_older_recordings_are_left_out()
+    {
+        var log = new FlightLog { Samples = [At(0, "ORBITING"), At(500, "ORBITING", warp: 1_000), At(900, "ORBITING", warp: 4)] };
+        var clean = log.WithoutRailsSamples();
+        Assert.Equal([0, 900], clean.Samples.Select(s => s.MetS));
+        Assert.Same(clean, clean.WithoutRailsSamples());
     }
 
     [Fact]

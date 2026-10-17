@@ -29,6 +29,9 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     private List<(long Id, double LaunchUt)> _open = [];
     private (string Name, double LaunchUt)? _deleted; // the flight being flown was deleted: don't start it again
     private LiveTelemetry? _telemetry;
+    private ulong _recordingId; // kRPC's id for the vessel being recorded
+    private (string Name, int Parts)? _pad; // the vessel on the pad and its part count, for the log made when it lifts off
+    private bool _readingPad;
     private bool _opening;
     private FlightLogRecorder? _recorder;
     private DateTime _storedAt;
@@ -126,8 +129,7 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             Leave(FlightLogEventKind.SwitchedAway, end == TelemetryEnd.OtherVessel ? "Switched to another vessel" : "Lost the vessel's readings");
             return;
         }
-        if (_recorder is { } current && !(_telemetry.VesselName == current.VesselName
-                                          && Math.Abs(sample.Ut - sample.MetS - current.LaunchUt) <= FlightLogs.SameLaunchS))
+        if (_recorder is not null && _telemetry.VesselId != _recordingId)
         {
             // Reopened after a change of body, but the player has switched vessel meanwhile.
             Leave(FlightLogEventKind.SwitchedAway, "Switched to another vessel");
@@ -135,14 +137,32 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         }
         if (_recorder is null)
         {
-            if (sample.Situation == "PRELAUNCH") { UpdateStatus(sample); return; } // not launched yet
+            if (!Recordable(_telemetry.VesselType))
+            {
+                Status = $"Not recording {_telemetry.VesselName}: {(_telemetry.VesselType == "EVA" ? "a kerbal on EVA" : _telemetry.VesselType.ToLowerInvariant())}.";
+                return;
+            }
+            // On rails the readings can be from different moments (kRPC doesn't refresh them all each frame), so the flight
+            // is only told apart (by its launch time) once out of warp.
+            if (sample.WarpRate > FlightLogRecorder.PhysicsWarpMax)
+            {
+                Status = $"{_telemetry.VesselName}: recording picks up when the warp ends.";
+                return;
+            }
+            if (sample.Situation == "PRELAUNCH")
+            {
+                // Not launched yet: count its parts meanwhile (the design's fingerprint, with the launch mass).
+                if (_pad?.Name != _telemetry.VesselName && !_readingPad) _ = ReadPadAsync(_telemetry.VesselName);
+                UpdateStatus(sample);
+                return;
+            }
             if (_deleted is { } d && d.Name == _telemetry.VesselName && Math.Abs(sample.Ut - sample.MetS - d.LaunchUt) <= FlightLogs.SameLaunchS)
             {
                 Status = $"Not recording {d.Name}: its log was deleted.";
                 return;
             }
-            _recorder = Resume(_telemetry.VesselName, sample)
-                        ?? new FlightLogRecorder(_telemetry.VesselName, sample, FlightFor(_telemetry.VesselName));
+            _recorder = Resume(_telemetry.VesselName, sample) ?? NewLog(_telemetry.VesselName, sample);
+            _recordingId = _telemetry.VesselId;
             Store();
         }
         else
@@ -175,6 +195,26 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             _telemetry = null;
             _ = _link.CloseTelemetryAsync(stale);
         }
+    }
+
+    /// <summary>Kerbals on EVA, debris, flags and the like aren't flights worth a log.</summary>
+    private static bool Recordable(string vesselType) =>
+        vesselType is not ("EVA" or "Debris" or "Flag" or "SpaceObject" or "DroppedPart" or "DeployedScienceController" or "DeployedSciencePart");
+
+    private FlightLogRecorder NewLog(string vesselName, FlightSample first)
+    {
+        var recorder = new FlightLogRecorder(vesselName, first, FlightFor(vesselName));
+        if (recorder.Log.FromLaunch && _pad is { } pad && pad.Name == vesselName) recorder.SetLaunchPartCount(pad.Parts);
+        _pad = null;
+        return recorder;
+    }
+
+    private async Task ReadPadAsync(string vesselName)
+    {
+        _readingPad = true;
+        try { _pad = (vesselName, await _link.ActiveVesselPartCountAsync()); }
+        catch (Exception) { /* left the pad or the link dropped: no count for this launch */ }
+        finally { _readingPad = false; }
     }
 
     /// <summary>The stored log of this flight, picked up where it was left, with the gap noted.</summary>

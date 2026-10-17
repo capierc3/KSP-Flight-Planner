@@ -42,6 +42,12 @@ public sealed record FlightSample(
     public double LanDeg { get; init; } = double.NaN;
     public double ArgumentOfPeriapsisDeg { get; init; } = double.NaN;
 
+    /// <summary>
+    /// Pitch and heading are against the local horizon and north. Logs recorded before 2026-10-15 read them against the
+    /// planet's own axes instead, which isn't a pitch at all; those samples have this false.
+    /// </summary>
+    public bool SurfaceAttitude { get; init; }
+
     public bool HasOrbit => !double.IsNaN(SemiMajorAxisM) && !double.IsNaN(Eccentricity) && !double.IsNaN(MeanAnomalyRad);
 
     /// <summary>The whole orbit (shape and which way it faces), with this moment as its epoch; null if not all of it was kept.</summary>
@@ -103,6 +109,12 @@ public sealed record FlightLog
     /// <summary>The planner flight (Flight pane) being flown with this vessel when recording started, if any.</summary>
     public long? FlightId { get; init; }
 
+    /// <summary>Parts the vessel had on the pad (with its launch clamps); null when not seen there.</summary>
+    public int? LaunchPartCount { get; init; }
+
+    /// <summary>Mass at the first sample after lift-off, kg (0 for a flight joined under way).</summary>
+    public double LaunchMassKg => FromLaunch && Samples.Count > 0 ? Samples[0].MassKg : 0;
+
     public IReadOnlyList<FlightSample> Samples { get; init; } = [];
     public IReadOnlyList<FlightLogEvent> Events { get; init; } = [];
 
@@ -117,8 +129,17 @@ public sealed record FlightLog
     /// <summary>The bodies flown around, in order: "Kerbin › Mun › Kerbin".</summary>
     public string Route => FlightLogs.Route(Samples);
 
+    /// <summary>
+    /// The log without samples taken on rails (stored by recordings before 2026-10-17), whose readings can be from
+    /// different moments. The stretches they covered are filled from the orbit instead.
+    /// </summary>
+    public FlightLog WithoutRailsSamples() =>
+        Samples.Any(s => s.WarpRate > FlightLogRecorder.PhysicsWarpMax)
+            ? this with { Samples = Samples.Where(s => s.WarpRate <= FlightLogRecorder.PhysicsWarpMax).ToList() }
+            : this;
+
     public FlightLogSummary Summary => new(Id, VesselName, LaunchUt, JoinedAtMetS, Outcome, LastUt, DeltaVUsed, MaxAltitudeM,
-        LastSituation, LastBody, Events) { Route = Route };
+        LastSituation, LastBody, Events) { Route = Route, LaunchPartCount = LaunchPartCount, LaunchMassKg = LaunchMassKg };
 
     /// <summary>Whether this log is the flight of a vessel with this name and MET at game time <paramref name="ut"/>.</summary>
     public bool IsFlightOf(string vesselName, double ut, double metS) =>
@@ -131,6 +152,9 @@ public sealed record FlightLogSummary(long Id, string VesselName, double LaunchU
 {
     /// <summary>The bodies flown around, in order (null in logs stored before routes were).</summary>
     public string? Route { get; init; }
+
+    public int? LaunchPartCount { get; init; }
+    public double LaunchMassKg { get; init; }
 
     public bool FromLaunch => JoinedAtMetS <= 0;
     public double DurationS => LastUt - LaunchUt;
@@ -191,6 +215,13 @@ public sealed class FlightLogRecorder
     public string VesselName => _log.VesselName;
     public double LaunchUt => _log.LaunchUt;
     public double DeltaVUsed => FlightLogMath.DeltaVUsed(_samples);
+
+    /// <summary>Notes how many parts the vessel had on the pad (the design's fingerprint, with the launch mass).</summary>
+    public void SetLaunchPartCount(int parts)
+    {
+        _log = _log with { LaunchPartCount = parts };
+        Dirty = true;
+    }
     public FlightSample? Last => _pending ?? (_samples.Count > 0 ? _samples[^1] : null);
 
     /// <summary>Whether anything was added since <see cref="MarkSaved"/>.</summary>
@@ -198,8 +229,20 @@ public sealed class FlightLogRecorder
 
     public void MarkSaved() => Dirty = false;
 
+    /// <summary>
+    /// Adds a sample. On rails (warp faster than ×4) it's only watched for the warp note, not kept: the game then moves the
+    /// craft along its orbit, so the stretch is worked out from the orbit afterwards (FlightAnalysis.FillGaps), and kRPC
+    /// doesn't refresh every reading in the same frame there, so a sample's time, MET and orbit can be from different
+    /// moments far apart. The last sample before the warp is kept, to fill from.
+    /// </summary>
     public void Add(FlightSample sample)
     {
+        if (sample.WarpRate > PhysicsWarpMax)
+        {
+            Flush();
+            TrackWarp(sample);
+            return;
+        }
         var kept = _samples.Count > 0 ? _samples[^1] : null;
         if (kept is not null && sample.Ut < kept.Ut - 1) Rewind(sample);
         kept = _samples.Count > 0 ? _samples[^1] : null;
@@ -280,7 +323,7 @@ public sealed class FlightLogRecorder
         {
             var length = sample.Ut - _warpStartUt;
             if (length >= NotableWarpS)
-                Note(sample, FlightLogEventKind.Warp, $"Data lost in warp: ×{_warpMax:#,0} for {FlightLogs.Duration(length)}", length);
+                Note(sample, FlightLogEventKind.Warp, $"Time warp ×{_warpMax:#,0} for {FlightLogs.Duration(length)}: path worked out from the orbit", length);
             _warpStartUt = double.NaN;
         }
     }

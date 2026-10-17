@@ -38,6 +38,12 @@ public sealed class LiveTelemetry
     /// <summary>The vessel's name when the streams were opened.</summary>
     public string VesselName { get; }
 
+    /// <summary>kRPC's id for the vessel: the same vessel keeps it while connected (unlike game time − MET, which drifts on rails).</summary>
+    public ulong VesselId { get; }
+
+    /// <summary>Ship, Probe, Lander… EVA for a kerbal outside, Debris for dropped parts.</summary>
+    public string VesselType { get; }
+
     /// <summary>The body the surface readings are against.</summary>
     public string BodyName { get; }
 
@@ -46,10 +52,13 @@ public sealed class LiveTelemetry
         var space = c.SpaceCenter();
         _vessel = vessel;
         VesselName = vessel.Name;
+        VesselId = vessel.id;
+        VesselType = vessel.Type.ToString();
         var orbit = vessel.Orbit;
         _body = orbit.Body;
         BodyName = KspLink.PlannerBodyName(_body.Name);
         var flight = vessel.Flight(_body.ReferenceFrame); // speeds against the turning body: surface speeds
+        var attitude = vessel.Flight(vessel.SurfaceReferenceFrame); // pitch and heading against the horizon and north
         var control = vessel.Control;
 
         _active = Add(c.AddStream(() => space.ActiveVessel));
@@ -68,8 +77,8 @@ public sealed class LiveTelemetry
         _verticalSpeed = Add(c.AddStream(() => flight.VerticalSpeed));
         _latitude = Add(c.AddStream(() => flight.Latitude));
         _longitude = Add(c.AddStream(() => flight.Longitude));
-        _pitch = AddFloat(c, () => flight.Pitch);
-        _heading = AddFloat(c, () => flight.Heading);
+        _pitch = AddFloat(c, () => attitude.Pitch);
+        _heading = AddFloat(c, () => attitude.Heading);
         _q = AddFloat(c, () => flight.DynamicPressure);
         _g = AddFloat(c, () => flight.GForce);
         _orbitalSpeed = Add(c.AddStream(() => orbit.Speed));
@@ -115,6 +124,7 @@ public sealed class LiveTelemetry
                 InclinationDeg = _inc() * RadToDeg,
                 LanDeg = _lan() * RadToDeg,
                 ArgumentOfPeriapsisDeg = _argPe() * RadToDeg,
+                SurfaceAttitude = true,
             };
         }
         catch (Exception ex) when (ex is RPCException or System.InvalidOperationException or ObjectDisposedException)

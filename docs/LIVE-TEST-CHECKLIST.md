@@ -296,6 +296,10 @@ Notes:
 - [ ] Burns table matches what you flew; the Δv by stage looks right against the design's stages
 - [ ] A Mun trip with long warps: no "Switched to another vessel" at the SOI changes; warp shows as a dashed curve on the altitude chart
 - [ ] Map › Around Kerbin: the path goes out to the Mun's orbit and meets the Mun where it was; Around Mun shows the flyby or capture
+- [ ] Fly the same rocket twice → Compare this rocket: both flights in the table (same design letter), best figures in green, charts overlaid
+- [ ] Add a part in the VAB and fly again → the new flight gets the next design letter; the Rocket pane says how often the design has flown
+- [ ] Launch to orbit → Flight report › Ascent coach: launch TWR, turn start and 45° altitude match what you flew; the pitch chart's blue line is your nose (90° on the pad)
+- [ ] The best-climb box gives a model check within a few %; try its advice (turn start speed, 45° altitude) on the next launch and compare
 
 Notes:
 

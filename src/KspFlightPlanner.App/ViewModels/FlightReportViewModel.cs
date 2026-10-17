@@ -12,6 +12,9 @@ namespace KspFlightPlanner.App.ViewModels;
 public sealed record ReportCard(string Title, string Value, string Detail);
 public sealed record ReportRow(string When, string What, string Value);
 
+/// <summary>A line of ascent advice: ✓ went well, ✗ cost Δv, • a remark.</summary>
+public sealed record AdviceRow(string Mark, string Title, string Detail, bool? Good);
+
 /// <summary>A part of the flight a chart can show.</summary>
 public sealed record ChartRange(string Title, double FromMetS, double ToMetS)
 {
@@ -40,6 +43,10 @@ public sealed class FlightReportViewModel : ObservableObject
     private IReadOnlyList<FilledPoint> _filled = [];
     private Dictionary<string, CelestialBody> _bodies = [];
     private string? _mapBody;
+    private AscentDiagnosis? _diagnosis;
+    private OptimalAscent? _optimum;
+    private string? _optimumStatus;
+    private readonly Dictionary<(long, double), OptimalAscent?> _optima = []; // per flight and ascent end: the search takes seconds
     private string _chartKind = ChartKinds[0];
     private ChartRange? _range;
 
@@ -83,6 +90,100 @@ public sealed class FlightReportViewModel : ObservableObject
 
     public ChartData? Chart => _log is { } log && _report is { } report ? BuildChart(log, report, _filled, ChartKind, Range) : null;
 
+    // ---------------- Ascent coach ----------------
+
+    public bool HasCoach => _diagnosis is not null;
+
+    public IReadOnlyList<ReportCard> CoachCards => _diagnosis is not { } d || _report?.Ascent is not { } a ? [] :
+    [
+        new("Gravity loss", Ms(a.GravityLoss), "climbing against gravity"),
+        new("Steering loss", d.SteeringLoss is { } st ? Ms(st) : "—", d.HasPitch ? "nose off the path while burning" : "no pitch recorded"),
+        new(d.HasPitch ? "Drag loss" : "Drag & steering", Ms(d.DragLoss ?? a.DragAndSteeringLoss), "the air slowing it"),
+        new("Launch TWR", d.LaunchTwr is { } twr ? twr.ToString("N2", CultureInfo.CurrentCulture) : "—", "thrust ÷ weight on the pad"),
+    ];
+
+    public IReadOnlyList<AdviceRow> Advice => _diagnosis?.Advice
+        .Select(a => new AdviceRow(a.Good switch { true => "✓", false => "✗", _ => "•" }, a.Title, a.Detail, a.Good)).ToList() ?? [];
+
+    /// <summary>The best climb for this rocket, or what the search is doing.</summary>
+    public string? BestText => _optimum is { Best.ReachedOrbit: true } o && _report?.Ascent is { } a
+        ? $"Best for this rocket: about {o.BestEstimate:N0} m/s to orbit, against {a.DeltaVSpent:N0} m/s flown " +
+          (o.Saving >= 10 ? $"({o.Saving:N0} m/s to gain). " : "(you're already there). ") +
+          $"Start the turn at {o.Best.Program!.TurnStartSpeed:N0} m/s, reach 45° at {Pitch45(o.Best) / 1000:N1} km and level by {o.Best.Program.TurnEndAltitudeM / 1000:N0} km, " +
+          "following prograde through the thick air."
+        : _optimumStatus;
+
+    /// <summary>How far to trust <see cref="BestText"/>.</summary>
+    public string? ModelText => _optimum is not { Best.ReachedOrbit: true } o ? null
+        : o.ModelError is { } err
+            ? $"Model check: flying your own steering through the model takes {o.Replay!.DeltaV:N0} m/s against {o.FlownDeltaV:N0} flown ({err:+0.0 %;-0.0 %}). " +
+              (Math.Abs(err) <= 0.05 ? "Close, so the gain is a fair estimate." : "Not that close: take the gain as rough.")
+            : o.Replay is not null
+                ? "Rough: flying your own steering through the model didn't reach orbit, so the gain compares the model with the real flight."
+                : "Rough: this flight has no pitch recorded to check the model against, so the gain compares the model with the real flight.";
+
+    /// <summary>Pitch against altitude: the nose, where the craft was going, and the best program.</summary>
+    public ChartData? PitchChart { get; private set; }
+
+    /// <summary>The flown climb and the best one, altitude against distance from the pad.</summary>
+    public ChartData? CoachProfile { get; private set; }
+
+    private static double Pitch45(SimAscent run) => run.Path.FirstOrDefault(p => p.PitchDeg <= 45)?.AltitudeM ?? double.NaN;
+
+    private void StartCoach(Dictionary<string, CelestialBody> bodies)
+    {
+        _diagnosis = null;
+        _optimum = null;
+        _optimumStatus = null;
+        if (_log is not { } log || _report?.Ascent is not { } ascent || log.Samples.Count == 0 || bodies.GetValueOrDefault(log.Samples[0].Body) is not { } home)
+            return;
+        _diagnosis = AscentCoach.Diagnose(log, ascent, home);
+        if (AscentSimulator.For(log, ascent, home) is not { } sim)
+        {
+            _optimumStatus = ascent.ReachedOrbit ? null : "No best climb: this flight didn't reach orbit.";
+            return;
+        }
+        var key = (log.Id, ascent.EndMetS);
+        if (_optima.TryGetValue(key, out var known))
+        {
+            _optimum = known;
+            return;
+        }
+        _optimumStatus = "Working out the best climb for this rocket…";
+        var flown = ascent.DeltaVSpent;
+        Task.Run(() => sim.Optimize(flown)).ContinueWith(t =>
+        {
+            var result = t.IsCompletedSuccessfully ? t.Result : null;
+            _optima[key] = result;
+            if (_log?.Id != key.Id) return;
+            _optimum = result;
+            _optimumStatus = result is null ? "Couldn't work out a best climb for this flight." : null;
+            BuildCoachCharts();
+            foreach (var name in new[] { nameof(BestText), nameof(ModelText), nameof(PitchChart), nameof(CoachProfile) }) OnPropertyChanged(name);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void BuildCoachCharts()
+    {
+        PitchChart = CoachProfile = null;
+        if (_diagnosis is not { } d || _log is not { } log) return;
+        var km = (Func<double, string>)(x => x.ToString("N0", CultureInfo.CurrentCulture));
+        var pitch = new List<ChartSeries>();
+        if (d.HasPitch) pitch.Add(new ChartSeries("Nose", Blue, [d.Pitch.Select(p => new Point(p.AltitudeM / 1000, p.PitchDeg)).ToList()]));
+        pitch.Add(new ChartSeries("Prograde", Color.FromRgb(0x9A, 0xA4, 0xB8), [d.Pitch.Select(p => new Point(p.AltitudeM / 1000, p.ProgradeDeg)).ToList()]) { Dashed = true });
+        if (_optimum is { Best.ReachedOrbit: true } o)
+            pitch.Add(new ChartSeries("Best", Green, [o.Best.Path.Where(p => !double.IsNaN(p.PitchDeg) && p.AltitudeM < 70_000)
+                .Select(p => new Point(p.AltitudeM / 1000, p.PitchDeg)).ToList()]));
+        PitchChart = new ChartData("Altitude (km)", "Pitch (°)", pitch, XIsTime: false, y => $"{y:N0}°") { FormatX = km };
+
+        if (_optimum is { Best.ReachedOrbit: true } best && AscentProfile is { } flown)
+            CoachProfile = flown with
+            {
+                Series = [flown.Series[0] with { Name = "Flown" },
+                    new ChartSeries("Best", Green, [best.Best.Path.Select(p => new Point(p.DownrangeM / 1000, p.AltitudeM / 1000)).ToList()])],
+            };
+    }
+
     /// <summary>Bodies the flight can be drawn around (a planet's map shows its moons too).</summary>
     public IReadOnlyList<string> MapBodies { get; private set; } = [];
 
@@ -115,19 +216,22 @@ public sealed class FlightReportViewModel : ObservableObject
     public void Show(long? id)
     {
         var same = id is not null && id == _log?.Id;
-        _log = id is { } i ? _logs.Get(i) : null;
+        _log = id is { } i ? _logs.Get(i)?.WithoutRailsSamples() : null;
         var bodies = _bodies = _sync.StockBodies();
         _report = _log is { } log ? FlightAnalysis.Analyze(log, b => bodies.GetValueOrDefault(b)) : null;
-        _filled = _log is { } l ? FlightAnalysis.FillGaps(l.Samples, b => bodies.GetValueOrDefault(b)) : [];
+        _filled = _log is { } l ? FlightAnalysis.FillGaps(l.Samples, b => bodies.GetValueOrDefault(b), Parent) : [];
         Build(bodies);
         var keep = same ? _range?.Title : null;
         _range = Ranges.FirstOrDefault(r => r.Title == keep) ?? Ranges.FirstOrDefault();
+        StartCoach(bodies);
+        BuildCoachCharts();
         MapBodies = _log is { } shown ? FlightMap.Views(shown, b => bodies.GetValueOrDefault(b), Parent) : [];
         var keepMap = same ? _mapBody : null;
         _mapBody = MapBodies.Contains(keepMap ?? "") ? keepMap : MapBodies.FirstOrDefault();
         foreach (var name in new[] { nameof(LogId), nameof(HasLog), nameof(Title), nameof(Subtitle), nameof(Cards), nameof(Burns), nameof(HasBurns),
                      nameof(DeltaVSplit), nameof(Timeline), nameof(Ranges), nameof(Range), nameof(Chart), nameof(AscentProfile), nameof(HasAscentProfile),
-                     nameof(MapBodies), nameof(MapBody), nameof(Map), nameof(HasMap), nameof(MapNote) })
+                     nameof(MapBodies), nameof(MapBody), nameof(Map), nameof(HasMap), nameof(MapNote),
+                     nameof(HasCoach), nameof(CoachCards), nameof(Advice), nameof(BestText), nameof(ModelText), nameof(PitchChart), nameof(CoachProfile) })
             OnPropertyChanged(name);
     }
 
@@ -188,8 +292,9 @@ public sealed class FlightReportViewModel : ObservableObject
         // Where the recording has holes: warp (noted where it ended) and not recorded (noted where it began).
         static (double From, double To) Span(FlightLogEvent e) =>
             e.Kind == FlightLogEventKind.Warp ? (e.MetS - e.DurationS, e.MetS) : (e.MetS, e.MetS + e.DurationS);
-        var gaps = log.Events.Where(e => e.DurationS > 0).Select(Span).ToList();
+        // Only stretches nothing covers are shaded: warp on rails is worked out from the orbit (drawn dashed).
         var holes = log.Events.Where(e => e.DurationS > 0 && e.Kind != FlightLogEventKind.Warp).Select(Span).ToList(); // lines break here
+        var gaps = holes.Where(h => !filled.Any(f => f.MetS > h.From && f.MetS < h.To)).ToList();
 
         ChartSeries Series(string name, Color color, Func<FlightSample, int, double> value)
         {

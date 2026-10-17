@@ -99,6 +99,7 @@
                         <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
                         <MenuItem Header="Flight _log" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightLog}" ToolTip="Every flight recorded while connected" />
                         <MenuItem Header="Flight _report" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightReport}" ToolTip="The flight picked in the Flight log" />
+                        <MenuItem Header="_Compare flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightCompare}" ToolTip="One rocket's flights side by side" />
                     </MenuItem>
                     <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" ToolTip="Inputs for the tool you looked at last" />
                     <Separator />
