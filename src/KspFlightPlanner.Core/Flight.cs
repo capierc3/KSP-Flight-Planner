@@ -8,7 +8,10 @@ public enum FlightKind
     Rendezvous,
     /// <summary>Deploy a constellation from a carrier orbit (Resonant Orbits pane).</summary>
     Resonant,
-    /// <summary>One-off burns planned from where the craft was (From here pane): flown as they are, not re-planned.</summary>
+    /// <summary>
+    /// Burns planned from where the craft was (From here pane): flown as they are, not re-planned, except a trip to a body
+    /// (Go to), which keeps <see cref="Flight.DestinationName"/> and <see cref="Flight.AltitudeM"/> to be planned again on the way.
+    /// </summary>
     Burns,
     /// <summary>To another planet or moon in a launch window (Transfer Planner): re-planned from wherever the craft is on the way.</summary>
     Transfer,
@@ -90,7 +93,7 @@ public sealed record Flight
     public double StayS { get; init; }
     public double? DeorbitPeriapsisAltitudeM { get; init; }
 
-    // Transfer inputs: the window (leaving OriginName at TransferDepartureUt, TransferFlightTimeS long) and the arrival.
+    // Transfer inputs (DestinationName is also a From here trip's): the window (leaving OriginName at TransferDepartureUt, TransferFlightTimeS long) and the arrival.
     // BodyName is the body the burns were last planned around: the origin, then its parent on the way.
     public string? OriginName { get; init; }
     public string? DestinationName { get; init; }
@@ -102,7 +105,7 @@ public sealed record Flight
     public LandingLeg? Landing { get; init; }
     public bool LandSooner { get; init; }
 
-    // Resonant inputs (AltitudeM is also a transfer's arrival height).
+    // Resonant inputs (AltitudeM is also a transfer's or From here trip's arrival height).
     public int SatelliteCount { get; init; }
     public double AltitudeM { get; init; }
     public bool PreferDiveOrbit { get; init; }

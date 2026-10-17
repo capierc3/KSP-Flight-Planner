@@ -66,6 +66,7 @@ public sealed class FromHereViewModel : ObservableObject
     private RendezvousPlan? _plannedRendezvous;
     private FlightCraft? _plannedTarget;
     private CelestialBody? _plannedTo;
+    private double _plannedHeight; // a trip's arrival height over _plannedTo
     private LandingLeg? _plannedLanding;
     private bool _plannedSooner;
 
@@ -370,7 +371,7 @@ public sealed class FromHereViewModel : ObservableObject
         {
             var bodies = _sync.StockBodies().Values.ToList();
             var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies));
-            (_plannedBody, _plannedFrom, _plannedUt, _plannedTo) = (from, orbit, now, to);
+            (_plannedBody, _plannedFrom, _plannedUt, _plannedTo, _plannedHeight) = (from, orbit, now, to, height);
             foreach (var option in options) TripOptions.Add(new TripOptionRow(option.Label, OptionText(option, now), option));
             OnPropertyChanged(nameof(HasTripOptions));
             SelectedTrip = TripOptions[0];
@@ -757,7 +758,9 @@ public sealed class FromHereViewModel : ObservableObject
                 Kind = FlightKind.Rendezvous,
                 Targets = [new FlightTarget(plan.Legs[0].Target.Name, _plannedTarget?.SaveVesselId, plan.Legs[0].Target.Orbit, plan.Legs[0].ArrivalUt)],
             }
-            : new Flight { Name = _plannedTo is { } to ? $"To {to.Name}" : burns[0].Title, Kind = FlightKind.Burns };
+            : _plannedTo is { } to
+            ? new Flight { Name = $"To {to.Name}", Kind = FlightKind.Burns, DestinationName = to.Name, AltitudeM = _plannedHeight }
+            : new Flight { Name = burns[0].Title, Kind = FlightKind.Burns };
         flight = flight with
         {
             BodyName = body.Name,
