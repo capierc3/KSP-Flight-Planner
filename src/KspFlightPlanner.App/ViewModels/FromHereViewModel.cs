@@ -9,7 +9,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, GoTo, MatchPlanes, Rendezvous, Deorbit, Land }
+public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land }
 
 public sealed record QuickActionOption(QuickAction Action, string Name)
 {
@@ -69,6 +69,11 @@ public sealed class FromHereViewModel : ObservableObject
     private double _plannedHeight; // a trip's arrival height over _plannedTo
     private LandingLeg? _plannedLanding;
     private bool _plannedSooner;
+    private DeployStep? _plannedDeploy; // a deployment's satellites and carrier, at _plannedHeight
+
+    // Deploy satellites: how many, and whether to share the carrier's apoapsis (a dive orbit) instead of its periapsis.
+    private string _satellitesText = "3";
+    private bool _preferDive;
 
     // Land at a spot: the spots on the body the craft is around, and the one picked or typed.
     private LandingTarget? _spot;
@@ -92,7 +97,7 @@ public sealed class FromHereViewModel : ObservableObject
         };
 
         PlanCommand = new RelayCommand(Plan, () => !_busy && Here() is not null);
-        SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && Burns.Any(b => b.State != BurnState.Passed));
+        SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
         FlyCommand = new RelayCommand(Fly, () => !_busy && Burns.Count > 0);
     }
 
@@ -105,6 +110,7 @@ public sealed class FromHereViewModel : ObservableObject
         new(QuickAction.GoTo, "Go to…"),
         new(QuickAction.MatchPlanes, "Match planes with the target"),
         new(QuickAction.Rendezvous, "Rendezvous with the target"),
+        new(QuickAction.Deploy, "Deploy satellites"),
         new(QuickAction.Deorbit, "Deorbit"),
         new(QuickAction.Land, "Land at a spot"),
     ];
@@ -122,13 +128,13 @@ public sealed class FromHereViewModel : ObservableObject
         {
             if (value is null || !SetProperty(ref _action, value)) return;
             _altitudeText = DefaultAltitude();
-            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(OptionsTitle) })
+            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle) })
                 OnPropertyChanged(name);
             Clear();
         }
     }
 
-    public bool NeedsAltitude => _action.Action is QuickAction.SetApoapsis or QuickAction.SetPeriapsis or QuickAction.Deorbit
+    public bool NeedsAltitude => _action.Action is QuickAction.SetApoapsis or QuickAction.SetPeriapsis or QuickAction.Deorbit or QuickAction.Deploy
                                  || _action.Action == QuickAction.GoTo && !GoingToCraft;
 
     /// <summary>Go to is set to KSP's target, and that's a craft: a rendezvous, which needs no height.</summary>
@@ -139,12 +145,29 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.SetApoapsis => "New apoapsis",
         QuickAction.SetPeriapsis => "New periapsis",
         QuickAction.GoTo => "Orbit there at",
+        QuickAction.Deploy => "Satellites at",
         _ => "Periapsis",
     };
 
     public bool NeedsDestination => _action.Action == QuickAction.GoTo;
 
     public bool NeedsSpot => _action.Action == QuickAction.Land;
+
+    public bool NeedsSatellites => _action.Action == QuickAction.Deploy;
+
+    /// <summary>How many satellites the craft carries, to spread evenly round the orbit.</summary>
+    public string SatellitesText
+    {
+        get => _satellitesText;
+        set { if (SetProperty(ref _satellitesText, value)) Clear(); }
+    }
+
+    /// <summary>Release from a carrier orbit that dips below the satellites' (a dive orbit), as in the Resonant Orbits tool.</summary>
+    public bool PreferDive
+    {
+        get => _preferDive;
+        set { if (SetProperty(ref _preferDive, value)) Clear(); }
+    }
 
     public string OptionsTitle => _action.Action == QuickAction.Land ? "Ways to land" : "Ways to go";
 
@@ -241,6 +264,9 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.SetPeriapsis => "Burns at the apoapsis, which stays where it is.",
         QuickAction.MatchPlanes => "Target a craft, or a moon of the body you're orbiting, in KSP first. Burns at the cheaper of the next two plane crossings.",
         QuickAction.Rendezvous => "Target a craft in KSP first. Plans the plane match, phasing and intercept, like the Rendezvous tool.",
+        QuickAction.Deploy => "Spreads the satellites evenly round a circular orbit at this height, like the Resonant Orbits tool. If your orbit doesn't reach " +
+                              "that height, it climbs (or drops) there first, then enters the carrier orbit and releases one satellite each lap. " +
+                              "Each satellite circularizes itself: release it, switch to it and send it its node. Keep it as a flight to follow along.",
         QuickAction.Land => "Pick a spot (or type its latitude and longitude). Tilts your orbit first if it doesn't reach that far north or south, then " +
                             "waits for a pass close to the spot: a deorbit burn half an orbit before, a small burn on the way down to swing the track " +
                             "over it, and a braking burn from 1 km above the ground. On a body with air the landing spot is a rough estimate.",
@@ -329,6 +355,26 @@ public sealed class FromHereViewModel : ObservableObject
                     var deorbit = Rendezvous.Deorbit(body, orbit, after, periapsis);
                     burns = [new FlightBurn($"Deorbit (periapsis {Km(periapsis)})", deorbit.Ut, deorbit.Burn)];
                     break;
+                case QuickAction.Deploy:
+                    if (!TryKm(out var deployAt)) return;
+                    if (!int.TryParse(_satellitesText.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out var count) || count is < 1 or > 64)
+                    {
+                        Status = "Enter how many satellites to deploy (1 to 64).";
+                        return;
+                    }
+                    ResonantOrbitResult carrier;
+                    try
+                    {
+                        carrier = ResonantOrbitCalculator.Calculate(new ResonantOrbitRequest(body, count, deployAt, _preferDive));
+                    }
+                    catch (Exception ex) when (ex is ArgumentOutOfRangeException or InvalidOperationException)
+                    {
+                        Status = ex.Message.Split(" (Parameter")[0];
+                        return;
+                    }
+                    burns = [.. ResonantDeployment.Plan(body, carrier, orbit, count, after).Burns];
+                    (_plannedDeploy, _plannedHeight) = (new DeployStep(count, _preferDive), deployAt);
+                    break;
                 case QuickAction.MatchPlanes:
                     if (TargetOrbit(body) is not (var name, var targetOrbit, _)) return;
                     var (plane, _) = Rendezvous.MatchPlane(body, orbit, targetOrbit, after);
@@ -342,8 +388,13 @@ public sealed class FromHereViewModel : ObservableObject
 
             (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
             for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
-            var end = burns.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
-            ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
+            // A released satellite's burn isn't the craft's: it neither moves the craft nor uses its fuel.
+            var own = burns.Where(b => !b.ByReleasedCraft).ToList();
+            var end = own.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
+            var released = burns.Where(b => b.ByReleasedCraft).ToList();
+            ResultText = $"{Format.Speed0(own.Sum(b => b.DeltaV))} in all" +
+                         (released.Count > 0 ? $", plus {Format.Speed0(released[0].DeltaV)} for each satellite" : "") +
+                         $" · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
             OnPropertyChanged(nameof(HasBurns));
             Status = FuelNote();
             // An apsis burn is never pushed to the next orbit, so it can be close.
@@ -529,10 +580,11 @@ public sealed class FromHereViewModel : ObservableObject
     private string? FuelNote()
     {
         if (ActiveReport() is not { ThrustKn: > 0 } report) return null;
-        var times = VesselAnalysis.BurnTimes(report, Burns.Select(b => b.Burn.DeltaV));
-        for (var i = 0; i < Burns.Count; i++)
-            Burns[i].BurnTime = times[i] is { } t ? "burn " + Units.BurnTime(t) : "not enough fuel";
-        var need = Burns.Sum(b => b.Burn.DeltaV);
+        var own = Burns.Where(b => !b.Burn.ByReleasedCraft).ToList(); // a satellite burns its own fuel
+        var times = VesselAnalysis.BurnTimes(report, own.Select(b => b.Burn.DeltaV));
+        for (var i = 0; i < own.Count; i++)
+            own[i].BurnTime = times[i] is { } t ? "burn " + Units.BurnTime(t) : "not enough fuel";
+        var need = own.Sum(b => b.Burn.DeltaV);
         var name = _sync.ActiveCraft!.Name;
         return need > report.DeltaVVacuum
             ? $"{name} has {Format.Speed0(report.DeltaVVacuum)} left (as the save last recorded it): {Format.Speed0(need - report.DeltaVVacuum)} short."
@@ -606,6 +658,10 @@ public sealed class FromHereViewModel : ObservableObject
             QuickAction.SetApoapsis => orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) - body.EquatorialRadiusM,
             QuickAction.SetPeriapsis => orbit.SemiMajorAxisM * (1 - orbit.Eccentricity) - body.EquatorialRadiusM,
             QuickAction.Deorbit => body.AtmosphereHeightM * 0.43, // as the Rendezvous tool's deorbit (docs/MATH.md §2.5)
+            // A relay's usual home: the synchronous orbit, if it's inside the sphere of influence; else where the craft reaches.
+            QuickAction.Deploy => body.SynchronousAltitudeM is { } sync && sync < body.SoiAltitudeM
+                ? sync
+                : orbit.SemiMajorAxisM * (1 + orbit.Eccentricity) - body.EquatorialRadiusM,
             _ => double.NaN,
         };
         return double.IsNaN(metres) ? "" : (Math.Round(metres / 1000)).ToString("#,0", CultureInfo.CurrentCulture);
@@ -620,6 +676,7 @@ public sealed class FromHereViewModel : ObservableObject
         _plannedTarget = null;
         _plannedTo = null;
         _plannedLanding = null;
+        _plannedDeploy = null;
         TripOptions.Clear();
         _trip = null;
         OnPropertyChanged(nameof(SelectedTrip));
@@ -719,7 +776,8 @@ public sealed class FromHereViewModel : ObservableObject
 
     private async Task SendAsync()
     {
-        var burns = Burns.Where(b => b.State != BurnState.Passed).Select(b => (b.Burn.Ut, b.Burn.Burn)).ToList();
+        // A satellite's own burn goes to it once it's released (from the Flight pane), not to the carrier.
+        var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn)).ToList();
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
         try
@@ -757,6 +815,15 @@ public sealed class FromHereViewModel : ObservableObject
                 Name = $"Meet {plan.Legs[0].Target.Name}",
                 Kind = FlightKind.Rendezvous,
                 Targets = [new FlightTarget(plan.Legs[0].Target.Name, _plannedTarget?.SaveVesselId, plan.Legs[0].Target.Orbit, plan.Legs[0].ArrivalUt)],
+            }
+            : _plannedDeploy is { } deploy
+            ? new Flight
+            {
+                Name = $"Deploy {deploy.SatelliteCount} satellites around {body.Name}",
+                Kind = FlightKind.Resonant,
+                SatelliteCount = deploy.SatelliteCount,
+                AltitudeM = _plannedHeight,
+                PreferDiveOrbit = deploy.PreferDiveOrbit,
             }
             : _plannedTo is { } to
             ? new Flight { Name = $"To {to.Name}", Kind = FlightKind.Burns, DestinationName = to.Name, AltitudeM = _plannedHeight }

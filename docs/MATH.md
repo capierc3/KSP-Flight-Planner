@@ -975,7 +975,16 @@ Resonant deployment (§5.1) needs the carrier to pass the shared apsis once per 
        Δv_k = v_circ·ĥ − v(t_k)          the satellite's node (it's flown by the satellite, not the carrier)
 ```
 
-Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative). If the craft's apsis misses r by more than 1 km, the plan warns you: the satellites will end up at that apsis instead, and their spacing will be off.
+Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative).
+
+If that apsis misses r by more than 1 km (say the craft is still in low orbit), the plan starts with one more burn that brings it to r, half a Hohmann transfer (§2.1). It burns at the *other* apsis (any time, if the orbit is circular), so the far side of the orbit lands on r:
+
+```
+0. Bring the apsis to r:   a₀ = (|r_burn| + r) / 2,   v₀ = √(μ·(2/|r_burn| − 1/a₀)) horizontal,   Δv₀ = v₀·ĥ − v
+   then step 1 happens half an orbit later, at the new apsis (|r_burn| = r)
+```
+
+Re-planning after this burn (the Flight pane does it on its own once a burn is flown) drops it, and a small miss just gives a small fix-up burn.
 
 Re-planning partway through (at least one satellite already out) keeps the very next pass of the shared apsis, even if it's inside the flight's lead time. Waiting a lap would put the next satellite 2/n of an orbit behind the one before instead of 1/n, so the spacing would be lost (`Partway_through_the_next_release_is_the_next_pass_however_soon`). The same goes for a released satellite circularized from the From here pane (§2.8).
 
@@ -984,6 +993,11 @@ Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r 
 1. Satellite period 21,549.1 s; carrier period × 4/3 = **28,732.1 s**, so a = 4,195,530.5 m and the far apsis is at **4,327.7 km**
 2. Enter: v = √(μ/r) = 1,009.82 m/s → v′ = √(μ·(2/r − 1/a)) = 1,094.40 m/s, so **+84.57 m/s prograde**
 3. Satellite k circularizes at the periapsis one, two and three carrier laps later (+28,732.1 s each): 1,009.82 − 1,094.40 = **−84.57 m/s (retrograde)**
+
+The same deployment from an 80 km circular orbit (r₀ = 680,000 m) adds step 0 and moves step 1:
+
+0. v = √(μ/r₀) = 2,278.93 m/s; a₀ = (680,000 + 3,463,334.1) / 2 = 2,071,667 m, v₀ = 2,946.58 m/s, so **+667.65 m/s prograde**, raising the apoapsis to 2,863.3 km
+1. Half that orbit later (**4,984.8 s**), at the apoapsis: v = √(μ·(2/r − 1/a₀)) = 578.54 m/s → 1,094.38 m/s, so **+515.84 m/s prograde**
 
 - Code: `ResonantDeployment.Plan`; tested in `FlightTests`
 - Source: vis-viva (§1.3); §5.1 for the carrier orbit
