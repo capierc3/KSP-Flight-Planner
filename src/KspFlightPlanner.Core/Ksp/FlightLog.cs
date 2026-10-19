@@ -142,8 +142,10 @@ public sealed record FlightLog
         LastSituation, LastBody, Events) { Route = Route, LaunchPartCount = LaunchPartCount, LaunchMassKg = LaunchMassKg };
 
     /// <summary>Whether this log is the flight of a vessel with this name and MET at game time <paramref name="ut"/>.</summary>
-    public bool IsFlightOf(string vesselName, double ut, double metS) =>
-        vesselName == VesselName && Math.Abs(ut - metS - LaunchUt) <= FlightLogs.SameLaunchS;
+    public bool IsFlightOf(string vesselName, double ut, double metS) => vesselName == VesselName && LaunchedAt(ut, metS);
+
+    /// <summary>Whether a vessel with this MET at game time <paramref name="ut"/> was launched with this log's flight, whatever it's called now.</summary>
+    public bool LaunchedAt(double ut, double metS) => Math.Abs(ut - metS - LaunchUt) <= FlightLogs.SameLaunchS;
 }
 
 /// <summary>A flight log without its samples: what the Flight log list shows.</summary>
@@ -185,20 +187,33 @@ public sealed class FlightLogRecorder
     /// <summary>Starts a new log from the first sample of a vessel (at the launch, or joining a flight under way).</summary>
     public FlightLogRecorder(string vesselName, FlightSample first, long? flightId)
     {
-        var fromLaunch = first.MetS < FlightLogs.SameLaunchS;
+        // KSP starts a vessel's MET again when it splits off another (a satellite released in orbit), so a MET near 0
+        // above the air is a separation, not a launch.
+        var justStarted = first.MetS < FlightLogs.SameLaunchS;
+        var inSpace = first.Situation is "ORBITING" or "SUB_ORBITAL" or "ESCAPING";
+        var fromLaunch = justStarted && !inSpace;
         _log = new FlightLog
         {
             VesselName = vesselName,
             LaunchUt = first.Ut - first.MetS,
-            JoinedAtMetS = fromLaunch ? 0 : first.MetS,
+            JoinedAtMetS = fromLaunch ? 0 : Math.Max(first.MetS, MinJoinedMetS),
             FlightId = flightId,
         };
         _samples = [];
         _events = [];
+        var where = $"{first.Situation.ToLowerInvariant().Replace('_', ' ')} at {first.Body}";
         Note(first, fromLaunch ? FlightLogEventKind.Launch : FlightLogEventKind.Joined,
-            fromLaunch ? $"Launch from {first.Body}" : $"Recording started in flight ({first.Situation.ToLowerInvariant().Replace('_', ' ')} at {first.Body})");
+            fromLaunch ? $"Launch from {first.Body}"
+            : inSpace && first.MetS < SeparatedWithinS ? $"Separated from another vessel ({where})"
+            : $"Recording started in flight ({where})");
         Add(first);
     }
+
+    /// <summary>A vessel first seen in space this soon after its MET started has just split off another.</summary>
+    public const double SeparatedWithinS = 60;
+
+    // A log joined at MET 0 would read as one from the launch (FromLaunch is JoinedAtMetS ≤ 0).
+    private const double MinJoinedMetS = 0.01;
 
     /// <summary>Carries on a log stored earlier (after a disconnect, or coming back to the vessel).</summary>
     public FlightLogRecorder(FlightLog log)
@@ -247,6 +262,7 @@ public sealed class FlightLogRecorder
         if (kept is not null && sample.Ut < kept.Ut - 1) Rewind(sample);
         kept = _samples.Count > 0 ? _samples[^1] : null;
         var previous = _pending ?? kept;
+        if (previous is not null && sample.Ut <= previous.Ut) return; // the game is paused (e.g. the recovery dialog): nothing new
 
         if (previous is not null)
         {
@@ -328,10 +344,16 @@ public sealed class FlightLogRecorder
         }
     }
 
+    /// <summary>
+    /// Dynamic pressure above this (Pa) is flying through air. Standing still on the ground still reads a trace
+    /// (1.5 × 10⁻⁷ Pa), which isn't.
+    /// </summary>
+    public const double InAirPa = 1;
+
     /// <summary>Burning, in the air, or something changed: every sample is kept.</summary>
     private static bool Changing(FlightSample s, FlightSample previous) =>
         s.ThrustN > 0 || previous.ThrustN > 0
-        || s.DynamicPressurePa > 0 || previous.DynamicPressurePa > 0
+        || s.DynamicPressurePa > InAirPa || previous.DynamicPressurePa > InAirPa
         || s.Stage != previous.Stage || s.Situation != previous.Situation || s.Body != previous.Body
         || Math.Abs(s.MassKg - previous.MassKg) > 1e-3 * previous.MassKg;
 
@@ -394,18 +416,31 @@ public static class FlightLogs
 
     /// <summary>
     /// How a flight still open in the log ended, judged from the save file KSP last wrote, or null if it's still going (or
-    /// the save is older than the log). The save's vessels launched at Ut − MET; a flight with no vessel of its name
-    /// launched then is gone: recovered if it was last seen on the ground or in the water, else lost. A save from before
-    /// the launch means the flight was reverted.
+    /// the save is older than the log). A flight with no vessel in the save launched when it was is gone: recovered if it
+    /// was last seen on the ground or in the water, else lost. A save from before the launch means the flight was reverted.
     /// </summary>
     public static FlightLogOutcome? EndedIn(FlightLog log, KspSave file)
     {
         if (log.Outcome != FlightLogOutcome.InFlight) return null;
         if (file.Ut < log.LaunchUt - SameLaunchS) return FlightLogOutcome.Reverted;
         if (file.Ut < log.LastUt - SameLaunchS) return null; // written before the log's last sample: it can't tell yet
-        if (file.Vessels.Any(v => v.Name == log.VesselName && Math.Abs(file.Ut - v.MissionTimeS - log.LaunchUt) <= SameLaunchS)) return null;
+        if (StillIn(log, file)) return null;
         return log.LastSituation is "LANDED" or "SPLASHED" or "PRELAUNCH" ? FlightLogOutcome.Recovered : FlightLogOutcome.Lost;
     }
+
+    /// <summary>
+    /// Whether the save still has the log's vessel: one launched when it was (lct), under the log's name, or renamed but not
+    /// debris, or the only one launched then. Not Ut − met: KSP only moves a vessel's met on while it's loaded, so a vessel
+    /// left behind while the player flew another one and warped has a met that's days short of the file's time.
+    /// </summary>
+    private static bool StillIn(FlightLog log, KspSave file)
+    {
+        var launched = file.Vessels.Where(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt) <= SameLaunchS).ToList();
+        return launched.Count == 1 || launched.Any(v => v.Name == log.VesselName || v.Type != "Debris");
+    }
+
+    /// <summary>When a saved vessel was launched: its lct, or the file's time less its met in a save without one.</summary>
+    private static double LaunchUt(SavedVessel v, KspSave file) => v.LaunchUt > 0 ? v.LaunchUt : file.Ut - v.MissionTimeS;
 
     /// <summary>The bodies a flight was around, in order, each once per visit: "Kerbin › Mun › Kerbin".</summary>
     public static string Route(IEnumerable<FlightSample> samples)

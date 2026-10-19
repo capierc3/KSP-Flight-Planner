@@ -96,6 +96,33 @@ public sealed class FlightLogTests : IDisposable
         Assert.True(log.IsFlightOf("Relay 1", Launch + 5_000.5, 5_000));
         Assert.False(log.IsFlightOf("Relay 1", Launch + 5_010, 5_000));
         Assert.False(log.IsFlightOf("Relay 2", Launch + 5_000, 5_000));
+        Assert.True(log.LaunchedAt(Launch + 5_000, 5_000)); // renamed since
+    }
+
+    [Fact]
+    public void A_vessel_released_in_orbit_is_a_separation_not_a_launch()
+    {
+        // KSP starts a split-off vessel's MET again: the third relay was first seen at MET 1.4 s, in orbit.
+        var log = new FlightLogRecorder("Relay", At(1.36, "ORBITING"), null).Log;
+        Assert.False(log.FromLaunch);
+        Assert.Equal(0, log.LaunchMassKg);
+        var joined = Assert.Single(log.Events);
+        Assert.Equal(FlightLogEventKind.Joined, joined.Kind);
+        Assert.Equal("Separated from another vessel (orbiting at Kerbin)", joined.Text);
+        Assert.Equal(Launch, log.LaunchUt, 1e-9);
+
+        Assert.True(new FlightLogRecorder("Kerbal X", At(0.4, thrustN: 1), null).Log.FromLaunch);
+        Assert.StartsWith("Recording started in flight", new FlightLogRecorder("Relay", At(3_600, "ORBITING"), null).Log.Events[0].Text);
+    }
+
+    [Fact]
+    public void Standing_still_on_the_ground_is_thinned_and_a_paused_game_adds_nothing()
+    {
+        var recorder = new FlightLogRecorder("Probe", At(100, "LANDED", q: 1.5e-7), null);
+        for (var t = 100.5; t <= 120; t += 0.5) recorder.Add(At(t, "LANDED", q: 1.5e-7));
+        for (var i = 0; i < 13; i++) recorder.Add(At(120.2, "LANDED", q: 1.5e-7)); // the recovery dialog
+        recorder.Flush();
+        Assert.Equal([100, 110, 120, 120.2], recorder.Log.Samples.Select(s => s.MetS));
     }
 
     [Fact]
@@ -149,18 +176,45 @@ public sealed class FlightLogTests : IDisposable
         landed.Add(At(600, "LANDED"));
         var log = landed.Log;
 
-        KspSave Save(double met, params SavedVessel[] vessels) => new("Protogen", "SANDBOX", Launch + met, vessels);
-        SavedVessel Vessel(string name, double saveMet) => new("1", name, "Ship", "LANDED", null) { MissionTimeS = saveMet };
-
-        Assert.Null(FlightLogs.EndedIn(log, Save(700, Vessel("Kerbal X", 700)))); // still there
+        Assert.Null(FlightLogs.EndedIn(log, Save(700, Vessel("Kerbal X", 0)))); // still there
         Assert.Null(FlightLogs.EndedIn(log, Save(300))); // written before the landing: can't tell
-        Assert.Equal(FlightLogOutcome.Recovered, FlightLogs.EndedIn(log, Save(700, Vessel("Kerbal X", 100)))); // another launch
+        Assert.Equal(FlightLogOutcome.Recovered, FlightLogs.EndedIn(log, Save(700, Vessel("Kerbal X", 600)))); // another launch
         Assert.Equal(FlightLogOutcome.Reverted, FlightLogs.EndedIn(log, Save(-60)));
 
         var crashed = log with { Samples = [.. log.Samples.SkipLast(1), log.Samples[^1] with { Situation = "FLYING" }] };
         Assert.Equal(FlightLogOutcome.Lost, FlightLogs.EndedIn(crashed, Save(700)));
         Assert.Null(FlightLogs.EndedIn(log with { Outcome = FlightLogOutcome.Recovered }, Save(700)));
+
+        // A save without lct: launched at the file's time less met.
+        Assert.Null(FlightLogs.EndedIn(log, Save(700, new SavedVessel("1", "Kerbal X", "Ship", "LANDED", null) { MissionTimeS = 700 })));
     }
+
+    [Fact]
+    public void A_vessel_left_behind_while_another_warps_is_still_there()
+    {
+        // The MunLink Shuttle's relays: the save's met only moves on while a vessel is loaded, so a relay left in orbit
+        // while the shuttle warped a day reads lct + met = its lastUT, a day short of the file's time.
+        var relay = new FlightLogRecorder("Relay", At(4, "ORBITING", altitudeM: 2_863_000), null).Log;
+        var left = Vessel("Relay", 0) with { Situation = "ORBITING", MissionTimeS = 146 };
+        Assert.Null(FlightLogs.EndedIn(relay, Save(86_400, left)));
+    }
+
+    [Fact]
+    public void A_renamed_vessel_is_still_there()
+    {
+        var relay = new FlightLogRecorder("MunLink Shuttle mk1 Relay", At(4, "ORBITING"), null).Log;
+        Assert.Null(FlightLogs.EndedIn(relay, Save(700, Vessel("KerbLink mk1 A", 0, "Relay"))));
+        // Decommissioned: renamed and set to debris, but the only vessel launched then.
+        Assert.Null(FlightLogs.EndedIn(relay, Save(700, Vessel("KerbLink mk1 A DeComp", 0, "Debris"))));
+        // Two pieces of debris from that moment, neither of its name: it's gone.
+        Assert.Equal(FlightLogOutcome.Lost,
+            FlightLogs.EndedIn(relay, Save(700, Vessel("Fairing", 0, "Debris"), Vessel("Decoupler", 0.5, "Debris"))));
+    }
+
+    private static KspSave Save(double met, params SavedVessel[] vessels) => new("Protogen", "SANDBOX", Launch + met, vessels);
+
+    private static SavedVessel Vessel(string name, double launchMet, string type = "Ship") =>
+        new("1", name, type, "LANDED", null) { LaunchUt = Launch + launchMet, MissionTimeS = 1 };
 
     // ---------------- Storage ----------------
 

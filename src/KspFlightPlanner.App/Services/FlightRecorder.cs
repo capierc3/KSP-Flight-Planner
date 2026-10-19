@@ -21,11 +21,19 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     /// <summary>A gap in the recording shorter than this (game seconds) isn't worth a line in the timeline.</summary>
     private const double NotableGapS = 5;
 
+    /// <summary>
+    /// Readings skipped after opening the streams: a vessel just switched to can read wrong while the game puts it
+    /// together (a 4.9 t shuttle once read 19 t for its first reading).
+    /// </summary>
+    private const int SettleReads = 2;
+
     private readonly KspLink _link;
     private readonly SaveSync _sync;
     private readonly FlightLogRepository _logs;
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<long, (FlightLogEventKind Kind, string Why)> _leftBecause = [];
+    private readonly Dictionary<long, ulong> _vesselOf = []; // log → kRPC id of the vessel last recorded for it
+    private int _unsettledReads; // readings still to skip from streams just opened
     private List<(long Id, double LaunchUt)> _open = [];
     private (string Name, double LaunchUt)? _deleted; // the flight being flown was deleted: don't start it again
     private LiveTelemetry? _telemetry;
@@ -135,6 +143,11 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             Leave(FlightLogEventKind.SwitchedAway, "Switched to another vessel");
             return;
         }
+        if (_unsettledReads > 0)
+        {
+            _unsettledReads--;
+            return;
+        }
         if (_recorder is null)
         {
             if (!Recordable(_telemetry.VesselType))
@@ -161,9 +174,10 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
                 Status = $"Not recording {d.Name}: its log was deleted.";
                 return;
             }
-            _recorder = Resume(_telemetry.VesselName, sample) ?? NewLog(_telemetry.VesselName, sample);
+            _recorder = Resume(_telemetry.VesselName, _telemetry.VesselId, sample) ?? NewLog(_telemetry.VesselName, sample);
             _recordingId = _telemetry.VesselId;
             Store();
+            _vesselOf[_recorder.Id] = _recordingId;
         }
         else
         {
@@ -179,6 +193,7 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         try
         {
             _telemetry = await _link.OpenTelemetryAsync();
+            _unsettledReads = SettleReads;
         }
         catch (Exception)
         {
@@ -217,10 +232,18 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         finally { _readingPad = false; }
     }
 
-    /// <summary>The stored log of this flight, picked up where it was left, with the gap noted.</summary>
-    private FlightLogRecorder? Resume(string vesselName, FlightSample sample)
+    /// <summary>
+    /// The stored log of this flight, picked up where it was left, with the gap noted. Found by launch time: the vessel may
+    /// have been renamed since. Of logs launched together (vessels that split apart), the one last recorded with this kRPC
+    /// vessel, else the one of this name.
+    /// </summary>
+    private FlightLogRecorder? Resume(string vesselName, ulong vesselId, FlightSample sample)
     {
-        if (_logs.GetInFlight().FirstOrDefault(l => l.IsFlightOf(vesselName, sample.Ut, sample.MetS)) is not { } log) return null;
+        var launched = _logs.GetInFlight().Where(l => l.LaunchedAt(sample.Ut, sample.MetS)).ToList();
+        var log = launched.FirstOrDefault(l => _vesselOf.GetValueOrDefault(l.Id) == vesselId)
+            ?? launched.FirstOrDefault(l => l.VesselName == vesselName)
+            ?? (launched.Count == 1 ? launched[0] : null);
+        if (log is null) return null;
         var recorder = new FlightLogRecorder(log);
         var gap = sample.Ut - log.LastUt;
         if (gap >= NotableGapS)
@@ -261,14 +284,19 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         LogsChanged?.Invoke();
     }
 
-    /// <summary>Ends flights the save no longer has (recovered or lost), or that the game went back before (reverted).</summary>
+    /// <summary>
+    /// Ends flights the save no longer has (recovered or lost), or that the game went back before (reverted). Not the one
+    /// being flown, which can't be gone: recovering or losing it ends the recording first.
+    /// </summary>
     private void EndFromSave(KspSave file)
     {
         var changed = false;
         foreach (var log in _logs.GetInFlight())
         {
-            var current = _recorder?.Id == log.Id ? _recorder.Log : log;
+            var flying = _recorder?.Id == log.Id;
+            var current = flying ? _recorder!.Log : log;
             if (FlightLogs.EndedIn(current, file) is not { } outcome) continue;
+            if (flying && outcome != FlightLogOutcome.Reverted) continue;
             End(log, outcome);
             changed = true;
         }
@@ -290,10 +318,21 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     private void End(FlightLog log, FlightLogOutcome outcome)
     {
         var recorder = _recorder?.Id == log.Id ? _recorder : new FlightLogRecorder(log);
-        if (recorder == _recorder) _recorder = null;
+        if (recorder == _recorder)
+        {
+            // Open the streams again rather than carry on with these: they still have the vessel's old name, and a log
+            // started from them straight away would be a zero-length twin of this one.
+            _recorder = null;
+            if (_telemetry is { } telemetry)
+            {
+                _telemetry = null;
+                _ = _link.CloseTelemetryAsync(telemetry);
+            }
+        }
         recorder.End(outcome, FlightLogs.EndText(outcome));
         _logs.Save(recorder.Log);
         _leftBecause.Remove(log.Id);
+        _vesselOf.Remove(log.Id);
         LogsChanged?.Invoke();
         UpdateStatus();
     }

@@ -230,7 +230,7 @@ public static class FlightAnalysis
         x.Elements is { } orbit ? Kepler.StateAt(orbit, body.Mu, ut).Position : null;
 
     private static bool Coasting(FlightSample x) =>
-        x.ThrustN <= 0 && x.DynamicPressurePa <= 0 && x.Situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH" or "FLYING");
+        x.ThrustN <= 0 && x.DynamicPressurePa <= FlightLogRecorder.InAirPa && x.Situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH" or "FLYING");
 
     /// <summary>
     /// Distance from the body's centre and orbital speed at <paramref name="ut"/> on the orbit of <paramref name="x"/>:
