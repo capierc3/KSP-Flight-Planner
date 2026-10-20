@@ -415,6 +415,37 @@ public static class FlightLogs
     public const double SameLaunchS = 2;
 
     /// <summary>
+    /// An orbit that puts the craft further than this share of its distance from the body's centre from where its altitude
+    /// does isn't the craft's orbit. Readings that do follow the craft agree to within 0.02 %.
+    /// </summary>
+    public const double OrbitFitTolerance = 0.01;
+
+    /// <summary>
+    /// Whether a sample's orbit readings have stopped following the craft. Streams opened while the game is putting a
+    /// vessel back together (just after a quickload) can get the orbit it had for a moment then (around Kerbin, whatever
+    /// it's really around), and that orbit never moves again. Two signs: the orbit puts the craft at another distance from
+    /// the body's centre than its altitude does, or game time moved on and the mean anomaly didn't. On rails the readings
+    /// can be from different moments, and on the pad the craft isn't going anywhere, so those aren't judged.
+    /// docs/MATH.md §8.5.
+    /// </summary>
+    /// <param name="previous">The reading before, from the same streams (null for the first).</param>
+    /// <param name="bodyRadiusM">The radius of the body the streams were opened against.</param>
+    public static bool OrbitStale(FlightSample? previous, FlightSample now, double bodyRadiusM)
+    {
+        if (!now.HasOrbit || now.WarpRate > FlightLogRecorder.PhysicsWarpMax || now.Situation == "PRELAUNCH") return false;
+        if (previous is { HasOrbit: true } p && p.WarpRate <= FlightLogRecorder.PhysicsWarpMax && now.Ut > p.Ut
+            && now.MeanAnomalyRad == p.MeanAnomalyRad)
+            return true;
+        var (a, e, m) = (now.SemiMajorAxisM, now.Eccentricity, now.MeanAnomalyRad);
+        var fromOrbit = e < 1
+            ? a * (1 - e * Math.Cos(Kepler.SolveEccentricAnomaly(m, e)))
+            : a * (1 - e * Math.Cosh(Kepler.SolveHyperbolicAnomaly(m, e)));
+        var fromAltitude = bodyRadiusM + now.AltitudeM;
+        if (!double.IsFinite(fromOrbit) || fromAltitude <= 0) return false; // can't judge (a parabola, say)
+        return Math.Abs(fromOrbit - fromAltitude) > OrbitFitTolerance * fromAltitude;
+    }
+
+    /// <summary>
     /// How a flight still open in the log ended, judged from the save file KSP last wrote, or null if it's still going (or
     /// the save is older than the log). A flight with no vessel in the save launched when it was is gone: recovered if it
     /// was last seen on the ground or in the water, else lost. A save from before the launch means the flight was reverted.

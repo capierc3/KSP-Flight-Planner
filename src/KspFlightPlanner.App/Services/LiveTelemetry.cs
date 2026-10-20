@@ -13,6 +13,12 @@ public enum TelemetryEnd
     /// <summary>The vessel crossed into another body's sphere of influence: same flight, readings against the new body.</summary>
     OtherBody,
 
+    /// <summary>
+    /// The orbit readings stopped following the vessel (streams opened while the game was rebuilding it, e.g. just after a
+    /// quickload): same flight, open them again.
+    /// </summary>
+    Stale,
+
     /// <summary>A reading failed: the vessel is gone, or the game is between scenes.</summary>
     Lost,
 }
@@ -34,6 +40,8 @@ public sealed class LiveTelemetry
     private readonly Func<int> _stage;
     private readonly Func<Vessel> _active;
     private readonly Func<CelestialBody> _orbitBody;
+    private readonly double _bodyRadiusM;
+    private FlightSample? _last; // the reading before, to tell an orbit that has stopped moving
 
     /// <summary>The vessel's name when the streams were opened.</summary>
     public string VesselName { get; }
@@ -57,6 +65,7 @@ public sealed class LiveTelemetry
         var orbit = vessel.Orbit;
         _body = orbit.Body;
         BodyName = KspLink.PlannerBodyName(_body.Name);
+        _bodyRadiusM = _body.EquatorialRadius;
         var flight = vessel.Flight(_body.ReferenceFrame); // speeds against the turning body: surface speeds
         var attitude = vessel.Flight(vessel.SurfaceReferenceFrame); // pitch and heading against the horizon and north
         var control = vessel.Control;
@@ -103,7 +112,7 @@ public sealed class LiveTelemetry
 
     /// <summary>
     /// The vessel now, or null when these streams no longer fit (<paramref name="end"/> says why): the player switched
-    /// vessel, it left the body, or it's gone.
+    /// vessel, it left the body, its orbit readings went stale, or it's gone.
     /// </summary>
     public FlightSample? Read(out TelemetryEnd end)
     {
@@ -112,7 +121,7 @@ public sealed class LiveTelemetry
         {
             if (_active() != _vessel) { end = TelemetryEnd.OtherVessel; return null; }
             if (_orbitBody() != _body) { end = TelemetryEnd.OtherBody; return null; }
-            return new FlightSample(
+            var sample = new FlightSample(
                 _ut(), _met(), BodyName, KspLink.SituationName(_situation()), _stage(),
                 _altitude(), _surfaceSpeed(), _orbitalSpeed(), _verticalSpeed(), _apoapsis(), _periapsis(),
                 _latitude(), _longitude(), _pitch(), _heading(), _throttle(),
@@ -126,6 +135,9 @@ public sealed class LiveTelemetry
                 ArgumentOfPeriapsisDeg = _argPe() * RadToDeg,
                 SurfaceAttitude = true,
             };
+            if (FlightLogs.OrbitStale(_last, sample, _bodyRadiusM)) { end = TelemetryEnd.Stale; return null; }
+            _last = sample;
+            return sample;
         }
         catch (Exception ex) when (ex is RPCException or System.InvalidOperationException or ObjectDisposedException)
         {

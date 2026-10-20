@@ -146,6 +146,15 @@
             <StatusBarItem Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" FontSize="12" />
             </StatusBarItem>
+            <!-- The game is playing another save: nothing is recorded or laid over this one until they match. -->
+            <StatusBarItem Visibility="{Binding Sync.PlayingOtherSave, Converter={StaticResource BoolToVisibility}}"
+                           ToolTip="Flights aren't recorded and the live game isn't laid over this save until KSP plays it.">
+                <TextBlock FontSize="12">
+                    <Run Text="{Binding Sync.OtherSaveText, Mode=OneWay}" Foreground="#EF5350" />
+                    <Run Text=" · " />
+                    <Hyperlink Click="OtherSave_Click">What now?</Hyperlink>
+                </TextBlock>
+            </StatusBarItem>
             <!-- Right side: vessels waiting to be imported, then the live link to the game. -->
             <StatusBarItem HorizontalAlignment="Right">
                 <StackPanel Orientation="Horizontal">

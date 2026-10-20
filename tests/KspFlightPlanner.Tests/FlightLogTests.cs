@@ -270,6 +270,52 @@ public sealed class FlightLogTests : IDisposable
         Assert.Equal(id, repo.GetAll()[0].Id);
     }
 
+    // ---------------- Stale orbit readings ----------------
+
+    private static FlightSample InOrbit(double ut, string body, double altitudeM, double a, double e, double meanAnomaly,
+        string situation = "ESCAPING", double warp = 1) =>
+        At(ut - Launch, situation, body: body, altitudeM: altitudeM, warp: warp) with
+        {
+            SemiMajorAxisM = a, Eccentricity = e, MeanAnomalyRad = meanAnomaly,
+        };
+
+    [Fact]
+    public void An_orbit_that_follows_the_craft_is_not_stale()
+    {
+        // Leaving Duna (the Duna test flight): the hyperbola puts the craft 1,941,970.59 km out, as its altitude does.
+        var before = InOrbit(23_589_027.01, "Duna", 1_612_008.79, -392_795.98, 2.0551626460, 3.8310464549);
+        var now = InOrbit(23_589_037.09, "Duna", 1_621_970.59, -392_795.98, 2.0551626460, 3.8535243217);
+        Assert.False(FlightLogs.OrbitStale(before, now, 320_000));
+
+        // A circular 100 km Kerbin orbit, and an ellipse at its apoapsis (a = 1,000 km, e = 0.5: 1,500 km from the centre).
+        Assert.False(FlightLogs.OrbitStale(null, InOrbit(Launch + 10, "Kerbin", 100_000, 700_000, 0, 1, "ORBITING"), 600_000));
+        Assert.False(FlightLogs.OrbitStale(null, InOrbit(Launch + 10, "Kerbin", 900_000, 1_000_000, 0.5, Math.PI, "ORBITING"), 600_000));
+    }
+
+    [Fact]
+    public void An_orbit_caught_while_the_game_rebuilt_the_vessel_is_stale()
+    {
+        // After a quickload leaving Duna, the streams got an orbit around Kerbin that never moved again. It puts the craft
+        // 9,944.39 km from the centre; the altitude (against Duna, really) says 600 + 1,631.87 = 2,231.87 km.
+        var now = InOrbit(23_589_047.09, "Kerbin", 1_631_870.28, -17_712_187.51, 1.0348360906, 0.1989576395);
+        Assert.True(FlightLogs.OrbitStale(null, now, 600_000));
+    }
+
+    [Fact]
+    public void A_mean_anomaly_that_stops_while_time_goes_on_is_stale()
+    {
+        var a = InOrbit(Launch + 10, "Kerbin", 100_000, 700_000, 0, 1, "ORBITING");
+        Assert.True(FlightLogs.OrbitStale(a, a with { Ut = a.Ut + 10 }, 600_000));
+        Assert.False(FlightLogs.OrbitStale(a, a, 600_000)); // paused: time didn't move on either
+        Assert.False(FlightLogs.OrbitStale(a with { WarpRate = 1000 }, a with { Ut = a.Ut + 10 }, 600_000)); // on rails before
+        Assert.False(FlightLogs.OrbitStale(a, a with { Ut = a.Ut + 10, WarpRate = 1000 }, 600_000)); // on rails now
+        Assert.False(FlightLogs.OrbitStale(a, a with { Ut = a.Ut + 10, Situation = "PRELAUNCH" }, 600_000)); // on the pad
+    }
+
+    [Fact]
+    public void Samples_without_an_orbit_are_not_judged() =>
+        Assert.False(FlightLogs.OrbitStale(null, At(10, altitudeM: 5_000), 600_000));
+
     [Fact]
     public void Logs_are_carried_over_when_the_database_is_rebuilt()
     {

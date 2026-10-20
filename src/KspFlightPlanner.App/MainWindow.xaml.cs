@@ -245,6 +245,7 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         viewModel.FlightLog.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        viewModel.Sync.OtherSaveFound += () => Dispatcher.BeginInvoke(AskToSwitchSave);
         Closing += (_, e) =>
         {
             if (!viewModel.Mission.ConfirmDiscard())
@@ -300,6 +301,50 @@ public partial class MainWindow : Window
         if (settings.Result.KspSaveName != _viewModel.Sync.SaveName && !_viewModel.Mission.ConfirmDiscard()) return;
         _viewModel.Sync.Apply(settings.Result);
     }
+
+    private bool _askingSave;
+
+    /// <summary>
+    /// The game is playing another save than the planner's: warn, and offer to switch to it. "No" carries on as it is
+    /// (nothing recorded) without asking again for this save; the status bar keeps the warning and can ask again.
+    /// </summary>
+    private void AskToSwitchSave()
+    {
+        var sync = _viewModel.Sync;
+        if (_askingSave || !sync.PlayingOtherSave) return;
+        _askingSave = true;
+        try
+        {
+            var mine = sync.SaveName;
+            const string Paused = "Until they match, the planner won't record flights or lay the live game over {0}'s vessels, " +
+                                  "so nothing from KSP ends up in {0}'s plans or flight log.";
+            if (sync.PlayingSave is { } other)
+            {
+                var answer = MessageBox.Show(this,
+                    $"KSP is playing the save \"{other}\", but the planner is set to \"{mine}\".\n\n{string.Format(Paused, mine)}\n\n" +
+                    $"Switch the planner to {other}?",
+                    "KSP is playing another save", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                // Switching brings in the other save's missions: offer to save the open one first.
+                if (answer == MessageBoxResult.Yes && sync.PlayingSave == other && _viewModel.Mission.ConfirmDiscard())
+                    sync.Apply(sync.Settings with { KspSaveName = other });
+                else sync.DismissOtherSave();
+            }
+            else
+            {
+                MessageBox.Show(this,
+                    $"KSP doesn't seem to be playing \"{mine}\": its game mode or vessels don't match that save.\n\n" +
+                    $"{string.Format(Paused, mine)}\n\nPick the save KSP is playing in File › Settings.",
+                    "KSP is playing another save", MessageBoxButton.OK, MessageBoxImage.Warning);
+                sync.DismissOtherSave();
+            }
+        }
+        finally
+        {
+            _askingSave = false;
+        }
+    }
+
+    private void OtherSave_Click(object sender, RoutedEventArgs e) => AskToSwitchSave();
 
     private async void ConnectKsp_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Link.ToggleAsync();
 

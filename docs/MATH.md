@@ -1628,6 +1628,20 @@ The rocket equation on the mass drop is exact however far apart the samples are,
 
 **Thinning.** Burning, in the air (q > 1 Pa; standing still on the ground still reads a trace, about 10⁻⁷ Pa), or a change of stage, situation, body or mass: every sample is kept, and so is the one before. Coasting outside the air: one every 10 s of game time. On-rails warp (faster than ×4) skips physics and moves the craft along its orbit. kRPC doesn't refresh every reading in the same frame there, so a sample's time, MET and orbit can be from moments far apart (at ×1,000, one frame is 20 s). Samples on rails aren't kept: the last one before the warp is, and the stretch is worked out from the orbit (§8.7). A warp of a minute or more is noted with its length. The same skew is why the recorder tells the flown vessel by kRPC's object id, not by game time − MET, and only matches a flight by its launch time out of warp. A disconnect, a vessel switch or leaving the flight is noted with the time not recorded once the flight is picked up again. The flight is picked up by launch time, not name, since the player may have renamed the vessel meanwhile; of flights launched together, the one last recorded with that kRPC vessel wins, then the one of that name. The first two readings after a switch are skipped: the game is still putting the vessel together, and its mass can read wrong. Readings whose game time hasn't moved on (the game paused) are dropped.
 
+**Stale orbit readings.** Streams opened while the game is putting a vessel back together (just after a quickload) can get the orbit it had for a moment then. That orbit is around Kerbin whatever the craft is really around, and it never moves again. Altitude, which kRPC always reads against the body the craft is really around, keeps going. So each reading out of on-rails warp and off the pad is checked. If either test fails, the reading is dropped and the streams are opened again (the flight carries on in the same log):
+
+```
+r_orbit    = a · (1 − e · cos E)     ellipse, E from M = E − e · sin E
+           = a · (1 − e · cosh H)    hyperbola (a < 0), H from M = e · sinh H − H
+r_altitude = R_body + altitude
+stale if   |r_orbit − r_altitude| > 1 % × r_altitude
+      or   game time moved on since the last reading and M didn't
+```
+
+Readings that follow the craft agree to within 0.02 % (checked against every recorded flight up to 2026-10-20). Physics moves M on every frame, so an M that hasn't changed while time has means the orbit is frozen. The first test alone would miss a frozen near-circular orbit around the right body.
+
+Worked example (the Duna test flight, leaving Duna just after a quickload): the streams reopened against Kerbin (R = 600 km) with a = −17,712,187.5 m, e = 1.034836, M = 0.198958. Kepler gives H = 0.970324, so r_orbit = −17,712,187.5 × (1 − 1.034836 × cosh 0.970324) = **9,944.39 km**. The altitude, really against Duna, read 1,631.87 km, so r_altitude = 600 + 1,631.87 = **2,231.87 km**. That's 346 % off: stale. Ten seconds earlier, the right orbit around Duna (R = 320 km, a = −392,796.0 m, e = 2.055163, M = 3.853524) gave r_orbit = **1,941.97 km** against 320 + 1,621.97 = 1,941.97 km from the altitude.
+
 **Separations.** KSP starts a vessel's MET again when it splits off another, so a satellite released in orbit has MET ≈ 0 and its own launch time. A log whose first sample has MET under 2 s is a launch only if it isn't in space (orbiting, sub-orbital or escaping). In space and under 60 s, it's noted as separated from another vessel.
 
 **How a flight ends.** It ends when the save KSP last wrote, if written after the log's last sample, has no vessel launched when the flight was (the save's `lct`, within 2 s). One launched then counts if it has the log's name, or isn't debris (renamed), or is the only one launched then. The save's `met` can't be used for this: KSP only moves it on while the vessel is loaded, so for a vessel left behind while the player flew another and warped, Ut − met is days off. A gone flight is *Recovered* if it was last seen landed or splashed, and *Lost* otherwise. The flight being flown is never ended this way (recovering or losing it ends the recording first). If the game's time goes back before the launch, it's *Reverted*. If it goes back within the flight (a quickload), the samples after that point are dropped.
@@ -1638,7 +1652,7 @@ Worked example: a 10 t craft burns to 8 t on a 300 s engine making 200 kN:
 2. Δv = 9.80665 × 300 × ln(10 / 8) = **656.48 m/s**, the same from two samples 29.4 s apart as from sixty
 3. Staging in the next half second (10 t → 4 t, thrust 200 → 50 kN): the mass drop would claim 2,696 m/s. Thrust ÷ mass gives (20 + 12.5) / 2 × 0.5 = **8.1 m/s**
 
-- Code: `FlightLogMath.DeltaVBetween`, `FlightLogRecorder` and `FlightLogs.EndedIn` (`Core/Ksp/FlightLog.cs`), streamed by `LiveTelemetry`, run by `FlightRecorder`; tested in `FlightLogTests`
+- Code: `FlightLogMath.DeltaVBetween`, `FlightLogRecorder`, `FlightLogs.EndedIn` and `FlightLogs.OrbitStale` (`Core/Ksp/FlightLog.cs`), streamed by `LiveTelemetry`, run by `FlightRecorder`; tested in `FlightLogTests`
 - Source: Tsiolkovsky rocket equation (§7.1); kRPC SpaceCenter API (`Vessel.Mass`, `Thrust`, `SpecificImpulse`, streams)
 
 ### 8.6 The flight report: ascent losses, burns and touchdowns
@@ -1782,6 +1796,34 @@ Checked against a rocket whose drag area (1.5 m²) and engines are known: the fi
 
 - Code: `AscentSimulator.For`, `AscentSimulator.Fly`, `AscentSimulator.Optimize` (`Core/Ksp/AscentSimulator.cs`), shown by `FlightReportViewModel`; tested in `AscentCoachTests` (a known rocket flown with plain physics)
 - Source: equations of motion along the flight path, Curtis 11.2; KSP engines (fixed fuel flow, Isp against pressure), KSP wiki *Specific impulse*
+
+### 8.12 Which save the game is playing
+
+kRPC can't name the save the game has loaded, and the connection stays up when the player loads another one. So the planner works it out, and while the game plays another save than the chosen one it records no flights, ends none, and doesn't lay the live game over the chosen save (§8.2). A popup offers to switch to the other save.
+
+**A save KSP just wrote.** KSP writes the save it's playing a few seconds after loading it and at every scene change (and the one it leaves on going back to the main menu). So every save folder is watched while connected. A save written now is the one being played if:
+
+```
+the game mode is the same     kRPC's ScienceSandbox = the save's SCIENCE_SANDBOX (underscores and case ignored)
+|t_file − t_game| ≤ 60 s      the file's game time is the game's time now
+```
+
+**Before any write** (on connecting, and on each scene change), the game's vessels are looked for in every save by name. Debris and asteroids are left out, since any save could have one of the same name. With *share* = the game's vessels with a namesake in the save ÷ the game's vessels:
+
+```
+chosen save fits          same mode and share ≥ 50 %       (a launch since KSP last wrote it isn't in the file yet)
+another save is the one   the only other save with the same mode and share ≥ 80 %
+                          (with no vessels to go on: the only other save with the same mode)
+not the chosen save       a different mode, or share < 50 %, and no other save stands out
+nothing to say            same mode, no vessels to compare
+```
+
+Until a check has run, flights aren't recorded and none are ended as reverted (connecting to another save with an earlier game time would otherwise "revert" every open flight of the chosen one).
+
+Worked example (the probe of 2026-10-20, Protogen chosen): loading SandBox, KSP wrote `SandBox/persistent.sfs` at t = 29,388,990 s, 6 s after the load. The game read mode Sandbox at t = 29,388,990, so |Δt| = 0 ≤ 60 and the mode is the same: **SandBox** is being played. Its 3 non-debris vessels (Kerbal X, two Untitled Space Craft) are all in SandBox (share 100 %) and none in Protogen (0 %, and Protogen's mode is SCIENCE_SANDBOX), so the vessel check says the same.
+
+- Code: `LiveSaveMatch.Judge`, `LiveSaveMatch.WrittenByGame` (`Core/Ksp/LiveSaveMatch.cs`), run by `SaveSync` (`App/Services/SaveSync.LiveSave.cs`), read from the game by `KspLink.ReadIdentityAsync`; tested in `LiveSaveMatchTests`
+- Source: KSP's save behaviour as seen by a probe on 2026-10-20 (writes on scene change and after loading); kRPC SpaceCenter API (`GameMode`, `UT`, `Vessels`)
 
 ## Sources
 

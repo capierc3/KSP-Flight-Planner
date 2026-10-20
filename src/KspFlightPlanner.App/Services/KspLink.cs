@@ -253,6 +253,24 @@ public sealed class KspLink : ObservableObject, IDisposable
     /// <summary>Starts streaming the flown vessel's readings (for the flight log); null when not flying one.</summary>
     public Task<LiveTelemetry?> OpenTelemetryAsync() => CallAsync(LiveTelemetry.Open);
 
+    /// <summary>
+    /// The game's mode, time and (when asked) every vessel's name and type, to tell which save it's playing. Vessels are
+    /// listed at the Space Center and Tracking Station too, not only in flight (about two calls per vessel).
+    /// </summary>
+    public Task<GameIdentity> ReadIdentityAsync(bool withVessels) => CallAsync(c =>
+    {
+        var space = c.SpaceCenter();
+        var mode = space.GameMode.ToString();
+        var ut = space.UT;
+        IReadOnlyList<(string, string)>? vessels = null;
+        if (withVessels)
+        {
+            try { vessels = space.Vessels.Select(v => (v.Name, v.Type.ToString())).ToList(); }
+            catch (RPCException) { /* not listed in this scene */ }
+        }
+        return new GameIdentity(mode, ut, vessels);
+    });
+
     /// <summary>How many parts the vessel being flown has (with launch clamps, on the pad).</summary>
     public Task<int> ActiveVesselPartCountAsync() => CallAsync(c => c.SpaceCenter().ActiveVessel.Parts.All.Count);
 

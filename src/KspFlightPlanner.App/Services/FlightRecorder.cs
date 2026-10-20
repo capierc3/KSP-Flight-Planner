@@ -11,7 +11,9 @@ namespace KspFlightPlanner.App.Services;
 /// Records the flight log: while connected and flying, the flown vessel is read twice a second (over kRPC streams) and
 /// its flight stored, from the launch on. A flight left (another vessel, another scene, the link dropped) is picked up
 /// again when the player comes back to it; the gap goes in its timeline. Flights end when the save file no longer has the
-/// vessel (recovered or lost) or the game goes back to before the launch (reverted).
+/// vessel (recovered or lost) or the game goes back to before the launch (reverted). Nothing is recorded or ended until
+/// the game is known to be playing the chosen save (<see cref="SaveSync.PlayingOtherSave"/>), so another save's flights
+/// never land in this one's log.
 /// </summary>
 public sealed class FlightRecorder : ObservableObject, IDisposable
 {
@@ -53,7 +55,7 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         _timer = new DispatcherTimer { Interval = ReadEvery };
         _timer.Tick += (_, _) => Tick();
         link.PropertyChanged += OnLinkChanged;
-        link.GameUpdated += game => { if (game is not null) EndReverted(game.Ut); };
+        link.GameUpdated += game => { if (game is not null && SaveConfirmed) EndReverted(game.Ut); };
         sync.PropertyChanged += OnSyncChanged;
         LogsChanged += RefreshOpen;
         RefreshOpen();
@@ -73,6 +75,9 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
 
     private bool Enabled => _sync.Settings.RecordFlights;
+
+    /// <summary>The game is playing the chosen save (as far as can be told): the flights it flies belong in this log.</summary>
+    private bool SaveConfirmed => _sync.LiveSaveChecked && !_sync.PlayingOtherSave;
 
     public void Delete(long id)
     {
@@ -109,12 +114,24 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             if (_link.IsConnected && _link.InFlight && Enabled) _timer.Start();
             UpdateStatus();
         }
+        else if (e.PropertyName is nameof(SaveSync.PlayingOtherSave) or nameof(SaveSync.LiveSaveChecked))
+        {
+            if (_sync.PlayingOtherSave) Leave(FlightLogEventKind.SwitchedAway, "KSP is playing another save");
+            UpdateStatus();
+        }
         else if (e.PropertyName == nameof(SaveSync.FileSave) && _sync.FileSave is { } file) EndFromSave(file);
     }
 
     private void Tick()
     {
         if (_opening) return;
+        if (!SaveConfirmed)
+        {
+            if (_recorder is not null || _telemetry is not null)
+                Leave(FlightLogEventKind.SwitchedAway, _sync.PlayingOtherSave ? "KSP is playing another save" : "Checking which save KSP is playing");
+            UpdateStatus();
+            return;
+        }
         if (_telemetry is null)
         {
             _ = OpenAsync();
@@ -124,9 +141,10 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         var sample = _telemetry.Read(out var end);
         if (sample is null)
         {
-            if (end == TelemetryEnd.OtherBody)
+            if (end is TelemetryEnd.OtherBody or TelemetryEnd.Stale)
             {
-                // Same flight, now around another body: read against that one, and carry on with the same log.
+                // Same flight, now around another body (or the orbit readings stopped following it, e.g. just after a
+                // quickload): open the readings again, and carry on with the same log.
                 var stale = _telemetry;
                 _telemetry = null;
                 _ = _link.CloseTelemetryAsync(stale);
@@ -341,6 +359,8 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     {
         Status = !Enabled ? "Recording is off (File › Settings › Live connection)."
             : !_link.IsConnected ? "Connect to KSP to record flights."
+            : _sync.PlayingOtherSave ? $"Not recording: {_sync.OtherSaveText}."
+            : !_sync.LiveSaveChecked ? "Checking which save KSP is playing…"
             : !_link.InFlight ? "Records when you fly a vessel."
             : _recorder is { } r && sample is not null
                 ? $"Recording {r.VesselName} · MET {FlightLogs.Duration(sample.MetS)} · {r.DeltaVUsed:N0} m/s used"
