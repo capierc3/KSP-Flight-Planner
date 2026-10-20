@@ -167,4 +167,49 @@ public sealed class QuickBurnsTests : IDisposable
             QuickBurns.SetApsis(_kerbin, orbit, ApoapsisUt(orbit) + 10, 120, 70_000, apoapsis: false));
         Assert.Contains("circularize now", ex.Message);
     }
+
+    [Fact]
+    public void Turning_a_round_equatorial_orbit_polar_costs_two_v_sin_45()
+    {
+        var orbit = Ellipse(100_000, 100_000);
+        var burn = QuickBurns.ChangeInclination(_kerbin, orbit, 1000, 120, 90);
+        var after = After(burn, orbit);
+        var v = OrbitMath.CircularVelocity(_kerbin.Mu, R + 100_000);
+        _output.WriteLine($"{burn.Title}: {burn.DeltaV:0.0} m/s at UT {burn.Ut:0}; {after.InclinationDeg:0.000}°");
+
+        Assert.Equal(90, after.InclinationDeg, 0.01);
+        Assert.Equal(2 * v * Math.Sin(Math.PI / 4), burn.DeltaV, 1.0);
+        Assert.Equal(1120, burn.Ut, 61.0);
+        var (pe, ap) = Apsides(after);
+        Assert.Equal(100_000, pe, 10.0);
+        Assert.Equal(100_000, ap, 10.0);
+        Assert.NotNull(burn.Note); // a big turn: the advice to turn far out, or on the way
+    }
+
+    [Fact]
+    public void Changing_an_inclined_orbit_burns_at_the_higher_equator_crossing_and_keeps_its_shape()
+    {
+        var orbit = Ellipse(100_000, 2_000_000, inclinationDeg: 30);
+        var burn = QuickBurns.ChangeInclination(_kerbin, orbit, 1000, 120, 10);
+        var after = After(burn, orbit);
+        _output.WriteLine($"{burn.Title}: {burn.DeltaV:0.0} m/s at UT {burn.Ut:0}; {after.InclinationDeg:0.000}°");
+
+        Assert.Equal(10, after.InclinationDeg, 0.01);
+        Assert.Equal(orbit.LongitudeOfAscendingNodeDeg, after.LongitudeOfAscendingNodeDeg, 0.01);
+        var (pe, ap) = Apsides(after);
+        var (pe0, ap0) = Apsides(orbit);
+        Assert.Equal(pe0, pe, 10.0);
+        Assert.Equal(ap0, ap, 10.0);
+        // The crossing far out (argument of periapsis 40°: the nodes are 40° either side of the apsides) is the slower one.
+        var state = Kepler.StateAt(orbit, _kerbin.Mu, burn.Ut);
+        Assert.True(state.Position.Length > orbit.SemiMajorAxisM);
+    }
+
+    [Fact]
+    public void Changing_inclination_on_a_path_past_the_body_says_to_capture_or_go_to()
+    {
+        var path = new OrbitalElements(-2_000_000, 1.5, 0, 0, 0, -0.5, 1000);
+        var ex = Assert.Throws<ArgumentException>(() => QuickBurns.ChangeInclination(_kerbin, path, 1000, 120, 90));
+        Assert.Contains("Go to", ex.Message);
+    }
 }

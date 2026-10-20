@@ -35,7 +35,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   the stop's deployment shows it in Resonant Orbits again. A stop a KSC launch arrives at has an
   *Inclination* box next to its altitude (Equatorial by default; Polar, Retrograde or any angle): the launch's extra
   over due east is added to the launch leg, the heading to fly is shown, and later Kerbin orbits' plane changes are
-  measured from it. The altitude and inclination each have a dropdown of quick picks that shows Custom for a typed value.
+  measured from it. A stop in orbit of another body (the Mun, Duna…) has the same box: the small burn on the way that
+  tilts the approach is added to the leg (about 35 m/s for a polar Mun orbit, where turning in Mun orbit costs ~750).
+  The altitude and inclination each have a dropdown of quick picks that shows Custom for a typed value.
 - **Locations** — every body with all known data (physical, orbit, atmosphere, low orbit, Δv-map stops,
   derived values) read-only; custom locations editable: circular or elliptical orbit, inclination, description
   and images. Only independent values are stored; everything derived is calculated live, so nothing conflicts.
@@ -82,7 +84,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the
   rest from its real orbit. Resonant deployments time the carrier's burn and each satellite's circularize burn from
   the carrier's real orbit, climbing (or dropping) to the deployment altitude first if the orbit doesn't reach it;
-  **Deploy satellites** in the From here pane plans one straight from the craft you're flying. Flights are kept until you delete them. **Land at a spot** (From here pane), or *Fly this
+  **Deploy satellites** in the From here pane plans one straight from the craft you're flying. From here's **Go to…**
+  takes an optional inclination for the orbit there (90° for polar), aimed for with a burn on the way, and **Change the
+  inclination** turns the orbit you're in at an equator crossing. Flights are kept until you delete them. **Land at a spot** (From here pane), or *Fly this
   landing* on a mission's landing spot, times the deorbit burn from the craft's real orbit and the body's rotation, swings
   the ground track over the spot on the way down, and plans the braking burn.
 

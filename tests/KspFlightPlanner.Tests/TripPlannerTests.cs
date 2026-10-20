@@ -181,4 +181,78 @@ public sealed class TripPlannerTests : IDisposable
         Assert.Contains("aimed at 30.1 km, in Kerbin's atmosphere", planned.Note);
         Assert.InRange(planned.Burns.Sum(b => b.DeltaV), 300, 800);
     }
+
+    [Theory]
+    [InlineData(90)]
+    [InlineData(45)]
+    [InlineData(135)]
+    public void Kerbin_to_the_mun_arrives_in_the_asked_inclination_for_a_small_burn_on_the_way(double inclination)
+    {
+        var now = 1_000_000.0;
+        var flat = TripPlanner.Options(Body("Kerbin"), Body("Mun"), Circular("Kerbin", 100_000), now + 120, 30_000, _bodies)[0];
+        var tilted = TripPlanner.Options(Body("Kerbin"), Body("Mun"), Circular("Kerbin", 100_000), now + 120, 30_000, _bodies, inclination)[0];
+        Show(flat, now);
+        Show(tilted, now);
+        _output.WriteLine($"inclination {tilted.Arrival.Path.InclinationDeg:0.00}°, extra {tilted.DeltaV - flat.DeltaV:0.0} m/s");
+
+        Assert.Equal(inclination, tilted.Arrival.Path.InclinationDeg, 0.25);
+        Assert.Equal(30_000, tilted.Arrival.PeriapsisAltitudeM, 500.0);
+        var plan = tilted.Legs[0].Plan;
+        Assert.Equal(3, plan.Burns.Count);
+        Assert.StartsWith("Aim for a", plan.Burns[1].Title);
+        // Turning a 30 km Mun orbit to polar costs 2·v·sin(45°) ≈ 770 m/s; on the way it's a small part of that.
+        Assert.InRange(tilted.DeltaV - flat.DeltaV, 0, 150);
+
+        // Flying the burns exactly arrives as planned.
+        var mu = Body("Kerbin").Mu;
+        var orbit = Circular("Kerbin", 100_000);
+        foreach (var b in plan.Departure) orbit = Rendezvous.OrbitAfter(b.Ut, b.Burn, orbit, mu);
+        var arrival = Hops.EnterSoi(Body("Kerbin"), Body("Mun"), orbit, plan.Departure[^1].Ut, plan.Departure[^1].Ut + 10 * 86_400)!;
+        Assert.Equal(inclination, arrival.Path.InclinationDeg, 0.3);
+        Assert.Equal(30_000, arrival.PeriapsisAltitudeM, 1_000.0);
+    }
+
+    [Fact]
+    public void Already_on_the_way_to_the_mun_the_course_correction_tilts_the_arrival()
+    {
+        var now = 1_000_000.0;
+        var craft = Circular("Kerbin", 100_000);
+        var plan = TripPlanner.Options(Body("Kerbin"), Body("Mun"), craft, now + 120, 30_000, _bodies)[0].Legs[0].Plan;
+        var transfer = plan.Departure[0];
+        var coasting = Rendezvous.OrbitAfter(transfer.Ut, transfer.Burn, craft, Body("Kerbin").Mu);
+
+        var fix = TripPlanner.Options(Body("Kerbin"), Body("Mun"), coasting, transfer.Ut + 600, 30_000, _bodies, 90)[0];
+        Show(fix, now);
+        Assert.True(fix.IsCorrection);
+        Assert.Single(fix.Legs[0].Plan.Departure);
+        Assert.Equal(90, fix.Arrival.Path.InclinationDeg, 0.25);
+        Assert.Equal(30_000, fix.Arrival.PeriapsisAltitudeM, 500.0);
+        Assert.InRange(fix.Legs[0].Plan.Departure[0].DeltaV, 1, 200);
+    }
+
+    [Fact]
+    public void From_the_mun_to_a_polar_kerbin_orbit()
+    {
+        var now = 1_000_000.0;
+        var flat = TripPlanner.Options(Body("Mun"), Body("Kerbin"), Circular("Mun", 30_000), now + 120, 100_000, _bodies)[0];
+        var polar = TripPlanner.Options(Body("Mun"), Body("Kerbin"), Circular("Mun", 30_000), now + 120, 100_000, _bodies, 90)[0];
+        Show(polar, now);
+        _output.WriteLine($"inclination {polar.Arrival.Path.InclinationDeg:0.00}°, extra {polar.DeltaV - flat.DeltaV:0.0} m/s");
+        Assert.Equal(90, polar.Arrival.Path.InclinationDeg, 0.25);
+        Assert.Equal(100_000, polar.Arrival.PeriapsisAltitudeM, 500.0);
+    }
+
+    [Fact]
+    public void Kerbin_to_a_polar_duna_orbit_tilts_in_the_course_correction()
+    {
+        var now = 1_000_000.0;
+        var flat = TripPlanner.Options(Body("Kerbin"), Body("Duna"), Circular("Kerbin", 100_000), now + 120, 100_000, _bodies)[0];
+        var polar = TripPlanner.Options(Body("Kerbin"), Body("Duna"), Circular("Kerbin", 100_000), now + 120, 100_000, _bodies, 90)[0];
+        Show(polar, now);
+        _output.WriteLine($"inclination {polar.Arrival.Path.InclinationDeg:0.00}°, extra {polar.DeltaV - flat.DeltaV:0.0} m/s");
+        Assert.Equal(90, polar.Arrival.Path.InclinationDeg, 0.25);
+        Assert.Equal(100_000, polar.Arrival.PeriapsisAltitudeM, 500.0);
+        Assert.Contains(polar.Legs[0].Plan.Departure, b => b.Title.EndsWith("inclined 90°"));
+        Assert.InRange(polar.DeltaV - flat.DeltaV, -5, 60);
+    }
 }

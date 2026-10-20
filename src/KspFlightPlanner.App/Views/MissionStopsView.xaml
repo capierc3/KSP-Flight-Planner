@@ -80,7 +80,7 @@
                             </DockPanel>
 
                             <StackPanel Grid.Row="1" Grid.Column="1">
-                                <!-- An orbit stop's height and, after a launch, its inclination: type a value or pick one -->
+                                <!-- An orbit stop's height and, after a launch or a trip from another body, its inclination: type a value or pick one -->
                                 <StackPanel Margin="0,4,0,0">
                                     <DockPanel Visibility="{Binding IsOrbit, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock DockPanel.Dock="Left" Text="Altitude" Style="{StaticResource Label}" VerticalAlignment="Center" Width="62" Margin="2,0,0,0" />
@@ -93,17 +93,17 @@
                                     </DockPanel>
                                     <TextBlock Text="{Binding AltitudeError}" Foreground="#EF5350" FontSize="12" TextWrapping="Wrap"
                                                Margin="2,2,0,0" Visibility="{Binding HasAltitudeError, Converter={StaticResource BoolToVisibility}}" />
-                                    <DockPanel Margin="0,4,0,0" Visibility="{Binding CanLaunch, Converter={StaticResource BoolToVisibility}}">
+                                    <DockPanel Margin="0,4,0,0" Visibility="{Binding ShowsInclination, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock DockPanel.Dock="Left" Text="Inclination" Style="{StaticResource Label}" VerticalAlignment="Center" Width="62" Margin="2,0,0,0" />
                                         <TextBox DockPanel.Dock="Left" Text="{Binding InclinationText, UpdateSourceTrigger=LostFocus}" Width="52" FontSize="12"
                                                  KeyDown="AltitudeBox_KeyDown"
-                                                 ToolTip="The launch flies straight into this inclination, 0° to 180°: 0° equatorial (due east, the Δv map's launch), 90° polar, 180° equatorial going west. Below 90° the orbit goes east like Kerbin turns; above 90° it's retrograde. Press Enter to apply." />
+                                                 ToolTip="The orbit's inclination to the body's equator, 0° to 180°: 0° equatorial, 90° polar, 180° equatorial going the other way. After a launch, the launch flies straight into it (0° is due east, the Δv map's launch). Arriving from another body, a small burn on the way tilts the approach. Below 90° the orbit goes the way the body turns; above 90° it's retrograde. Press Enter to apply." />
                                         <TextBlock DockPanel.Dock="Left" Text="°" Style="{StaticResource Note}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="3,0,4,0" />
                                         <ComboBox ItemsSource="{Binding InclinationPresets}" SelectedItem="{Binding SelectedInclinationPreset}" FontSize="12" Padding="6,4,0,4"
-                                                  ToolTip="Equatorial: due east, the Δv map's launch. Polar: over both poles. Retrograde: due west, against Kerbin's spin. Custom: the inclination typed in the box." />
+                                                  ToolTip="Equatorial: due east (the Δv map's launch), or arriving however the trip comes in. Polar: over both poles. Retrograde: due west, against the body's spin. Custom: the inclination typed in the box." />
                                     </DockPanel>
-                                    <TextBlock Text="{Binding LaunchText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="2,4,0,0"
-                                               Visibility="{Binding ShowsLaunchText, Converter={StaticResource BoolToVisibility}}" />
+                                    <TextBlock Text="{Binding InclinationNote}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="2,4,0,0"
+                                               Visibility="{Binding ShowsInclinationNote, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                                 <TextBlock Text="{Binding Role}" Style="{StaticResource Note}" Margin="2,2,0,2" />
                             </StackPanel>

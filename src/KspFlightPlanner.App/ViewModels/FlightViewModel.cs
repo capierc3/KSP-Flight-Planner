@@ -174,7 +174,9 @@ public sealed class FlightViewModel : ObservableObject
     {
         FlightKind.Rendezvous => _selected.Targets.Count == 0 ? "Rendezvous" : $"Rendezvous with {string.Join(", then ", _selected.Targets.Select(t => t.Name))}",
         FlightKind.Resonant => $"Deploy {_selected.SatelliteCount} satellites at {_selected.AltitudeM / 1000:#,0.#} km around {_selected.BodyName}",
-        FlightKind.Burns when IsTrip(_selected) => $"To {_selected.DestinationName}, arriving {_selected.AltitudeM / 1000:#,0.#} km up. Re-plan from wherever the craft is on the way.",
+        FlightKind.Burns when IsTrip(_selected) => $"To {_selected.DestinationName}, arriving {_selected.AltitudeM / 1000:#,0.#} km up" +
+                                                   (_selected.ArrivalInclinationDeg is { } i ? $", inclined {i:0.#}°" : "") +
+                                                   ". Re-plan from wherever the craft is on the way.",
         FlightKind.Burns => $"Planned from where the craft was around {_selected.BodyName}. To plan it again, use the From here pane.",
         FlightKind.Landing => $"Land at {_selected.Landing?.Target.Name} on {_selected.BodyName}" +
                               $" ({_selected.Landing?.Target.LatitudeDeg:0.###}°, {_selected.Landing?.Target.LongitudeDeg:0.###}°)" +
@@ -472,7 +474,8 @@ public sealed class FlightViewModel : ObservableObject
         {
             var bodies = _sync.StockBodies().Values.ToList();
             var start = path.ToElements();
-            var options = await Task.Run(() => TripPlanner.Options(around, to, start, now + Math.Min(f.LeadS, CorrectionLeadS), f.AltitudeM, bodies));
+            var options = await Task.Run(() => TripPlanner.Options(around, to, start, now + Math.Min(f.LeadS, CorrectionLeadS), f.AltitudeM, bodies,
+                f.ArrivalInclinationDeg));
             var trip = options[0]; // the cheapest
             Store(f with
             {

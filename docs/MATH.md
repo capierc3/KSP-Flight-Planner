@@ -9,8 +9,8 @@ Each section has the formulas, a worked example, the code that implements them a
 ## Contents
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are
-- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are; 2.10 Changing the inclination from where you are
+- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options; 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
@@ -23,6 +23,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A single burn from where your craft is now (circularize, change Ap/Pe): §2.8
 - A plane change or an inclined target: §2.3, §4.2
 - A polar or other inclined orbit straight from the launch pad: §2.7
+- A polar (or any inclined) orbit around another body, set on the way there: §3.9; turning the orbit you're in: §2.10
 - A trip to another planet, and its launch window: §3.2, §3.4
 - Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
 - Burns from where you are to anywhere else (Duna, Mun → Minmus, Mun → Duna), with a choice of windows: §3.8
@@ -514,7 +515,7 @@ If the periapsis is in the atmosphere (or below the ground on an airless body), 
 - *Circularize at periapsis* and *Change the apoapsis* (which burns there) are refused.
 - If the next periapsis comes before the apoapsis you asked for, the craft is falling: it's just past the apoapsis after a launch. *Circularize* then burns 30 s from now (`FallingLeadS`) and turns the velocity horizontal at the circular speed for that height: Δv = √(μ/r)·ĥ − v, where ĥ is the horizontal direction in the orbit's plane. The radial part cancels the fall. *Change the periapsis* is refused, with a note to circularize instead.
 
-Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
+Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Change the inclination* is §2.10, *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
 
 **Capturing at a moon.** Once a craft enters a moon's sphere of influence (§1.6), its path around the moon is a hyperbola (§1.4). *Circularize at periapsis* is then the capture burn, at the pass's only periapsis: v_new = √(μ/r_p) as above, with v_now from vis-viva, where a < 0. *Change the apoapsis* burns there too and captures into an ellipse, which is cheaper. A path with no apoapsis can't do the rest (circularize at apoapsis, change the periapsis, match planes, rendezvous or deorbit), and the pane says to capture first. Once the periapsis has passed, the craft is on its way out and there's nothing to burn at.
 
@@ -579,6 +580,26 @@ Worked example — the Mun from a 30 km circular orbit inclined 15° (Ω = 20°)
 
 - Code: `LandingFlights.Options` (steps 1–5), `LandingFlights.Plan` (a Landing flight), `LandingFlights.SiteDirection`; the panes are `FromHereViewModel` (Land at a spot), `FlightViewModel` (re-plan) and `MissionBuilderViewModel.FlyLanding`; θ₀ from `BodyRotation`. Tested in `LandingFlightsTests` (`Mun_landing_comes_down_on_the_spot` checks that the descent's plane holds the spot and its low point is a braking distance short of it)
 - Source: §2.6 and its sources; plane change at a point 90° away: Curtis 6.10 (plane change maneuvers)
+
+### 2.10 Changing the inclination from where you are
+
+*Change the inclination* in the **From here** pane turns the orbit you're in to a new inclination to the body's equator, keeping its shape and its ascending node. It's §4.2's plane match with the new plane as the "target": one burn where the orbit crosses the equator (the line of nodes), turning the velocity into the new plane while keeping its speed and climb angle,
+
+```
+Δv = 2 · v_h · sin(Δi / 2)          v_h = the horizontal part of the speed there
+```
+
+Of the two crossings it takes the cheaper, which on an eccentric orbit is the one farther out (slower). An orbit lying in the equator crosses it everywhere, so the burn goes at the next apoapsis (two minutes from now on a round orbit), and that point becomes the ascending node.
+
+Turning a low orbit a long way is expensive (§2.3), so a turn of more than 30° carries a note: raising the apoapsis first, turning there and lowering it again can cost less, and on the way to another body the inclination is better set in *Go to* (§3.9). A path that's passing the body (a hyperbola) is refused for the same reason.
+
+Worked examples — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km):
+
+1. A round 100 km equatorial orbit to polar: v = √(μ / 700,000) = 2,246.1 m/s, so Δv = 2 × 2,246.1 × sin 45° = **3,176.5 m/s**, two minutes from now (`Turning_a_round_equatorial_orbit_polar_costs_two_v_sin_45`). That's more than it took to get into orbit, which is why polar orbits are launched into (§2.7) or arrived in (§3.9).
+2. A 100 × 2,000 km orbit inclined 30°, to 10°: the burn is at the crossing beyond the semi-major axis, where it's slower, and leaves the same periapsis, apoapsis and ascending node (`Changing_an_inclined_orbit_burns_at_the_higher_equator_crossing_and_keeps_its_shape`).
+
+- Code: `QuickBurns.ChangeInclination` (using `Rendezvous.MatchPlane`); the pane is `FromHereViewModel`; tested in `QuickBurnsTests`
+- Source: Curtis 6.10; [Orbital inclination change (Wikipedia)](https://en.wikipedia.org/wiki/Orbital_inclination_change)
 
 ## 3. Going to another planet
 
@@ -799,6 +820,58 @@ From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s
 
 - Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`), `TransferFlights.Plan`; the panes are `FromHereViewModel`, `TransferPlannerViewModel` (Fly this window) and `FlightViewModel` (Re-plan); tested in `TripPlannerTests`
 - Source: Curtis 8.2–8.10 (patched conics, the sphere of influence, departure and arrival hyperbolas); Lambert's problem (§3.4)
+
+### 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)
+
+A trip from an equatorial orbit arrives in about the destination's equator, because the path comes in roughly in the plane the bodies orbit in. A polar orbit there could be had by turning the orbit after the capture (§2.10), but that's dear: a 30 km Mun orbit costs 2 × 532.2 × sin 45° = **752.6 m/s** to turn polar.
+
+It's far cheaper to turn the approach on the way. Seen from the destination, the craft comes in along a line (its velocity far away, v∞) and passes at a distance b from a parallel line through the body's centre: the aim point. Which side the aim point is on decides the plane of the pass. To the side in the equator, the pass is equatorial; swung a quarter-turn round the line of approach (above or below the body), it's polar. Gravity bends the path in, so the aim point for a periapsis r_p is wider than r_p:
+
+```
+b = r_p · √(1 + 2μ / (r_p · v∞²))
+```
+
+A small sideways burn a long way out moves the aim point a long way. So *Go to* with an inclination adds a burn on the way: **Aim for a 90° orbit**.
+
+**How it's planned (From here, Fly mode).** After the transfer (§3.7, §3.8), a burn is tried 5 %, 15 %, 30 % and 50 % of the way along the coast, and the least Δv wins. Each is solved for two things at once: the pass at the asked height, and the arrival path's inclination to the destination's equator (stock KSP bodies have no axial tilt, so that's the inclination in the planner's frame). There are two things to hit and three parts to the burn (prograde, normal, radial), so Newton's method takes the least-Δv step each time:
+
+```
+miss = (height miss in km, inclination miss in degrees)
+J    = how the miss changes per m/s along each axis (nudged 0.02 m/s)
+Δv  ← Δv − Jᵀ (J Jᵀ)⁻¹ · miss          halved until the miss shrinks
+```
+
+It's done when the height is within 0.5 km and the inclination within 0.05°. The inclination is walked there 10° at a time from where the path arrives now, so each solve starts close. Then the capture is as before: retrograde at the periapsis, which keeps the plane. Above 90° the orbit is retrograde.
+
+- *Already on the way* (§3.7), the course correction does the tilt as well, starting from the plain correction.
+- *Across* (Kerbin → Duna, §3.8), the course correction a tenth of the way along does it. The coast is so long that it costs almost nothing.
+- *Up* (Mun → Kerbin), the burn comes once the craft is out of the moon's sphere, falling toward the planet.
+- *Keep as a flight* keeps the inclination, so *Re-plan* on the way aims for it too.
+
+Worked example — Kerbin (100 km round equatorial orbit) to a 30 km orbit at the Mun (`Kerbin_to_the_mun_arrives_in_the_asked_inclination_for_a_small_burn_on_the_way`):
+
+| Inclination at the Mun | Transfer | Aim on the way | Capture | In all | Extra |
+|---|---|---|---|---|---|
+| however it comes (0°) | 837.7 | — | 260.5 | **1,098 m/s** | |
+| 45° | 837.7 | 22.7, 1.7 h after the transfer | 260.9 | **1,121 m/s** | +23 |
+| 90° (polar) | 837.7 | 35.3 (16.6 prograde, 31.0 normal, 3.1 radial), 1.7 h after | 262.2 | **1,135 m/s** | +37 |
+| 135° | 837.7 | 30.4, 0.9 h after | 264.6 | **1,133 m/s** | +34 |
+
+So polar costs **37 m/s** on the way against 753 m/s turning in Mun orbit. Flying the burns exactly arrives at 90.0° and 30 km. Already coasting (planned again 10 minutes after the transfer), the course correction does it for **36.4 m/s**.
+
+To Duna (100 km, the cheapest window), the course correction for 90° is **16.2 m/s**, against 16.7 m/s for the plain one: the polar orbit is free. From the Mun (30 km) to a polar 100 km Kerbin orbit, the aim burn is **280.6 m/s** (turning a round 100 km Kerbin orbit polar would be 3,176.5 m/s, §2.10).
+
+**In Plan mode** a stop in orbit of another body (the leg arrives from its planet, its moon or another planet) shows an **Inclination** box, as a launch stop does (§2.7). The extra goes on the leg that crosses into the body's sphere, on top of its map value (an arrival tool, §6.2). There are no real orbits or dates there, so:
+
+- **Down or Up** (planet ↔ moon): both trips are planned as above, from a round equatorial orbit at the map's low orbit, with and without the inclination; the extra is the difference. Kerbin's 80 km low orbit → Mun's 10 km low orbit at 90°: **+35 m/s**. Mun → Kerbin at 90°: **+276 m/s**.
+- **Across** (planet → planet): a rule of thumb. A sideways burn a time t before arriving moves the aim point about Δv · t, and swinging it round the line of approach by Δi moves it 2·b·sin(Δi/2):
+  ```
+  Δv ≈ 2 · b · sin(Δi / 2) / t
+  ```
+  with v∞ from the Hohmann transfer (§3.2) and t the coast after the course correction, 0.9 of the transfer. Kerbin → Duna's 60 km low orbit at 90°: v∞ = 826.1 m/s, r_p = 380 km and μ = 3.0136×10¹¹ give b = 692.9 km; t = 5.87×10⁶ s, so Δv ≈ 2 × 692,857 × sin 45° / 5,871,602 = **0.17 m/s**. It ignores the Sun's pull on the way, so it's shown as an estimate.
+
+- Code: `Hops.TiltOnTheWay`, `Hops.CorrectTilted`, `Hops.Tilt` (the `inclinationDeg` of `Hops.Down`, `Hops.Up`, `Hops.Across` and `TripPlanner.Options`); Plan mode: `ArrivalTilt.Plan`, `ArrivalTilt.RuleOfThumb`, `LegTools.FindArrival`, `LegTools.EvaluateArrival`, `LegTools.ApplyArrival`; tested in `TripPlannerTests` and `LegToolsTests`
+- Source: Curtis 8.9–8.10 (the hyperbolic approach, its aiming radius and the B-plane idea of where it passes); Newton's method for an underdetermined system (the minimum-norm step, Jᵀ(JJᵀ)⁻¹)
 
 ## 4. Meeting a craft in orbit (rendezvous)
 
@@ -1091,7 +1164,7 @@ Known simplifications:
 
 A mission leg runs from one stop to the next and is made of Δv-map steps (§6.1). A leg tool works out part of the leg properly and puts its result in place of the map values for the steps it covers. The steps stay, so each one keeps its phase and aerobrake choice. A tool that no longer fits the leg (the stops changed) is ignored, and the map values come back.
 
-The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5), landing at a chosen spot (§2.6) and launching into an inclined orbit (§2.7). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies. An inclined launch adds its extra over a due-east launch to the launch step, on top of the map's value, and measures later plane changes around the body from its inclination.
+The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5), landing at a chosen spot (§2.6), launching into an inclined orbit (§2.7) and arriving at another body in an inclined orbit (§3.9). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies. An inclined launch adds its extra over a due-east launch to the launch step, on top of the map's value, and measures later plane changes around the body from its inclination. An inclined arrival adds the burn on the way that tilts the approach to the step that crosses into the body's sphere.
 
 ### 6.3 Transfer legs: a chosen launch window
 

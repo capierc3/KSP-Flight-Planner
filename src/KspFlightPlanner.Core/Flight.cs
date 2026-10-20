@@ -101,6 +101,9 @@ public sealed record Flight
     public double TransferFlightTimeS { get; init; }
     public ArrivalMode Arrival { get; init; } = ArrivalMode.Circularize;
 
+    /// <summary>A From here trip's inclination at the destination (90° polar); null for however it arrives.</summary>
+    public double? ArrivalInclinationDeg { get; init; }
+
     // Landing inputs: the spot and lander, and whether to take the sooner pass over the cheapest.
     public LandingLeg? Landing { get; init; }
     public bool LandSooner { get; init; }

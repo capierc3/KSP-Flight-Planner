@@ -9,7 +9,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land }
+public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, SetInclination, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land }
 
 public sealed record QuickActionOption(QuickAction Action, string Name)
 {
@@ -50,6 +50,7 @@ public sealed class FromHereViewModel : ObservableObject
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private QuickActionOption _action;
     private string _altitudeText = "";
+    private string _inclinationText = "";
     private string? _status;
     private string _resultText = "";
     private bool _busy;
@@ -67,6 +68,7 @@ public sealed class FromHereViewModel : ObservableObject
     private FlightCraft? _plannedTarget;
     private CelestialBody? _plannedTo;
     private double _plannedHeight; // a trip's arrival height over _plannedTo
+    private double? _plannedInclination; // a trip's arrival inclination there
     private LandingLeg? _plannedLanding;
     private bool _plannedSooner;
     private DeployStep? _plannedDeploy; // a deployment's satellites and carrier, at _plannedHeight
@@ -107,6 +109,7 @@ public sealed class FromHereViewModel : ObservableObject
         new(QuickAction.CircularizeAtPeriapsis, "Circularize at periapsis"),
         new(QuickAction.SetApoapsis, "Change the apoapsis"),
         new(QuickAction.SetPeriapsis, "Change the periapsis"),
+        new(QuickAction.SetInclination, "Change the inclination"),
         new(QuickAction.GoTo, "Go to…"),
         new(QuickAction.MatchPlanes, "Match planes with the target"),
         new(QuickAction.Rendezvous, "Rendezvous with the target"),
@@ -128,7 +131,9 @@ public sealed class FromHereViewModel : ObservableObject
         {
             if (value is null || !SetProperty(ref _action, value)) return;
             _altitudeText = DefaultAltitude();
-            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle) })
+            _inclinationText = value.Action == QuickAction.SetInclination ? "90" : "";
+            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
+                         nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint) })
                 OnPropertyChanged(name);
             Clear();
         }
@@ -150,6 +155,23 @@ public sealed class FromHereViewModel : ObservableObject
     };
 
     public bool NeedsDestination => _action.Action == QuickAction.GoTo;
+
+    /// <summary>Change the inclination needs one; Go to a body can take one for the orbit there (left empty, however it arrives).</summary>
+    public bool NeedsInclination => _action.Action == QuickAction.SetInclination || _action.Action == QuickAction.GoTo && !GoingToCraft;
+
+    public string InclinationLabel => _action.Action == QuickAction.GoTo ? "Inclined" : "New inclination";
+
+    public string InclinationHint => _action.Action == QuickAction.GoTo
+        ? "To the destination's equator: 90° polar, above 90° retrograde. Leave it empty to arrive however the trip comes in. " +
+          "A burn on the way tilts the approach, for far less than turning the orbit once there."
+        : "To the equator: 0° equatorial going east, 90° polar, 180° equatorial going west.";
+
+    /// <summary>The inclination for Change the inclination, or the orbit's at the destination (Go to; empty for any).</summary>
+    public string InclinationText
+    {
+        get => _inclinationText;
+        set { if (SetProperty(ref _inclinationText, value)) Clear(); }
+    }
 
     public bool NeedsSpot => _action.Action == QuickAction.Land;
 
@@ -223,6 +245,7 @@ public sealed class FromHereViewModel : ObservableObject
             _altitudeText = DefaultAltitude();
             OnPropertyChanged(nameof(AltitudeText));
             OnPropertyChanged(nameof(NeedsAltitude));
+            OnPropertyChanged(nameof(NeedsInclination));
             Clear();
         }
     }
@@ -259,9 +282,13 @@ public sealed class FromHereViewModel : ObservableObject
                             "height there, going the way it spins. A height in the atmosphere brings you down (or aerobrakes) instead. Trips through a " +
                             "launch window (another planet, or moon to moon) offer a few windows to choose from; from a moon to another planet, it stops " +
                             "in the planet's orbit on the way. Already on the way? It plans a course correction. KSP's target follows the game: a body " +
-                            "goes there, a craft plans a rendezvous with it.",
+                            "goes there, a craft plans a rendezvous with it. Give an inclination for a polar (or any tilted) orbit there: a small burn " +
+                            "on the way tilts the approach.",
         QuickAction.SetApoapsis => "Burns at the periapsis, which stays where it is.",
         QuickAction.SetPeriapsis => "Burns at the apoapsis, which stays where it is.",
+        QuickAction.SetInclination => "One burn where the orbit crosses the equator (the cheaper crossing, the higher one on an eccentric orbit), keeping its " +
+                                      "shape. On an orbit in the equator it's at the apoapsis, or two minutes from now when round. Turning a low orbit a long way " +
+                                      "is expensive: heading to another body, set the inclination in Go to instead.",
         QuickAction.MatchPlanes => "Target a craft, or a moon of the body you're orbiting, in KSP first. Burns at the cheaper of the next two plane crossings.",
         QuickAction.Rendezvous => "Target a craft in KSP first. Plans the plane match, phasing and intercept, like the Rendezvous tool.",
         QuickAction.Deploy => "Spreads the satellites evenly round a circular orbit at this height, like the Resonant Orbits tool. If your orbit doesn't reach " +
@@ -311,7 +338,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (Here() is not (var body, var orbit) || _sync.Now is not { } now) return;
         var after = now + LeadS;
         if (orbit.Eccentricity >= 1 && _action.Action is not (QuickAction.CircularizeAtApoapsis or QuickAction.CircularizeAtPeriapsis or QuickAction.SetApoapsis
-                or QuickAction.GoTo))
+                or QuickAction.GoTo or QuickAction.SetInclination))
         {
             Status = $"You're on a path that escapes {body.Name}: capture first (circularize at periapsis, or change the apoapsis).";
             return;
@@ -328,6 +355,10 @@ public sealed class FromHereViewModel : ObservableObject
                     if (!TryKm(out var altitude)) return;
                     burns = [QuickBurns.SetApsis(body, orbit, now, LeadS, altitude, _action.Action == QuickAction.SetApoapsis)];
                     break;
+                case QuickAction.SetInclination:
+                    if (!TryInclination(required: true, out var inclination)) return;
+                    burns = [QuickBurns.ChangeInclination(body, orbit, now, LeadS, inclination!.Value)];
+                    break;
                 case QuickAction.GoTo when GoingToCraft:
                     if (PlanRendezvous(body, orbit, after) is not { } meet) return;
                     burns = meet;
@@ -343,8 +374,8 @@ public sealed class FromHereViewModel : ObservableObject
                         Status = $"You're already around {destination.Name}. To change your orbit here, circularize or change the apoapsis or periapsis.";
                         return;
                     }
-                    if (!TryKm(out var height)) return;
-                    _ = PlanTripAsync(body, destination, orbit, now, after, height);
+                    if (!TryKm(out var height) || !TryInclination(required: false, out var tilt)) return;
+                    _ = PlanTripAsync(body, destination, orbit, now, after, height, tilt);
                     return;
                 case QuickAction.Land:
                     if (LandingFromInputs() is not { } leg) return;
@@ -413,7 +444,7 @@ public sealed class FromHereViewModel : ObservableObject
     /// Plans the ways to <paramref name="to"/> off the UI thread (a launch window search takes a moment), lists them and
     /// shows the first (the cheapest).
     /// </summary>
-    private async Task PlanTripAsync(CelestialBody from, CelestialBody to, OrbitalElements orbit, double now, double after, double height)
+    private async Task PlanTripAsync(CelestialBody from, CelestialBody to, OrbitalElements orbit, double now, double after, double height, double? inclination)
     {
         _busy = true;
         Status = $"Working out the way to {to.Name}…";
@@ -421,8 +452,8 @@ public sealed class FromHereViewModel : ObservableObject
         try
         {
             var bodies = _sync.StockBodies().Values.ToList();
-            var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies));
-            (_plannedBody, _plannedFrom, _plannedUt, _plannedTo, _plannedHeight) = (from, orbit, now, to, height);
+            var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
+            (_plannedBody, _plannedFrom, _plannedUt, _plannedTo, _plannedHeight, _plannedInclination) = (from, orbit, now, to, height, inclination);
             foreach (var option in options) TripOptions.Add(new TripOptionRow(option.Label, OptionText(option, now), option));
             OnPropertyChanged(nameof(HasTripOptions));
             SelectedTrip = TripOptions[0];
@@ -643,6 +674,24 @@ public sealed class FromHereViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// The inclination typed, 0° to 180°. Empty is null, which only Go to (<paramref name="required"/> false) takes; anything
+    /// else that doesn't read sets the status and returns false.
+    /// </summary>
+    private bool TryInclination(bool required, out double? degrees)
+    {
+        degrees = null;
+        var text = _inclinationText.Trim().TrimEnd('°');
+        if (text.Length == 0 && !required) return true;
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) || value is < 0 or > 180)
+        {
+            Status = "Enter an inclination from 0° to 180° (90° is polar)" + (required ? "." : ", or leave it empty.");
+            return false;
+        }
+        degrees = value;
+        return true;
+    }
+
     /// <summary>The altitude box's starting value: the apsis as it is now, or a periapsis low in the atmosphere.</summary>
     private string DefaultAltitude()
     {
@@ -723,6 +772,7 @@ public sealed class FromHereViewModel : ObservableObject
                 : game?.TargetBody is { } b ? $"KSP's target: {b}"
                 : "KSP's target (none set)";
             OnPropertyChanged(nameof(NeedsAltitude));
+            OnPropertyChanged(nameof(NeedsInclination));
         }
 
         var here = Here()?.Body;
@@ -742,6 +792,7 @@ public sealed class FromHereViewModel : ObservableObject
             OnPropertyChanged(nameof(Destinations));
             OnPropertyChanged(nameof(SelectedDestination));
             OnPropertyChanged(nameof(NeedsAltitude));
+            OnPropertyChanged(nameof(NeedsInclination));
         }
 
         // A new place to go: its parking height, unless burns are showing (their height is the one they were planned for).
@@ -826,7 +877,14 @@ public sealed class FromHereViewModel : ObservableObject
                 PreferDiveOrbit = deploy.PreferDiveOrbit,
             }
             : _plannedTo is { } to
-            ? new Flight { Name = $"To {to.Name}", Kind = FlightKind.Burns, DestinationName = to.Name, AltitudeM = _plannedHeight }
+            ? new Flight
+            {
+                Name = _plannedInclination is { } i ? $"To {to.Name}, {i:0.#}° orbit" : $"To {to.Name}",
+                Kind = FlightKind.Burns,
+                DestinationName = to.Name,
+                AltitudeM = _plannedHeight,
+                ArrivalInclinationDeg = _plannedInclination,
+            }
             : new Flight { Name = burns[0].Title, Kind = FlightKind.Burns };
         flight = flight with
         {

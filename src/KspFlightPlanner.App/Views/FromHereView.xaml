@@ -23,6 +23,12 @@
                 <TextBlock DockPanel.Dock="Right" Text="km" VerticalAlignment="Center" Margin="6,0,0,0" />
                 <TextBox Text="{Binding AltitudeText, UpdateSourceTrigger=PropertyChanged}" Width="90" HorizontalAlignment="Left" />
             </DockPanel>
+            <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsInclination, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding InclinationLabel}" VerticalAlignment="Center" Width="100" />
+                <TextBlock DockPanel.Dock="Right" Text="°" VerticalAlignment="Center" Margin="6,0,0,0" />
+                <TextBox Text="{Binding InclinationText, UpdateSourceTrigger=PropertyChanged}" Width="90" HorizontalAlignment="Left"
+                         ToolTip="{Binding InclinationHint}" />
+            </DockPanel>
             <StackPanel Margin="0,8,0,0" Visibility="{Binding NeedsSatellites, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <TextBlock Text="Satellites" VerticalAlignment="Center" Width="100" />
