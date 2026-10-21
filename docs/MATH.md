@@ -1825,6 +1825,24 @@ Worked example (the probe of 2026-10-20, Protogen chosen): loading SandBox, KSP 
 - Code: `LiveSaveMatch.Judge`, `LiveSaveMatch.WrittenByGame` (`Core/Ksp/LiveSaveMatch.cs`), run by `SaveSync` (`App/Services/SaveSync.LiveSave.cs`), read from the game by `KspLink.ReadIdentityAsync`; tested in `LiveSaveMatchTests`
 - Source: KSP's save behaviour as seen by a probe on 2026-10-20 (writes on scene change and after loading); kRPC SpaceCenter API (`GameMode`, `UT`, `Vessels`)
 
+### 8.13 Which vessel a logged flight is now
+
+A flight is logged under the vessel's name at launch (the *rocket*). Vessels get renamed later — a relay is usually given its final name once it's in its orbit — so the Flight log and the Vessels pane find each flight's vessel in the save by **launch time** instead. KSP stores each vessel's launch time as `lct`; a vessel that splits off another (a relay released from its carrier) gets the moment it split. The log's launch time is the game time less MET at its first sample (§8.5), which is that same moment. With *launched* = the save's vessels whose launch time is within 2 s of the flight's:
+
+```
+tagged by hand              that vessel (or none, if tagged to none)
+one launched then           that one, whatever it's called now
+several launched then       the one with the flight's name, else the only one that isn't debris
+otherwise                   no vessel (gone, or can't be told apart): tag it by hand (Edit log…)
+```
+
+A save without `lct` uses the file's time less the vessel's `met`. Edit log… lists the vessels launched with the flight first, then those with its name, then the rest by how near their launch was.
+
+Worked example (the Minmus relays, 2026-10-20): the carrier *Link Shuttle mk2* launched on Day 62 and released three relays on Days 68, 71 and 73, each logged as *Link Shuttle mk2 Relay*. Renamed in orbit, *MinLink B* has `lct` = Day 71, 1:50:58; the Day 71 log launched within 2 s of that and no other vessel did, so that log is MinLink B's — its row reads "Now MinLink B", and MinLink B's page lists it. The Day 62 log stays with the carrier, whose `lct` is Day 62.
+
+- Code: `FlightLogs.VesselOf`, `FlightLogs.LogsOf`, `FlightLogs.Candidates` (`Core/Ksp/FlightLog.cs`); the tag is `flight_logs.vessel_id`, set by `FlightLogRepository.Retag`; tested in `FlightLogTests`
+- Source: KSP's save format (`VESSEL` node `lct`, `met`, `pid`)
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

@@ -90,6 +90,13 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         LogsChanged?.Invoke();
     }
 
+    /// <summary>Files a flight under another rocket name and/or tags it to one of the save's vessels (see <see cref="FlightLogRepository.Retag"/>).</summary>
+    public void Retag(long id, string rocket, string? vesselId)
+    {
+        _logs.Retag(id, rocket, vesselId);
+        LogsChanged?.Invoke();
+    }
+
     public void Dispose()
     {
         Leave(FlightLogEventKind.Disconnected, "Flight disconnected (the planner closed)");

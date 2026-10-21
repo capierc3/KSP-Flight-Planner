@@ -300,6 +300,10 @@ Notes:
 - [ ] Add a part in the VAB and fly again → the new flight gets the next design letter; the Rocket pane says how often the design has flown
 - [ ] Launch to orbit → Flight report › Ascent coach: launch TWR, turn start and 45° altitude match what you flew; the pitch chart's blue line is your nose (90° on the pad)
 - [ ] The best-climb box gives a model check within a few %; try its advice (turn start speed, 45° altitude) on the next launch and compare
+- [ ] Release a relay, rename it in orbit, let KSP save → its log row says "Now <new name>" and the search finds the new name
+- [ ] Pick that log → "Vessel: <new name> (found by launch time)"; Show vessel opens it in the Vessels pane and Vessel page
+- [ ] On the Vessel page, Flight log lists its flights; clicking one opens the Flight log and the Flight report on it
+- [ ] Edit log… → pick another vessel (or None of them) and change the rocket name → the row, Vessel page and Compare follow; keep flying the vessel and the edit stays
 
 Notes:
 

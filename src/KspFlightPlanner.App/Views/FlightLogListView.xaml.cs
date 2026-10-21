@@ -34,6 +34,12 @@ public partial class FlightLogListView : UserControl
         if (group) groups.Add(new PropertyGroupDescription(nameof(FlightLogItem.Rocket)));
     }
 
+    private void Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not FlightLogViewModel vm || vm.EditSelected() is not { } edit) return;
+        new FlightLogEditWindow(edit) { Owner = Window.GetWindow(this) }.ShowDialog();
+    }
+
     private void Compare_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not FlightLogViewModel vm) return;

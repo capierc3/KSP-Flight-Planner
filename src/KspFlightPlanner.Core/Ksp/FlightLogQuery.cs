@@ -27,12 +27,14 @@ public static class FlightLogQuery
 {
     /// <summary>
     /// The logs that match <paramref name="show"/> and every word of <paramref name="search"/> (in the rocket's name, the
-    /// bodies it flew around or where it is now), in <paramref name="sort"/> order.
+    /// bodies it flew around, where it is now, or the name its vessel has now), in <paramref name="sort"/> order.
     /// </summary>
-    public static IEnumerable<FlightLogSummary> Apply(IEnumerable<FlightLogSummary> logs, string? search, FlightLogShow show, FlightLogSort sort)
+    /// <param name="vesselName">The name each flight's vessel has now (null when it's gone or unknown).</param>
+    public static IEnumerable<FlightLogSummary> Apply(IEnumerable<FlightLogSummary> logs, string? search, FlightLogShow show, FlightLogSort sort,
+        Func<FlightLogSummary, string?>? vesselName = null)
     {
         var words = (search ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var matching = logs.Where(l => Shows(l, show) && words.All(w => Mentions(l, w)));
+        var matching = logs.Where(l => Shows(l, show) && words.All(w => Mentions(l, w) || Has(vesselName?.Invoke(l), w)));
         return sort switch
         {
             FlightLogSort.Newest => matching.OrderByDescending(l => l.LaunchUt),

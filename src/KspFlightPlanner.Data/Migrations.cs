@@ -321,8 +321,9 @@ internal static class Migrations
             launch_ut       REAL    NOT NULL,   -- game time − MET; with the name, tells this flight from others of the rocket
             joined_at_met   REAL    NOT NULL DEFAULT 0,   -- 0 = recorded from the launch
             outcome         TEXT    NOT NULL,   -- FlightLogOutcome
-            flight_id       INTEGER,
-            launch_parts    INTEGER,            -- parts on the pad: with the launch mass, tells a changed design            -- the planner flight being flown, if any (not a foreign key: flights get deleted)
+            flight_id       INTEGER,            -- the planner flight being flown, if any (not a foreign key: flights get deleted)
+            launch_parts    INTEGER,            -- parts on the pad: with the launch mass, tells a changed design
+            vessel_id       TEXT,               -- the save vessel (pid) the player tagged it to; NULL = by launch time, '' = none
             last_ut         REAL    NOT NULL,
             delta_v_used    REAL    NOT NULL,   -- the samples' sums, kept for the list
             max_altitude_m  REAL    NOT NULL,

@@ -20,7 +20,7 @@ public sealed class FlightLogRepository(PlannerDatabase database)
     };
 
     private const string SummaryColumns = "id, vessel_name, launch_ut, joined_at_met, outcome, last_ut, delta_v_used, max_altitude_m, " +
-                                          "last_situation, last_body, events_json, route, launch_parts, launch_mass_kg";
+                                          "last_situation, last_body, events_json, route, launch_parts, launch_mass_kg, vessel_id";
 
     /// <summary>Every log without its samples, the latest launch first.</summary>
     public IReadOnlyList<FlightLogSummary> GetAll()
@@ -57,7 +57,10 @@ public sealed class FlightLogRepository(PlannerDatabase database)
     public IReadOnlyList<FlightLog> GetInFlight() =>
         Read($"outcome = '{FlightLogOutcome.InFlight}' AND {PlannerDatabase.InActiveSave()}", database.AddSave);
 
-    /// <summary>Stores a log: a new one (Id 0) gets its id back, an existing one is replaced.</summary>
+    /// <summary>
+    /// Stores a log: a new one (Id 0) gets its id back, an existing one is replaced — all but its rocket name and vessel tag,
+    /// which only <see cref="Retag"/> changes (the recorder holds a copy of the log being flown and saves it now and then).
+    /// </summary>
     public long Save(FlightLog log)
     {
         using var connection = database.Open();
@@ -66,12 +69,12 @@ public sealed class FlightLogRepository(PlannerDatabase database)
         cmd.CommandText = log.Id == 0
             ? """
               INSERT INTO flight_logs (vessel_name, launch_ut, joined_at_met, outcome, flight_id, last_ut, delta_v_used, max_altitude_m,
-                                       last_situation, last_body, route, launch_parts, launch_mass_kg, events_json, samples, ksp_save, created_utc, updated_utc)
-              VALUES ($name, $launch, $joined, $outcome, $flight, $last, $dv, $maxalt, $situation, $body, $route, $parts, $mass, $events, $samples, $active_save, $now, $now)
+                                       last_situation, last_body, route, launch_parts, launch_mass_kg, vessel_id, events_json, samples, ksp_save, created_utc, updated_utc)
+              VALUES ($name, $launch, $joined, $outcome, $flight, $last, $dv, $maxalt, $situation, $body, $route, $parts, $mass, $vessel, $events, $samples, $active_save, $now, $now)
               RETURNING id;
               """
             : """
-              UPDATE flight_logs SET vessel_name = $name, launch_ut = $launch, joined_at_met = $joined, outcome = $outcome,
+              UPDATE flight_logs SET launch_ut = $launch, joined_at_met = $joined, outcome = $outcome,
                   flight_id = $flight, last_ut = $last, delta_v_used = $dv, max_altitude_m = $maxalt, last_situation = $situation,
                   last_body = $body, route = $route, launch_parts = $parts, launch_mass_kg = $mass, events_json = $events, samples = $samples, updated_utc = $now
               WHERE id = $id RETURNING id;
@@ -91,10 +94,27 @@ public sealed class FlightLogRepository(PlannerDatabase database)
         cmd.Parameters.AddWithValue("$route", log.Route);
         cmd.Parameters.AddWithValue("$parts", (object?)log.LaunchPartCount ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$mass", log.LaunchMassKg);
+        cmd.Parameters.AddWithValue("$vessel", (object?)log.VesselId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$events", JsonSerializer.Serialize(log.Events, Json));
         cmd.Parameters.AddWithValue("$samples", Pack(log.Samples));
         cmd.Parameters.AddWithValue("$now", now);
         return Convert.ToInt64(cmd.ExecuteScalar() ?? log.Id);
+    }
+
+    /// <summary>
+    /// Edits what a flight is filed under: the rocket (the name it's grouped and compared by) and the save's vessel it
+    /// belongs to (null = found by launch time, <see cref="FlightLogs.NoVessel"/> = none).
+    /// </summary>
+    public void Retag(long id, string rocket, string? vesselId)
+    {
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE flight_logs SET vessel_name = $name, vessel_id = $vessel, updated_utc = $now WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$name", rocket);
+        cmd.Parameters.AddWithValue("$vessel", (object?)vesselId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        cmd.ExecuteNonQuery();
     }
 
     public void Delete(long id)
@@ -127,8 +147,9 @@ public sealed class FlightLogRepository(PlannerDatabase database)
                 LaunchUt = summary.LaunchUt,
                 JoinedAtMetS = summary.JoinedAtMetS,
                 Outcome = summary.Outcome,
-                FlightId = reader.IsDBNull(14) ? null : reader.GetInt64(14),
+                FlightId = reader.IsDBNull(15) ? null : reader.GetInt64(15),
                 LaunchPartCount = summary.LaunchPartCount,
+                VesselId = summary.VesselId,
                 Samples = samples,
                 Events = summary.Events,
             });
@@ -150,6 +171,7 @@ public sealed class FlightLogRepository(PlannerDatabase database)
             Route = reader.IsDBNull(11) ? null : reader.GetString(11),
             LaunchPartCount = reader.IsDBNull(12) ? null : reader.GetInt32(12),
             LaunchMassKg = reader.GetDouble(13),
+            VesselId = reader.IsDBNull(14) ? null : reader.GetString(14),
         };
     }
 

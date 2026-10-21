@@ -74,10 +74,19 @@
             <TextBlock Text="{Binding CountText}" Style="{StaticResource Note}" VerticalAlignment="Center" />
         </DockPanel>
 
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-            <Button Content="Compare this rocket" Click="Compare_Click" IsEnabled="{Binding HasSelection}"
-                    ToolTip="This rocket's flights side by side" />
-            <Button Content="Delete log" Command="{Binding DeleteCommand}" Margin="8,0,0,0" />
+        <!-- The picked flight: which vessel it is now, and what can be done with it. -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <TextBlock Text="{Binding SelectedVesselText}" Style="{StaticResource Note}" TextTrimming="CharacterEllipsis" Margin="2,0,0,4"
+                       ToolTip="{Binding SelectedVesselText}" />
+            <WrapPanel>
+                <Button Content="Show vessel" Command="{Binding ShowVesselCommand}" Margin="0,0,8,6"
+                        ToolTip="This flight's vessel in the Vessels pane, as it is now" />
+                <Button Content="Edit log…" Click="Edit_Click" IsEnabled="{Binding HasSelection}" Margin="0,0,8,6"
+                        ToolTip="Tag the flight to a vessel (one renamed since launch), or file it under another rocket" />
+                <Button Content="Compare this rocket" Click="Compare_Click" IsEnabled="{Binding HasSelection}" Margin="0,0,8,6"
+                        ToolTip="This rocket's flights side by side" />
+                <Button Content="Delete log" Command="{Binding DeleteCommand}" Margin="0,0,8,6" />
+            </WrapPanel>
         </StackPanel>
 
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,6"
@@ -126,6 +135,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <!-- How it ended, at a glance. -->
@@ -152,9 +162,12 @@
                         <TextBlock Grid.Column="2" Text="{Binding LaunchDay}" Style="{StaticResource Note}" TextWrapping="NoWrap"
                                    VerticalAlignment="Center" Margin="10,0,0,0" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Figures}" Style="{StaticResource Note}"
+                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding VesselLine}" Style="{StaticResource Note}"
+                                   Foreground="#64B5F6" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
+                                   Visibility="{Binding HasVesselLine, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Figures}" Style="{StaticResource Note}"
                                    TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding GapsShort}" ToolTip="{Binding Gaps}"
+                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding GapsShort}" ToolTip="{Binding Gaps}"
                                    Style="{StaticResource Note}" Foreground="#FFB74D" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
                                    Visibility="{Binding HasGaps, Converter={StaticResource BoolToVisibility}}" />
                     </Grid>

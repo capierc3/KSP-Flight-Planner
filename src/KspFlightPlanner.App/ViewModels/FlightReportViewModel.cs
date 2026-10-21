@@ -63,11 +63,12 @@ public sealed class FlightReportViewModel : ObservableObject
     public string Subtitle => _log is not { } log ? "Pick a flight in the Flight log pane."
         : string.Join(" · ", new[]
         {
+            _sync.Save is { } save && FlightLogs.VesselOf(log.Summary, save) is { } vessel && vessel.Name != log.VesselName ? $"Now {vessel.Name}" : null,
             (log.FromLaunch ? "Launched " : "Joined in flight, launched ") + Core.GameCalendar.Kerbin.FormatDate(log.LaunchUt),
             log.Outcome == FlightLogOutcome.InFlight ? "still flying" : FlightLogs.EndText(log.Outcome),
             log.Route,
             FlightLogs.Duration(log.DurationS),
-        });
+        }.Where(t => !string.IsNullOrEmpty(t)));
 
     public IReadOnlyList<ReportCard> Cards { get; private set; } = [];
     public IReadOnlyList<ReportRow> Burns { get; private set; } = [];

@@ -233,6 +233,46 @@
                     <StackPanel Grid.Column="2" Grid.IsSharedSizeScope="True">
                         <TextBlock Text="Status" Style="{StaticResource SectionHeader}" />
                         <ItemsControl ItemsSource="{Binding Status}" ItemTemplate="{StaticResource FactRow}" />
+
+                        <!-- Its flights in the flight log: pick one to open its report. -->
+                        <TextBlock Text="{Binding FlightsTitle}" Style="{StaticResource SectionHeader}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="No flights logged for this vessel. If it was renamed and its flight isn't found, tag it with Edit log… in the Flight log.">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasFlights}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ItemsControl ItemsSource="{Binding Flights}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding DataContext.OpenLogCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                            Padding="8,5" Margin="0,2" ToolTip="{Binding Launched}" AutomationProperties.Name="{Binding Launched}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Day}" Style="{StaticResource Note}" Margin="10,0,0,0" />
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Figures}" Style="{StaticResource Note}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <TextBlock Text="{Binding PartsTitle}" Style="{StaticResource SectionHeader}" />
                         <ItemsControl ItemsSource="{Binding Parts}" ItemTemplate="{StaticResource FactRow}" />
                     </StackPanel>

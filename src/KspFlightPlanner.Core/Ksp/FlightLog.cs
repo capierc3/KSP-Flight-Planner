@@ -112,6 +112,12 @@ public sealed record FlightLog
     /// <summary>Parts the vessel had on the pad (with its launch clamps); null when not seen there.</summary>
     public int? LaunchPartCount { get; init; }
 
+    /// <summary>
+    /// The save's vessel (its pid) the player tagged this flight to; null = found by launch time
+    /// (<see cref="FlightLogs.VesselOf"/>), <see cref="FlightLogs.NoVessel"/> = tagged to none.
+    /// </summary>
+    public string? VesselId { get; init; }
+
     /// <summary>Mass at the first sample after lift-off, kg (0 for a flight joined under way).</summary>
     public double LaunchMassKg => FromLaunch && Samples.Count > 0 ? Samples[0].MassKg : 0;
 
@@ -139,7 +145,7 @@ public sealed record FlightLog
             : this;
 
     public FlightLogSummary Summary => new(Id, VesselName, LaunchUt, JoinedAtMetS, Outcome, LastUt, DeltaVUsed, MaxAltitudeM,
-        LastSituation, LastBody, Events) { Route = Route, LaunchPartCount = LaunchPartCount, LaunchMassKg = LaunchMassKg };
+        LastSituation, LastBody, Events) { Route = Route, LaunchPartCount = LaunchPartCount, LaunchMassKg = LaunchMassKg, VesselId = VesselId };
 
     /// <summary>Whether this log is the flight of a vessel with this name and MET at game time <paramref name="ut"/>.</summary>
     public bool IsFlightOf(string vesselName, double ut, double metS) => vesselName == VesselName && LaunchedAt(ut, metS);
@@ -157,6 +163,9 @@ public sealed record FlightLogSummary(long Id, string VesselName, double LaunchU
 
     public int? LaunchPartCount { get; init; }
     public double LaunchMassKg { get; init; }
+
+    /// <summary>The vessel the player tagged the flight to (see <see cref="FlightLog.VesselId"/>).</summary>
+    public string? VesselId { get; init; }
 
     public bool FromLaunch => JoinedAtMetS <= 0;
     public double DurationS => LastUt - LaunchUt;
@@ -472,6 +481,40 @@ public static class FlightLogs
 
     /// <summary>When a saved vessel was launched: its lct, or the file's time less its met in a save without one.</summary>
     private static double LaunchUt(SavedVessel v, KspSave file) => v.LaunchUt > 0 ? v.LaunchUt : file.Ut - v.MissionTimeS;
+
+    /// <summary>A <see cref="FlightLog.VesselId"/> that says the flight belongs to none of the save's vessels.</summary>
+    public const string NoVessel = "";
+
+    /// <summary>
+    /// The save's vessel a flight belongs to now, whatever it has been renamed since: the one the player tagged it to, else
+    /// the one launched when the flight was (lct; a vessel split off another gets the time it split) — under the log's
+    /// name, else the only one that isn't debris, else the only one. Null when it's gone, or can't be told apart.
+    /// docs/MATH.md §8.13.
+    /// </summary>
+    public static SavedVessel? VesselOf(FlightLogSummary log, KspSave file)
+    {
+        if (log.VesselId is { } id) return id == NoVessel ? null : file.Vessels.FirstOrDefault(v => v.Id == id);
+        var launched = file.Vessels.Where(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt) <= SameLaunchS).ToList();
+        if (launched.Count == 1) return launched[0];
+        if (launched.FirstOrDefault(v => v.Name == log.VesselName) is { } named) return named;
+        var notDebris = launched.Where(v => v.Type != "Debris").ToList();
+        return notDebris.Count == 1 ? notDebris[0] : null;
+    }
+
+    /// <summary>The flights of one of the save's vessels (see <see cref="VesselOf"/>), in the order given.</summary>
+    public static IEnumerable<FlightLogSummary> LogsOf(SavedVessel vessel, KspSave file, IEnumerable<FlightLogSummary> logs) =>
+        logs.Where(l => VesselOf(l, file)?.Id == vessel.Id);
+
+    /// <summary>
+    /// The save's vessels a flight could be tagged to, likeliest first: launched when it was, then the same name, then
+    /// launched nearest the flight's launch.
+    /// </summary>
+    public static IEnumerable<SavedVessel> Candidates(FlightLogSummary log, KspSave file) =>
+        file.Vessels
+            .OrderByDescending(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt) <= SameLaunchS)
+            .ThenByDescending(v => v.Name == log.VesselName)
+            .ThenBy(v => v.Type == "Debris")
+            .ThenBy(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt));
 
     /// <summary>The bodies a flight was around, in order, each once per visit: "Kerbin › Mun › Kerbin".</summary>
     public static string Route(IEnumerable<FlightSample> samples)

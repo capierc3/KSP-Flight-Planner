@@ -211,6 +211,45 @@ public sealed class FlightLogTests : IDisposable
             FlightLogs.EndedIn(relay, Save(700, Vessel("Fairing", 0, "Debris"), Vessel("Decoupler", 0.5, "Debris"))));
     }
 
+    // ---------------- Which vessel a flight is now ----------------
+
+    [Fact]
+    public void A_flight_follows_its_vessel_through_a_rename()
+    {
+        // Three relays split off a shuttle on different days, then renamed in orbit (the Minmus relays of 2026-10-20).
+        var relayB = new FlightLogRecorder("Link Shuttle mk2 Relay", At(1, "ORBITING", altitudeM: 357_000), null).Log.Summary;
+        var shuttle = Vessel("Link Shuttle mk2", -86_400) with { Id = "s" };
+        var a = Vessel("MinLink A", -3_600, "Relay") with { Id = "a" };
+        var b = Vessel("MinLink B", 0, "Relay") with { Id = "b" };
+        var file = Save(700, shuttle, a, b);
+
+        Assert.Equal("b", FlightLogs.VesselOf(relayB, file)?.Id);
+        Assert.Same(relayB, Assert.Single(FlightLogs.LogsOf(b, file, [relayB])));
+        Assert.Empty(FlightLogs.LogsOf(a, file, [relayB]));
+
+        // Tagged by hand: that vessel, whenever it was launched; tagged to none: no vessel.
+        Assert.Equal("a", FlightLogs.VesselOf(relayB with { VesselId = "a" }, file)?.Id);
+        Assert.Null(FlightLogs.VesselOf(relayB with { VesselId = FlightLogs.NoVessel }, file));
+        Assert.Null(FlightLogs.VesselOf(relayB with { VesselId = "gone" }, file));
+
+        // The likeliest first: launched with the flight, then the rest by how near their launch was.
+        Assert.Equal(["b", "a", "s"], FlightLogs.Candidates(relayB, file).Select(v => v.Id));
+    }
+
+    [Fact]
+    public void Of_vessels_launched_together_the_flight_is_its_namesake_or_the_one_not_debris()
+    {
+        var log = new FlightLogRecorder("Kerbal X", At(0.5, thrustN: 1), null).Log.Summary;
+        var ship = Vessel("Kerbal X", 0) with { Id = "x" };
+        var renamed = Vessel("Kerbal Y", 0) with { Id = "y" };
+        var fairing = Vessel("Fairing", 0.5, "Debris") with { Id = "f" };
+
+        Assert.Equal("x", FlightLogs.VesselOf(log, Save(700, fairing, renamed, ship))?.Id);
+        Assert.Equal("y", FlightLogs.VesselOf(log, Save(700, fairing, renamed))?.Id);
+        Assert.Null(FlightLogs.VesselOf(log, Save(700, fairing, fairing with { Id = "g" })));
+        Assert.Null(FlightLogs.VesselOf(log, Save(700, renamed, renamed with { Id = "z" }))); // can't tell which
+    }
+
     private static KspSave Save(double met, params SavedVessel[] vessels) => new("Protogen", "SANDBOX", Launch + met, vessels);
 
     private static SavedVessel Vessel(string name, double launchMet, string type = "Ship") =>
@@ -248,6 +287,29 @@ public sealed class FlightLogTests : IDisposable
         _db.ActiveSave = "Protogen";
         repo.Delete(recorder.Id);
         Assert.Empty(repo.GetAll());
+    }
+
+    [Fact]
+    public void A_retag_is_kept_when_the_recorder_saves_the_flight_again()
+    {
+        var repo = new FlightLogRepository(_db);
+        var recorder = new FlightLogRecorder("Link Shuttle mk2 Relay", At(1, "ORBITING"), null);
+        recorder.Id = repo.Save(recorder.Log);
+
+        repo.Retag(recorder.Id, "MinLink", "b");
+        recorder.Add(At(60, "ORBITING"));
+        repo.Save(recorder.Log); // the recorder's copy still has the old name and no tag
+
+        var summary = Assert.Single(repo.GetAll());
+        Assert.Equal("MinLink", summary.VesselName);
+        Assert.Equal("b", summary.VesselId);
+        Assert.Equal("b", repo.Get(recorder.Id)!.VesselId);
+        Assert.Equal("b", Assert.Single(repo.GetInFlight()).VesselId);
+
+        repo.Retag(recorder.Id, "MinLink", null);
+        Assert.Null(repo.Get(recorder.Id)!.VesselId);
+        repo.Retag(recorder.Id, "MinLink", FlightLogs.NoVessel);
+        Assert.Equal(FlightLogs.NoVessel, repo.Get(recorder.Id)!.VesselId);
     }
 
     [Fact]

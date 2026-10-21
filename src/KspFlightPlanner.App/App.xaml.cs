@@ -56,10 +56,16 @@ public partial class App : Application
                 FlightFor = name => flight.SelectedFlight is { Craft.Name: var craft } f && craft == name ? f.Id : null,
             };
             recorder.LogsChanged += mission.RefreshFlown;
+            // A vessel's page lists its flights: found by launch time, so they follow it through renames (or tagged by hand).
+            var vessels = new VesselsViewModel(sync, designs)
+            {
+                FlightsOf = v => sync.Save is { } save ? Core.Ksp.FlightLogs.LogsOf(v, save, logs.GetAll()).ToList() : [],
+            };
+            recorder.LogsChanged += vessels.RefreshDetail;
             var viewModel = new MainViewModel(
                 mission,
                 new LocationsViewModel(bodies, maps, locations, events, bakes),
-                new VesselsViewModel(sync, designs),
+                vessels,
                 new TransferPlannerViewModel(bodies, locations, events, sync, flights),
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
@@ -75,7 +81,7 @@ public partial class App : Application
                 EngineChart = new EngineChartViewModel(sync, availability),
                 CommNet = new CommNetViewModel(sync, availability, engineering),
                 PowerBudget = new PowerBudgetViewModel(sync, availability, engineering),
-                FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, events,
+                FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, sync, events,
                     new FlightReportViewModel(new FlightLogRepository(database), sync),
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
@@ -105,6 +111,20 @@ public partial class App : Application
                 viewModel.RequestPane(Panes.Part, activate: false);
             }
             viewModel.Engineering.PartPicked += ShowPart;
+            // The Flight log and the Vessels pane lead to each other, like the tracking station: a flight's vessel as it
+            // is now, and a vessel's flights.
+            viewModel.FlightLog.ShowVesselRequested += id =>
+            {
+                if (!vessels.SelectVessel(id)) return;
+                viewModel.RequestPane(Panes.Vessels, activate: false);
+                viewModel.RequestPane(Panes.Vessel);
+            };
+            vessels.OpenLogRequested += id =>
+            {
+                viewModel.FlightLog.SelectLog(id);
+                viewModel.RequestPane(Panes.FlightLog, activate: false);
+                viewModel.RequestPane(Panes.FlightReport);
+            };
             viewModel.EngineChart.PartPicked += ShowPart;
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
