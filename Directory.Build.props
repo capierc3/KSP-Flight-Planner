@@ -1,4 +1,9 @@
 <Project>
+  <!-- The app's version, for every project. Raise it when starting the next version (docs/RELEASING.md). -->
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
   <!-- No debug symbols in Release builds, so publish/ contains only the exe. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
