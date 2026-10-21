@@ -9,8 +9,8 @@ Each section has the formulas, a worked example, the code that implements them a
 ## Contents
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
-- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are
-- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options
+- **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are; 2.10 Changing the inclination from where you are
+- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options; 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
@@ -23,6 +23,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A single burn from where your craft is now (circularize, change Ap/Pe): §2.8
 - A plane change or an inclined target: §2.3, §4.2
 - A polar or other inclined orbit straight from the launch pad: §2.7
+- A polar (or any inclined) orbit around another body, set on the way there: §3.9; turning the orbit you're in: §2.10
 - A trip to another planet, and its launch window: §3.2, §3.4
 - Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
 - Burns from where you are to anywhere else (Duna, Mun → Minmus, Mun → Duna), with a choice of windows: §3.8
@@ -514,7 +515,7 @@ If the periapsis is in the atmosphere (or below the ground on an airless body), 
 - *Circularize at periapsis* and *Change the apoapsis* (which burns there) are refused.
 - If the next periapsis comes before the apoapsis you asked for, the craft is falling: it's just past the apoapsis after a launch. *Circularize* then burns 30 s from now (`FallingLeadS`) and turns the velocity horizontal at the circular speed for that height: Δv = √(μ/r)·ĥ − v, where ĥ is the horizontal direction in the orbit's plane. The radial part cancels the fall. *Change the periapsis* is refused, with a note to circularize instead.
 
-Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
+Worked example: the craft is 40 s past an 80 km apoapsis with a periapsis 300 km underground. The burn 30 s later is at 77.6 km: **+484.6 m/s prograde and +150.9 m/s radial** (507.5 m/s in all), which leaves a 77.6 km circular orbit (`Just_past_the_apoapsis_and_falling_it_circularizes_now`). An apoapsis below the periapsis, or the reverse, is refused with a note to set the other one. *Change the inclination* is §2.10, *Match planes* is §4.2, *Rendezvous* is the whole §4.1 plan against the craft you've targeted in KSP, and *Deorbit* is §2.5.
 
 **Capturing at a moon.** Once a craft enters a moon's sphere of influence (§1.6), its path around the moon is a hyperbola (§1.4). *Circularize at periapsis* is then the capture burn, at the pass's only periapsis: v_new = √(μ/r_p) as above, with v_now from vis-viva, where a < 0. *Change the apoapsis* burns there too and captures into an ellipse, which is cheaper. A path with no apoapsis can't do the rest (circularize at apoapsis, change the periapsis, match planes, rendezvous or deorbit), and the pane says to capture first. Once the periapsis has passed, the craft is on its way out and there's nothing to burn at.
 
@@ -579,6 +580,26 @@ Worked example — the Mun from a 30 km circular orbit inclined 15° (Ω = 20°)
 
 - Code: `LandingFlights.Options` (steps 1–5), `LandingFlights.Plan` (a Landing flight), `LandingFlights.SiteDirection`; the panes are `FromHereViewModel` (Land at a spot), `FlightViewModel` (re-plan) and `MissionBuilderViewModel.FlyLanding`; θ₀ from `BodyRotation`. Tested in `LandingFlightsTests` (`Mun_landing_comes_down_on_the_spot` checks that the descent's plane holds the spot and its low point is a braking distance short of it)
 - Source: §2.6 and its sources; plane change at a point 90° away: Curtis 6.10 (plane change maneuvers)
+
+### 2.10 Changing the inclination from where you are
+
+*Change the inclination* in the **From here** pane turns the orbit you're in to a new inclination to the body's equator, keeping its shape and its ascending node. It's §4.2's plane match with the new plane as the "target": one burn where the orbit crosses the equator (the line of nodes), turning the velocity into the new plane while keeping its speed and climb angle,
+
+```
+Δv = 2 · v_h · sin(Δi / 2)          v_h = the horizontal part of the speed there
+```
+
+Of the two crossings it takes the cheaper, which on an eccentric orbit is the one farther out (slower). An orbit lying in the equator crosses it everywhere, so the burn goes at the next apoapsis (two minutes from now on a round orbit), and that point becomes the ascending node.
+
+Turning a low orbit a long way is expensive (§2.3), so a turn of more than 30° carries a note: raising the apoapsis first, turning there and lowering it again can cost less, and on the way to another body the inclination is better set in *Go to* (§3.9). A path that's passing the body (a hyperbola) is refused for the same reason.
+
+Worked examples — Kerbin (μ = 3.5316×10¹² m³/s², R = 600 km):
+
+1. A round 100 km equatorial orbit to polar: v = √(μ / 700,000) = 2,246.1 m/s, so Δv = 2 × 2,246.1 × sin 45° = **3,176.5 m/s**, two minutes from now (`Turning_a_round_equatorial_orbit_polar_costs_two_v_sin_45`). That's more than it took to get into orbit, which is why polar orbits are launched into (§2.7) or arrived in (§3.9).
+2. A 100 × 2,000 km orbit inclined 30°, to 10°: the burn is at the crossing beyond the semi-major axis, where it's slower, and leaves the same periapsis, apoapsis and ascending node (`Changing_an_inclined_orbit_burns_at_the_higher_equator_crossing_and_keeps_its_shape`).
+
+- Code: `QuickBurns.ChangeInclination` (using `Rendezvous.MatchPlane`); the pane is `FromHereViewModel`; tested in `QuickBurnsTests`
+- Source: Curtis 6.10; [Orbital inclination change (Wikipedia)](https://en.wikipedia.org/wiki/Orbital_inclination_change)
 
 ## 3. Going to another planet
 
@@ -800,6 +821,58 @@ From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s
 - Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`), `TransferFlights.Plan`; the panes are `FromHereViewModel`, `TransferPlannerViewModel` (Fly this window) and `FlightViewModel` (Re-plan); tested in `TripPlannerTests`
 - Source: Curtis 8.2–8.10 (patched conics, the sphere of influence, departure and arrival hyperbolas); Lambert's problem (§3.4)
 
+### 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)
+
+A trip from an equatorial orbit arrives in about the destination's equator, because the path comes in roughly in the plane the bodies orbit in. A polar orbit there could be had by turning the orbit after the capture (§2.10), but that's dear: a 30 km Mun orbit costs 2 × 532.2 × sin 45° = **752.6 m/s** to turn polar.
+
+It's far cheaper to turn the approach on the way. Seen from the destination, the craft comes in along a line (its velocity far away, v∞) and passes at a distance b from a parallel line through the body's centre: the aim point. Which side the aim point is on decides the plane of the pass. To the side in the equator, the pass is equatorial; swung a quarter-turn round the line of approach (above or below the body), it's polar. Gravity bends the path in, so the aim point for a periapsis r_p is wider than r_p:
+
+```
+b = r_p · √(1 + 2μ / (r_p · v∞²))
+```
+
+A small sideways burn a long way out moves the aim point a long way. So *Go to* with an inclination adds a burn on the way: **Aim for a 90° orbit**.
+
+**How it's planned (From here, Fly mode).** After the transfer (§3.7, §3.8), a burn is tried 5 %, 15 %, 30 % and 50 % of the way along the coast, and the least Δv wins. Each is solved for two things at once: the pass at the asked height, and the arrival path's inclination to the destination's equator (stock KSP bodies have no axial tilt, so that's the inclination in the planner's frame). There are two things to hit and three parts to the burn (prograde, normal, radial), so Newton's method takes the least-Δv step each time:
+
+```
+miss = (height miss in km, inclination miss in degrees)
+J    = how the miss changes per m/s along each axis (nudged 0.02 m/s)
+Δv  ← Δv − Jᵀ (J Jᵀ)⁻¹ · miss          halved until the miss shrinks
+```
+
+It's done when the height is within 0.5 km and the inclination within 0.05°. The inclination is walked there 10° at a time from where the path arrives now, so each solve starts close. Then the capture is as before: retrograde at the periapsis, which keeps the plane. Above 90° the orbit is retrograde.
+
+- *Already on the way* (§3.7), the course correction does the tilt as well, starting from the plain correction.
+- *Across* (Kerbin → Duna, §3.8), the course correction a tenth of the way along does it. The coast is so long that it costs almost nothing.
+- *Up* (Mun → Kerbin), the burn comes once the craft is out of the moon's sphere, falling toward the planet.
+- *Keep as a flight* keeps the inclination, so *Re-plan* on the way aims for it too.
+
+Worked example — Kerbin (100 km round equatorial orbit) to a 30 km orbit at the Mun (`Kerbin_to_the_mun_arrives_in_the_asked_inclination_for_a_small_burn_on_the_way`):
+
+| Inclination at the Mun | Transfer | Aim on the way | Capture | In all | Extra |
+|---|---|---|---|---|---|
+| however it comes (0°) | 837.7 | — | 260.5 | **1,098 m/s** | |
+| 45° | 837.7 | 22.7, 1.7 h after the transfer | 260.9 | **1,121 m/s** | +23 |
+| 90° (polar) | 837.7 | 35.3 (16.6 prograde, 31.0 normal, 3.1 radial), 1.7 h after | 262.2 | **1,135 m/s** | +37 |
+| 135° | 837.7 | 30.4, 0.9 h after | 264.6 | **1,133 m/s** | +34 |
+
+So polar costs **37 m/s** on the way against 753 m/s turning in Mun orbit. Flying the burns exactly arrives at 90.0° and 30 km. Already coasting (planned again 10 minutes after the transfer), the course correction does it for **36.4 m/s**.
+
+To Duna (100 km, the cheapest window), the course correction for 90° is **16.2 m/s**, against 16.7 m/s for the plain one: the polar orbit is free. From the Mun (30 km) to a polar 100 km Kerbin orbit, the aim burn is **280.6 m/s** (turning a round 100 km Kerbin orbit polar would be 3,176.5 m/s, §2.10).
+
+**In Plan mode** a stop in orbit of another body (the leg arrives from its planet, its moon or another planet) shows an **Inclination** box, as a launch stop does (§2.7). The extra goes on the leg that crosses into the body's sphere, on top of its map value (an arrival tool, §6.2). There are no real orbits or dates there, so:
+
+- **Down or Up** (planet ↔ moon): both trips are planned as above, from a round equatorial orbit at the map's low orbit, with and without the inclination; the extra is the difference. Kerbin's 80 km low orbit → Mun's 10 km low orbit at 90°: **+35 m/s**. Mun → Kerbin at 90°: **+276 m/s**.
+- **Across** (planet → planet): a rule of thumb. A sideways burn a time t before arriving moves the aim point about Δv · t, and swinging it round the line of approach by Δi moves it 2·b·sin(Δi/2):
+  ```
+  Δv ≈ 2 · b · sin(Δi / 2) / t
+  ```
+  with v∞ from the Hohmann transfer (§3.2) and t the coast after the course correction, 0.9 of the transfer. Kerbin → Duna's 60 km low orbit at 90°: v∞ = 826.1 m/s, r_p = 380 km and μ = 3.0136×10¹¹ give b = 692.9 km; t = 5.87×10⁶ s, so Δv ≈ 2 × 692,857 × sin 45° / 5,871,602 = **0.17 m/s**. It ignores the Sun's pull on the way, so it's shown as an estimate.
+
+- Code: `Hops.TiltOnTheWay`, `Hops.CorrectTilted`, `Hops.Tilt` (the `inclinationDeg` of `Hops.Down`, `Hops.Up`, `Hops.Across` and `TripPlanner.Options`); Plan mode: `ArrivalTilt.Plan`, `ArrivalTilt.RuleOfThumb`, `LegTools.FindArrival`, `LegTools.EvaluateArrival`, `LegTools.ApplyArrival`; tested in `TripPlannerTests` and `LegToolsTests`
+- Source: Curtis 8.9–8.10 (the hyperbolic approach, its aiming radius and the B-plane idea of where it passes); Newton's method for an underdetermined system (the minimum-norm step, Jᵀ(JJᵀ)⁻¹)
+
 ## 4. Meeting a craft in orbit (rendezvous)
 
 Getting from a launch, or from a craft already in orbit, to a standstill next to another craft. Used by the Rendezvous pane and by rendezvous legs (§6.5).
@@ -975,7 +1048,16 @@ Resonant deployment (§5.1) needs the carrier to pass the shared apsis once per 
        Δv_k = v_circ·ĥ − v(t_k)          the satellite's node (it's flown by the satellite, not the carrier)
 ```
 
-Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative). If the craft's apsis misses r by more than 1 km, the plan warns you: the satellites will end up at that apsis instead, and their spacing will be off.
+Here ĥ is the horizontal direction (the velocity with its radial part removed). At an apsis the velocity is already horizontal, so these Δv are pure prograde (positive) or retrograde (negative).
+
+If that apsis misses r by more than 1 km (say the craft is still in low orbit), the plan starts with one more burn that brings it to r, half a Hohmann transfer (§2.1). It burns at the *other* apsis (any time, if the orbit is circular), so the far side of the orbit lands on r:
+
+```
+0. Bring the apsis to r:   a₀ = (|r_burn| + r) / 2,   v₀ = √(μ·(2/|r_burn| − 1/a₀)) horizontal,   Δv₀ = v₀·ĥ − v
+   then step 1 happens half an orbit later, at the new apsis (|r_burn| = r)
+```
+
+Re-planning after this burn (the Flight pane does it on its own once a burn is flown) drops it, and a small miss just gives a small fix-up burn.
 
 Re-planning partway through (at least one satellite already out) keeps the very next pass of the shared apsis, even if it's inside the flight's lead time. Waiting a lap would put the next satellite 2/n of an orbit behind the one before instead of 1/n, so the spacing would be lost (`Partway_through_the_next_release_is_the_next_pass_however_soon`). The same goes for a released satellite circularized from the From here pane (§2.8).
 
@@ -984,6 +1066,11 @@ Worked example: 3 satellites at Kerbin's synchronous altitude, 2,863,334.1 m (r 
 1. Satellite period 21,549.1 s; carrier period × 4/3 = **28,732.1 s**, so a = 4,195,530.5 m and the far apsis is at **4,327.7 km**
 2. Enter: v = √(μ/r) = 1,009.82 m/s → v′ = √(μ·(2/r − 1/a)) = 1,094.40 m/s, so **+84.57 m/s prograde**
 3. Satellite k circularizes at the periapsis one, two and three carrier laps later (+28,732.1 s each): 1,009.82 − 1,094.40 = **−84.57 m/s (retrograde)**
+
+The same deployment from an 80 km circular orbit (r₀ = 680,000 m) adds step 0 and moves step 1:
+
+0. v = √(μ/r₀) = 2,278.93 m/s; a₀ = (680,000 + 3,463,334.1) / 2 = 2,071,667 m, v₀ = 2,946.58 m/s, so **+667.65 m/s prograde**, raising the apoapsis to 2,863.3 km
+1. Half that orbit later (**4,984.8 s**), at the apoapsis: v = √(μ·(2/r − 1/a₀)) = 578.54 m/s → 1,094.38 m/s, so **+515.84 m/s prograde**
 
 - Code: `ResonantDeployment.Plan`; tested in `FlightTests`
 - Source: vis-viva (§1.3); §5.1 for the carrier orbit
@@ -1077,7 +1164,7 @@ Known simplifications:
 
 A mission leg runs from one stop to the next and is made of Δv-map steps (§6.1). A leg tool works out part of the leg properly and puts its result in place of the map values for the steps it covers. The steps stay, so each one keeps its phase and aerobrake choice. A tool that no longer fits the leg (the stops changed) is ignored, and the map values come back.
 
-The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5), landing at a chosen spot (§2.6) and launching into an inclined orbit (§2.7). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies. An inclined launch adds its extra over a due-east launch to the launch step, on top of the map's value, and measures later plane changes around the body from its inclination.
+The tools are transfer windows (§6.3), constellation deployments (§6.4), rendezvous (§6.5), landing at a chosen spot (§2.6), launching into an inclined orbit (§2.7) and arriving at another body in an inclined orbit (§3.9). A landing replaces the last step, from a low orbit down to the surface, with its deorbit and braking burns on airless bodies. An inclined launch adds its extra over a due-east launch to the launch step, on top of the map's value, and measures later plane changes around the body from its inclination. An inclined arrival adds the burn on the way that tilts the approach to the step that crosses into the body's sphere.
 
 ### 6.3 Transfer legs: a chosen launch window
 
@@ -1522,6 +1609,262 @@ Worked example — Kerbin, from an 80 km orbit to a craft at 150 km 60° ahead (
 **When the leg hasn't started** (nothing flown yet, or the plane match still to come), Re-plan runs the whole Rendezvous planner (§4.1) again with the craft's real orbit as the start, from a few minutes after now (the lead time). If a plane crossing falls inside the lead, the flight's note says so (§4.2). On the Rendezvous pane, a plan that starts from the game's time counts its "in …" times from the game's time, not from the start after the lead. It plans for the targets whose arrival is still to come, on their current orbits. The planner picks the phasing and intercept again (the cheapest), so a choice made in the Rendezvous pane can change. That's intended: the old choice was for an orbit you're no longer on.
 
 - Code: `FlightViewModel.ReplanRendezvousAsync`
+
+### 8.5 The flight log: Δv a flight used
+
+While connected and flying, the flight log reads the flown vessel twice a second over kRPC streams. The game pushes the values as they change, so reading them costs no calls. Each sample holds game time, MET, situation, stage, altitude, speeds, Ap/Pe, position, attitude, throttle, mass, thrust, the active engines' combined Isp, dynamic pressure, g-force and the warp rate. A flight is told apart from others of the same rocket by its launch time, game time − MET (two within 2 s are the same launch).
+
+**Δv between two samples a and b** (masses in kg, thrust in N, Isp in s, g₀ = 9.80665 m/s²):
+
+```
+Engines off in both                         Δv = 0
+Same stage, no mass gone                    Δv = 0                                  (engines only just lit or cut)
+Same stage, mass drop ≤ 1.5 × burnable      Δv = g₀ · Isp · ln(m_a / m_b)          Isp = (Isp_a + Isp_b) / 2
+Otherwise (staged, parts dropped)           Δv = (F_a/m_a + F_b/m_b) / 2 · (t_b − t_a)
+burnable = (F_a + F_b) / 2 / (g₀ · Isp) · (t_b − t_a)       what the engines could have burned in the time
+```
+
+The rocket equation on the mass drop is exact however far apart the samples are, because fuel burned is the mass gone. That holds through physics warp and through a coast that recording thinned out. When parts come off, the mass drop isn't fuel, so the thrust ÷ mass average over the gap is used instead. That's rough over a long gap, but staging gaps are half a second.
+
+**Thinning.** Burning, in the air (q > 1 Pa; standing still on the ground still reads a trace, about 10⁻⁷ Pa), or a change of stage, situation, body or mass: every sample is kept, and so is the one before. Coasting outside the air: one every 10 s of game time. On-rails warp (faster than ×4) skips physics and moves the craft along its orbit. kRPC doesn't refresh every reading in the same frame there, so a sample's time, MET and orbit can be from moments far apart (at ×1,000, one frame is 20 s). Samples on rails aren't kept: the last one before the warp is, and the stretch is worked out from the orbit (§8.7). A warp of a minute or more is noted with its length. The same skew is why the recorder tells the flown vessel by kRPC's object id, not by game time − MET, and only matches a flight by its launch time out of warp. A disconnect, a vessel switch or leaving the flight is noted with the time not recorded once the flight is picked up again. The flight is picked up by launch time, not name, since the player may have renamed the vessel meanwhile; of flights launched together, the one last recorded with that kRPC vessel wins, then the one of that name. The first two readings after a switch are skipped: the game is still putting the vessel together, and its mass can read wrong. Readings whose game time hasn't moved on (the game paused) are dropped.
+
+**Stale orbit readings.** Streams opened while the game is putting a vessel back together (just after a quickload) can get the orbit it had for a moment then. That orbit is around Kerbin whatever the craft is really around, and it never moves again. Altitude, which kRPC always reads against the body the craft is really around, keeps going. So each reading out of on-rails warp and off the pad is checked. If either test fails, the reading is dropped and the streams are opened again (the flight carries on in the same log):
+
+```
+r_orbit    = a · (1 − e · cos E)     ellipse, E from M = E − e · sin E
+           = a · (1 − e · cosh H)    hyperbola (a < 0), H from M = e · sinh H − H
+r_altitude = R_body + altitude
+stale if   |r_orbit − r_altitude| > 1 % × r_altitude
+      or   game time moved on since the last reading and M didn't
+```
+
+Readings that follow the craft agree to within 0.02 % (checked against every recorded flight up to 2026-10-20). Physics moves M on every frame, so an M that hasn't changed while time has means the orbit is frozen. The first test alone would miss a frozen near-circular orbit around the right body.
+
+Worked example (the Duna test flight, leaving Duna just after a quickload): the streams reopened against Kerbin (R = 600 km) with a = −17,712,187.5 m, e = 1.034836, M = 0.198958. Kepler gives H = 0.970324, so r_orbit = −17,712,187.5 × (1 − 1.034836 × cosh 0.970324) = **9,944.39 km**. The altitude, really against Duna, read 1,631.87 km, so r_altitude = 600 + 1,631.87 = **2,231.87 km**. That's 346 % off: stale. Ten seconds earlier, the right orbit around Duna (R = 320 km, a = −392,796.0 m, e = 2.055163, M = 3.853524) gave r_orbit = **1,941.97 km** against 320 + 1,621.97 = 1,941.97 km from the altitude.
+
+**Separations.** KSP starts a vessel's MET again when it splits off another, so a satellite released in orbit has MET ≈ 0 and its own launch time. A log whose first sample has MET under 2 s is a launch only if it isn't in space (orbiting, sub-orbital or escaping). In space and under 60 s, it's noted as separated from another vessel.
+
+**How a flight ends.** It ends when the save KSP last wrote, if written after the log's last sample, has no vessel launched when the flight was (the save's `lct`, within 2 s). One launched then counts if it has the log's name, or isn't debris (renamed), or is the only one launched then. The save's `met` can't be used for this: KSP only moves it on while the vessel is loaded, so for a vessel left behind while the player flew another and warped, Ut − met is days off. A gone flight is *Recovered* if it was last seen landed or splashed, and *Lost* otherwise. The flight being flown is never ended this way (recovering or losing it ends the recording first). If the game's time goes back before the launch, it's *Reverted*. If it goes back within the flight (a quickload), the samples after that point are dropped.
+
+Worked example: a 10 t craft burns to 8 t on a 300 s engine making 200 kN:
+
+1. Mass flow = 200,000 / (9.80665 × 300) = **67.98 kg/s**, so 2 t takes **29.4 s**
+2. Δv = 9.80665 × 300 × ln(10 / 8) = **656.48 m/s**, the same from two samples 29.4 s apart as from sixty
+3. Staging in the next half second (10 t → 4 t, thrust 200 → 50 kN): the mass drop would claim 2,696 m/s. Thrust ÷ mass gives (20 + 12.5) / 2 × 0.5 = **8.1 m/s**
+
+- Code: `FlightLogMath.DeltaVBetween`, `FlightLogRecorder`, `FlightLogs.EndedIn` and `FlightLogs.OrbitStale` (`Core/Ksp/FlightLog.cs`), streamed by `LiveTelemetry`, run by `FlightRecorder`; tested in `FlightLogTests`
+- Source: Tsiolkovsky rocket equation (§7.1); kRPC SpaceCenter API (`Vessel.Mass`, `Thrust`, `SpecificImpulse`, streams)
+
+### 8.6 The flight report: ascent losses, burns and touchdowns
+
+The Flight report works through a log's samples (§8.5). Each step's Δv is added to running totals: by burn, by stage (the stage firing at the step's start), and by the body the craft was around.
+
+**Burns.** A burn is a run of samples with thrust. Two runs less than 3 s apart, around the same body, are one burn (a staging pause or a throttle blip). It counts the step into its first sample (throttling up) and the step out of its last (the engines seen off).
+
+**Ascent losses.** The ascent runs from the launch to the first sample in orbit around the launch body. That's KSP's ORBITING, with periapsis above the air, so the circularization burn is included. Along the path, speed changes by thrust less drag less gravity's pull along it:
+
+```
+dv/dt = (F/m)·cos α − D/m − g·sin γ          α: thrust off the path, γ: climb angle
+sin γ = vertical speed / orbital speed        g = μ / (R + h)²
+gravity loss        = ∫ g·sin γ dt            (trapezoids between samples)
+drag & steering     = Δv spent − (v_end − v_start) − gravity loss
+```
+
+Speeds are orbital, so the planet's spin that the pad already gives counts as speed you had, not speed gained. Drag isn't read from the game, so drag and steering (cos α < 1) come out together as what's left over. Max Q is the highest dynamic pressure on the way up.
+
+**Touchdowns.** A touchdown is the first sample landed or splashed after flying. It shows the vertical and surface speeds from the sample before (the moment before contact). Its descent Δv is spent from the last sample in orbit around that body, or entering its sphere of influence, to touchdown.
+
+**Ascent profile.** Altitude against distance along the ground from the pad, from latitude and longitude (haversine):
+
+```
+a = sin²(Δφ/2) + cos φ₁ · cos φ₂ · sin²(Δλ/2)
+downrange = 2R · asin √a
+```
+
+Worked example: straight up from Kerbin's pad at 100 m/s for 2 s, then reaching 110 m/s:
+
+1. g = 3.5316×10¹² / 600,000² = **9.81 m/s²**, sin γ = 1 throughout, so gravity loss = 9.81 × 2 = **19.62 m/s**
+2. 10 t → 9.864 t on a 300 s engine: spent = 9.80665 × 300 × ln(10 / 9.864) = **40.29 m/s**
+3. Gained 110 − 100 = 10 m/s, so drag & steering = 40.29 − 10 − 19.62 = **10.67 m/s**
+4. 10° of longitude along Kerbin's equator: 2 × 600 km × asin(sin 5°) = **104.7 km** downrange
+
+- Code: `FlightAnalysis.Analyze`, `FlightAnalysis.GravityAlongPath`, `FlightAnalysis.Downrange` (`Core/Ksp/FlightAnalysis.cs`), shown by `FlightReportViewModel`; tested in `FlightAnalysisTests`
+- Source: equations of motion along the flight path, Curtis 11.2 (gravity and drag losses); haversine formula
+
+### 8.7 Filling a warp from the orbit
+
+On-rails warp moves the craft along its orbit with Kepler's equation. Nothing else acts on it: no thrust, no drag (KSP won't rails-warp in the air). So where the log has a gap, the path can be worked out exactly from the orbit recorded with the sample before it. Each sample keeps the orbit's semi-major axis a, eccentricity e and the mean anomaly M₀ at that moment. A gap over 30 s is filled with up to 200 points:
+
+```
+n = √(μ / |a|³)                       mean motion
+M(t) = M₀ + n·(t − t₀)
+ellipse:   M = E − e·sin E,    r = a·(1 − e·cos E)
+hyperbola: M = e·sinh H − H,   r = a·(1 − e·cosh H)     (a < 0)
+v = √(μ·(2/r − 1/a))                  vis-viva
+altitude = r − R
+```
+
+A gap that crosses into another body's sphere of influence is filled forward from the sample before it, until r passes the old body's sphere. It's also filled back from the sample after it, on its orbit around the new body, until r passes that sphere. A gap where the mass changed (a burn while not recorded), or that starts or ends in the air or on the ground, is left empty. The charts draw the worked-out path dashed. A change of sphere of influence isn't a gap in the log: the recorder keeps the same flight and reads against the new body.
+
+Worked example: a 100 km circular Kerbin orbit (a = 700,000 m, e = 0) warped through for 1,000 s is filled every 10 s at 100 km and √(3.5316×10¹² / 700,000) = **2,246.1 m/s**. On an ellipse with a = 1,000 km and e = 0.5, half an orbit (π·√(a³/μ) = **1,671.7 s**) after periapsis it's at a·(1 + e) = 1,500 km from the centre (900 km up), going √(μ·(2/1.5×10⁶ − 1/10⁶)) = **1,085.0 m/s**.
+
+- Code: `FlightAnalysis.FillGaps`, `FlightAnalysis.Along` (`Core/Ksp/FlightAnalysis.cs`), `Kepler.SolveEccentricAnomaly`/`SolveHyperbolicAnomaly`; orbit read by `LiveTelemetry`; tested in `FlightAnalysisTests`
+- Source: Kepler's equation and vis-viva, Curtis 3.4 and 3.5 (hyperbolic); KSP patched conics (on-rails orbits)
+
+### 8.8 The flight map
+
+Each sample also keeps which way its orbit faces (inclination i, ascending node Ω, argument of periapsis ω, as kRPC gives them, in the same frame as the save and the bodies' orbits). With a, e and the mean anomaly (§8.7), that's the whole orbit with the sample's time as its epoch. So the craft's position is Kepler's position on it (§1.4), relative to the body it's around. The map looks down on a body's equator: it draws x and y and drops z.
+
+```
+craft around B, map of B:      p = StateAt(sample's orbit, μ_B, t)
+craft around moon M of B:      p = StateAt(M's orbit, μ_B, t) + StateAt(sample's orbit, μ_M, t)
+```
+
+A planet's map shows its moons' orbits, and each moon where it was when the craft entered and left its sphere of influence (with that sphere drawn round it). Stretches filled from the orbit (§8.7) are placed the same way and drawn dashed. Burning is orange, coasting blue. A moon's own map shows only the part of the flight around it.
+
+Worked example: a sample on a circular equatorial 100 km Kerbin orbit (a = 700,000 m, e = 0, i = Ω = ω = 0) with mean anomaly 0 at t₀ is at (700 km, 0). 20 s later it has gone n·20 = √(3.5316×10¹² / 700,000³)·20 = **0.0642 rad** round, to (698.6 km, 44.9 km), still 700 km from the centre.
+
+- Code: `FlightMap.Build`, `FlightMap.Views`, `FlightAnalysis.PositionAt` (`Core/Ksp/`), drawn by `FlightMapCanvas`; tested in `FlightMapTests` (a simulated Mun flyby with patched conics)
+- Source: Curtis 4.6 (orbital elements to position); patched conics, Curtis 8.6
+
+### 8.9 Comparing a rocket's flights
+
+A rocket is the vessel's name at launch. The Compare flights document puts its flights side by side. Each row shows Δv used, Δv to orbit, time to orbit, ascent losses (gravity, and drag & steering, §8.6), max Q, max g and touchdown speed (vertical, the moment before contact, of the last touchdown). Lower is better for every one of these, so the lowest in each column is picked out.
+
+**Versions of the design.** The same name can fly a changed rocket. On the pad, the recorder counts the vessel's parts (with its launch clamps). With the mass at the first sample after lift-off, that's the design's fingerprint. Flights are lettered A, B… in the order first flown. A flight joins a version when it has the same part count (or either count is unknown) and a launch mass within 1 %:
+
+```
+same version ⇔ (parts₁ = parts₂ or either unknown) and |m₁ − m₂| ≤ 0.01 · m₁
+```
+
+1 % lets a little more or less fuel, or a kerbal, count as the same rocket, while a new tank or engine doesn't. A flight joined under way has no launch to go by and gets "—".
+
+**Overlaid charts.** For the ascent and the whole flight, MET lines the flights up at launch. For a landing, the time since its descent began (the last sample in orbit, §8.6) lines them up, and Δv used counts from that moment.
+
+Worked example: three flights of Kerbal X at 30.0 t (42 parts), 30.2 t (42 parts) and 33.0 t (42 parts). 30.2 is within 1 % of 30.0 (0.3 t), so it's version **A**. 33.0 isn't (3 t over), so it's **B**. Their Δv to orbit of 3,400, 3,350 and 3,520 m/s have the 3,350 picked out, but the summary warns that two versions are being compared.
+
+- Code: `FlightComparison.Designs`, `FlightComparison.Figures`, `FlightComparison.Best` (`Core/Ksp/FlightComparison.cs`), shown by `FlightCompareViewModel`; the Rocket pane's line comes from the same analysis; tested in `FlightComparisonTests`
+
+### 8.10 Ascent coach: what the climb did
+
+The Flight report reads the climb to orbit (§8.6) sample by sample. Pitch is read against the local horizon (kRPC's surface frame). Logs from before 2026-10-15 read it against the planet's axes, which isn't a pitch, so for those the pitch figures are left out.
+
+```
+climb angle   γ = asin(vertical speed / surface speed)        (prograde, over the ground; from 50 m/s up)
+off prograde  δ = pitch − γ                                   (+ above prograde: turning slower than the path)
+steering loss = ∫ (F/m)·(1 − cos δ) dt                         (thrust not along the path)
+drag loss     = drag & steering (§8.6) − steering loss         (never below 0)
+launch TWR    = F / (m · g₀),  g₀ = μ / R²                     (first sample with thrust)
+```
+
+Rules of thumb for Kerbin-like climbs, with the figure each one is judged on:
+
+| Advice | Judged on | Good | Called out |
+|---|---|---|---|
+| Launch TWR | F/(m·g₀) on the pad | 1.25–2.2 | below 1.25 (gravity loss), above 2.2 (drag) |
+| Turn start | surface speed when pitch first < 85° | 20–120 m/s | over 120 m/s late, under 20 m/s early |
+| 45° | altitude when pitch first ≤ 45° | 5–15 km | over 15 km late, under 5 km early |
+| Prograde | mean δ while q ≥ 1 kPa | within ±3° | above (+) or below (−) prograde |
+| Max Q | highest q on the way up | ≤ 25 kPa | over 25 kPa: too fast low down |
+
+Worked example: 10° off prograde at a thrust acceleration of 20 m/s² for 10 s costs 20 × (1 − cos 10°) × 10 = **3.04 m/s**.
+
+- Code: `AscentCoach.Diagnose`, `AscentCoach.ProgradePitch` (`Core/Ksp/AscentCoach.cs`); tested in `AscentCoachTests`
+
+### 8.11 Ascent coach: the best climb for this rocket
+
+The climb is flown again in a model fitted to the flight, with other steering. The model is 2D, over the equator, eastward, on a turning planet, in the frame that doesn't turn, stepped every 0.1 s:
+
+```
+a = −μ/r² r̂  +  (F/m) n̂  −  (q · A(v_air) / m) v̂_air          q = ½ ρ v_air²,  v_air = v − ω × r
+```
+
+- **Fuel.** The engines burn fuel at the rate they did (KSP engines burn at a fixed rate; only thrust changes with Isp). So the model follows the flight's mass and fuel flow against **burn time**, staging where the flight did: ṁ = F/(Isp·g₀) from each sample.
+- **Thrust** = ṁ · g₀ · Isp(p). Isp against pressure is a straight line fitted per stage to what the flight saw (constant if a stage only flew in vacuum).
+- **Air density** per atm of pressure, from the flight: ρ = 2q/v², in 5 km bands.
+- **Drag area** A, from the flight, in the frame that doesn't turn, where only thrust, drag and gravity act. Along the orbital velocity:
+  ```
+  dv/dt = (F cos τ − D cos β)/m − g · v_vertical/v      ⇒   D = (F cos τ − m (dv/dt + g · v_vertical/v)) / cos β
+  A = Σ D / Σ q   per 100 m/s band of air speed (q ≥ 1 kPa; bands with too little air take the nearest)
+  ```
+  β is between the airflow and the orbital velocity (they differ by the planet's spin, eastward). τ is between the nose and the orbital velocity. Without a usable pitch the nose is taken as along the path, so steering is counted with drag. Fast bands are flown high, where q is small, so their fit is mostly noise. KSP's drag falls past Mach 1 but not to nothing, so no band is taken below 40 % of the largest subsonic one (100–400 m/s).
+- **Fuel past the recording.** The recording only shows fuel burned up to orbit. A climb flown differently may need a little more, so past it the last stage keeps burning at its last rate, for up to 50 % more burn time.
+- **Pitch programs.** Straight up to a speed v₀, then pitch = 90° · (1 − f^k), with f the share of the climb from there to an altitude H, level after it. In thick air (q ≥ 1 kPa) the nose is kept within 5° of prograde, since a real rocket flips further off. Each program burns until the apoapsis is the flown one, coasts to it, then burns level until the periapsis is the flown one. A grid of v₀ (30–140 m/s), H (20–80 km) and k (0.3–1.2) is tried, then a finer one round the best.
+- **Calibration.** The flown pitch, against burn time, is flown through the same model too. Gain = replay − best, so the model's own error (drag, Isp) mostly cancels. Best for this rocket ≈ flown − gain. The replay's difference from the real flight is shown as the model check. Without a usable pitch there's no replay, and the gain is the real flight − best, marked rough.
+
+Checked against a rocket whose drag area (1.5 m²) and engines are known: the fit finds 1.50 m², and the replay comes within 0.8 % of the flown Δv (3,310 against 3,286 m/s).
+
+- Code: `AscentSimulator.For`, `AscentSimulator.Fly`, `AscentSimulator.Optimize` (`Core/Ksp/AscentSimulator.cs`), shown by `FlightReportViewModel`; tested in `AscentCoachTests` (a known rocket flown with plain physics)
+- Source: equations of motion along the flight path, Curtis 11.2; KSP engines (fixed fuel flow, Isp against pressure), KSP wiki *Specific impulse*
+
+### 8.12 Which save the game is playing
+
+kRPC can't name the save the game has loaded, and the connection stays up when the player loads another one. So the planner works it out, and while the game plays another save than the chosen one it records no flights, ends none, and doesn't lay the live game over the chosen save (§8.2). A popup offers to switch to the other save.
+
+**A save KSP just wrote.** KSP writes the save it's playing a few seconds after loading it and at every scene change (and the one it leaves on going back to the main menu). So every save folder is watched while connected. A save written now is the one being played if:
+
+```
+the game mode is the same     kRPC's ScienceSandbox = the save's SCIENCE_SANDBOX (underscores and case ignored)
+|t_file − t_game| ≤ 60 s      the file's game time is the game's time now
+```
+
+**Before any write** (on connecting, and on each scene change), the game's vessels are looked for in every save by name. Debris and asteroids are left out, since any save could have one of the same name. With *share* = the game's vessels with a namesake in the save ÷ the game's vessels:
+
+```
+chosen save fits          same mode and share ≥ 50 %       (a launch since KSP last wrote it isn't in the file yet)
+another save is the one   the only other save with the same mode and share ≥ 80 %
+                          (with no vessels to go on: the only other save with the same mode)
+not the chosen save       a different mode, or share < 50 %, and no other save stands out
+nothing to say            same mode, no vessels to compare
+```
+
+Until a check has run, flights aren't recorded and none are ended as reverted (connecting to another save with an earlier game time would otherwise "revert" every open flight of the chosen one).
+
+Worked example (the probe of 2026-10-20, Protogen chosen): loading SandBox, KSP wrote `SandBox/persistent.sfs` at t = 29,388,990 s, 6 s after the load. The game read mode Sandbox at t = 29,388,990, so |Δt| = 0 ≤ 60 and the mode is the same: **SandBox** is being played. Its 3 non-debris vessels (Kerbal X, two Untitled Space Craft) are all in SandBox (share 100 %) and none in Protogen (0 %, and Protogen's mode is SCIENCE_SANDBOX), so the vessel check says the same.
+
+- Code: `LiveSaveMatch.Judge`, `LiveSaveMatch.WrittenByGame` (`Core/Ksp/LiveSaveMatch.cs`), run by `SaveSync` (`App/Services/SaveSync.LiveSave.cs`), read from the game by `KspLink.ReadIdentityAsync`; tested in `LiveSaveMatchTests`
+- Source: KSP's save behaviour as seen by a probe on 2026-10-20 (writes on scene change and after loading); kRPC SpaceCenter API (`GameMode`, `UT`, `Vessels`)
+
+### 8.13 Which vessel a logged flight is now
+
+A flight is logged under the vessel's name at launch (the *rocket*). Vessels get renamed later — a relay is usually given its final name once it's in its orbit — so the Flight log and the Vessels pane find each flight's vessel in the save by **launch time** instead. KSP stores each vessel's launch time as `lct`; a vessel that splits off another (a relay released from its carrier) gets the moment it split. The log's launch time is the game time less MET at its first sample (§8.5), which is that same moment. With *launched* = the save's vessels whose launch time is within 2 s of the flight's:
+
+```
+tagged by hand              that vessel (or none, if tagged to none)
+one launched then           that one, whatever it's called now
+several launched then       the one with the flight's name, else the only one that isn't debris
+otherwise                   no vessel (gone, or can't be told apart): tag it by hand (Edit log…)
+```
+
+A save without `lct` uses the file's time less the vessel's `met`. Edit log… lists the vessels launched with the flight first, then those with its name, then the rest by how near their launch was.
+
+Worked example (the Minmus relays, 2026-10-20): the carrier *Link Shuttle mk2* launched on Day 62 and released three relays on Days 68, 71 and 73, each logged as *Link Shuttle mk2 Relay*. Renamed in orbit, *MinLink B* has `lct` = Day 71, 1:50:58; the Day 71 log launched within 2 s of that and no other vessel did, so that log is MinLink B's — its row reads "Now MinLink B", and MinLink B's page lists it. The Day 62 log stays with the carrier, whose `lct` is Day 62.
+
+- Code: `FlightLogs.VesselOf`, `FlightLogs.LogsOf`, `FlightLogs.Candidates` (`Core/Ksp/FlightLog.cs`); the tag is `flight_logs.vessel_id`, set by `FlightLogRepository.Retag`; tested in `FlightLogTests`
+- Source: KSP's save format (`VESSEL` node `lct`, `met`, `pid`)
+
+### 8.14 Docking and undocking
+
+When two vessels dock, KSP merges them into **one** of them; the other vessel is gone from the game. When they undock, KSP makes a **new** vessel of the part that comes off: it gets the name it had before docking (each docking port remembers it) and its MET — and `lct` — start again. So the flight log handles the two sides differently:
+
+```
+kept vessel (its kRPC id carries on)     its log carries on, recording the docked stack; notes "<other> docked"
+vessel gone into it                      its log waits docked: event Docked (joined), with the name it docked as
+vessel that comes off again              the waiting log carries on, with that vessel's launch time added
+```
+
+**Spotting a docking live.** Between two readings (≤ 3 s apart, same stage, off rails) the mass jumps by more than max(20 kg, 0.2 % of the mass): up for a docking, down for an undocking. Burning fuel or mining never moves the mass that fast; a staging changes the stage. The flown vessel vanishing into the one flown next (KSP kept the other) shows as a switch of vessel instead. Either way the next listing of the game's vessels says which: a vessel *gone* is one that was in the listing before, isn't now, and was alongside the kept vessel — same body, semi-major axis within 5 %, inclination within 2° (a rendezvous leaves a few m/s between them, a fraction of a percent in orbit size). The kept vessel must be in both listings, so a quickload (every vessel back with a new id) isn't taken for a docking. A vessel *appeared* alongside after a mass drop is one that came off.
+
+**Finding the flight again.** A flight's launch times are its launch plus, for every undocking of its own vessel, game time − MET of the vessel it came off as. A vessel is the flight's if its game time − MET is within 2 s of any of them (§8.5, §8.13). A flight docked into another vessel (or undocked but not seen since) is *away*: it's only picked up by the name it docked as, by a vessel seen first in space or more than a minute after its MET started — a new launch of a rocket with the same name is never taken for it. Samples recorded after an undocking have MET = game time − the log's launch, so the log's clock runs on.
+
+If KSP hands the kept vessel the docked ship's name on undocking (players report stations renamed after the ship that docked), the flown vessel *is* that ship now: the ship's waiting log carries on with it, and the flight that was being recorded goes with the vessel that came off under its old name.
+
+**What the save says.** A docked port (`state = Docked (…)`) in a saved vessel keeps a `DOCKEDVESSEL { vesselName }` node: the vessel it came with. A docked flight stays open while some saved vessel's ports remember its name, and its vessel (§8.13) is that one. If none does, it ends the way the vessel it docked into ended (recovered with it), else as lost. This also catches dockings flown while the planner wasn't connected.
+
+Worked example: the shuttle (launched Day 80) docks to *Kerb Station* on Day 81; the station is kept. The station's log notes "Shuttle docked"; the shuttle's log stops with "Docked to Kerb Station", and saves after that show the station's ports remembering *Kerb Station* and *Shuttle*, so it stays open. On Day 95 the shuttle undocks: KSP names it *Shuttle* again with MET 0, so its game time − MET is Day 95. Flown, it's found as the away flight named *Shuttle*; the log adds "Undocked from Kerb Station after 14d 0h 00m" with launch time Day 95, and the 14 docked days show as a break in its charts. Its MET reads 15 days, not 0.
+
+- Code: `FlightDocking` (`Core/Ksp/FlightDocking.cs`), `FlightLogs.LaunchTimes`, `DockedIn`, `Away`, `EndedIn` (`Core/Ksp/FlightLog.cs`), `SavedVessel.DockedNames` (`KspSave.cs`), `FlightRecorder` (the checks); tested in `FlightDockingTests`
+- Sources: KSP's save format (`ModuleDockingNode` `state`, `DOCKEDVESSEL`); KSP forum notes on undocking names and MET ([undocking rules](https://forum.kerbalspaceprogram.com/profile/100668-claw/content/page/156), [station renamed to the docking craft](https://forum.kerbalspaceprogram.com/topic/190345-space-station-being-renamed-to-the-docking-craft), [vessel naming, 1.4](https://forum.kerbalspaceprogram.com/developerarticles.html/whats-in-a-vessel-name-r206))
 
 ## Sources
 

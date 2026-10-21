@@ -1,0 +1,29 @@
+<Window x:Class="KspFlightPlanner.App.FlightLogEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="/Assets/app.ico"
+        Title="Edit flight log" Width="560" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        FontSize="{DynamicResource ControlContentThemeFontSize}">
+    <StackPanel Margin="24,16,24,20">
+        <TextBlock Text="{Binding Header}" FontSize="18" FontWeight="Bold" />
+        <TextBlock Text="{Binding Subheader}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+
+        <TextBlock Text="Vessel" FontWeight="SemiBold" Margin="0,18,0,4" />
+        <ComboBox ItemsSource="{Binding VesselChoices}" SelectedItem="{Binding Vessel}" DisplayMemberPath="Text"
+                  HorizontalAlignment="Stretch" AutomationProperties.Name="Vessel" />
+        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="Which of the save's vessels this flight is. It's found by launch time, so it follows renames; pick one by hand when that finds the wrong one or none." />
+
+        <TextBlock Text="Rocket" FontWeight="SemiBold" Margin="0,16,0,4" />
+        <ComboBox ItemsSource="{Binding Rockets}" Text="{Binding Rocket, UpdateSourceTrigger=PropertyChanged}" IsEditable="True"
+                  HorizontalAlignment="Stretch" AutomationProperties.Name="Rocket" />
+        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="The name the flight is grouped and compared under (Compare this rocket). Usually the vessel's name at launch." />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Save" Command="{Binding SaveCommand}" IsDefault="True" MinWidth="90" Margin="0,0,8,0" />
+            <Button Content="Cancel" IsCancel="True" MinWidth="90" />
+        </StackPanel>
+    </StackPanel>
+</Window>

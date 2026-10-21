@@ -66,6 +66,41 @@ public sealed class VesselsViewModel : ObservableObject
 
     public string PartDataSummary => _sync.Parts.Summary;
 
+    /// <summary>A vessel's logged flights, newest first (set by the app; none without it).</summary>
+    public Func<SavedVessel, IReadOnlyList<FlightLogSummary>> FlightsOf { get; set; } = _ => [];
+
+    /// <summary>The Flight log should open this flight (picked on a vessel's page).</summary>
+    public event Action<long>? OpenLogRequested;
+
+    /// <summary>Picks a vessel by its save pid, showing debris and the like if that's what it is. False if it isn't in the save.</summary>
+    public bool SelectVessel(string id)
+    {
+        if (Find(Tree, id) is null && !ShowAll && _sync.Save?.Vessels.Any(v => v.Id == id) == true) ShowAll = true;
+        if (Find(Tree, id) is not { } path) return false;
+        foreach (var parent in path[..^1]) parent.IsExpanded = true;
+        _selectedId = id;
+        path[^1].IsSelected = true;
+        Select(path[^1]);
+        return true;
+    }
+
+    /// <summary>Shows the picked vessel again, e.g. once its flights have changed.</summary>
+    public void RefreshDetail()
+    {
+        if (Detail is VesselDetailViewModel && Leaves(Tree).FirstOrDefault(i => i.Key == _selectedId) is { } item) Select(item);
+    }
+
+    /// <summary>The way down the tree to a vessel: its groups, then the vessel; null if it isn't shown.</summary>
+    private static VesselTreeItem[]? Find(IEnumerable<VesselTreeItem> items, string id)
+    {
+        foreach (var item in items)
+        {
+            if (item.Vessel?.Id == id) return [item];
+            if (Find(item.Children, id) is { } below) return [item, .. below];
+        }
+        return null;
+    }
+
     /// <summary>Called by the view when the tree selection changes.</summary>
     public void Select(VesselTreeItem? item)
     {
@@ -79,7 +114,10 @@ public sealed class VesselsViewModel : ObservableObject
         if (item?.Vessel is not { } vessel) return;
         _selectedId = vessel.Id;
         var radius = vessel.Orbit?.BodyName is { } body && _sync.StockBodies().TryGetValue(body, out var b) ? b.EquatorialRadiusM : (double?)null;
-        Detail = new VesselDetailViewModel(vessel, _sync.Save!.Ut, _sync.Parts.Catalog, radius);
+        Detail = new VesselDetailViewModel(vessel, _sync.Save!.Ut, _sync.Parts.Catalog, radius, FlightsOf(vessel))
+        {
+            OpenLogCommand = new RelayCommand<VesselFlightRow>(row => OpenLogRequested?.Invoke(row.Id)),
+        };
     }
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
@@ -166,12 +204,21 @@ public sealed record ResourceRow(string Name, string Amount, double Fraction, st
 /// <summary>One engine row: count × part, thrust, limiter, Isp, what it burns.</summary>
 public sealed record EngineRow(string Engine, string Thrust, string Limit, string Isp, string Propellants, bool Counted);
 
-/// <summary>Everything about one vessel: status, Δv, fuel, engines, parts.</summary>
+/// <summary>One of a vessel's logged flights, on its page: how it went, when, and the figures.</summary>
+public sealed record VesselFlightRow(long Id, string Heading, string Day, string Figures, string Launched);
+
+/// <summary>Everything about one vessel: status, Δv, fuel, engines, parts, and its logged flights.</summary>
 public sealed class VesselDetailViewModel
 {
     /// <param name="bodyRadiusM">Radius of the body it orbits, to show altitudes; null if unknown.</param>
-    public VesselDetailViewModel(SavedVessel vessel, double saveUt, PartCatalog catalog, double? bodyRadiusM)
+    /// <param name="flights">Its flights in the flight log, newest first.</param>
+    public VesselDetailViewModel(SavedVessel vessel, double saveUt, PartCatalog catalog, double? bodyRadiusM,
+        IReadOnlyList<FlightLogSummary>? flights = null)
     {
+        Flights = (flights ?? []).Select(l => new FlightLogItem(l))
+            .Select(i => new VesselFlightRow(i.Id, i.Rocket == vessel.Name ? i.Outcome : $"{i.Outcome} · as {i.Rocket}", i.LaunchDay, i.Figures, i.Launched))
+            .ToList();
+
         var report = VesselAnalysis.Analyze(vessel, catalog);
         var calendar = GameCalendar.Kerbin;
         var body = vessel.Orbit?.BodyName ?? "?";
@@ -251,6 +298,13 @@ public sealed class VesselDetailViewModel
     public IReadOnlyList<Fact> Status { get; }
     public IReadOnlyList<Fact> Parts { get; }
     public string PartsTitle { get; }
+
+    public IReadOnlyList<VesselFlightRow> Flights { get; }
+    public bool HasFlights => Flights.Count > 0;
+    public string FlightsTitle => Flights.Count == 0 ? "Flight log" : $"Flight log ({Flights.Count})";
+
+    /// <summary>Opens a flight in the Flight log and Flight report (set by the Vessels pane).</summary>
+    public RelayCommand<VesselFlightRow>? OpenLogCommand { get; init; }
 
     private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 }

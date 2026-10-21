@@ -78,6 +78,7 @@ public sealed class PlannerDatabase
         "saved_missions",
         "saved_constellations",
         "flights",
+        "flight_logs",
         "tech_plans",
         "app_settings",
         // Read from the KSP install rather than typed in, but kept so a rebuild doesn't need KSP to be there.

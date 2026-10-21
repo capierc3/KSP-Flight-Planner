@@ -1,5 +1,6 @@
-# Pushing a v* tag on main (git tag v1.0.0 && git push origin v1.0.0) builds that commit and publishes
-# a GitHub Release with KspFlightPlanner-1.0.0.exe attached. A tag with a dash (v1.1.0-rc.1) is a pre-release.
+# Pushing a v* tag on main (git tag v0.2.0 && git push origin v0.2.0) builds that commit and publishes
+# a GitHub Release with KspFlightPlanner-0.2.0.exe attached. The tag must match <Version> in Directory.Build.props.
+# A tag with a dash (v0.2.0-rc.1, with that <Version>) is a pre-release.
 name: Release
 
 on:
@@ -26,6 +27,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+
+      - name: Check the tag matches the version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/KspFlightPlanner.App -getProperty:Version).Trim()
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME doesn't match <Version> $version in Directory.Build.props." }
 
       - name: Test
         run: dotnet test -c Release

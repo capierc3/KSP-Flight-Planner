@@ -104,7 +104,7 @@ public sealed class FlightViewModel : ObservableObject
         };
 
         UseActiveCraftCommand = new RelayCommand(() => _ = UseActiveCraftAsync(), () => _selected is not null && _sync.ActiveCraft is not null && !_busy);
-        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(), () => _selected is { Craft: not null, Kind: not FlightKind.Burns } && !_busy);
+        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(), () => _selected is { Craft: not null } f && CanReplan(f) && !_busy);
         SendBurnCommand = new RelayCommand<FlightBurnRow>(r => _ = SendAsync([r.Burn], replace: false), r => CanSend && r.State != BurnState.Passed);
         SendNextCommand = new RelayCommand(() => _ = SendAsync([NextOwnBurn()!.Burn], replace: false), () => CanSend && NextOwnBurn() is not null);
         SendAllCommand = new RelayCommand(() => _ = SendAsync(OwnFutureBurns(), replace: true), () => CanSend && OwnFutureBurns().Count > 0);
@@ -131,6 +131,7 @@ public sealed class FlightViewModel : ObservableObject
         get => _selected;
         set
         {
+            if (_storing) return; // the Flights list letting go of the flight being swapped for its re-planned copy
             if (!SetProperty(ref _selected, value)) return;
             Status = null;
             RebuildBurns();
@@ -174,6 +175,9 @@ public sealed class FlightViewModel : ObservableObject
     {
         FlightKind.Rendezvous => _selected.Targets.Count == 0 ? "Rendezvous" : $"Rendezvous with {string.Join(", then ", _selected.Targets.Select(t => t.Name))}",
         FlightKind.Resonant => $"Deploy {_selected.SatelliteCount} satellites at {_selected.AltitudeM / 1000:#,0.#} km around {_selected.BodyName}",
+        FlightKind.Burns when IsTrip(_selected) => $"To {_selected.DestinationName}, arriving {_selected.AltitudeM / 1000:#,0.#} km up" +
+                                                   (_selected.ArrivalInclinationDeg is { } i ? $", inclined {i:0.#}°" : "") +
+                                                   ". Re-plan from wherever the craft is on the way.",
         FlightKind.Burns => $"Planned from where the craft was around {_selected.BodyName}. To plan it again, use the From here pane.",
         FlightKind.Landing => $"Land at {_selected.Landing?.Target.Name} on {_selected.BodyName}" +
                               $" ({_selected.Landing?.Target.LatitudeDeg:0.###}°, {_selected.Landing?.Target.LongitudeDeg:0.###}°)" +
@@ -225,16 +229,30 @@ public sealed class FlightViewModel : ObservableObject
         RebuildBurns();
     }
 
-    /// <summary>Stores a changed flight and shows it.</summary>
+    /// <summary>
+    /// Stores a changed flight and keeps showing it. Swapping it into <see cref="Flights"/> makes the Flights list drop its
+    /// selection (it writes null back to <see cref="SelectedFlight"/>), which would close the flight: that write is ignored,
+    /// and the list is pointed at the new copy.
+    /// </summary>
     private void Store(Flight flight)
     {
         _flights.Update(flight);
         var i = Flights.IndexOf(_selected!);
         _selected = flight;
-        if (i >= 0) Flights[i] = flight;
+        _storing = true;
+        try
+        {
+            if (i >= 0) Flights[i] = flight;
+        }
+        finally
+        {
+            _storing = false;
+        }
         OnPropertyChanged(nameof(SelectedFlight));
         RebuildBurns();
     }
+
+    private bool _storing; // swapping a re-planned flight into the list
 
     private void RebuildBurns()
     {
@@ -317,7 +335,7 @@ public sealed class FlightViewModel : ObservableObject
         if (f.Craft is not { } craft) { DriftText = ""; return; }
         if (Body(f.BodyName) is not { } body) { DriftText = ""; return; }
         var orbit = _sync.OrbitOf(craft);
-        if (f.Kind == FlightKind.Transfer && _sync.PathOf(craft)?.BodyName is { } around && around != f.BodyName)
+        if ((f.Kind == FlightKind.Transfer || IsTrip(f)) && _sync.PathOf(craft)?.BodyName is { } around && around != f.BodyName)
         {
             // On the way: into the parent's sphere after the ejection, or arrived.
             IsDrifting = around != f.DestinationName;
@@ -340,7 +358,8 @@ public sealed class FlightViewModel : ObservableObject
         }
         IsDrifting = drift > DriftThresholdM;
         DriftText = IsDrifting
-            ? $"{craft.Name} is {Distance(drift)} off the planned path. Re-plan to fly the rest from where it really is."
+            ? $"{craft.Name} is {Distance(drift)} off the planned path. " +
+              (CanReplan(f) ? "Re-plan to fly the rest from where it really is." : "Plan it again from here in the From here pane.")
             : $"On plan: {Distance(drift)} from the planned path.";
     }
 
@@ -358,9 +377,14 @@ public sealed class FlightViewModel : ObservableObject
     /// <summary>Plans the rest of the flight again from where the craft really is, starting at least the lead time from now.</summary>
     private async Task ReplanAsync()
     {
-        if (_selected is not { } f || f.Craft is not { } craft || f.Kind == FlightKind.Burns) return;
+        if (_selected is not { } f || f.Craft is not { } craft || !CanReplan(f)) return;
         if (Body(f.BodyName) is not { } body) { Status = $"{f.BodyName} isn't in the planner's bodies."; return; }
         if (_sync.Now is not { } now) { Status = "No game time yet: connect to KSP or link a save."; return; }
+        if (IsTrip(f))
+        {
+            await ReplanTripAsync(f, craft, now);
+            return;
+        }
         if (f.Kind == FlightKind.Transfer)
         {
             await ReplanTransferAsync(f, craft, now);
@@ -426,6 +450,59 @@ public sealed class FlightViewModel : ObservableObject
             var replanned = await Task.Run(() => TransferFlights.Plan(f, bodies, around, path.ToElements(), now, f.LeadS));
             Store(replanned);
             Status = $"Planned from {craft.Name}'s path around {around.Name} at {_calendar.FormatDate(now)}.";
+        }
+        catch (ArgumentException ex)
+        {
+            Status = $"Couldn't re-plan: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>
+    /// Plans a From here trip (Go to a body) again from wherever the craft is: its orbit before it leaves, or once on the
+    /// way, a course correction from its real path. docs/MATH.md §3.8.
+    /// </summary>
+    private async Task ReplanTripAsync(Flight f, FlightCraft craft, double now)
+    {
+        if (_sync.PathOf(craft) is not { BodyName: { } there } path || Body(there) is not { } around)
+        {
+            Status = $"{craft.Name} isn't in orbit, so there's nothing to plan from.";
+            return;
+        }
+        if (there == f.DestinationName)
+        {
+            Status = $"{craft.Name} has reached {there}: capture with the burn above, or Circularize at periapsis in the From here pane.";
+            return;
+        }
+        if (Body(f.DestinationName!) is not { } to)
+        {
+            Status = $"{f.DestinationName} isn't in the planner's bodies.";
+            return;
+        }
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var bodies = _sync.StockBodies().Values.ToList();
+            var start = path.ToElements();
+            var options = await Task.Run(() => TripPlanner.Options(around, to, start, now + Math.Min(f.LeadS, CorrectionLeadS), f.AltitudeM, bodies,
+                f.ArrivalInclinationDeg));
+            var trip = options[0]; // the cheapest
+            Store(f with
+            {
+                BodyName = around.Name,
+                StartOrbit = start,
+                Burns = trip.Burns,
+                PlannedUt = now,
+                Note = trip.Warnings.Count > 0 ? string.Join(" ", trip.Warnings) : null,
+            });
+            var onCraft = _sync.Link.Game?.ActiveNodes.Count > 0 ? " Send all burns to replace the nodes on the craft." : "";
+            Status = (trip.IsCorrection ? $"Corrected the course from {craft.Name}'s real path" : $"Planned from {craft.Name}'s orbit around {around.Name}") +
+                     $" at {_calendar.FormatDate(now)}: {Format.Speed0(trip.DeltaV)} in all." + onCraft;
         }
         catch (ArgumentException ex)
         {
@@ -609,6 +686,12 @@ public sealed class FlightViewModel : ObservableObject
     // ---------------- Helpers ----------------
 
     private CelestialBody? Body(string name) => _sync.StockBodies().GetValueOrDefault(name);
+
+    /// <summary>A From here trip (Go to a body): one-off burns that know where they're going, so they can be planned again.</summary>
+    private static bool IsTrip(Flight f) => f.Kind == FlightKind.Burns && f.DestinationName is not null;
+
+    /// <summary>Every flight but one-off burns (other than a trip) keeps what it needs to be planned again.</summary>
+    private static bool CanReplan(Flight f) => f.Kind != FlightKind.Burns || IsTrip(f);
 
     private string Duration(double seconds) => seconds < 60 ? $"{seconds:0} s" : _calendar.FormatDuration(seconds);
 

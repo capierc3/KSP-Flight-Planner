@@ -208,6 +208,27 @@ public sealed class KspLink : ObservableObject, IDisposable
         return PollAsync();
     }
 
+    /// <summary>Reads every vessel on the next poll, rather than when the vessels are next due.</summary>
+    public void ReadVesselsSoon() => _vesselsDue = true;
+
+    /// <summary>
+    /// Game time less MET of these vessels (by kRPC id): when each was launched, or came off another vessel. Vessels gone
+    /// are left out.
+    /// </summary>
+    public Task<IReadOnlyDictionary<ulong, double>> LaunchTimesAsync(IReadOnlyCollection<ulong> ids) =>
+        CallAsync<IReadOnlyDictionary<ulong, double>>(c =>
+        {
+            var space = c.SpaceCenter();
+            var result = new Dictionary<ulong, double>();
+            foreach (var v in space.Vessels)
+            {
+                if (!ids.Contains(v.id)) continue;
+                try { result[v.id] = space.UT - v.MET; }
+                catch (RPCException) { /* gone meanwhile */ }
+            }
+            return result;
+        });
+
     /// <summary>The vessel being flown and how many maneuver nodes it already has, or null outside flight.</summary>
     public async Task<(string Vessel, int Nodes)?> ActiveVesselNodesAsync()
     {
@@ -250,8 +271,40 @@ public sealed class KspLink : ObservableObject, IDisposable
     // ---------------- Surface bake (KSP › Bake Surface Data) ----------------
 
     /// <summary>The game's celestial bodies, by the planner's names (Kerbol, not Sun).</summary>
+    /// <summary>Starts streaming the flown vessel's readings (for the flight log); null when not flying one.</summary>
+    public Task<LiveTelemetry?> OpenTelemetryAsync() => CallAsync(LiveTelemetry.Open);
+
+    /// <summary>
+    /// The game's mode, time and (when asked) every vessel's name and type, to tell which save it's playing. Vessels are
+    /// listed at the Space Center and Tracking Station too, not only in flight (about two calls per vessel).
+    /// </summary>
+    public Task<GameIdentity> ReadIdentityAsync(bool withVessels) => CallAsync(c =>
+    {
+        var space = c.SpaceCenter();
+        var mode = space.GameMode.ToString();
+        var ut = space.UT;
+        IReadOnlyList<(string, string)>? vessels = null;
+        if (withVessels)
+        {
+            try { vessels = space.Vessels.Select(v => (v.Name, v.Type.ToString())).ToList(); }
+            catch (RPCException) { /* not listed in this scene */ }
+        }
+        return new GameIdentity(mode, ut, vessels);
+    });
+
+    /// <summary>How many parts the vessel being flown has (with launch clamps, on the pad).</summary>
+    public Task<int> ActiveVesselPartCountAsync() => CallAsync(c => c.SpaceCenter().ActiveVessel.Parts.All.Count);
+
+    /// <summary>Stops the readings' streams, if the connection they came over is still up.</summary>
+    public async Task CloseTelemetryAsync(LiveTelemetry telemetry)
+    {
+        if (!IsConnected) return;
+        try { await CallAsync(_ => { telemetry.Close(); return 0; }); }
+        catch (Exception) { /* lost the game meanwhile: the streams went with it */ }
+    }
+
     public Task<IReadOnlyList<string>> BodyNamesAsync() =>
-        CallAsync<IReadOnlyList<string>>(c => c.SpaceCenter().Bodies.Keys.Select(BodyName).ToList());
+        CallAsync<IReadOnlyList<string>>(c => c.SpaceCenter().Bodies.Keys.Select(PlannerBodyName).ToList());
 
     /// <summary>A body's constants and biome names as the game has them.</summary>
     public Task<BakeBodyInfo> ReadBodyAsync(string bodyName) => CallAsync(c =>
@@ -333,7 +386,7 @@ public sealed class KspLink : ObservableObject, IDisposable
                 var space = c.SpaceCenter();
                 var vessels = scene == GameScene.Flight && readVessels ? ReadVessels(space) : null;
                 string? targetBody = null;
-                if (vessels is not null && space.TargetBody is { } body) targetBody = BodyName(body.Name);
+                if (vessels is not null && space.TargetBody is { } body) targetBody = PlannerBodyName(body.Name);
                 var nodes = scene == GameScene.Flight && TryGet(() => space.ActiveVessel) is { } active
                     ? active.Control.Nodes.Select(n => new LiveNode(n.UT, n.Prograde, n.Normal, n.Radial)).ToList()
                     : [];
@@ -385,7 +438,7 @@ public sealed class KspLink : ObservableObject, IDisposable
                 orbit = new SavedOrbit(o.SemiMajorAxis, o.Eccentricity, o.Inclination * RadToDeg, o.LongitudeOfAscendingNode * RadToDeg,
                     o.ArgumentOfPeriapsis * RadToDeg, o.MeanAnomalyAtEpoch, o.Epoch, -1, bodyName);
             }
-            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId });
+            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId, KrpcId = v.id });
         }
         return list;
     }
@@ -420,7 +473,7 @@ public sealed class KspLink : ObservableObject, IDisposable
         catch (RPCException) { return null; }
     }
 
-    private static string SituationName(VesselSituation situation) => situation switch
+    internal static string SituationName(VesselSituation situation) => situation switch
     {
         VesselSituation.PreLaunch => "PRELAUNCH",
         VesselSituation.Orbiting => "ORBITING",
@@ -434,7 +487,7 @@ public sealed class KspLink : ObservableObject, IDisposable
     };
 
     /// <summary>The planner's name for a body (KSP calls Kerbol "Sun").</summary>
-    private static string BodyName(string kspName) => kspName == "Sun" ? "Kerbol" : kspName;
+    internal static string PlannerBodyName(string kspName) => kspName == "Sun" ? "Kerbol" : kspName;
 
     private static async Task<IPAddress> ResolveAsync(string host)
     {

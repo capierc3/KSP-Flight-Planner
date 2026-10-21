@@ -281,6 +281,41 @@ side of the Mun, or mirrored east/west, the longitude convention is wrong: note 
 
 Notes:
 
+## 10e. Flight log (View › Flying › Flight log)
+
+- [ ] On the pad the pane says the rocket is on the pad and recording starts at launch
+- [ ] Launch → "Recording <name> · MET … · … m/s used" counts up; Δv used looks close to KSP's own Δv readout drop
+- [ ] Reach orbit → the log in the list says "In orbit of Kerbin", grouped under the rocket's name
+- [ ] Time warp past ×4 for a while → the log shows "Data lost in warp: ×… for …"
+- [ ] Disconnect (KSP › Disconnect) mid-flight, wait, reconnect → "Flight disconnected: … not recorded", same log carries on
+- [ ] Switch to another vessel and back → one log, with the gap noted
+- [ ] Recover a landed vessel → its log says Recovered (after KSP writes the save); revert a launch → Reverted
+- [ ] Turn off "Record a flight log while flying" in Settings → the pane says recording is off; nothing new is logged
+- [ ] Pick a log → the Flight report opens: Δv to orbit, ascent losses, max Q/g, a card per touchdown
+- [ ] Charts: switch kind (altitude, speed, Δv used…) and part of the flight (ascent, each landing); hover shows values and staging lines
+- [ ] Burns table matches what you flew; the Δv by stage looks right against the design's stages
+- [ ] A Mun trip with long warps: no "Switched to another vessel" at the SOI changes; warp shows as a dashed curve on the altitude chart
+- [ ] Map › Around Kerbin: the path goes out to the Mun's orbit and meets the Mun where it was; Around Mun shows the flyby or capture
+- [ ] Fly the same rocket twice → Compare this rocket: both flights in the table (same design letter), best figures in green, charts overlaid
+- [ ] Add a part in the VAB and fly again → the new flight gets the next design letter; the Rocket pane says how often the design has flown
+- [ ] Launch to orbit → Flight report › Ascent coach: launch TWR, turn start and 45° altitude match what you flew; the pitch chart's blue line is your nose (90° on the pad)
+- [ ] The best-climb box gives a model check within a few %; try its advice (turn start speed, 45° altitude) on the next launch and compare
+- [ ] Release a relay, rename it in orbit, let KSP save → its log row says "Now <new name>" and the search finds the new name
+- [ ] Pick that log → "Vessel: <new name> (found by launch time)"; Show vessel opens it in the Vessels pane and Vessel page
+- [ ] On the Vessel page, Flight log lists its flights; clicking one opens the Flight log and the Flight report on it
+- [ ] Edit log… → pick another vessel (or None of them) and change the rocket name → the row, Vessel page and Compare follow; keep flying the vessel and the edit stays
+
+Docking (fly a ship up to the station and dock, then undock it later):
+- [ ] Fly the ship in and dock → within a few seconds the station's log gets "<ship> docked" and the ship's row says "Docked to <station>" (not Lost, even after KSP saves)
+- [ ] Note which vessel KSP kept (the docked stack's name in the map view): that one's log carries on recording the stack
+- [ ] Switch away and back to the docked stack → still one log for the stack, no new log for the ship
+- [ ] Undock and fly the ship away → its own log picks up again: "Undocked from <station> after …", MET runs on from its launch (not from 0), the docked days show as a break in the charts
+- [ ] The station's log gets "<ship> undocked"; the ship's Vessel page lists its flight again
+- [ ] If KSP renamed either vessel on undocking, write down what it did: both logs should still follow the right vessel
+- [ ] Dock while the planner is closed, open it, let KSP save → the ship's log says Docked (found from the save's docking ports), not Lost
+
+Notes:
+
 ## 11. Other bits
 
 - [ ] **Transfer Planner › Today** sets Year/Day to the game date

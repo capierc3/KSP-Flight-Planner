@@ -224,6 +224,8 @@ public static class LegTools
                 s = s with { Legs = ApplyLaunch(s.Legs, launchPlan) };
                 launches.Add((index, launchPlan));
             }
+            if (stop.Arrival is { } arrive && stop.Rendezvous is null && EvaluateArrival(s.Legs, arrive, bodies) is { } arrivalPlan)
+                s = s with { Legs = ApplyArrival(s.Legs, arrivalPlan) };
             return s;
         }).ToList();
         if (location is not null)
@@ -312,6 +314,55 @@ public static class LegTools
     /// The leg a landing tool works on: the last one, when it comes down from an orbit of a body to that body's surface.
     /// Its index, or -1.
     /// </summary>
+    /// <summary>
+    /// The leg an arrival tool works on: the last one that crosses into the sphere of influence of the body the leg ends
+    /// in orbit of (from its planet, a moon of it, or another planet round the same star). Its index, or -1.
+    /// </summary>
+    public static int FindArrival(IReadOnlyList<RouteLeg> legs, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (legs.Count == 0 || legs[^1].To is not { Kind: "LowOrbit" or "Synchronous" or "Elliptical" or "Custom", AltitudeM: > 0 } end
+            || !bodies.TryGetValue(end.BodyName, out var body) || body.ParentId is null) return -1;
+        for (var i = legs.Count - 1; i >= 0; i--)
+        {
+            if (legs[i].To.BodyName != body.Name) return -1;
+            if (legs[i].From.BodyName != body.Name)
+                return bodies.TryGetValue(legs[i].From.BodyName, out var from) && ArrivalKind(from, body, bodies) is not null ? i : -1;
+        }
+        return -1;
+    }
+
+    /// <summary>How a trip from <paramref name="from"/> enters <paramref name="to"/>'s sphere of influence; null when it's not one hop.</summary>
+    private static HopKind? ArrivalKind(CelestialBody from, CelestialBody to, IReadOnlyDictionary<string, CelestialBody> bodies) =>
+        to.ParentId == from.Id ? HopKind.Down
+        : from.ParentId == to.Id ? HopKind.Up
+        : from.ParentId == to.ParentId && from.Orbit is not null && to.Orbit is not null
+          && bodies.Values.FirstOrDefault(b => b.Id == to.ParentId) is not null ? HopKind.Across
+        : null;
+
+    /// <summary>
+    /// Arriving in <paramref name="arrival"/>'s inclination at the orbit the leg ends in: the extra Δv of the burn on the
+    /// way that tilts the approach (§3.9), or null when the leg doesn't enter another body's sphere.
+    /// </summary>
+    public static ArrivalPlan? EvaluateArrival(IReadOnlyList<RouteLeg> legs, ArrivalLeg arrival, IReadOnlyDictionary<string, CelestialBody> bodies)
+    {
+        if (FindArrival(legs, bodies) is not (var i and >= 0)) return null;
+        var from = bodies[legs[i].From.BodyName];
+        var to = bodies[legs[^1].To.BodyName];
+        var parkingM = legs[i].From is { Kind: "LowOrbit", AltitudeM: > 0 } low ? low.AltitudeM!.Value : from.DefaultParkingAltitudeM;
+        return ArrivalTilt.Plan(ArrivalKind(from, to, bodies)!.Value, from, to, bodies.Values.FirstOrDefault(b => b.Id == to.ParentId),
+            parkingM, legs[^1].To.AltitudeM!.Value, Math.Clamp(arrival.InclinationDeg, 0, 180), i);
+    }
+
+    /// <summary>Adds the burn that tilts the arrival to the leg that crosses into the body's sphere, on top of what it has.</summary>
+    public static IReadOnlyList<RouteLeg> ApplyArrival(IReadOnlyList<RouteLeg> legs, ArrivalPlan plan)
+    {
+        if (plan.Leg >= legs.Count || plan.AimDv is not { } aim) return legs;
+        var note = $"Arrive at {plan.Body.Name} inclined {plan.InclinationDeg:0.#}°: +{aim:0} m/s on the way to tilt the approach" +
+                   (plan.IsEstimate ? " (an estimate)" : "");
+        return legs.Select((leg, i) => i != plan.Leg ? leg
+            : leg with { DeltaV = leg.DeltaV + Math.Round(aim), ToolNote = leg.ToolNote is { } tool ? $"{tool}; {note}" : note }).ToList();
+    }
+
     public static int FindLanding(IReadOnlyList<RouteLeg> legs) =>
         legs.Count > 0 && legs[^1] is { To.Kind: "Surface", IsCombined: false } leg && leg.From.BodyName == leg.To.BodyName
                        && leg.From.AltitudeM is > 0

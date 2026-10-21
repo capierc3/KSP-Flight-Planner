@@ -315,6 +315,29 @@ internal static class Migrations
             created_utc  TEXT    NOT NULL
         );
 
+        CREATE TABLE flight_logs (
+            id              INTEGER PRIMARY KEY,
+            vessel_name     TEXT    NOT NULL,   -- the rocket: the vessel's name at launch
+            launch_ut       REAL    NOT NULL,   -- game time − MET; with the name, tells this flight from others of the rocket
+            joined_at_met   REAL    NOT NULL DEFAULT 0,   -- 0 = recorded from the launch
+            outcome         TEXT    NOT NULL,   -- FlightLogOutcome
+            flight_id       INTEGER,            -- the planner flight being flown, if any (not a foreign key: flights get deleted)
+            launch_parts    INTEGER,            -- parts on the pad: with the launch mass, tells a changed design
+            vessel_id       TEXT,               -- the save vessel (pid) the player tagged it to; NULL = by launch time, '' = none
+            last_ut         REAL    NOT NULL,
+            delta_v_used    REAL    NOT NULL,   -- the samples' sums, kept for the list
+            max_altitude_m  REAL    NOT NULL,
+            launch_mass_kg  REAL    NOT NULL DEFAULT 0,
+            last_situation  TEXT,
+            last_body       TEXT,
+            route           TEXT,               -- bodies flown around in order, "Kerbin › Mun › Kerbin"
+            events_json     TEXT    NOT NULL,   -- FlightLogEvent list
+            samples         BLOB    NOT NULL,   -- FlightSample list as Brotli-compressed JSON
+            ksp_save        TEXT,               -- the KSP save it belongs to; NULL = shared by every save
+            created_utc     TEXT    NOT NULL,
+            updated_utc     TEXT    NOT NULL
+        );
+
         CREATE TABLE saved_constellations (
             id                 INTEGER PRIMARY KEY,
             name               TEXT    NOT NULL,

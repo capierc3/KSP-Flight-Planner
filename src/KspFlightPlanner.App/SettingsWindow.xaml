@@ -121,6 +121,10 @@
                 <CheckBox Content="Connect to KSP when the planner starts" IsChecked="{Binding KrpcConnectOnStartup}" Margin="0,16,0,0" />
                 <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"
                            Text="If KSP isn't running yet, the planner stays disconnected; use KSP › Connect to KSP later. The first time, kRPC asks in game whether to allow the planner — click Allow (or turn on auto-accept in kRPC's advanced settings)." />
+
+                <CheckBox Content="Record a flight log while flying" IsChecked="{Binding RecordFlights}" Margin="0,16,0,0" />
+                <TextBlock Style="{StaticResource Note}" Margin="28,4,0,0"
+                           Text="While connected, every flight is recorded from launch to landing: altitude, speed, staging and the Δv it used. See View › Flying › Flight log. Nothing is recorded while the planner is closed or disconnected, and little during time warp." />
             </StackPanel>
           </Grid>
         </ScrollViewer>

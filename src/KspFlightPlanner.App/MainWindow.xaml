@@ -97,6 +97,9 @@
                         <MenuItem Header="_Flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
                         <MenuItem Header="F_light" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
                         <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
+                        <MenuItem Header="Flight _log" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightLog}" ToolTip="Every flight recorded while connected" />
+                        <MenuItem Header="Flight _report" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightReport}" ToolTip="The flight picked in the Flight log" />
+                        <MenuItem Header="_Compare flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightCompare}" ToolTip="One rocket's flights side by side" />
                     </MenuItem>
                     <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" ToolTip="Inputs for the tool you looked at last" />
                     <Separator />
@@ -142,6 +145,15 @@
             </StatusBarItem>
             <StatusBarItem Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" FontSize="12" />
+            </StatusBarItem>
+            <!-- The game is playing another save: nothing is recorded or laid over this one until they match. -->
+            <StatusBarItem Visibility="{Binding Sync.PlayingOtherSave, Converter={StaticResource BoolToVisibility}}"
+                           ToolTip="Flights aren't recorded and the live game isn't laid over this save until KSP plays it.">
+                <TextBlock FontSize="12">
+                    <Run Text="{Binding Sync.OtherSaveText, Mode=OneWay}" Foreground="#EF5350" />
+                    <Run Text=" · " />
+                    <Hyperlink Click="OtherSave_Click">What now?</Hyperlink>
+                </TextBlock>
             </StatusBarItem>
             <!-- Right side: vessels waiting to be imported, then the live link to the game. -->
             <StatusBarItem HorizontalAlignment="Right">

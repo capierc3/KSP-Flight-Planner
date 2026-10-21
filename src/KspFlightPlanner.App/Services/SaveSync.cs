@@ -15,7 +15,7 @@ namespace KspFlightPlanner.App.Services;
 /// reading <see cref="Save"/> follows the game between saves too.
 /// The chosen save also scopes the planner's own data (<see cref="PlannerDatabase.ActiveSave"/>).
 /// </summary>
-public sealed class SaveSync : ObservableObject, IDisposable
+public sealed partial class SaveSync : ObservableObject, IDisposable
 {
     private readonly PlannerDatabase _database;
     private readonly SettingsRepository _settingsRepository;
@@ -62,6 +62,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
         // The editor writes the auto-saved ship as you build; settle before reading.
         _shipsDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _shipsDebounce.Tick += (_, _) => { _shipsDebounce.Stop(); RefreshCrafts(); };
+        _savesDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+        _savesDebounce.Tick += (_, _) => { _savesDebounce.Stop(); _ = CheckWrittenAsync(); };
+        link.PropertyChanged += (_, e) => OnLinkChanged(e.PropertyName);
         Restart();
     }
 
@@ -80,6 +83,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
     public KspSave? Save { get => _save; private set { if (SetProperty(ref _save, value)) OnPropertyChanged(nameof(HasSave)); } }
 
     public bool HasSave => Save is not null;
+
+    /// <summary>The save file as KSP last wrote it, without the live game over it.</summary>
+    public KspSave? FileSave => _fileSave;
 
     /// <summary>How the live game matched the save: which vessel is being flown and targeted, and vessels not in the save yet.</summary>
     public LiveMerge? Live { get => _live; private set { if (SetProperty(ref _live, value)) OnPropertyChanged(nameof(IsLive)); } }
@@ -218,6 +224,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
             _readAt = DateTime.Now;
             Problem = null;
             ApplyLive(fileChanged: true);
+            OnPropertyChanged(nameof(FileSave));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
         {
@@ -242,7 +249,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
     {
         if (_fileSave is not { } file) return;
         var previous = Save;
-        if (_link.Game is not { } game || game.Ut < file.Ut)
+        if (_link.Game is not { } game || game.Ut < file.Ut || PlayingOtherSave)
         {
             Live = null;
             if (!fileChanged && ReferenceEquals(previous, file)) return;
@@ -359,6 +366,7 @@ public sealed class SaveSync : ObservableObject, IDisposable
         RefreshCrafts();
         _ = _parts.EnsureCurrentAsync(_settings.KspInstallPath);
         _ = ReloadAsync();
+        RestartLiveSaveCheck();
     }
 
     /// <summary>Watcher events arrive on a worker thread; restart the debounce on the UI thread.</summary>
@@ -388,5 +396,9 @@ public sealed class SaveSync : ObservableObject, IDisposable
         _shipsWatcher = null;
     }
 
-    public void Dispose() => StopWatching();
+    public void Dispose()
+    {
+        StopWatching();
+        StopWatchingSaves();
+    }
 }

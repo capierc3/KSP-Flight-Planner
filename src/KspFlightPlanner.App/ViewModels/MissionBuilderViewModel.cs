@@ -131,6 +131,7 @@ public sealed class StopViewModel : ObservableObject
     private RendezvousLeg? _rendezvous;
     private LandingLeg? _landing;
     private LaunchLeg? _launch;
+    private ArrivalLeg? _arrival;
 
     /// <param name="changed">The stop moved somewhere else: the route changes.</param>
     /// <param name="legsChanged">The note or a leg tool changed: same route, new leg values.</param>
@@ -143,6 +144,7 @@ public sealed class StopViewModel : ObservableObject
         _rendezvous = stop.Rendezvous;
         _landing = stop.Landing;
         _launch = stop.Launch;
+        _arrival = stop.Arrival;
         _changed = changed;
         _legsChanged = legsChanged;
     }
@@ -387,7 +389,7 @@ public sealed class StopViewModel : ObservableObject
         return string.Join("\n", lines);
     }
 
-    // ---------------- Launch into an inclined orbit (stops a launch arrives at) ----------------
+    // ---------------- An inclined orbit: launched into, or arrived in from another body ----------------
 
     /// <summary>The inclination the launch arriving here flies into (§2.7); null for the map's due-east (equatorial) launch.</summary>
     public LaunchLeg? Launch
@@ -395,32 +397,62 @@ public sealed class StopViewModel : ObservableObject
         get => _launch;
         set
         {
-            _customInclination = false;
-            if (!SetProperty(ref _launch, value))
-            {
-                OnPropertyChanged(nameof(InclinationText));
-                OnPropertyChanged(nameof(SelectedInclinationPreset));
-                return;
-            }
-            foreach (var name in new[] { nameof(InclinationText), nameof(SelectedInclinationPreset), nameof(ShowsLaunchText) })
-                OnPropertyChanged(name);
-            _legsChanged();
+            if (SetProperty(ref _launch, value)) InclinationChanged();
+            else ShowInclination();
         }
+    }
+
+    /// <summary>The inclination the leg arriving here from another body comes in at (§3.9); null for however it arrives.</summary>
+    public ArrivalLeg? Arrival
+    {
+        get => _arrival;
+        set
+        {
+            if (SetProperty(ref _arrival, value)) InclinationChanged();
+            else ShowInclination();
+        }
+    }
+
+    private void InclinationChanged()
+    {
+        ShowInclination();
+        _legsChanged();
+    }
+
+    private void ShowInclination()
+    {
+        _customInclination = false;
+        foreach (var name in new[] { nameof(InclinationText), nameof(SelectedInclinationPreset), nameof(InclinationNote), nameof(ShowsInclinationNote) })
+            OnPropertyChanged(name);
     }
 
     /// <summary>The leg arriving here launches from a launch site into an orbit, so its inclination can be picked.</summary>
     public bool CanLaunch { get; private set; }
-    public bool ShowsLaunchText => CanLaunch && LaunchText.Length > 0;
+
+    /// <summary>The leg arriving here comes from another body into an orbit of this one, so its inclination can be picked.</summary>
+    public bool CanArrive { get; private set; }
+
+    /// <summary>The stop's orbit has an inclination to pick: launched into, or arrived in.</summary>
+    public bool ShowsInclination => CanLaunch || CanArrive;
+
+    /// <summary>The inclination picked: the launch's, or else the arrival's; 0 for none.</summary>
+    private double Inclination => CanLaunch ? _launch?.InclinationDeg ?? 0 : _arrival?.InclinationDeg ?? 0;
+
+    private void SetInclination(double degrees)
+    {
+        if (CanLaunch) Launch = degrees == 0 ? null : new LaunchLeg(degrees);
+        else Arrival = degrees == 0 ? null : new ArrivalLeg(degrees);
+    }
 
     /// <summary>The orbit's inclination in degrees, 0–180 (0° equatorial, 90° polar, 180° retrograde equatorial).</summary>
     public string InclinationText
     {
-        get => (_launch?.InclinationDeg ?? 0).ToString("0.###", CultureInfo.CurrentCulture);
+        get => Inclination.ToString("0.###", CultureInfo.CurrentCulture);
         set
         {
             if (double.TryParse((value ?? "").Trim().TrimEnd('°').Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var i)
                 && i is >= 0 and <= 180)
-                Launch = i == 0 ? null : new LaunchLeg(i);
+                SetInclination(i);
             else OnPropertyChanged(nameof(InclinationText));
         }
     }
@@ -437,11 +469,11 @@ public sealed class StopViewModel : ObservableObject
     public ValuePreset SelectedInclinationPreset
     {
         get => _customInclination ? ValuePreset.Custom
-            : InclinationPresets.FirstOrDefault(p => p.Value == (_launch?.InclinationDeg ?? 0)) ?? ValuePreset.Custom;
+            : InclinationPresets.FirstOrDefault(p => p.Value == Inclination) ?? ValuePreset.Custom;
         set
         {
             if (value is null) return;
-            if (value.Value is { } i) Launch = i == 0 ? null : new LaunchLeg(i);
+            if (value.Value is { } i) SetInclination(i);
             else
             {
                 _customInclination = true;
@@ -453,14 +485,36 @@ public sealed class StopViewModel : ObservableObject
     /// <summary>"Fly heading 355.6° (north) or 184.4° (south) … / +182 m/s over a launch due east"; empty for due east.</summary>
     public string LaunchText { get; private set; } = "";
 
+    /// <summary>"Arrive inclined 90°: +37 m/s for a burn on the way …"; empty for however it arrives.</summary>
+    public string ArrivalText { get; private set; } = "";
+
+    /// <summary>What the inclination picked costs, under the box.</summary>
+    public string InclinationNote => CanLaunch ? LaunchText : CanArrive ? ArrivalText : "";
+    public bool ShowsInclinationNote => InclinationNote.Length > 0;
+
     /// <param name="measuresPlaneChanges">The mission goes on to custom orbits around the body, whose plane changes are measured from this one.</param>
     internal void SetLaunch(bool canLaunch, LaunchPlan? plan, bool measuresPlaneChanges)
     {
         CanLaunch = canLaunch;
         LaunchText = plan is null ? "" : LaunchSummary(plan, measuresPlaneChanges);
-        foreach (var name in new[] { nameof(CanLaunch), nameof(LaunchText), nameof(ShowsLaunchText) })
+        foreach (var name in new[] { nameof(CanLaunch), nameof(ShowsInclination), nameof(InclinationText), nameof(SelectedInclinationPreset),
+                     nameof(LaunchText), nameof(InclinationNote), nameof(ShowsInclinationNote) })
             OnPropertyChanged(name);
     }
+
+    internal void SetArrival(bool canArrive, ArrivalPlan? plan)
+    {
+        CanArrive = canArrive;
+        ArrivalText = plan is null ? "" : ArrivalSummary(plan);
+        foreach (var name in new[] { nameof(CanArrive), nameof(ShowsInclination), nameof(InclinationText), nameof(SelectedInclinationPreset),
+                     nameof(ArrivalText), nameof(InclinationNote), nameof(ShowsInclinationNote) })
+            OnPropertyChanged(name);
+    }
+
+    private static string ArrivalSummary(ArrivalPlan p) => p.AimDv is not { } dv
+        ? $"Couldn't work out the burn to arrive at {p.Body.Name} inclined {p.InclinationDeg:0.#}°: the map's value is kept"
+        : $"+{Format.Speed0(dv)} on the way to arrive at {p.Body.Name} inclined {p.InclinationDeg:0.#}°" + (p.IsEstimate ? " (an estimate)" : "") +
+          "\nA small burn on the way moves where you pass the body, tilting the approach: far cheaper than turning the orbit once there";
 
     private static string LaunchSummary(LaunchPlan p, bool measuresPlaneChanges)
     {
@@ -588,7 +642,8 @@ public sealed class StopViewModel : ObservableObject
         OnPropertyChanged(nameof(IsLast));
     }
 
-    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous, _landing, _launch);
+    public MissionStop ToDefinition() => new(NodeKey, string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), _transfer, _deploy, _rendezvous, _landing, _launch,
+        _arrival);
 }
 
 /// <summary>A constellation released at a stop, shown after the leg that arrives there, with the phase that flies it.</summary>
@@ -1051,6 +1106,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         Stops[0].SetRendezvous(false, false);
         Stops[0].SetLanding(null, null, []);
         Stops[0].SetLaunch(false, null, false);
+        Stops[0].SetArrival(false, null);
         var placed = PlacedLocations();
         _deploys = new DeployResult?[Stops.Count];
         for (var i = 0; i < Stops.Count; i++)
@@ -1094,6 +1150,12 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                 launches.Add((index, launch));
             }
             stop.SetLaunch(canLaunch, launch, launch is not null && MeasuresPlaneChanges(segments, index, launch.Body.Name));
+
+            // Into an orbit of another body: the approach is tilted on the way (a rendezvous matches the craft's plane itself).
+            var canArrive = !canLaunch && rendezvous is null && rendezvousSpan is null && LegTools.FindArrival(segment.Legs, _bodies) >= 0;
+            var arrival = canArrive && stop.Arrival is { } inclinedArrival ? LegTools.EvaluateArrival(segment.Legs, inclinedArrival, _bodies) : null;
+            if (arrival is not null) legs = LegTools.ApplyArrival(legs, arrival);
+            stop.SetArrival(canArrive, arrival);
             return ReferenceEquals(legs, segment.Legs) ? segment : segment with { Legs = legs };
         }).ToList();
         foreach (var (index, plan) in launches)
@@ -1183,8 +1245,18 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             // The picker passes through null while the list is refilled; that isn't the user clearing the choice.
             if (value is not null) _designPath = value.Design is null ? null : value.Path;
             Recalculate();
+            OnPropertyChanged(nameof(FlownText));
         }
     }
+
+    /// <summary>What the flight log has on a rocket of this name (set by the app), or null when it hasn't flown.</summary>
+    public Func<string, string?> FlightHistory { get; set; } = _ => null;
+
+    /// <summary>How the picked design has flown so far, from the flight log; null if it hasn't.</summary>
+    public string? FlownText => SelectedDesign?.Design?.Report?.Name is { } name ? FlightHistory(name) : null;
+
+    /// <summary>The flight log changed: the picked design's history may have too.</summary>
+    public void RefreshFlown() => OnPropertyChanged(nameof(FlownText));
 
     public bool HasDesign => _check is not null;
 

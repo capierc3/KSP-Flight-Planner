@@ -33,6 +33,7 @@ public static class Panes
     public const string Rocket = "rocket";
     public const string Flights = "flights";
     public const string FromHere = "fromhere";
+    public const string FlightLog = "flightlog";
     public const string Parts = "parts";
     public const string Part = "part";
 
@@ -45,6 +46,8 @@ public static class Panes
     public const string Rendezvous = "rendezvous";
     public const string Resonant = "resonant";
     public const string Flight = "flight";
+    public const string FlightReport = "flightreport";
+    public const string FlightCompare = "flightcompare";
     public const string TechTree = "techtree";
     public const string Engineering = "engineering";
     public const string EngineChart = "enginechart";
@@ -69,6 +72,7 @@ public static class Panes
         new(Part, "Part", false, Plan, vm => new PartDetailView { DataContext = vm.Parts.Detail }) { OpensOnRight = true, OpensBeside = Notes },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
         new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
+        new(FlightLog, "Flight log", false, [WorkMode.Fly, WorkMode.Plan], vm => new FlightLogListView { DataContext = vm.FlightLog }),
 
         new(Legs, "Legs & phases", true, Plan, vm => new MissionLegsView { DataContext = vm.Mission }),
         new(DvMap, "Δv map", true, Plan, vm => new DvMapView { DataContext = vm.Mission }),
@@ -83,6 +87,8 @@ public static class Panes
         new(CommNet, "CommNet", true, Plan, vm => new CommNetView { DataContext = vm.CommNet }),
         new(PowerBudget, "Power budget", true, Plan, vm => new PowerBudgetView { DataContext = vm.PowerBudget }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
+        new(FlightReport, "Flight report", true, [WorkMode.Fly, WorkMode.Plan], vm => new FlightReportView { DataContext = vm.FlightLog.Report }),
+        new(FlightCompare, "Compare flights", true, [WorkMode.Plan, WorkMode.Fly], vm => new FlightCompareView { DataContext = vm.FlightLog.Compare }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];
 
