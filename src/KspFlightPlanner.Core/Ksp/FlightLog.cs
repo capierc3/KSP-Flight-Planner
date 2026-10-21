@@ -70,11 +70,39 @@ public enum FlightLogEventKind
     Returned,
     Quickload,
     Ended,
+
+    /// <summary>Docked with another vessel (see <see cref="FlightLogEvent.Joined"/> for which one carried on).</summary>
+    Docked,
+
+    /// <summary>Undocked from another vessel.</summary>
+    Undocked,
 }
 
 /// <summary>Something that happened in a flight, for the log's timeline.</summary>
 /// <param name="DurationS">For a gap in the recording (warp, disconnect, switching away): how long it lasted.</param>
-public sealed record FlightLogEvent(double Ut, double MetS, FlightLogEventKind Kind, string Text, double DurationS = 0);
+public sealed record FlightLogEvent(double Ut, double MetS, FlightLogEventKind Kind, string Text, double DurationS = 0)
+{
+    /// <summary>Docked / Undocked: the other vessel's name.</summary>
+    public string? Partner { get; init; }
+
+    /// <summary>Docked / Undocked: the other vessel's log, when it has one.</summary>
+    public long? PartnerLogId { get; init; }
+
+    /// <summary>
+    /// Docked: this flight's vessel went into the other one (KSP kept the other vessel; this log waits until it undocks).
+    /// Undocked: this flight's vessel came back off as a vessel of its own. False on the side that carried on.
+    /// </summary>
+    public bool Joined { get; init; }
+
+    /// <summary>Docked + Joined: the vessel's name when it docked. KSP gives the vessel that name back when it undocks.</summary>
+    public string? AsName { get; init; }
+
+    /// <summary>
+    /// Undocked + Joined: game time − MET of the vessel it came off as. KSP starts a new vessel's MET when it undocks, so
+    /// from here on the flight is found by this launch time too (null when not seen yet).
+    /// </summary>
+    public double? NewLaunchUt { get; init; }
+}
 
 public enum FlightLogOutcome
 {
@@ -151,7 +179,13 @@ public sealed record FlightLog
     public bool IsFlightOf(string vesselName, double ut, double metS) => vesselName == VesselName && LaunchedAt(ut, metS);
 
     /// <summary>Whether a vessel with this MET at game time <paramref name="ut"/> was launched with this log's flight, whatever it's called now.</summary>
-    public bool LaunchedAt(double ut, double metS) => Math.Abs(ut - metS - LaunchUt) <= FlightLogs.SameLaunchS;
+    public bool LaunchedAt(double ut, double metS) => FlightLogs.LaunchTimes(LaunchUt, Events).Any(t => Math.Abs(ut - metS - t) <= FlightLogs.SameLaunchS);
+
+    /// <summary>The docking that put this flight's vessel inside another one, while it's still in there (see <see cref="FlightLogs.DockedIn"/>).</summary>
+    public FlightLogEvent? DockedIn => FlightLogs.DockedIn(Events);
+
+    /// <summary>Not a vessel of its own right now: docked into another, or undocked and not seen since (<see cref="FlightLogs.Away"/>).</summary>
+    public bool Away => FlightLogs.Away(Events);
 }
 
 /// <summary>A flight log without its samples: what the Flight log list shows.</summary>
@@ -169,6 +203,9 @@ public sealed record FlightLogSummary(long Id, string VesselName, double LaunchU
 
     public bool FromLaunch => JoinedAtMetS <= 0;
     public double DurationS => LastUt - LaunchUt;
+
+    /// <inheritdoc cref="FlightLog.DockedIn"/>
+    public FlightLogEvent? DockedIn => FlightLogs.DockedIn(Events);
 }
 
 /// <summary>
@@ -230,10 +267,14 @@ public sealed class FlightLogRecorder
         _log = log;
         _samples = [.. log.Samples];
         _events = [.. log.Events];
+        _followsNewVessel = log.Events.Any(e => e.NewLaunchUt is not null);
     }
 
+    private bool _followsNewVessel; // the vessel undocked since launch: its MET no longer runs from the log's launch
+
     /// <summary>The log so far.</summary>
-    public FlightLog Log => _log with { Samples = _samples.ToList(), Events = _events.ToList() };
+    /// <summary>The log so far, events in time order (a docking can be noted on a log after a later reading resumed it).</summary>
+    public FlightLog Log => _log with { Samples = _samples.ToList(), Events = _events.OrderBy(e => e.Ut).ToList() };
 
     public long Id { get => _log.Id; set => _log = _log with { Id = value }; }
     public string VesselName => _log.VesselName;
@@ -261,6 +302,8 @@ public sealed class FlightLogRecorder
     /// </summary>
     public void Add(FlightSample sample)
     {
+        // After undocking, KSP counts the vessel's MET from the undocking: keep the log's own MET going instead.
+        if (_followsNewVessel) sample = sample with { MetS = sample.Ut - _log.LaunchUt };
         if (sample.WarpRate > PhysicsWarpMax)
         {
             Flush();
@@ -275,7 +318,8 @@ public sealed class FlightLogRecorder
 
         if (previous is not null)
         {
-            if (sample.Stage != previous.Stage) Note(sample, FlightLogEventKind.Stage, $"Stage {sample.Stage}");
+            // A stage count that changes as the mass jumps up isn't staging: another vessel docked, bringing its stages.
+            if (sample.Stage != previous.Stage && FlightDocking.MassJump(previous, sample) <= 0) Note(sample, FlightLogEventKind.Stage, $"Stage {sample.Stage}");
             if (sample.Body != previous.Body) Note(sample, FlightLogEventKind.Soi, $"Entered {sample.Body}'s sphere of influence");
             if (sample.Situation != previous.Situation) Note(sample, FlightLogEventKind.Situation, SituationText(sample.Situation, sample.Body));
         }
@@ -294,6 +338,25 @@ public sealed class FlightLogRecorder
             _pending = null;
         }
         else _pending = sample;
+        Dirty = true;
+    }
+
+    /// <summary>
+    /// Notes a docking or undocking at game time <paramref name="ut"/> (MET in this flight's own count). An undocking that
+    /// gives the flight a new launch time (<see cref="FlightLogEvent.NewLaunchUt"/>) makes later samples' MET run on from
+    /// the log's launch. The flight's own vessel coming back off another one closes the docking: its duration is the time
+    /// spent docked, a gap in the recording.
+    /// </summary>
+    public void NoteDocking(double ut, FlightLogEventKind kind, string text, string? partner, long? partnerLogId, bool joined,
+        string? asName = null, double? newLaunchUt = null)
+    {
+        Flush();
+        if (kind == FlightLogEventKind.Undocked && joined
+            && _events.FindLastIndex(e => e.Joined) is var i and >= 0 && _events[i] is { Kind: FlightLogEventKind.Docked } docked)
+            _events[i] = docked with { DurationS = Math.Max(0, ut - docked.Ut) };
+        _events.Add(new FlightLogEvent(ut, ut - _log.LaunchUt, kind, text)
+            { Partner = partner, PartnerLogId = partnerLogId, Joined = joined, AsName = asName, NewLaunchUt = newLaunchUt });
+        if (newLaunchUt is not null) _followsNewVessel = true;
         Dirty = true;
     }
 
@@ -459,12 +522,16 @@ public static class FlightLogs
     /// the save is older than the log). A flight with no vessel in the save launched when it was is gone: recovered if it
     /// was last seen on the ground or in the water, else lost. A save from before the launch means the flight was reverted.
     /// </summary>
-    public static FlightLogOutcome? EndedIn(FlightLog log, KspSave file)
+    /// <param name="outcomeOf">How another log ended (null while in flight): a flight docked into another vessel ends the way that one did.</param>
+    public static FlightLogOutcome? EndedIn(FlightLog log, KspSave file, Func<long, FlightLogOutcome?>? outcomeOf = null)
     {
         if (log.Outcome != FlightLogOutcome.InFlight) return null;
         if (file.Ut < log.LaunchUt - SameLaunchS) return FlightLogOutcome.Reverted;
-        if (file.Ut < log.LastUt - SameLaunchS) return null; // written before the log's last sample: it can't tell yet
-        if (StillIn(log, file)) return null;
+        var lastUt = log.Events.Count > 0 ? Math.Max(log.LastUt, log.Events.Max(e => e.Ut)) : log.LastUt;
+        if (file.Ut < lastUt - SameLaunchS) return null; // written before the log's last sample (or docking): it can't tell yet
+        if (StillIn(log, file) || DockedUnseen(log, file) is not null) return null;
+        if (log.DockedIn is { PartnerLogId: { } host } && outcomeOf?.Invoke(host) is FlightLogOutcome.Recovered or FlightLogOutcome.Lost)
+            return outcomeOf(host); // went the way of the vessel it docked into
         return log.LastSituation is "LANDED" or "SPLASHED" or "PRELAUNCH" ? FlightLogOutcome.Recovered : FlightLogOutcome.Lost;
     }
 
@@ -475,12 +542,67 @@ public static class FlightLogs
     /// </summary>
     private static bool StillIn(FlightLog log, KspSave file)
     {
-        var launched = file.Vessels.Where(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt) <= SameLaunchS).ToList();
+        if (log.Away)
+        {
+            // Docked: still in while a vessel's docking ports remember it. Undocked and not seen since: while there's a
+            // vessel of that name that came off after the docking.
+            var name = AwayName(log.VesselName, log.Events);
+            var since = log.Events.Last(e => e.Joined).Ut;
+            return file.Vessels.Any(v => v.DockedNames.Contains(name))
+                || file.Vessels.Any(v => v.Name == name && LaunchUt(v, file) >= since - SameLaunchS);
+        }
+        var launched = Launched(log.LaunchUt, log.Events, file);
         return launched.Count == 1 || launched.Any(v => v.Name == log.VesselName || v.Type != "Debris");
+    }
+
+    /// <summary>
+    /// The saved vessel a flight docked into without the log seeing it (the planner wasn't connected): its vessel is gone
+    /// from the save, and a saved vessel's docking ports remember its name. Null otherwise.
+    /// </summary>
+    public static SavedVessel? DockedUnseen(FlightLog log, KspSave file)
+    {
+        if (log.Outcome != FlightLogOutcome.InFlight || log.Away || StillIn(log, file)) return null;
+        return file.Vessels.FirstOrDefault(v => v.DockedNames.Contains(log.VesselName) && v.Name != log.VesselName)
+            ?? file.Vessels.FirstOrDefault(v => v.DockedNames.Contains(log.VesselName));
+    }
+
+    /// <summary>The save's vessels launched (or come off another) at one of the flight's launch times.</summary>
+    private static List<SavedVessel> Launched(double launchUt, IEnumerable<FlightLogEvent> events, KspSave file)
+    {
+        var times = LaunchTimes(launchUt, events).ToList();
+        return file.Vessels.Where(v => times.Any(t => Math.Abs(LaunchUt(v, file) - t) <= SameLaunchS)).ToList();
     }
 
     /// <summary>When a saved vessel was launched: its lct, or the file's time less its met in a save without one.</summary>
     private static double LaunchUt(SavedVessel v, KspSave file) => v.LaunchUt > 0 ? v.LaunchUt : file.Ut - v.MissionTimeS;
+
+    /// <summary>
+    /// Every launch time a flight is known by: its launch, and the start of each vessel it came off another one as (KSP
+    /// starts a vessel's MET, and its lct, again when it undocks). docs/MATH.md §8.14.
+    /// </summary>
+    public static IEnumerable<double> LaunchTimes(double launchUt, IEnumerable<FlightLogEvent> events) =>
+        events.Where(e => e is { Kind: FlightLogEventKind.Undocked, Joined: true, NewLaunchUt: not null })
+            .Select(e => e.NewLaunchUt!.Value).Prepend(launchUt);
+
+    /// <summary>The flight's last docking or undocking of its own vessel (see <see cref="FlightLogEvent.Joined"/>).</summary>
+    private static FlightLogEvent? LastJoined(IEnumerable<FlightLogEvent> events) =>
+        events.LastOrDefault(e => e is { Joined: true, Kind: FlightLogEventKind.Docked or FlightLogEventKind.Undocked });
+
+    /// <summary>The docking that put the flight's vessel inside another one, or null when it's a vessel of its own.</summary>
+    public static FlightLogEvent? DockedIn(IEnumerable<FlightLogEvent> events) =>
+        LastJoined(events) is { Kind: FlightLogEventKind.Docked } docked ? docked : null;
+
+    /// <summary>
+    /// Not a vessel of its own as far as the log knows: docked into another vessel, or undocked (or carried off by the
+    /// other side) without being seen as a vessel since, so its new launch time isn't known. Such a flight is picked up
+    /// again by name.
+    /// </summary>
+    public static bool Away(IEnumerable<FlightLogEvent> events) =>
+        LastJoined(events) is { Kind: FlightLogEventKind.Docked } or { Kind: FlightLogEventKind.Undocked, NewLaunchUt: null };
+
+    /// <summary>The name a flight away from its vessel goes by: the name it docked (or came off) as, else the log's.</summary>
+    public static string AwayName(string vesselName, IEnumerable<FlightLogEvent> events) =>
+        events.LastOrDefault(e => e is { Joined: true, AsName: not null })?.AsName ?? vesselName;
 
     /// <summary>A <see cref="FlightLog.VesselId"/> that says the flight belongs to none of the save's vessels.</summary>
     public const string NoVessel = "";
@@ -494,7 +616,17 @@ public static class FlightLogs
     public static SavedVessel? VesselOf(FlightLogSummary log, KspSave file)
     {
         if (log.VesselId is { } id) return id == NoVessel ? null : file.Vessels.FirstOrDefault(v => v.Id == id);
-        var launched = file.Vessels.Where(v => Math.Abs(LaunchUt(v, file) - log.LaunchUt) <= SameLaunchS).ToList();
+        if (log.DockedIn is not null)
+        {
+            // Docked: the vessel it's part of now.
+            var name = AwayName(log.VesselName, log.Events);
+            return file.Vessels.FirstOrDefault(v => v.DockedNames.Contains(name));
+        }
+        var launched = Launched(log.LaunchUt, log.Events, file);
+        // Come off another vessel since: the vessel it came off as last is the one it is now.
+        var latest = LaunchTimes(log.LaunchUt, log.Events).Last();
+        if (launched.Count > 1 && launched.Where(v => Math.Abs(LaunchUt(v, file) - latest) <= SameLaunchS).ToList() is { Count: 1 } now)
+            return now[0];
         if (launched.Count == 1) return launched[0];
         if (launched.FirstOrDefault(v => v.Name == log.VesselName) is { } named) return named;
         var notDebris = launched.Where(v => v.Type != "Debris").ToList();

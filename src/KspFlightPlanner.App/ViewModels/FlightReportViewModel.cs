@@ -354,6 +354,7 @@ public sealed class FlightReportViewModel : ObservableObject
         return new ChartData("MET", title, series, XIsTime: true, format)
         {
             Marks = log.Events.Where(e => e.Kind is FlightLogEventKind.Stage or FlightLogEventKind.Soi or FlightLogEventKind.Situation
+                    or FlightLogEventKind.Docked or FlightLogEventKind.Undocked
                     && e.MetS >= from && e.MetS <= to).Select(e => (e.MetS, e.Text)).ToList(),
             Gaps = gaps.Where(g => g.To >= from && g.From <= to).ToList(),
         };

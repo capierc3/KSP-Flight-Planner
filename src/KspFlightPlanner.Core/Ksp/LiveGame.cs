@@ -9,6 +9,9 @@ public sealed record LiveVessel(string Name, string Type, string Situation, Save
     /// <summary>The vessel the player has set as target.</summary>
     public bool IsTarget { get; init; }
 
+    /// <summary>kRPC's id for the vessel: the same while connected, gone when the vessel is (e.g. docked into another).</summary>
+    public ulong KrpcId { get; init; }
+
     public bool IsOrbiting => Situation == "ORBITING";
 }
 

@@ -1843,6 +1843,29 @@ Worked example (the Minmus relays, 2026-10-20): the carrier *Link Shuttle mk2* l
 - Code: `FlightLogs.VesselOf`, `FlightLogs.LogsOf`, `FlightLogs.Candidates` (`Core/Ksp/FlightLog.cs`); the tag is `flight_logs.vessel_id`, set by `FlightLogRepository.Retag`; tested in `FlightLogTests`
 - Source: KSP's save format (`VESSEL` node `lct`, `met`, `pid`)
 
+### 8.14 Docking and undocking
+
+When two vessels dock, KSP merges them into **one** of them; the other vessel is gone from the game. When they undock, KSP makes a **new** vessel of the part that comes off: it gets the name it had before docking (each docking port remembers it) and its MET — and `lct` — start again. So the flight log handles the two sides differently:
+
+```
+kept vessel (its kRPC id carries on)     its log carries on, recording the docked stack; notes "<other> docked"
+vessel gone into it                      its log waits docked: event Docked (joined), with the name it docked as
+vessel that comes off again              the waiting log carries on, with that vessel's launch time added
+```
+
+**Spotting a docking live.** Between two readings (≤ 3 s apart, same stage, off rails) the mass jumps by more than max(20 kg, 0.2 % of the mass): up for a docking, down for an undocking. Burning fuel or mining never moves the mass that fast; a staging changes the stage. The flown vessel vanishing into the one flown next (KSP kept the other) shows as a switch of vessel instead. Either way the next listing of the game's vessels says which: a vessel *gone* is one that was in the listing before, isn't now, and was alongside the kept vessel — same body, semi-major axis within 5 %, inclination within 2° (a rendezvous leaves a few m/s between them, a fraction of a percent in orbit size). The kept vessel must be in both listings, so a quickload (every vessel back with a new id) isn't taken for a docking. A vessel *appeared* alongside after a mass drop is one that came off.
+
+**Finding the flight again.** A flight's launch times are its launch plus, for every undocking of its own vessel, game time − MET of the vessel it came off as. A vessel is the flight's if its game time − MET is within 2 s of any of them (§8.5, §8.13). A flight docked into another vessel (or undocked but not seen since) is *away*: it's only picked up by the name it docked as, by a vessel seen first in space or more than a minute after its MET started — a new launch of a rocket with the same name is never taken for it. Samples recorded after an undocking have MET = game time − the log's launch, so the log's clock runs on.
+
+If KSP hands the kept vessel the docked ship's name on undocking (players report stations renamed after the ship that docked), the flown vessel *is* that ship now: the ship's waiting log carries on with it, and the flight that was being recorded goes with the vessel that came off under its old name.
+
+**What the save says.** A docked port (`state = Docked (…)`) in a saved vessel keeps a `DOCKEDVESSEL { vesselName }` node: the vessel it came with. A docked flight stays open while some saved vessel's ports remember its name, and its vessel (§8.13) is that one. If none does, it ends the way the vessel it docked into ended (recovered with it), else as lost. This also catches dockings flown while the planner wasn't connected.
+
+Worked example: the shuttle (launched Day 80) docks to *Kerb Station* on Day 81; the station is kept. The station's log notes "Shuttle docked"; the shuttle's log stops with "Docked to Kerb Station", and saves after that show the station's ports remembering *Kerb Station* and *Shuttle*, so it stays open. On Day 95 the shuttle undocks: KSP names it *Shuttle* again with MET 0, so its game time − MET is Day 95. Flown, it's found as the away flight named *Shuttle*; the log adds "Undocked from Kerb Station after 14d 0h 00m" with launch time Day 95, and the 14 docked days show as a break in its charts. Its MET reads 15 days, not 0.
+
+- Code: `FlightDocking` (`Core/Ksp/FlightDocking.cs`), `FlightLogs.LaunchTimes`, `DockedIn`, `Away`, `EndedIn` (`Core/Ksp/FlightLog.cs`), `SavedVessel.DockedNames` (`KspSave.cs`), `FlightRecorder` (the checks); tested in `FlightDockingTests`
+- Sources: KSP's save format (`ModuleDockingNode` `state`, `DOCKEDVESSEL`); KSP forum notes on undocking names and MET ([undocking rules](https://forum.kerbalspaceprogram.com/profile/100668-claw/content/page/156), [station renamed to the docking craft](https://forum.kerbalspaceprogram.com/topic/190345-space-station-being-renamed-to-the-docking-craft), [vessel naming, 1.4](https://forum.kerbalspaceprogram.com/developerarticles.html/whats-in-a-vessel-name-r206))
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

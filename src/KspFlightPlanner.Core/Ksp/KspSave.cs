@@ -67,6 +67,13 @@ public sealed record SavedVessel(string Id, string Name, string Type, string Sit
     public double AltitudeM { get; init; } = double.NaN;
 
     public IEnumerable<string> Crew => Parts.SelectMany(p => p.Crew);
+
+    /// <summary>
+    /// The names of the vessels docked together into this one, as its docking ports remember them: each port keeps the name
+    /// of the vessel it came with, and KSP gives that name back on undocking. Includes this vessel's own name from before
+    /// it docked. Empty when nothing is docked.
+    /// </summary>
+    public IReadOnlySet<string> DockedNames { get; init; } = new HashSet<string>();
 }
 
 /// <summary>A part of a vessel in the save. <see cref="Name"/> matches <see cref="KspPart.Name"/> in the part catalog.</summary>
@@ -229,6 +236,10 @@ public static class KspSaveReader
             v.GetValue("type") ?? "", v.GetValue("sit") ?? "", orbit)
         {
             Parts = v.GetNodes("PART").Select(ReadPart).ToList(),
+            DockedNames = v.GetNodes("PART").SelectMany(p => p.GetNodes("MODULE"))
+                .Where(m => m.GetValue("name") == "ModuleDockingNode" && (m.GetValue("state") ?? "").StartsWith("Docked", StringComparison.Ordinal))
+                .Select(m => m.GetNode("DOCKEDVESSEL")?.GetValue("vesselName"))
+                .OfType<string>().ToHashSet(),
             LaunchUt = Number(v.GetValue("lct")),
             MissionTimeS = Number(v.GetValue("met")),
             LatitudeDeg = Number(v.GetValue("lat")),

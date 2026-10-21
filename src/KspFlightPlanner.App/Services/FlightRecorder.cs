@@ -47,6 +47,16 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     private DateTime _storedAt;
     private string _status = "";
 
+    // Dockings and undockings: a reading that hints at one (the mass jumped, or the flown vessel vanished into another) is
+    // checked against the next listing of the game's vessels, which shows which vessel went or came.
+    private enum CheckKind { Joined, Left, Split }
+    private sealed record DockCheck(CheckKind Kind, double Ut, ulong VesselId, long LogId, string Name, IReadOnlyList<LiveVessel> Before);
+    private readonly List<DockCheck> _checks = [];
+    private IReadOnlyList<LiveVessel>? _vessels; // the latest listing of the game's vessels
+    private FlightSample? _lastRead; // the reading before, to spot a mass jump
+    private long? _lastLogId; // the log recorded last: a vessel that comes off it carries on a log docked into it
+    private readonly Dictionary<ulong, List<Action<FlightLogRecorder>>> _notesFor = []; // for a vessel not recorded yet
+
     public FlightRecorder(KspLink link, SaveSync sync, FlightLogRepository logs)
     {
         _link = link;
@@ -55,7 +65,12 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         _timer = new DispatcherTimer { Interval = ReadEvery };
         _timer.Tick += (_, _) => Tick();
         link.PropertyChanged += OnLinkChanged;
-        link.GameUpdated += game => { if (game is not null && SaveConfirmed) EndReverted(game.Ut); };
+        link.GameUpdated += game =>
+        {
+            if (game is null) return;
+            if (SaveConfirmed) EndReverted(game.Ut);
+            OnVesselsRead(game);
+        };
         sync.PropertyChanged += OnSyncChanged;
         LogsChanged += RefreshOpen;
         RefreshOpen();
@@ -158,7 +173,10 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
                 _ = OpenAsync();
                 return;
             }
-            // Another vessel, or this one's gone: open again for whatever is flown now.
+            // Another vessel, or this one's gone: open again for whatever is flown now. The flown vessel may have docked into
+            // the one flown now (KSP keeps one of the two): see what the next listing of vessels says.
+            if (end == TelemetryEnd.OtherVessel && _recorder is { } left && _lastRead is { Situation: not "PRELAUNCH" } last)
+                Check(CheckKind.Left, last.Ut, left);
             Leave(FlightLogEventKind.SwitchedAway, end == TelemetryEnd.OtherVessel ? "Switched to another vessel" : "Lost the vessel's readings");
             return;
         }
@@ -201,14 +219,20 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             }
             _recorder = Resume(_telemetry.VesselName, _telemetry.VesselId, sample) ?? NewLog(_telemetry.VesselName, sample);
             _recordingId = _telemetry.VesselId;
+            if (_notesFor.Remove(_recordingId, out var notes))
+                foreach (var note in notes) note(_recorder);
             Store();
             _vesselOf[_recorder.Id] = _recordingId;
         }
         else
         {
             _recorder.Add(sample);
+            // Another vessel joined this one (docked) or came off it (undocked, or released without staging).
+            if (_lastRead is { } before && FlightDocking.MassJump(before, sample) is var jump and not 0)
+                Check(jump > 0 ? CheckKind.Joined : CheckKind.Split, sample.Ut, _recorder);
             if (DateTime.UtcNow - _storedAt >= StoreEvery && _recorder.Dirty) Store();
         }
+        _lastRead = sample;
         UpdateStatus(sample);
     }
 
@@ -219,6 +243,7 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         {
             _telemetry = await _link.OpenTelemetryAsync();
             _unsettledReads = SettleReads;
+            _lastRead = null;
         }
         catch (Exception)
         {
@@ -264,23 +289,194 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     /// </summary>
     private FlightLogRecorder? Resume(string vesselName, ulong vesselId, FlightSample sample)
     {
-        var launched = _logs.GetInFlight().Where(l => l.LaunchedAt(sample.Ut, sample.MetS)).ToList();
+        var open = _logs.GetInFlight();
+        var launched = open.Where(l => !l.Away && l.LaunchedAt(sample.Ut, sample.MetS)).ToList();
         var log = launched.FirstOrDefault(l => _vesselOf.GetValueOrDefault(l.Id) == vesselId)
-            ?? launched.FirstOrDefault(l => l.VesselName == vesselName)
-            ?? (launched.Count == 1 ? launched[0] : null);
-        if (log is null) return null;
-        var recorder = new FlightLogRecorder(log);
-        var gap = sample.Ut - log.LastUt;
-        if (gap >= NotableGapS)
+            ?? launched.FirstOrDefault(l => l.VesselName == vesselName);
+        FlightLogRecorder recorder;
+        if (log is null && !FlightDocking.JustLaunched(sample)
+            && FlightDocking.AwayLogNamed(vesselName, open.Select(l => l.Summary), _lastLogId) is { } awaySummary
+            && open.FirstOrDefault(l => l.Id == awaySummary.Id) is { } away)
         {
-            var (kind, why) = _leftBecause.GetValueOrDefault(log.Id, (FlightLogEventKind.Disconnected, "Flight disconnected"));
-            recorder.Note(kind == FlightLogEventKind.Disconnected ? FlightLogEventKind.Reconnected : FlightLogEventKind.Returned,
-                $"{why}: {FlightLogs.Duration(gap)} not recorded", gap);
+            // A vessel that docked into another one (or was carried off by it) and has come back off as itself: KSP gave
+            // it back its name and started its MET again.
+            log = away;
+            recorder = new FlightLogRecorder(log);
+            NoteUndocked(recorder, sample.Ut, sample.Ut - sample.MetS);
+        }
+        else
+        {
+            log ??= launched.Count == 1 ? launched[0] : null;
+            if (log is null) return null;
+            recorder = new FlightLogRecorder(log);
+            var gap = sample.Ut - log.LastUt;
+            if (gap >= NotableGapS)
+            {
+                var (kind, why) = _leftBecause.GetValueOrDefault(log.Id, (FlightLogEventKind.Disconnected, "Flight disconnected"));
+                recorder.Note(kind == FlightLogEventKind.Disconnected ? FlightLogEventKind.Reconnected : FlightLogEventKind.Returned,
+                    $"{why}: {FlightLogs.Duration(gap)} not recorded", gap);
+            }
         }
         _leftBecause.Remove(log.Id);
         recorder.Add(sample);
         return recorder;
     }
+
+    /// <summary>
+    /// Notes on an away flight that its vessel is its own again, as the vessel launched (came off) at
+    /// <paramref name="newLaunchUt"/>, and on the vessel it was docked into that it undocked.
+    /// </summary>
+    private void NoteUndocked(FlightLogRecorder recorder, double ut, double newLaunchUt)
+    {
+        var log = recorder.Log;
+        var docked = log.DockedIn;
+        var since = log.Events.Last(e => e.Joined);
+        var partner = docked?.Partner ?? since.Partner;
+        var name = FlightLogs.AwayName(log.VesselName, log.Events);
+        var after = docked is null ? "" : $" after {FlightLogs.Duration(ut - docked.Ut)} docked";
+        recorder.NoteDocking(ut, FlightLogEventKind.Undocked, (partner is null ? "Undocked" : $"Undocked from {partner}") + after,
+            partner, since.PartnerLogId, joined: true, asName: name, newLaunchUt: newLaunchUt);
+        if (docked?.PartnerLogId is { } host)
+            NoteOn(host, null, r =>
+            {
+                if (!r.Log.Events.Any(e => e.Kind == FlightLogEventKind.Undocked && e.Partner == name && e.Ut >= docked.Ut))
+                    r.NoteDocking(ut, FlightLogEventKind.Undocked, $"{name} undocked", name, recorder.Id, joined: false);
+            });
+    }
+
+    /// <summary>Checks the next listing of vessels for a docking or undocking hinted at by the flown vessel's readings.</summary>
+    private void Check(CheckKind kind, double ut, FlightLogRecorder recorder)
+    {
+        if (_vessels is not { } before) return; // nothing to compare with yet
+        _checks.Add(new DockCheck(kind, ut, _recordingId, recorder.Id, _telemetry?.VesselName ?? recorder.VesselName, before));
+        _link.ReadVesselsSoon();
+    }
+
+    private void OnVesselsRead(LiveGame game)
+    {
+        if (game.Vessels is not { } after || ReferenceEquals(after, _vessels)) return; // not read again since
+        _vessels = after;
+        if (!SaveConfirmed) { _checks.Clear(); return; }
+        foreach (var check in _checks.Where(c => c.Ut <= game.Ut + FlightLogs.SameLaunchS).ToList())
+        {
+            _checks.Remove(check);
+            _ = ResolveAsync(check, after);
+        }
+    }
+
+    private async Task ResolveAsync(DockCheck check, IReadOnlyList<LiveVessel> after)
+    {
+        try
+        {
+            if (check.Kind == CheckKind.Split) await ResolveSplitAsync(check, after);
+            else ResolveDocking(check, after);
+        }
+        catch (Exception)
+        {
+            // The link dropped meanwhile: the save's docking ports still tell (FlightLogs.EndedIn).
+        }
+    }
+
+    /// <summary>Vessels gone into the one KSP kept: their flights wait docked in it, and it notes who docked.</summary>
+    private void ResolveDocking(DockCheck check, IReadOnlyList<LiveVessel> after)
+    {
+        // Joined: the flown vessel was kept and another went into it. Left: the flown vessel went into the one flown now.
+        var hostId = check.Kind == CheckKind.Joined ? check.VesselId : after.FirstOrDefault(v => v.IsActive)?.KrpcId;
+        if (hostId is not { } id || after.FirstOrDefault(v => v.KrpcId == id) is not { } host) return;
+        var gone = FlightDocking.Gone(check.Before, after, id);
+        if (check.Kind == CheckKind.Left) gone = gone.Where(v => v.KrpcId == check.VesselId).ToList();
+        if (gone.Count == 0) return;
+
+        var summaries = _logs.GetAll();
+        var hostLog = _recorder is { } r && _recordingId == id ? r.Id
+            : FlightDocking.LogOf(host, summaries, _vesselOf, NameNow)?.Id;
+        foreach (var vessel in gone)
+        {
+            long? goneId = check.Kind == CheckKind.Left ? check.LogId : FlightDocking.LogOf(vessel, summaries, _vesselOf, NameNow)?.Id;
+            if (goneId == hostLog) goneId = null;
+            if (goneId is { } logId && _logs.Get(logId) is { } goneLog && !goneLog.Away)
+            {
+                var recorder = new FlightLogRecorder(goneLog);
+                recorder.NoteDocking(check.Ut, FlightLogEventKind.Docked, $"Docked to {host.Name}", host.Name, hostLog, joined: true, asName: vessel.Name);
+                _logs.Save(recorder.Log);
+                _vesselOf.Remove(logId);
+                _leftBecause.Remove(logId);
+            }
+            var text = vessel.Type == "SpaceObject" ? $"Grabbed {vessel.Name}" : $"{vessel.Name} docked";
+            NoteOn(hostLog, id, h => h.NoteDocking(check.Ut, FlightLogEventKind.Docked, text, vessel.Name, goneId, joined: false));
+        }
+        LogsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Vessels come off the flown one: a flight docked into it carries on with the vessel of its name. When KSP gave the
+    /// flown vessel itself a docked flight's name, that flight carries on with it, and this flight with the vessel that
+    /// came off.
+    /// </summary>
+    private async Task ResolveSplitAsync(DockCheck check, IReadOnlyList<LiveVessel> after)
+    {
+        var appeared = FlightDocking.Appeared(check.Before, after, check.VesselId).Where(v => v.Type != "Debris").ToList();
+        var now = after.FirstOrDefault(v => v.KrpcId == check.VesselId);
+        var renamed = now is not null && now.Name != check.Name ? now.Name : null;
+        var summaries = _logs.GetAll();
+        var docked = appeared.Select(v => (Vessel: v, Log: FlightDocking.AwayLogNamed(v.Name, summaries, check.LogId)))
+            .Where(p => p.Log is not null).ToList();
+        var swapped = renamed is not null ? FlightDocking.AwayLogNamed(renamed, summaries, check.LogId) : null;
+        if (docked.Count == 0 && swapped is null) return;
+
+        var ids = appeared.Select(v => v.KrpcId).ToList();
+        var launches = ids.Count > 0 ? await _link.LaunchTimesAsync(ids) : new Dictionary<ulong, double>();
+        foreach (var (vessel, summary) in docked)
+        {
+            // Without its launch time (gone again already) it's picked up by name when it's flown.
+            if (!launches.TryGetValue(vessel.KrpcId, out var launch) || _logs.Get(summary!.Id) is not { Away: true } log) continue;
+            var recorder = new FlightLogRecorder(log);
+            NoteUndocked(recorder, check.Ut, launch);
+            _logs.Save(recorder.Log);
+        }
+
+        if (swapped is not null && _recorder is { } flown && flown.Id == check.LogId && _recordingId == check.VesselId)
+        {
+            // The flown vessel is now the docked flight's (KSP named it so): this flight goes with the vessel that came off
+            // under its old name, found by that launch time, or by name when flown next. The streams reopen, and the
+            // docked flight is picked up again on this vessel.
+            var off = appeared.FirstOrDefault(v => v.Name == check.Name);
+            double? offLaunch = off is not null && launches.TryGetValue(off.KrpcId, out var launch) ? launch : null;
+            flown.NoteDocking(check.Ut, FlightLogEventKind.Undocked, $"Undocked from {renamed}: carried on as a new vessel", renamed,
+                swapped.Id, joined: true, asName: check.Name, newLaunchUt: offLaunch);
+            _vesselOf.Remove(flown.Id);
+            Leave(FlightLogEventKind.SwitchedAway, "Undocked");
+        }
+        LogsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Adds a note to a log: the one being recorded, else the stored one, else (no log yet) the next one recorded for
+    /// vessel <paramref name="vesselId"/>.
+    /// </summary>
+    private void NoteOn(long? logId, ulong? vesselId, Action<FlightLogRecorder> note)
+    {
+        if (_recorder is { } r && (r.Id == logId || vesselId is not null && _recordingId == vesselId))
+        {
+            note(r);
+            Store();
+        }
+        else if (logId is { } id && _logs.Get(id) is { Outcome: FlightLogOutcome.InFlight } log)
+        {
+            var recorder = new FlightLogRecorder(log);
+            note(recorder);
+            _logs.Save(recorder.Log);
+            LogsChanged?.Invoke();
+        }
+        else if (vesselId is { } v)
+        {
+            if (!_notesFor.TryGetValue(v, out var list)) _notesFor[v] = list = [];
+            list.Add(note);
+        }
+    }
+
+    /// <summary>The name a log's vessel goes by in the save now (it may have been renamed since launch).</summary>
+    private string? NameNow(FlightLogSummary log) => _sync.Save is { } save ? FlightLogs.VesselOf(log, save)?.Name : null;
 
     /// <summary>Stops recording the current flight (it stays open, to be picked up again) and closes the streams.</summary>
     private void Leave(FlightLogEventKind kind, string why, bool store = true)
@@ -290,8 +486,10 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             recorder.Flush();
             if (store) Store();
             _leftBecause[recorder.Id] = (kind, why);
+            _lastLogId = recorder.Id;
             _recorder = null;
         }
+        _lastRead = null;
         if (_telemetry is { } telemetry)
         {
             _telemetry = null;
@@ -316,13 +514,28 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     private void EndFromSave(KspSave file)
     {
         var changed = false;
-        foreach (var log in _logs.GetInFlight())
+        var outcomes = _logs.GetAll().ToDictionary(l => l.Id, l => l.Outcome);
+        FlightLogOutcome? OutcomeOf(long id) => outcomes.TryGetValue(id, out var o) && o != FlightLogOutcome.InFlight ? o : null;
+        // Flights docked into another vessel last: they go the way that one went.
+        foreach (var log in _logs.GetInFlight().OrderBy(l => l.DockedIn is null ? 0 : 1))
         {
             var flying = _recorder?.Id == log.Id;
             var current = flying ? _recorder!.Log : log;
-            if (FlightLogs.EndedIn(current, file) is not { } outcome) continue;
+            if (!flying && file.Ut >= log.LastUt && FlightLogs.DockedUnseen(log, file) is { } host)
+            {
+                // Docked while the planner wasn't looking: wait docked in the vessel that remembers it.
+                var docked = new FlightLogRecorder(log);
+                var hostLog = FlightLogs.LogsOf(host, file, _logs.GetAll()).FirstOrDefault(l => l.Id != log.Id)?.Id;
+                docked.NoteDocking(log.LastUt, FlightLogEventKind.Docked, $"Docked to {host.Name} (found in the save)", host.Name, hostLog,
+                    joined: true, asName: log.VesselName);
+                _logs.Save(docked.Log);
+                changed = true;
+                continue;
+            }
+            if (FlightLogs.EndedIn(current, file, OutcomeOf) is not { } outcome) continue;
             if (flying && outcome != FlightLogOutcome.Reverted) continue;
             End(log, outcome);
+            outcomes[log.Id] = outcome;
             changed = true;
         }
         if (changed) LogsChanged?.Invoke();

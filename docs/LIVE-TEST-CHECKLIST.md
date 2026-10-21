@@ -305,6 +305,15 @@ Notes:
 - [ ] On the Vessel page, Flight log lists its flights; clicking one opens the Flight log and the Flight report on it
 - [ ] Edit log… → pick another vessel (or None of them) and change the rocket name → the row, Vessel page and Compare follow; keep flying the vessel and the edit stays
 
+Docking (fly a ship up to the station and dock, then undock it later):
+- [ ] Fly the ship in and dock → within a few seconds the station's log gets "<ship> docked" and the ship's row says "Docked to <station>" (not Lost, even after KSP saves)
+- [ ] Note which vessel KSP kept (the docked stack's name in the map view): that one's log carries on recording the stack
+- [ ] Switch away and back to the docked stack → still one log for the stack, no new log for the ship
+- [ ] Undock and fly the ship away → its own log picks up again: "Undocked from <station> after …", MET runs on from its launch (not from 0), the docked days show as a break in the charts
+- [ ] The station's log gets "<ship> undocked"; the ship's Vessel page lists its flight again
+- [ ] If KSP renamed either vessel on undocking, write down what it did: both logs should still follow the right vessel
+- [ ] Dock while the planner is closed, open it, let KSP save → the ship's log says Docked (found from the save's docking ports), not Lost
+
 Notes:
 
 ## 11. Other bits

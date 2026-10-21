@@ -41,6 +41,7 @@ public sealed class FlightLogItem(FlightLogSummary log, bool grouped = true, Sav
 
     public string Outcome => Log.Outcome switch
     {
+        FlightLogOutcome.InFlight when Log.DockedIn is { } docked => docked.Partner is { } host ? $"Docked to {host}" : "Docked",
         FlightLogOutcome.InFlight => Log.LastSituation switch
         {
             "LANDED" => $"Landed on {Log.LastBody}",

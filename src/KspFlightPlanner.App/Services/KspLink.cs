@@ -208,6 +208,27 @@ public sealed class KspLink : ObservableObject, IDisposable
         return PollAsync();
     }
 
+    /// <summary>Reads every vessel on the next poll, rather than when the vessels are next due.</summary>
+    public void ReadVesselsSoon() => _vesselsDue = true;
+
+    /// <summary>
+    /// Game time less MET of these vessels (by kRPC id): when each was launched, or came off another vessel. Vessels gone
+    /// are left out.
+    /// </summary>
+    public Task<IReadOnlyDictionary<ulong, double>> LaunchTimesAsync(IReadOnlyCollection<ulong> ids) =>
+        CallAsync<IReadOnlyDictionary<ulong, double>>(c =>
+        {
+            var space = c.SpaceCenter();
+            var result = new Dictionary<ulong, double>();
+            foreach (var v in space.Vessels)
+            {
+                if (!ids.Contains(v.id)) continue;
+                try { result[v.id] = space.UT - v.MET; }
+                catch (RPCException) { /* gone meanwhile */ }
+            }
+            return result;
+        });
+
     /// <summary>The vessel being flown and how many maneuver nodes it already has, or null outside flight.</summary>
     public async Task<(string Vessel, int Nodes)?> ActiveVesselNodesAsync()
     {
@@ -417,7 +438,7 @@ public sealed class KspLink : ObservableObject, IDisposable
                 orbit = new SavedOrbit(o.SemiMajorAxis, o.Eccentricity, o.Inclination * RadToDeg, o.LongitudeOfAscendingNode * RadToDeg,
                     o.ArgumentOfPeriapsis * RadToDeg, o.MeanAnomalyAtEpoch, o.Epoch, -1, bodyName);
             }
-            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId });
+            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId, KrpcId = v.id });
         }
         return list;
     }
