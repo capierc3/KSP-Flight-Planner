@@ -131,6 +131,7 @@ public sealed class FlightViewModel : ObservableObject
         get => _selected;
         set
         {
+            if (_storing) return; // the Flights list letting go of the flight being swapped for its re-planned copy
             if (!SetProperty(ref _selected, value)) return;
             Status = null;
             RebuildBurns();
@@ -228,16 +229,30 @@ public sealed class FlightViewModel : ObservableObject
         RebuildBurns();
     }
 
-    /// <summary>Stores a changed flight and shows it.</summary>
+    /// <summary>
+    /// Stores a changed flight and keeps showing it. Swapping it into <see cref="Flights"/> makes the Flights list drop its
+    /// selection (it writes null back to <see cref="SelectedFlight"/>), which would close the flight: that write is ignored,
+    /// and the list is pointed at the new copy.
+    /// </summary>
     private void Store(Flight flight)
     {
         _flights.Update(flight);
         var i = Flights.IndexOf(_selected!);
         _selected = flight;
-        if (i >= 0) Flights[i] = flight;
+        _storing = true;
+        try
+        {
+            if (i >= 0) Flights[i] = flight;
+        }
+        finally
+        {
+            _storing = false;
+        }
         OnPropertyChanged(nameof(SelectedFlight));
         RebuildBurns();
     }
+
+    private bool _storing; // swapping a re-planned flight into the list
 
     private void RebuildBurns()
     {
