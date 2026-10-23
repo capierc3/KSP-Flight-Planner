@@ -106,7 +106,7 @@ public sealed class LiveTelemetry
     {
         Vessel vessel;
         try { vessel = c.SpaceCenter().ActiveVessel; }
-        catch (RPCException) { return null; }
+        catch (Exception ex) when (ex is RPCException or System.ArgumentException) { return null; }
         return new LiveTelemetry(c, vessel);
     }
 
@@ -139,7 +139,7 @@ public sealed class LiveTelemetry
             _last = sample;
             return sample;
         }
-        catch (Exception ex) when (ex is RPCException or System.InvalidOperationException or ObjectDisposedException)
+        catch (Exception ex) when (ex is RPCException or System.ArgumentException or System.InvalidOperationException or ObjectDisposedException)
         {
             return null;
         }

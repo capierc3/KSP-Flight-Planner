@@ -224,7 +224,7 @@ public sealed class KspLink : ObservableObject, IDisposable
             {
                 if (!ids.Contains(v.id)) continue;
                 try { result[v.id] = space.UT - v.MET; }
-                catch (RPCException) { /* gone meanwhile */ }
+                catch (Exception ex) when (ex is RPCException or System.ArgumentException) { /* gone meanwhile */ }
             }
             return result;
         });
@@ -428,17 +428,22 @@ public sealed class KspLink : ObservableObject, IDisposable
         var list = new List<LiveVessel>();
         foreach (var v in space.Vessels)
         {
-            var situation = SituationName(v.Situation);
-            SavedOrbit? orbit = null;
-            if (situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH"))
+            try
             {
-                var o = v.Orbit;
-                var body = o.Body;
-                if (!bodies.TryGetValue(body.id, out var bodyName)) bodies[body.id] = bodyName = body.Name;
-                orbit = new SavedOrbit(o.SemiMajorAxis, o.Eccentricity, o.Inclination * RadToDeg, o.LongitudeOfAscendingNode * RadToDeg,
-                    o.ArgumentOfPeriapsis * RadToDeg, o.MeanAnomalyAtEpoch, o.Epoch, -1, bodyName);
+                var situation = SituationName(v.Situation);
+                SavedOrbit? orbit = null;
+                if (situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH"))
+                {
+                    var o = v.Orbit;
+                    var body = o.Body;
+                    if (!bodies.TryGetValue(body.id, out var bodyName)) bodies[body.id] = bodyName = body.Name;
+                    orbit = new SavedOrbit(o.SemiMajorAxis, o.Eccentricity, o.Inclination * RadToDeg, o.LongitudeOfAscendingNode * RadToDeg,
+                        o.ArgumentOfPeriapsis * RadToDeg, o.MeanAnomalyAtEpoch, o.Epoch, -1, bodyName);
+                }
+                list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId, KrpcId = v.id });
             }
-            list.Add(new LiveVessel(v.Name, v.Type.ToString(), situation, orbit) { IsActive = v.id == activeId, IsTarget = v.id == targetId, KrpcId = v.id });
+            // Debris can be destroyed between listing the vessels and reading one: kRPC then says "No such vessel".
+            catch (Exception ex) when (ex is RPCException or System.ArgumentException) { }
         }
         return list;
     }
@@ -452,7 +457,7 @@ public sealed class KspLink : ObservableObject, IDisposable
         {
             return await Task.Run(() => call(connection));
         }
-        catch (Exception ex) when (ex is not (System.InvalidOperationException or RPCException))
+        catch (Exception ex) when (ex is not (System.InvalidOperationException or RPCException or System.ArgumentException))
         {
             if (connection == _connection)
             {
@@ -470,7 +475,7 @@ public sealed class KspLink : ObservableObject, IDisposable
     private static T? TryGet<T>(Func<T> get) where T : class
     {
         try { return get(); }
-        catch (RPCException) { return null; }
+        catch (Exception ex) when (ex is RPCException or System.ArgumentException) { return null; }
     }
 
     internal static string SituationName(VesselSituation situation) => situation switch
