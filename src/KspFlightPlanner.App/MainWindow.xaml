@@ -53,6 +53,8 @@
                              ToolTip="Fly a plan against the live game (Ctrl+2)" />
             </StackPanel>
 
+            <!-- File: missions and the planner's own settings. View: mode and panes. Tools: the planners.
+                 KSP: everything that reads from or talks to the game. -->
             <Menu Padding="4,2">
                 <MenuItem Header="_File">
                     <MenuItem Header="_New Mission" Command="{Binding Mission.NewMissionCommand}" InputGestureText="Ctrl+N" />
@@ -62,9 +64,8 @@
                     <MenuItem Header="Save Mission _As…" Command="{Binding Mission.SaveMissionAsCommand}" InputGestureText="Ctrl+Shift+S"
                               ToolTip="Save a copy and keep editing the copy" />
                     <Separator />
-                    <MenuItem Header="_Import Vessels from Save…" Command="{x:Static app:MainCommands.ImportVessels}" />
-                    <MenuItem Header="_Reload Save" Command="{x:Static app:MainCommands.ReloadSave}" />
-                    <Separator />
+                    <MenuItem Header="Se_ttings…" Command="{x:Static app:MainCommands.Settings}"
+                              ToolTip="Your KSP folder and save, the live connection, units" />
                     <MenuItem Header="Open _Data Folder" Command="{x:Static app:MainCommands.OpenDataFolder}"
                               ToolTip="Where the planner database is stored" />
                     <Separator />
@@ -76,36 +77,58 @@
                     <MenuItem Header="_Fly" Command="{x:Static app:MainCommands.SetMode}" CommandParameter="Fly" InputGestureText="Ctrl+2"
                               IsChecked="{Binding IsFlying, Mode=OneWay}" />
                     <Separator />
-                    <MenuItem Header="_Mission" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Mission}" />
-                    <MenuItem Header="_Saved missions" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Missions}" />
-                    <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" />
-                    <MenuItem Header="Not_es" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Notes}" />
-                    <MenuItem Header="_Rocket" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rocket}" />
-                    <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
-                    <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />
-                    <MenuItem Header="F_lights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
-                    <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
-                    <Separator />
-                    <MenuItem Header="Legs &amp; p_hases" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Legs}" />
-                    <MenuItem Header="Δv m_ap" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.DvMap}" />
-                    <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Transfer}" />
-                    <MenuItem Header="Re_ndezvous" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rendezvous}" />
-                    <MenuItem Header="Res_onant Orbits" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Resonant}" />
-                    <MenuItem Header="Fli_ght" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
+                    <MenuItem Header="_Mission">
+                        <MenuItem Header="_Mission" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Mission}" />
+                        <MenuItem Header="_Legs &amp; phases" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Legs}" />
+                        <MenuItem Header="_Δv map" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.DvMap}" />
+                        <MenuItem Header="_Saved missions" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Missions}" />
+                        <MenuItem Header="_Notes" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Notes}" />
+                    </MenuItem>
+                    <MenuItem Header="C_raft">
+                        <MenuItem Header="_Rocket" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rocket}" />
+                        <MenuItem Header="_Parts" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Parts}" />
+                        <MenuItem Header="Part _details" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Part}" />
+                    </MenuItem>
+                    <MenuItem Header="Pl_aces">
+                        <MenuItem Header="_Locations" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Locations}" />
+                        <MenuItem Header="_Vessels" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Vessels}" />
+                    </MenuItem>
+                    <MenuItem Header="Fl_ying">
+                        <MenuItem Header="_Flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flights}" />
+                        <MenuItem Header="F_light" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Flight}" />
+                        <MenuItem Header="From _here" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FromHere}" />
+                        <MenuItem Header="Flight _log" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightLog}" ToolTip="Every flight recorded while connected" />
+                        <MenuItem Header="Flight _report" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightReport}" ToolTip="The flight picked in the Flight log" />
+                        <MenuItem Header="_Compare flights" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.FlightCompare}" ToolTip="One rocket's flights side by side" />
+                    </MenuItem>
+                    <MenuItem Header="_Calculators" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}" ToolTip="Inputs for the tool you looked at last" />
                     <Separator />
                     <MenuItem Header="Reset Window _Layout" Command="{x:Static app:MainCommands.ResetLayout}"
                               ToolTip="Put the panes of the current mode back where they started" />
                 </MenuItem>
                 <MenuItem Header="_Tools">
+                    <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Transfer}" />
+                    <MenuItem Header="_Rendezvous" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rendezvous}" />
+                    <MenuItem Header="Res_onant Orbits" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Resonant}" />
+                    <Separator />
+                    <MenuItem Header="_Engineering" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Engineering}" ToolTip="A saved design taken apart" />
+                    <MenuItem Header="Engine c_hart" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.EngineChart}" />
+                    <MenuItem Header="Comm_Net planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.CommNet}" />
+                    <MenuItem Header="Power _budget" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.PowerBudget}" />
+                    <Separator />
+                    <MenuItem Header="Te_ch tree" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.TechTree}" />
+                </MenuItem>
+                <MenuItem Header="_KSP">
                     <MenuItem Header="{Binding Link.MenuText}" Command="{x:Static app:MainCommands.ConnectKsp}"
                               ToolTip="Talk to the running game through the kRPC mod (address and ports in Settings › Live connection)" />
+                    <Separator />
+                    <MenuItem Header="_Reload Save" Command="{x:Static app:MainCommands.ReloadSave}" InputGestureText="F5" />
+                    <MenuItem Header="_Import Vessels from Save…" Command="{x:Static app:MainCommands.ImportVessels}" InputGestureText="Ctrl+I" />
+                    <MenuItem Header="Read _Part Data Again" Command="{x:Static app:MainCommands.ReadPartData}"
+                              ToolTip="Read parts (masses, engines, antennas, power) and the tech tree from the KSP folder again" />
+                    <Separator />
                     <MenuItem Header="_Bake Surface Data…" Command="{x:Static app:MainCommands.BakeSurface}"
                               ToolTip="Sample each body's terrain, biomes, rotation and air from the running game, for landing spots" />
-                    <Separator />
-                    <MenuItem Header="Read _Part Data Again" Command="{x:Static app:MainCommands.ReadPartData}"
-                              ToolTip="Read part masses, engines and antennas from the KSP folder again" />
-                    <Separator />
-                    <MenuItem Header="_Settings…" Command="{x:Static app:MainCommands.Settings}" />
                 </MenuItem>
                 <MenuItem Header="_Help">
                     <MenuItem Header="Math _Guide" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Guide}" InputGestureText="F1" />
@@ -122,6 +145,15 @@
             </StatusBarItem>
             <StatusBarItem Visibility="{Binding Sync.HasProblem, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Sync.Problem}" Foreground="#EF5350" FontSize="12" />
+            </StatusBarItem>
+            <!-- The game is playing another save: nothing is recorded or laid over this one until they match. -->
+            <StatusBarItem Visibility="{Binding Sync.PlayingOtherSave, Converter={StaticResource BoolToVisibility}}"
+                           ToolTip="Flights aren't recorded and the live game isn't laid over this save until KSP plays it.">
+                <TextBlock FontSize="12">
+                    <Run Text="{Binding Sync.OtherSaveText, Mode=OneWay}" Foreground="#EF5350" />
+                    <Run Text=" · " />
+                    <Hyperlink Click="OtherSave_Click">What now?</Hyperlink>
+                </TextBlock>
             </StatusBarItem>
             <!-- Right side: vessels waiting to be imported, then the live link to the game. -->
             <StatusBarItem HorizontalAlignment="Right">

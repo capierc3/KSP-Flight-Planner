@@ -12,17 +12,17 @@ Easiest way: open `docs/checklist.html` in Edge or Chrome and pick this file. Ti
 
 - [x] Start KSP, load the **Protogen** save
 - [x] kRPC window → **Start server** (auto-accept is already on)
-- [x] Start the planner (`publish\KspFlightPlanner.exe`)
+- [x] Start the planner (`publish\<branch>\KspFlightPlanner.exe`, from `tools/publish.ps1`)
 - [x] Have a craft **in orbit around Kerbin** you don't mind adding/removing maneuver nodes on (a KerbLink relay is fine)
 - [ ] Optional for later sections: a second craft in Kerbin orbit to use as a **target**, and a carrier with a few
       decouplable probes for the **resonant deployment** test
 
 ## 1. Connecting
 
-- [x] **Tools › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
+- [x] **KSP › Connect to KSP**: status bar dot goes amber, then green: "KSP: Space Center · Year 1, Day …"
 - [x] Status bar date **ticks forward** every couple of seconds while time passes in game
 - [ ] Switch scenes (Space Center → Tracking Station → flight): status bar scene name follows
-- [x] **Tools › Disconnect from KSP** → grey dot, "not connected". Connect again works.
+- [x] **KSP › Disconnect from KSP** → grey dot, "not connected". Connect again works.
 - [x] Quit KSP while connected → planner shows "Lost the connection to KSP" in red (it shouldn't freeze or crash)
 - [x] Optional: **Settings › Live connection**: enter a bad port (e.g. `abc`) → red message and OK greyed out;
       **Restore kRPC defaults** puts 127.0.0.1 / 50000 / 50001 back
@@ -138,7 +138,7 @@ lift-off time for a launch rendezvous is off.
 
 Notes:
 
-## 10. Bake surface data (Tools › Bake Surface Data…) ✅ baked 2026-10-09
+## 10. Bake surface data (KSP › Bake Surface Data…) ✅ baked 2026-10-09
 
 Done: all 17 bodies baked at **1°** in about **22 minutes** (from the bake timestamps). Results, read from the
 planner's database:
@@ -187,7 +187,7 @@ Notes:
 
 ## 10b. From here (Fly mode, right side) — no plan needed
 
-Fly mode's default layout changed, so your Fly panes start from the default once. **View › From here** reopens the pane.
+Fly mode's default layout changed, so your Fly panes start from the default once. **View › Flying › From here** reopens the pane.
 
 - [ ] The top line shows the craft, its orbit and the target, and follows the game as you switch craft or target
 - [ ] **Circularize at apoapsis** on an elliptical orbit → **Send to KSP** → the node sits on the Ap marker, and KSP's
@@ -281,9 +281,44 @@ side of the Mun, or mirrored east/west, the longitude convention is wrong: note 
 
 Notes:
 
-## 10e. Fly a whole mission ⚠ new
+## 10e. Flight log (View › Flying › Flight log)
 
-A mission Kerbin surface → Minmus surface (with a landing spot) → Kerbin surface, saved. See docs/MATH.md §8.5.
+- [ ] On the pad the pane says the rocket is on the pad and recording starts at launch
+- [ ] Launch → "Recording <name> · MET … · … m/s used" counts up; Δv used looks close to KSP's own Δv readout drop
+- [ ] Reach orbit → the log in the list says "In orbit of Kerbin", grouped under the rocket's name
+- [ ] Time warp past ×4 for a while → the log shows "Data lost in warp: ×… for …"
+- [ ] Disconnect (KSP › Disconnect) mid-flight, wait, reconnect → "Flight disconnected: … not recorded", same log carries on
+- [ ] Switch to another vessel and back → one log, with the gap noted
+- [ ] Recover a landed vessel → its log says Recovered (after KSP writes the save); revert a launch → Reverted
+- [ ] Turn off "Record a flight log while flying" in Settings → the pane says recording is off; nothing new is logged
+- [ ] Pick a log → the Flight report opens: Δv to orbit, ascent losses, max Q/g, a card per touchdown
+- [ ] Charts: switch kind (altitude, speed, Δv used…) and part of the flight (ascent, each landing); hover shows values and staging lines
+- [ ] Burns table matches what you flew; the Δv by stage looks right against the design's stages
+- [ ] A Mun trip with long warps: no "Switched to another vessel" at the SOI changes; warp shows as a dashed curve on the altitude chart
+- [ ] Map › Around Kerbin: the path goes out to the Mun's orbit and meets the Mun where it was; Around Mun shows the flyby or capture
+- [ ] Fly the same rocket twice → Compare this rocket: both flights in the table (same design letter), best figures in green, charts overlaid
+- [ ] Add a part in the VAB and fly again → the new flight gets the next design letter; the Rocket pane says how often the design has flown
+- [ ] Launch to orbit → Flight report › Ascent coach: launch TWR, turn start and 45° altitude match what you flew; the pitch chart's blue line is your nose (90° on the pad)
+- [ ] The best-climb box gives a model check within a few %; try its advice (turn start speed, 45° altitude) on the next launch and compare
+- [ ] Release a relay, rename it in orbit, let KSP save → its log row says "Now <new name>" and the search finds the new name
+- [ ] Pick that log → "Vessel: <new name> (found by launch time)"; Show vessel opens it in the Vessels pane and Vessel page
+- [ ] On the Vessel page, Flight log lists its flights; clicking one opens the Flight log and the Flight report on it
+- [ ] Edit log… → pick another vessel (or None of them) and change the rocket name → the row, Vessel page and Compare follow; keep flying the vessel and the edit stays
+
+Docking (fly a ship up to the station and dock, then undock it later):
+- [ ] Fly the ship in and dock → within a few seconds the station's log gets "<ship> docked" and the ship's row says "Docked to <station>" (not Lost, even after KSP saves)
+- [ ] Note which vessel KSP kept (the docked stack's name in the map view): that one's log carries on recording the stack
+- [ ] Switch away and back to the docked stack → still one log for the stack, no new log for the ship
+- [ ] Undock and fly the ship away → its own log picks up again: "Undocked from <station> after …", MET runs on from its launch (not from 0), the docked days show as a break in the charts
+- [ ] The station's log gets "<ship> undocked"; the ship's Vessel page lists its flight again
+- [ ] If KSP renamed either vessel on undocking, write down what it did: both logs should still follow the right vessel
+- [ ] Dock while the planner is closed, open it, let KSP save → the ship's log says Docked (found from the save's docking ports), not Lost
+
+Notes:
+
+## 10f. Fly a whole mission ⚠ new
+
+A mission Kerbin surface → Minmus surface (with a landing spot) → Kerbin surface, saved. See docs/MATH.md §8.15.
 
 - [ ] Plan mode: **Fly this mission** on the Mission pane (or **Fly** in Saved missions) → Fly mode opens the Flight pane with
       six steps: Launch to 80 km, Go to Minmus, Land at …, Launch to 10 km around Minmus, Go to Kerbin straight into the

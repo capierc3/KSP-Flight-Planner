@@ -1,0 +1,178 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.FlightLogListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ksp="clr-namespace:KspFlightPlanner.Core.Ksp;assembly=KspFlightPlanner.Core">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <!-- Grouped by rocket only while sorted by rocket (the code-behind adds and removes the grouping). -->
+        <CollectionViewSource x:Key="LogsView" Source="{Binding Logs}" />
+    </UserControl.Resources>
+
+    <!-- Every flight recorded while connected: searchable, filtered by how it ended, and sorted. -->
+    <DockPanel Margin="12,10">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Recorder.Status}" Style="{StaticResource Note}" Margin="0,0,0,10" />
+
+        <!-- Search, filter and sort. -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasNoLogs}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.ColumnSpan="3">
+                <TextBox x:Name="SearchBox" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"
+                         AutomationProperties.Name="Search flights" ToolTip="Rocket names and the bodies they went to" />
+                <TextBlock Text="Search rockets and bodies" IsHitTestVisible="False" VerticalAlignment="Center" Margin="9,0,0,0"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <ComboBox Grid.Row="2" ItemsSource="{Binding ShowChoices}" SelectedItem="{Binding Show}" DisplayMemberPath="Text"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Show" ToolTip="Show flights that ended this way" />
+            <ComboBox Grid.Row="2" Grid.Column="2" ItemsSource="{Binding SortChoices}" SelectedItem="{Binding Sort}" DisplayMemberPath="Text"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Sort by" ToolTip="Sort by" />
+        </Grid>
+
+        <!-- How many are shown, and a way back to all of them. -->
+        <DockPanel DockPanel.Dock="Top" Margin="2,0,0,2">
+            <DockPanel.Style>
+                <Style TargetType="DockPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasNoLogs}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DockPanel.Style>
+            <Button DockPanel.Dock="Right" Content="Clear filter" Command="{Binding ClearFilterCommand}" Padding="6,1" MinHeight="0" FontSize="12"
+                    Visibility="{Binding IsFiltered, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock Text="{Binding CountText}" Style="{StaticResource Note}" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- The picked flight: which vessel it is now, and what can be done with it. -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <TextBlock Text="{Binding SelectedVesselText}" Style="{StaticResource Note}" TextTrimming="CharacterEllipsis" Margin="2,0,0,4"
+                       ToolTip="{Binding SelectedVesselText}" />
+            <WrapPanel>
+                <Button Content="Show vessel" Command="{Binding ShowVesselCommand}" Margin="0,0,8,6"
+                        ToolTip="This flight's vessel in the Vessels pane, as it is now" />
+                <Button Content="Edit log…" Click="Edit_Click" IsEnabled="{Binding HasSelection}" Margin="0,0,8,6"
+                        ToolTip="Tag the flight to a vessel (one renamed since launch), or file it under another rocket" />
+                <Button Content="Compare this rocket" Click="Compare_Click" IsEnabled="{Binding HasSelection}" Margin="0,0,8,6"
+                        ToolTip="This rocket's flights side by side" />
+                <Button Content="Delete log" Command="{Binding DeleteCommand}" Margin="0,0,8,6" />
+            </WrapPanel>
+        </StackPanel>
+
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="0,0,0,6"
+                   Visibility="{Binding HasNoLogs, Converter={StaticResource BoolToVisibility}}"
+                   Text="No flights recorded yet. Connect to KSP (KSP › Connect to KSP) and launch: each flight is logged from the launch on." />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}" Margin="2,8,0,6"
+                   Visibility="{Binding HasNoMatches, Converter={StaticResource BoolToVisibility}}"
+                   Text="No flights match the search and filter." />
+
+        <ListBox ItemsSource="{Binding Source={StaticResource LogsView}}" SelectedItem="{Binding SelectedLog}" IsSynchronizedWithCurrentItem="False"
+                 SelectionChanged="List_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 BorderThickness="0" Background="Transparent" AutomationProperties.Name="Flight logs">
+            <ListBox.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="0,12,0,4" Padding="2,0,0,4">
+                                <TextBlock TextTrimming="CharacterEllipsis">
+                                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" FontSize="14" />
+                                    <Run Text="{Binding ItemCount, Mode=OneWay, StringFormat='· {0}'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" />
+                                </TextBlock>
+                            </Border>
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </ListBox.GroupStyle>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="6,4" />
+                    <Setter Property="Margin" Value="0,1" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Launched}" />
+                    <Setter Property="ToolTip" Value="{Binding Launched}" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- How it ended, at a glance. -->
+                        <Ellipse Width="8" Height="8" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#64B5F6" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding OutcomeKind}" Value="{x:Static ksp:FlightLogOutcome.Recovered}">
+                                            <Setter Property="Fill" Value="#66BB6A" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OutcomeKind}" Value="{x:Static ksp:FlightLogOutcome.Lost}">
+                                            <Setter Property="Fill" Value="#EF5350" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OutcomeKind}" Value="{x:Static ksp:FlightLogOutcome.Reverted}">
+                                            <Setter Property="Fill" Value="#9E9E9E" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+
+                        <TextBlock Grid.Column="1" Text="{Binding Heading}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Text="{Binding LaunchDay}" Style="{StaticResource Note}" TextWrapping="NoWrap"
+                                   VerticalAlignment="Center" Margin="10,0,0,0" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding VesselLine}" Style="{StaticResource Note}"
+                                   Foreground="#64B5F6" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
+                                   Visibility="{Binding HasVesselLine, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Figures}" Style="{StaticResource Note}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding GapsShort}" ToolTip="{Binding Gaps}"
+                                   Style="{StaticResource Note}" Foreground="#FFB74D" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
+                                   Visibility="{Binding HasGaps, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

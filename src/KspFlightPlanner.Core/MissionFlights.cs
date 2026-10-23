@@ -105,7 +105,7 @@ public sealed record MissionPlanContext(
 /// Flying a whole mission: its stops become steps (launch, change orbit, go to a body, meet a craft, release satellites,
 /// land), flown in order. The step being flown is planned from the craft's real orbit, and every step after it from
 /// where the one before leaves the craft, so a launch to 75 km instead of 80 changes the trip after it, and that the
-/// landing after that. Each step is planned again from the real orbit once the craft gets to it. docs/MATH.md §8.5.
+/// landing after that. Each step is planned again from the real orbit once the craft gets to it. docs/MATH.md §8.15.
 /// </summary>
 public static class MissionFlights
 {

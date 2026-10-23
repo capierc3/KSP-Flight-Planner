@@ -77,6 +77,43 @@ public static class QuickBurns
     }
 
     /// <summary>
+    /// Turns the orbit to <paramref name="inclinationDeg"/> to the equator, keeping its shape and ascending node: one burn
+    /// where the orbit crosses the equator, Δv = 2·v_h·sin(Δi/2), as matching a target's plane (§4.2) with the new plane as
+    /// the target's. Of the two crossings it takes the cheaper, the higher (slower) one on an eccentric orbit. An orbit in
+    /// the equator crosses it everywhere, so the burn is at the next apoapsis (soon, on a round orbit), which becomes a
+    /// node. docs/MATH.md §2.10.
+    /// </summary>
+    public static FlightBurn ChangeInclination(CelestialBody body, OrbitalElements orbit, double now, double leadS, double inclinationDeg)
+    {
+        if (inclinationDeg is < 0 or > 180) throw new ArgumentException("The inclination is between 0° (equatorial, going east) and 180° (going west).");
+        if (orbit.Eccentricity >= 1)
+            throw new ArgumentException($"The craft is passing {body.Name}, not orbiting it: capture first, or plan Go to {body.Name} with an inclination, " +
+                                        "which tilts the path on the way in for much less.");
+        if (Math.Abs(inclinationDeg - orbit.InclinationDeg) < 0.01) throw new ArgumentException($"The orbit is already inclined {orbit.InclinationDeg:0.##}°.");
+
+        var mu = body.Mu;
+        var after = now + leadS;
+        var lanDeg = orbit.LongitudeOfAscendingNodeDeg;
+        if (orbit.InclinationDeg is < 0.05 or > 179.95)
+        {
+            // The node goes where the burn is; a minute's slack so the crossing search starts before it.
+            var ut = ApsisUt(orbit, mu, now, leadS, atApoapsis: true, body.Name);
+            var position = Kepler.StateAt(orbit, mu, ut).Position;
+            lanDeg = Math.Atan2(position.Y, position.X) * 180 / Math.PI;
+            after = Math.Max(now, ut - 60);
+        }
+        var (burn, _) = Rendezvous.MatchPlane(body, orbit, orbit with { InclinationDeg = inclinationDeg, LongitudeOfAscendingNodeDeg = lanDeg }, after);
+        var turn = Math.Abs(inclinationDeg - orbit.InclinationDeg);
+        return new FlightBurn($"Change inclination to {inclinationDeg:0.#}°", burn.Ut, burn.Burn)
+        {
+            Note = turn > 30
+                ? "A big turn: it's cheapest where the craft is slowest, so raising the apoapsis first, turning there and lowering it again can cost less. " +
+                  "Heading to another body, set the inclination in Go to instead: it's tilted on the way for far less."
+                : null,
+        };
+    }
+
+    /// <summary>
     /// The next apoapsis (or periapsis) after <paramref name="now"/>, however soon; <paramref name="leadS"/> from now on
     /// a circular orbit. Waiting for the lead would skip an apsis that's close and leave the burn a whole orbit later,
     /// which a suborbital craft never reaches and which breaks a relay's spacing. A path escaping

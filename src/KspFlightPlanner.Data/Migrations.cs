@@ -196,7 +196,12 @@ internal static class Migrations
             mass_t         REAL NOT NULL,    -- dry
             cost           REAL NOT NULL DEFAULT 0,
             crew_capacity  INTEGER NOT NULL DEFAULT 0,
-            fuel_crossfeed INTEGER NOT NULL DEFAULT 1    -- 0: fuel can't pass through (decouplers)
+            fuel_crossfeed INTEGER NOT NULL DEFAULT 1,   -- 0: fuel can't pass through (decouplers)
+            tech_required  TEXT,                         -- the tech node that unlocks it (ksp_tech_nodes.id)
+            description    TEXT,
+            bulkhead_profiles TEXT,                      -- sizes it attaches at, comma-separated (size1,srf)
+            crash_tolerance REAL NOT NULL DEFAULT 0,     -- m/s
+            max_temp       REAL NOT NULL DEFAULT 0       -- K
         );
 
         CREATE TABLE ksp_part_resources (      -- what a new part holds (full tanks)
@@ -225,6 +230,16 @@ internal static class Migrations
             PRIMARY KEY (engine_id, resource_name)
         );
 
+        CREATE TABLE ksp_part_power (          -- electric charge a part makes or uses, one row per module
+            part_name     TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
+            module_index  INTEGER NOT NULL,
+            kind          TEXT    NOT NULL,   -- Solar / Generator / FuelCell / Command / ReactionWheel / Antenna / Light / Lab / Converter / Drill
+            ec_per_s      REAL    NOT NULL,
+            tracking      INTEGER NOT NULL DEFAULT 1,   -- solar panels that turn to follow the Sun
+            inputs        TEXT,               -- fuel cells: what they burn, units/s ("LiquidFuel=0.0016875;Oxidizer=0.0020625")
+            PRIMARY KEY (part_name, module_index)
+        );
+
         CREATE TABLE ksp_part_antennas (
             part_name            TEXT    NOT NULL REFERENCES ksp_parts(name) ON DELETE CASCADE,
             module_index         INTEGER NOT NULL,
@@ -233,6 +248,31 @@ internal static class Migrations
             combinable           INTEGER NOT NULL,
             combinable_exponent  REAL    NOT NULL,
             PRIMARY KEY (part_name, module_index)
+        );
+
+        -- The R&D tech tree of the install (RDNode), read with the parts.
+        CREATE TABLE ksp_tech_nodes (
+            id             TEXT PRIMARY KEY,
+            sort_order     INTEGER NOT NULL,   -- as GameData lists them
+            title          TEXT NOT NULL,
+            description    TEXT,
+            cost           REAL NOT NULL,      -- science
+            x              REAL NOT NULL,      -- position in the R&D building, y up
+            y              REAL NOT NULL,
+            any_to_unlock  INTEGER NOT NULL    -- 1: one researched parent is enough
+        );
+
+        CREATE TABLE ksp_tech_parents (
+            node_id    TEXT NOT NULL REFERENCES ksp_tech_nodes(id) ON DELETE CASCADE,
+            parent_id  TEXT NOT NULL,
+            PRIMARY KEY (node_id, parent_id)
+        );
+
+        -- Tech nodes the player plans to research next, per KSP save ('' when no save is chosen).
+        CREATE TABLE tech_plans (
+            ksp_save  TEXT NOT NULL,
+            node_id   TEXT NOT NULL,
+            PRIMARY KEY (ksp_save, node_id)
         );
 
         -- Surface data sampled from the running game over kRPC ("baked"), per body of the user's install.
@@ -273,6 +313,29 @@ internal static class Migrations
             flight_json  TEXT    NOT NULL,   -- Flight (burns, start orbit, the plan's inputs)
             ksp_save     TEXT,               -- the KSP save it belongs to; NULL = shared by every save
             created_utc  TEXT    NOT NULL
+        );
+
+        CREATE TABLE flight_logs (
+            id              INTEGER PRIMARY KEY,
+            vessel_name     TEXT    NOT NULL,   -- the rocket: the vessel's name at launch
+            launch_ut       REAL    NOT NULL,   -- game time − MET; with the name, tells this flight from others of the rocket
+            joined_at_met   REAL    NOT NULL DEFAULT 0,   -- 0 = recorded from the launch
+            outcome         TEXT    NOT NULL,   -- FlightLogOutcome
+            flight_id       INTEGER,            -- the planner flight being flown, if any (not a foreign key: flights get deleted)
+            launch_parts    INTEGER,            -- parts on the pad: with the launch mass, tells a changed design
+            vessel_id       TEXT,               -- the save vessel (pid) the player tagged it to; NULL = by launch time, '' = none
+            last_ut         REAL    NOT NULL,
+            delta_v_used    REAL    NOT NULL,   -- the samples' sums, kept for the list
+            max_altitude_m  REAL    NOT NULL,
+            launch_mass_kg  REAL    NOT NULL DEFAULT 0,
+            last_situation  TEXT,
+            last_body       TEXT,
+            route           TEXT,               -- bodies flown around in order, "Kerbin › Mun › Kerbin"
+            events_json     TEXT    NOT NULL,   -- FlightLogEvent list
+            samples         BLOB    NOT NULL,   -- FlightSample list as Brotli-compressed JSON
+            ksp_save        TEXT,               -- the KSP save it belongs to; NULL = shared by every save
+            created_utc     TEXT    NOT NULL,
+            updated_utc     TEXT    NOT NULL
         );
 
         CREATE TABLE saved_constellations (

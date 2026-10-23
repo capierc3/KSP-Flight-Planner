@@ -67,6 +67,13 @@ public sealed record SavedVessel(string Id, string Name, string Type, string Sit
     public double AltitudeM { get; init; } = double.NaN;
 
     public IEnumerable<string> Crew => Parts.SelectMany(p => p.Crew);
+
+    /// <summary>
+    /// The names of the vessels docked together into this one, as its docking ports remember them: each port keeps the name
+    /// of the vessel it came with, and KSP gives that name back on undocking. Includes this vessel's own name from before
+    /// it docked. Empty when nothing is docked.
+    /// </summary>
+    public IReadOnlySet<string> DockedNames { get; init; } = new HashSet<string>();
 }
 
 /// <summary>A part of a vessel in the save. <see cref="Name"/> matches <see cref="KspPart.Name"/> in the part catalog.</summary>
@@ -88,6 +95,22 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
 {
     /// <summary>Waypoints the player placed (KerbNet or the map), from the ScenarioCustomWaypoints scenario.</summary>
     public IReadOnlyList<SavedWaypoint> Waypoints { get; init; } = [];
+
+    /// <summary>What's been researched; null in sandbox, where every part can be used.</summary>
+    public SavedResearch? Research { get; init; }
+
+    /// <summary>The game's CommNet settings (difficulty options); stock defaults when the save doesn't say.</summary>
+    public SavedCommNet CommNet { get; init; } = SavedCommNet.Default;
+}
+
+/// <summary>
+/// CommNet as the save has it: the tracking station's level and the difficulty modifiers on antenna range and on the
+/// tracking station's power (docs/MATH.md §7.7).
+/// </summary>
+/// <param name="TrackingStationLevel">1 to 3. Career saves record it; sandbox and science saves have every building upgraded.</param>
+public sealed record SavedCommNet(bool Enabled, int TrackingStationLevel, double RangeModifier, double DsnModifier)
+{
+    public static readonly SavedCommNet Default = new(true, 3, 1, 1);
 }
 
 /// <summary>A custom waypoint: a named spot on a body (degrees, north and east positive).</summary>
@@ -168,7 +191,37 @@ public static class KspSaveReader
                 Number(w.GetValue("latitude")), Number(w.GetValue("longitude"))))
             .Where(w => w.BodyName.Length > 0 && double.IsFinite(w.LatitudeDeg) && double.IsFinite(w.LongitudeDeg))
             .ToList();
-        return new KspSave(title, game.GetValue("Mode") ?? "", Number(flight?.GetValue("UT")), vessels) { Waypoints = waypoints };
+        var mode = game.GetValue("Mode") ?? "";
+        var research = mode == "SANDBOX" ? null
+            : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment") is { } rd ? ReadResearch(rd) : null;
+        return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels)
+        {
+            Waypoints = waypoints, Research = research, CommNet = ReadCommNet(game),
+        };
+    }
+
+    private static SavedCommNet ReadCommNet(ConfigNode game)
+    {
+        var parameters = game.GetNode("PARAMETERS");
+        var settings = parameters?.GetNode("CommNetParams");
+        // The facility's level is stored from 0 to 1 (level 1, 2, 3 → 0, 0.5, 1); only career saves have it.
+        var station = game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ScenarioUpgradeableFacilities")
+            ?.GetNode("SpaceCenter/TrackingStation")?.GetValue("lvl");
+        var level = station is null ? 3 : Math.Clamp((int)Math.Round(Number(station) * 2) + 1, 1, 3);
+        return new SavedCommNet(
+            !string.Equals(parameters?.GetNode("DIFFICULTY")?.GetValue("EnableCommNet"), "False", StringComparison.OrdinalIgnoreCase),
+            level,
+            settings?.GetValue("rangeModifier") is { } range ? Number(range) : 1,
+            settings?.GetValue("DSNModifier") is { } dsn ? Number(dsn) : 1);
+    }
+
+    /// <summary>Researched tech nodes (state Available) and the parts each lists as usable.</summary>
+    private static SavedResearch ReadResearch(ConfigNode rd)
+    {
+        var researched = rd.GetNodes("Tech").Where(t => t.GetValue("state") == "Available").ToList();
+        return new SavedResearch(Number(rd.GetValue("sci")),
+            researched.Select(t => t.GetValue("id")).OfType<string>().ToHashSet(),
+            researched.SelectMany(t => t.Values.Where(v => v.Key == "part").Select(v => PartCatalog.NormalizeName(v.Value))).ToHashSet());
     }
 
     private static SavedVessel ReadVessel(ConfigNode v)
@@ -183,6 +236,10 @@ public static class KspSaveReader
             v.GetValue("type") ?? "", v.GetValue("sit") ?? "", orbit)
         {
             Parts = v.GetNodes("PART").Select(ReadPart).ToList(),
+            DockedNames = v.GetNodes("PART").SelectMany(p => p.GetNodes("MODULE"))
+                .Where(m => m.GetValue("name") == "ModuleDockingNode" && (m.GetValue("state") ?? "").StartsWith("Docked", StringComparison.Ordinal))
+                .Select(m => m.GetNode("DOCKEDVESSEL")?.GetValue("vesselName"))
+                .OfType<string>().ToHashSet(),
             LaunchUt = Number(v.GetValue("lct")),
             MissionTimeS = Number(v.GetValue("met")),
             LatitudeDeg = Number(v.GetValue("lat")),

@@ -1,0 +1,136 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.PowerBudgetView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="Mono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ColumnHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- What the craft makes and uses, and whether its batteries last the night; inputs in the Calculators pane. -->
+    <ScrollViewer Padding="24,12,8,16" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,16,0">
+            <TextBlock Text="Power budget" FontSize="20" FontWeight="Bold" />
+            <TextBlock Style="{StaticResource Note}" FontSize="13"
+                       Text="What the craft's panels, generators and fuel cells make where it's going, what its parts use, and whether the batteries last the longest night there. Parts and the place are in the Calculators pane." />
+            <TextBlock Text="{Binding Where}" Style="{StaticResource Note}" Margin="0,2,0,0" />
+
+            <!-- Verdict -->
+            <Border Margin="0,12,0,0" Padding="12,8" CornerRadius="4" BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding VerdictGood}" Value="True">
+                                <Setter Property="BorderBrush" Value="#9966BB6A" />
+                                <Setter Property="Background" Value="#1F66BB6A" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding VerdictGood}" Value="False">
+                                <Setter Property="BorderBrush" Value="#99EF5350" />
+                                <Setter Property="Background" Value="#1FEF5350" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- Headlines -->
+            <ItemsControl ItemsSource="{Binding Cards}" Margin="0,12,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,10,10" Padding="14,8" CornerRadius="4" BorderThickness="1" Width="200"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Text="{Binding Value}" FontFamily="Cascadia Mono, Consolas" FontSize="17" FontWeight="Bold" TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Good}" Value="True">
+                                                    <Setter Property="Foreground" Value="#66BB6A" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Good}" Value="False">
+                                                    <Setter Property="Foreground" Value="#EF5350" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Every part that makes or uses charge -->
+            <StackPanel Visibility="{Binding HasLines, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="What makes and uses charge" Style="{StaticResource SectionHeader}" />
+                <Grid Margin="0,0,0,4" HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" /><ColumnDefinition Width="140" /><ColumnDefinition Width="60" /><ColumnDefinition Width="110" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Part" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="1" Text="As" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="2" Text="Count" Style="{StaticResource ColumnHeader}" />
+                    <TextBlock Grid.Column="3" Text="EC/s" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Lines}" HorizontalAlignment="Left">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOn}" Value="False">
+                                                <Setter Property="Opacity" Value="0.45" />
+                                                <Setter Property="ToolTip" Value="Not counted: switched off in the Calculators pane" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="320" /><ColumnDefinition Width="140" /><ColumnDefinition Width="60" /><ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Part}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Kind}" Style="{StaticResource Note}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Count}" Style="{StaticResource Mono}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Rate}" HorizontalAlignment="Right">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Makes}" Value="True">
+                                                        <Setter Property="Foreground" Value="#66BB6A" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
+                       Text="Solar panels are rated at Kerbin's distance and assumed to face the Sun; output falls with the square of the distance. Nights: in orbit, the longest pass through the body's shadow; on the surface, half a solar day at the equator (a moon's planet can also eclipse it). How it's worked out: Math guide §7.8." />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

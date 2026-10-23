@@ -8,7 +8,10 @@ public enum FlightKind
     Rendezvous,
     /// <summary>Deploy a constellation from a carrier orbit (Resonant Orbits pane).</summary>
     Resonant,
-    /// <summary>One-off burns planned from where the craft was (From here pane): flown as they are, not re-planned.</summary>
+    /// <summary>
+    /// Burns planned from where the craft was (From here pane): flown as they are, not re-planned, except a trip to a body
+    /// (Go to), which keeps <see cref="Flight.DestinationName"/> and <see cref="Flight.AltitudeM"/> to be planned again on the way.
+    /// </summary>
     Burns,
     /// <summary>To another planet or moon in a launch window (Transfer Planner): re-planned from wherever the craft is on the way.</summary>
     Transfer,
@@ -92,7 +95,7 @@ public sealed record Flight
     public double StayS { get; init; }
     public double? DeorbitPeriapsisAltitudeM { get; init; }
 
-    // Transfer inputs: the window (leaving OriginName at TransferDepartureUt, TransferFlightTimeS long) and the arrival.
+    // Transfer inputs (DestinationName is also a From here trip's): the window (leaving OriginName at TransferDepartureUt, TransferFlightTimeS long) and the arrival.
     // BodyName is the body the burns were last planned around: the origin, then its parent on the way.
     public string? OriginName { get; init; }
     public string? DestinationName { get; init; }
@@ -100,11 +103,14 @@ public sealed record Flight
     public double TransferFlightTimeS { get; init; }
     public ArrivalMode Arrival { get; init; } = ArrivalMode.Circularize;
 
+    /// <summary>A From here trip's inclination at the destination (90° polar); null for however it arrives.</summary>
+    public double? ArrivalInclinationDeg { get; init; }
+
     // Landing inputs: the spot and lander, and whether to take the sooner pass over the cheapest.
     public LandingLeg? Landing { get; init; }
     public bool LandSooner { get; init; }
 
-    // Resonant inputs (AltitudeM is also a transfer's arrival height).
+    // Resonant inputs (AltitudeM is also a transfer's or From here trip's arrival height).
     public int SatelliteCount { get; init; }
     public double AltitudeM { get; init; }
     public bool PreferDiveOrbit { get; init; }
@@ -184,17 +190,32 @@ public static class ResonantDeployment
         }
         else
         {
-            // Burn where the craft's orbit comes closest to the deployment altitude: an apsis, or anywhere if circular.
+            // Enter where the craft's orbit comes closest to the deployment altitude: an apsis, or anywhere if circular.
             var pe = craft.SemiMajorAxisM * (1 - craft.Eccentricity);
             var ap = craft.SemiMajorAxisM * (1 + craft.Eccentricity);
             var atPeriapsis = Math.Abs(pe - r) <= Math.Abs(ap - r);
-            var ut = craft.Eccentricity < 1e-3 ? earliestUt : Kepler.NextTimeAtMeanAnomaly(craft, mu, earliestUt, atPeriapsis ? 0 : Math.PI);
+            var circular = craft.Eccentricity < 1e-3;
+            var ut = circular ? earliestUt : Kepler.NextTimeAtMeanAnomaly(craft, mu, earliestUt, atPeriapsis ? 0 : Math.PI);
             var state = Kepler.StateAt(craft, mu, ut);
+            if (Math.Abs(state.Position.Length - r) > 1000)
+            {
+                // It misses r: first bring that apsis to r, burning half an orbit before (at the other apsis), then enter there.
+                var raiseUt = circular ? earliestUt : Kepler.NextTimeAtMeanAnomaly(craft, mu, earliestUt, atPeriapsis ? Math.PI : 0);
+                var raiseState = Kepler.StateAt(craft, mu, raiseUt);
+                var raiseRadius = raiseState.Position.Length;
+                var raiseTarget = QuickBurns.HorizontalVelocity(raiseState, OrbitMath.VisViva(mu, raiseRadius, (raiseRadius + r) / 2));
+                var raise = NodeBurn.From(raiseState, raiseTarget - raiseState.Velocity);
+                var apsis = r > raiseRadius ? "apoapsis" : "periapsis";
+                burns.Add(new FlightBurn($"Bring the {apsis} to {(r - body.EquatorialRadiusM) / 1000:#,0.#} km", raiseUt, raise)
+                {
+                    Note = $"{(raise.Prograde >= 0 ? "Raises" : "Lowers")} the far side to the deployment altitude, where the carrier orbit starts.",
+                });
+                orbit = Rendezvous.OrbitAfter(raiseUt, raise, craft, mu);
+                // Half an orbit on, at the new apsis.
+                ut = Kepler.NextTimeAtMeanAnomaly(orbit, mu, raiseUt + 1, r > raiseRadius ? Math.PI : 0);
+                state = Kepler.StateAt(orbit, mu, ut);
+            }
             var radius = state.Position.Length;
-            if (Math.Abs(radius - r) > 1000)
-                warnings.Add($"Your orbit only reaches {(radius - body.EquatorialRadiusM) / 1000:#,0.#} km, not the deployment altitude of " +
-                             $"{(r - body.EquatorialRadiusM) / 1000:#,0.#} km: the satellites' orbit and spacing will be off by that much. " +
-                             $"Bring your {(atPeriapsis ? "periapsis" : "apoapsis")} to the deployment altitude first for the best result.");
 
             // Horizontal at the burn point with the speed for an orbit whose other apsis is the carrier's.
             var target = QuickBurns.HorizontalVelocity(state, OrbitMath.VisViva(mu, radius, (radius + carrierOtherApsis) / 2));
@@ -203,7 +224,7 @@ public static class ResonantDeployment
             {
                 Note = $"{(burn.Prograde >= 0 ? "Raises" : "Lowers")} the far side to {(carrierOtherApsis - body.EquatorialRadiusM) / 1000:#,0.#} km.",
             });
-            orbit = Rendezvous.OrbitAfter(ut, burn, craft, mu);
+            orbit = Rendezvous.OrbitAfter(ut, burn, orbit, mu);
             after = ut + 1; // releases start on the next pass
         }
 

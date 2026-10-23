@@ -98,15 +98,43 @@ public sealed class FlightTests
     }
 
     [Fact]
-    public void An_orbit_that_misses_the_altitude_is_planned_from_its_nearest_apsis_with_a_warning()
+    public void An_orbit_that_misses_the_altitude_first_brings_its_nearest_apsis_there()
     {
         var carrier = Carrier(3, 2_863_334);
         var elliptical = new OrbitalElements(Kerbin.EquatorialRadiusM + 1_500_000, 0.3, 0.5, 30, 40, 1.0, Start);
 
         var plan = ResonantDeployment.Plan(Kerbin, carrier, elliptical, 3, Start);
 
-        Assert.Single(plan.Warnings);
-        Assert.Equal(Math.PI, Kepler.MeanAnomalyAt(elliptical, Kerbin.Mu, plan.Burns[0].Ut), 6); // apoapsis is closer
+        Assert.Empty(plan.Warnings);
+        Assert.Equal(["Bring the apoapsis to 2,863.3 km", "Enter the carrier orbit", "Circularize satellite 1", "Circularize satellite 2", "Circularize satellite 3"],
+            plan.Burns.Select(b => b.Title));
+        // The apoapsis is closer, so it's raised from the periapsis, then the carrier orbit starts there half an orbit on.
+        Assert.Equal(0, Kepler.MeanAnomalyAt(elliptical, Kerbin.Mu, plan.Burns[0].Ut), 6);
+        var raised = Rendezvous.OrbitAfter(plan.Burns[0].Ut, plan.Burns[0].Burn, elliptical, Kerbin.Mu);
+        Assert.Equal(carrier.SatelliteRadiusM, raised.SemiMajorAxisM * (1 + raised.Eccentricity), 0);
+        Assert.Equal(Kepler.OrbitalPeriod(raised, Kerbin.Mu) / 2, plan.Burns[1].Ut - plan.Burns[0].Ut, 0);
+
+        var onCarrier = Rendezvous.OrbitAfter(plan.Burns[1].Ut, plan.Burns[1].Burn, raised, Kerbin.Mu);
+        Assert.Equal(carrier.CarrierPeriodS, Kepler.OrbitalPeriod(onCarrier, Kerbin.Mu), 0);
+        Assert.Equal(carrier.SatelliteRadiusM, onCarrier.SemiMajorAxisM * (1 - onCarrier.Eccentricity), 0);
+    }
+
+    [Fact]
+    public void From_low_orbit_it_climbs_to_the_altitude_then_enters_the_carrier_orbit()
+    {
+        var carrier = Carrier(3, 2_863_334);
+        var plan = ResonantDeployment.Plan(Kerbin, carrier, Circular(80_000), 3, Start + 300);
+
+        Assert.Equal(5, plan.Burns.Count);
+        Assert.Equal(Start + 300, plan.Burns[0].Ut, 3); // circular: right away
+        Assert.Equal(667.65, plan.Burns[0].Burn.Prograde, 0.01); // docs/MATH.md §5.2's worked example
+        Assert.Equal(515.84, plan.Burns[1].Burn.Prograde, 0.01);
+        Assert.Equal(4_984.8, plan.Burns[1].Ut - plan.Burns[0].Ut, 0.1);
+        var raised = Rendezvous.OrbitAfter(plan.Burns[0].Ut, plan.Burns[0].Burn, plan.StartOrbit, Kerbin.Mu);
+        var onCarrier = Rendezvous.OrbitAfter(plan.Burns[1].Ut, plan.Burns[1].Burn, raised, Kerbin.Mu);
+        Assert.Equal(carrier.CarrierPeriodS, Kepler.OrbitalPeriod(onCarrier, Kerbin.Mu), 0);
+        Assert.Equal(carrier.SatelliteRadiusM, onCarrier.SemiMajorAxisM * (1 - onCarrier.Eccentricity), 0);
+        Assert.Equal(plan.Burns[1].Ut + carrier.CarrierPeriodS, plan.Burns[2].Ut, 0);
     }
 
     [Fact]

@@ -19,6 +19,7 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _krpcConnectOnStartup;
     private string _krpcPollSeconds;
     private string _krpcVesselsSeconds;
+    private bool _recordFlights;
 
     public SettingsViewModel(AppSettings settings, PartData parts)
     {
@@ -31,6 +32,7 @@ public sealed class SettingsViewModel : ObservableObject
         _krpcConnectOnStartup = settings.KrpcConnectOnStartup;
         _krpcPollSeconds = settings.KrpcPollSeconds.ToString(CultureInfo.CurrentCulture);
         _krpcVesselsSeconds = settings.KrpcVesselsSeconds.ToString(CultureInfo.CurrentCulture);
+        _recordFlights = settings.RecordFlights;
         RestoreKrpcDefaultsCommand = new RelayCommand(RestoreKrpcDefaults);
         BrowseCommand = new RelayCommand(Browse);
         DetectCommand = new RelayCommand(Detect);
@@ -79,6 +81,9 @@ public sealed class SettingsViewModel : ObservableObject
 
     public bool KrpcConnectOnStartup { get => _krpcConnectOnStartup; set => SetProperty(ref _krpcConnectOnStartup, value); }
 
+    /// <summary>Keep a flight log of every flight flown while connected.</summary>
+    public bool RecordFlights { get => _recordFlights; set => SetProperty(ref _recordFlights, value); }
+
     public string KrpcPollSeconds { get => _krpcPollSeconds; set { if (SetProperty(ref _krpcPollSeconds, value)) OnKrpcChanged(); } }
 
     public string KrpcVesselsSeconds { get => _krpcVesselsSeconds; set { if (SetProperty(ref _krpcVesselsSeconds, value)) OnKrpcChanged(); } }
@@ -112,6 +117,7 @@ public sealed class SettingsViewModel : ObservableObject
         KrpcConnectOnStartup = KrpcConnectOnStartup,
         KrpcPollSeconds = Seconds(KrpcPollSeconds, AppSettings.MinKrpcPollSeconds, AppSettings.MaxKrpcPollSeconds) ?? AppSettings.DefaultKrpcPollSeconds,
         KrpcVesselsSeconds = Seconds(KrpcVesselsSeconds, AppSettings.MinKrpcVesselsSeconds, AppSettings.MaxKrpcVesselsSeconds) ?? AppSettings.DefaultKrpcVesselsSeconds,
+        RecordFlights = RecordFlights,
     };
 
     private void OnKrpcChanged()

@@ -1,0 +1,88 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.EngineeringDetailView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:KspFlightPlanner.App.ViewModels">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- A part name (wraps) and how many: names are too long to share the facts' label column. -->
+        <DataTemplate x:Key="CountRow">
+            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="Cascadia Mono, Consolas" FontSize="12" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- A stage: its numbers, its engines, its TWR on every body, and what it leaves behind -->
+        <DataTemplate DataType="{x:Type vm:EngineeringStageDetail}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="12,10,0,10">
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" Margin="0,2,0,0" />
+                    <ItemsControl ItemsSource="{Binding Facts}" ItemTemplate="{StaticResource FactRow}" Margin="0,8,0,0" Grid.IsSharedSizeScope="True" />
+
+                    <TextBlock Text="Engines firing" Style="{StaticResource SectionHeader}" Margin="0,14,0,4" />
+                    <ItemsControl ItemsSource="{Binding Engines}" ItemTemplate="{StaticResource CountRow}" />
+
+                    <TextBlock Text="TWR on each body" Style="{StaticResource SectionHeader}" Margin="0,14,0,4"
+                               ToolTip="Thrust at the body's surface pressure ÷ weight at its surface gravity, with the stage's tanks full. Below 1 it can't lift off or stop a descent there; under 1.3 there's little room to correct." />
+                    <ItemsControl ItemsSource="{Binding Twr}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,4">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="70" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Body}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Detail}" Style="{StaticResource Note}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Twr}" FontFamily="Cascadia Mono, Consolas" FontSize="12" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#66BB6A" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Rating}" Value="Low">
+                                                            <Setter Property="Foreground" Value="#FFB300" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Rating}" Value="TooLow">
+                                                            <Setter Property="Foreground" Value="#EF5350" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="{Binding DropsTitle}" Style="{StaticResource SectionHeader}" Margin="0,14,0,4" />
+                    <ItemsControl ItemsSource="{Binding Drops}" ItemTemplate="{StaticResource CountRow}" />
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- What's picked in the Engineering document -->
+    <Grid>
+        <TextBlock Text="Pick a stage in the Engineering document to see it here. Parts you pick there show in the Part pane." Margin="12,10">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasDetail}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+        <ContentControl Content="{Binding Detail}" />
+    </Grid>
+</UserControl>

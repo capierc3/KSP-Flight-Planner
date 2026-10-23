@@ -28,7 +28,7 @@ public sealed record BakeStep(double Degrees, string Text)
 }
 
 /// <summary>
-/// Tools › Bake Surface Data: samples each chosen body's terrain height and biome on a lat/lon grid, its rotation
+/// KSP › Bake Surface Data: samples each chosen body's terrain height and biome on a lat/lon grid, its rotation
 /// at UT 0 and its air, over kRPC, and stores it as install data (docs/MATH.md §1.9, §2.6).
 /// </summary>
 public sealed class SurfaceBakeViewModel : ObservableObject
@@ -85,7 +85,7 @@ public sealed class SurfaceBakeViewModel : ObservableObject
 
     public string ConnectionText => _link.IsConnected
         ? $"Connected to KSP ({_link.Scene?.ToString() ?? "…"}). Heights may read 0 outside the flight scene; if they do, bake from flight."
-        : "Not connected. Use Tools › Connect to KSP first; the bake asks the running game.";
+        : "Not connected. Use KSP › Connect to KSP first; the bake asks the running game.";
 
     /// <summary>What happened, newest last: one line per body baked, plus problems.</summary>
     public ObservableCollection<string> Log { get; } = [];

@@ -373,4 +373,58 @@ public sealed class LegToolsTests : IDisposable
             new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
         Assert.All(old.Stops, s => Assert.True(s.Transfer is null && s.Deploy is null && s.Rendezvous is null));
     }
+
+    [Fact]
+    public void Arriving_at_the_mun_in_a_polar_orbit_adds_a_small_burn_on_the_way_and_survives_a_save()
+    {
+        var legs = Route("kerbin.lo", "mun.lo");
+        var index = LegTools.FindArrival(legs, _bodies);
+        Assert.Equal("Kerbin", legs[index].From.BodyName);
+        Assert.Equal("Mun", legs[index].To.BodyName);
+
+        var plan = LegTools.EvaluateArrival(legs, new ArrivalLeg(90), _bodies)!;
+        Assert.False(plan.IsEstimate);
+        // Planned with Hops: about 37 m/s, where turning a low Mun orbit to polar costs about 770.
+        Assert.InRange(plan.AimDv!.Value, 15, 80);
+        var applied = LegTools.ApplyArrival(legs, plan);
+        Assert.Equal(legs[index].DeltaV + Math.Round(plan.AimDv.Value), applied[index].DeltaV);
+        Assert.Contains("inclined 90°", applied[index].ToolNote);
+
+        var stops = new[] { "kerbin.surface", "kerbin.lo", "mun.lo" }.Select(k => _map[k]).ToList();
+        var segments = MissionPlanner.BuildRoute(_map, stops);
+        var (phases, settings) = MissionPlanner.DefaultPhases(segments, stops);
+        var definition = new MissionDefinition([new("kerbin.surface"), new("kerbin.lo"), new("mun.lo", Arrival: new ArrivalLeg(90))], phases, settings);
+        var repo = new MissionRepository(_db);
+        var reopened = repo.Get(repo.Add("Polar Mun", definition))!.Definition;
+        Assert.Equal(new ArrivalLeg(90), reopened.Stops[2].Arrival);
+        var total = LegTools.Apply(segments, reopened.Stops, _bodies)[1].Legs.Sum(l => l.DeltaV);
+        Assert.Equal(segments[1].Legs.Sum(l => l.DeltaV) + Math.Round(plan.AimDv.Value), total);
+    }
+
+    [Fact]
+    public void A_leg_that_stays_around_one_body_or_lands_has_no_arrival_tool()
+    {
+        Assert.Equal(-1, LegTools.FindArrival(Route("kerbin.surface", "kerbin.lo"), _bodies));
+        Assert.Equal(-1, LegTools.FindArrival(Route("kerbin.lo", "mun.surface"), _bodies));
+        Assert.Equal(-1, LegTools.FindArrival(Route("kerbin.lo", "mun.intercept"), _bodies));
+    }
+
+    [Fact]
+    public void Arriving_at_duna_in_a_polar_orbit_is_a_few_m_s_by_the_rule_of_thumb()
+    {
+        var legs = Route("kerbin.lo", "duna.lo");
+        var plan = LegTools.EvaluateArrival(legs, new ArrivalLeg(90), _bodies)!;
+        Assert.True(plan.IsEstimate);
+        Assert.Equal("Duna", legs[plan.Leg].To.BodyName);
+        Assert.InRange(plan.AimDv!.Value, 0.1, 5);
+    }
+
+    [Fact]
+    public void From_the_mun_to_a_polar_kerbin_orbit_is_planned_with_hops()
+    {
+        var legs = Route("mun.lo", "kerbin.lo");
+        var plan = LegTools.EvaluateArrival(legs, new ArrivalLeg(90), _bodies)!;
+        Assert.Equal("Mun", legs[plan.Leg].From.BodyName);
+        Assert.InRange(plan.AimDv!.Value, 100, 400);
+    }
 }

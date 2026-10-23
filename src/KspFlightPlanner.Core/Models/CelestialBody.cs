@@ -124,7 +124,7 @@ public sealed record CelestialBody
     public ScienceMultipliers? Science { get; init; }
 
     /// <summary>
-    /// When the player's game has been sampled (Tools › Bake Surface Data): each value compared with the wiki and which
+    /// When the player's game has been sampled (KSP › Bake Surface Data): each value compared with the wiki and which
     /// one is used (see <see cref="Ksp.BakeMerge"/>). Empty without a bake.
     /// </summary>
     public IReadOnlyList<Ksp.DataCheck> DataChecks { get; init; } = [];

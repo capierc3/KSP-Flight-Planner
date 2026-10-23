@@ -35,5 +35,5 @@ public sealed class BodyRotation(SurfaceBakeRepository bakes, KspLink link)
 
     /// <summary>Why a landing can't be timed on <paramref name="body"/>.</summary>
     public static string Missing(CelestialBody body) =>
-        $"Landing at a spot needs {body.Name}'s rotation: connect to KSP (or bake {body.Name} with Tools › Bake Surface Data) and plan again.";
+        $"Landing at a spot needs {body.Name}'s rotation: connect to KSP (or bake {body.Name} with KSP › Bake Surface Data) and plan again.";
 }

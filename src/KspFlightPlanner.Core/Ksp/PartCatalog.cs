@@ -42,9 +42,44 @@ public sealed record PartEngine(string? EngineId, double MaxThrustKn, double Isp
 /// <summary>An antenna: DIRECT/RELAY/INTERNAL, its power (range rating, metres) and whether several combine.</summary>
 public sealed record PartAntenna(string Type, double Power, bool Combinable, double CombinableExponent);
 
+/// <summary>What a part does with electric charge (docs/MATH.md §7.8).</summary>
+public enum PowerKind
+{
+    /// <summary>A solar panel: its rate is at Kerbin's distance from the Sun, facing it.</summary>
+    Solar,
+    /// <summary>Makes charge on its own (an RTG).</summary>
+    Generator,
+    /// <summary>Makes charge from propellant (a fuel cell).</summary>
+    FuelCell,
+    /// <summary>A probe core or pod keeping control.</summary>
+    Command,
+    /// <summary>A reaction wheel at full torque.</summary>
+    ReactionWheel,
+    /// <summary>An antenna while it transmits.</summary>
+    Antenna,
+    Light,
+    /// <summary>The science lab while researching.</summary>
+    Lab,
+    /// <summary>A converter running on charge (ISRU); a part with several modes has one per mode.</summary>
+    Converter,
+    Drill,
+}
+
+/// <summary>Electric charge a part makes or uses, per second (one entry per module).</summary>
+/// <param name="Tracking">Solar panels: whether it turns to follow the Sun.</param>
+/// <param name="Inputs">Fuel cells: the propellant they burn, units per second.</param>
+public sealed record PartPower(PowerKind Kind, double EcPerSecond, bool Tracking = true, IReadOnlyList<Propellant>? Inputs = null)
+{
+    public bool Makes => Kind is PowerKind.Solar or PowerKind.Generator or PowerKind.FuelCell;
+}
+
 /// <summary>A part definition from GameData, as KSP uses it after mods have patched it.</summary>
 /// <param name="Name">KSP's internal name with '_' written as '.', as saves and craft files write it (microEngine.v2).</param>
 /// <param name="FuelCrossfeed">Whether fuel passes through the part (false for decouplers unless crossfeed is switched on).</param>
+/// <param name="TechRequired">The tech node that unlocks it (<see cref="TechNode.Id"/>).</param>
+/// <param name="BulkheadProfiles">The sizes it attaches at, as KSP lists them: size0 … size4, srf (radial), mk2, mk3.</param>
+/// <param name="CrashToleranceMs">Impact speed it survives (m/s).</param>
+/// <param name="MaxTempK">Temperature it can take before it burns up (K).</param>
 public sealed record KspPart(
     string Name,
     string Title,
@@ -56,12 +91,25 @@ public sealed record KspPart(
     IReadOnlyList<PartResource> Resources,
     IReadOnlyList<PartEngine> Engines,
     IReadOnlyList<PartAntenna> Antennas,
-    bool FuelCrossfeed = true);
+    bool FuelCrossfeed = true,
+    string? TechRequired = null,
+    string? Description = null,
+    IReadOnlyList<string>? BulkheadProfiles = null,
+    double CrashToleranceMs = 0,
+    double MaxTempK = 0,
+    IReadOnlyList<PartPower>? Power = null)
+{
+    /// <summary>What it makes and uses of electric charge (none for most parts).</summary>
+    public IReadOnlyList<PartPower> PowerModules => Power ?? [];
+}
 
-/// <summary>Every part and resource of a KSP install. Built by <see cref="PartCatalogReader"/>, stored in the planner database.</summary>
-public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResource> resources)
+/// <summary>Every part, resource and tech node of a KSP install. Built by <see cref="PartCatalogReader"/>, stored in the planner database.</summary>
+public sealed class PartCatalog(IEnumerable<KspPart> parts, IEnumerable<KspResource> resources, IEnumerable<TechNode>? techTree = null)
 {
     public static readonly PartCatalog Empty = new([], []);
+
+    /// <summary>The R&amp;D tech tree, in the order GameData lists it.</summary>
+    public IReadOnlyList<TechNode> TechTree { get; } = techTree?.ToList() ?? [];
 
     public IReadOnlyDictionary<string, KspPart> Parts { get; } =
         parts.GroupBy(p => p.Name).ToDictionary(g => g.Key, g => g.Last());
@@ -107,7 +155,10 @@ public static class PartCatalogReader
     public const string ModuleManagerCache = "ModuleManager.ConfigCache";
 
     /// <summary>Bumped when the reader starts collecting new fields, so stored catalogs are read again.</summary>
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 5;
+
+    /// <summary>The tech tree as ModuleManager writes it after patches (what the game loads unless a save points elsewhere).</summary>
+    public const string ModuleManagerTechTree = "ModuleManager.TechTree";
 
     /// <summary>The file or folder the catalog is read from, and when it last changed (to know when to read again).</summary>
     public static (string Path, DateTime LastWriteUtc)? Source(string installPath)
@@ -125,27 +176,49 @@ public static class PartCatalogReader
     {
         var gameData = Path.Combine(installPath, "GameData");
         var cache = Path.Combine(gameData, ModuleManagerCache);
-        if (File.Exists(cache)) return Parse(ReadShared(cache));
+        var techTreeFile = Path.Combine(gameData, ModuleManagerTechTree);
+        if (File.Exists(cache)) return Parse(ReadShared(cache), File.Exists(techTreeFile) ? ReadShared(techTreeFile) : null);
 
         // No ModuleManager: every .cfg as written (nodes starting with @, + or ! are patches and are skipped).
         var parts = new List<KspPart>();
         var resources = new List<KspResource>();
+        var trees = new List<ConfigNode>();
         foreach (var file in Directory.EnumerateFiles(gameData, "*.cfg", SearchOption.AllDirectories))
         {
             var root = ConfigNode.Parse(ReadShared(file));
             parts.AddRange(root.GetNodes("PART").Select(ReadPart).OfType<KspPart>());
             resources.AddRange(root.GetNodes("RESOURCE_DEFINITION").Select(ReadResource).OfType<KspResource>());
+            trees.AddRange(root.GetNodes("TechTree"));
         }
-        return new PartCatalog(parts, resources);
+        return new PartCatalog(parts, resources, ReadTechTree(trees));
     }
 
-    /// <summary>Parses ModuleManager's cache: UrlConfig { parentUrl = …  PART { … } } blocks.</summary>
-    public static PartCatalog Parse(string configCache)
+    /// <summary>
+    /// Parses ModuleManager's cache: UrlConfig { parentUrl = …  PART { … } } blocks. The tech tree comes from
+    /// <paramref name="techTree"/> (ModuleManager.TechTree) when given, else from the cache's own TechTree.
+    /// </summary>
+    public static PartCatalog Parse(string configCache, string? techTree = null)
     {
         var configs = ConfigNode.Parse(configCache).GetNodes("UrlConfig").SelectMany(u => u.Nodes).ToList();
+        var trees = techTree is not null ? ConfigNode.Parse(techTree).GetNodes("TechTree").ToList() : configs.Where(n => n.Name == "TechTree").ToList();
         return new PartCatalog(
             configs.Where(n => n.Name == "PART").Select(ReadPart).OfType<KspPart>(),
-            configs.Where(n => n.Name == "RESOURCE_DEFINITION").Select(ReadResource).OfType<KspResource>());
+            configs.Where(n => n.Name == "RESOURCE_DEFINITION").Select(ReadResource).OfType<KspResource>(),
+            ReadTechTree(trees));
+    }
+
+    /// <summary>The first TechTree with nodes (mods that replace the tree ship their own).</summary>
+    private static List<TechNode> ReadTechTree(IEnumerable<ConfigNode> trees) =>
+        trees.Select(t => t.GetNodes("RDNode").Select(ReadTechNode).OfType<TechNode>().ToList()).FirstOrDefault(t => t.Count > 0) ?? [];
+
+    private static TechNode? ReadTechNode(ConfigNode n)
+    {
+        if (n.GetValue("id") is not { Length: > 0 } id) return null;
+        var pos = (n.GetValue("pos") ?? "").Split(',');
+        return new TechNode(id, StripLocalization(n.GetValue("title")) ?? id, StripLocalization(n.GetValue("description")),
+            Number(n.GetValue("cost")), Number(pos.ElementAtOrDefault(0)), Number(pos.ElementAtOrDefault(1)),
+            n.GetNodes("Parent").Select(p => p.GetValue("parentID")).OfType<string>().Where(p => p.Length > 0).ToList(),
+            bool.TryParse(n.GetValue("anyToUnlock"), out var any) && any);
     }
 
     private static KspPart? ReadPart(ConfigNode p)
@@ -174,11 +247,72 @@ public static class PartCatalogReader
         var resources = p.GetNodes("RESOURCE")
             .Select(r => new PartResource(r.GetValue("name") ?? "", Number(r.GetValue("amount")), Number(r.GetValue("maxAmount"))))
             .Where(r => r.Name.Length > 0).ToList();
+        var power = modules.SelectMany(ReadPower).Where(x => x.EcPerSecond > 0).ToList();
 
         return new KspPart(PartCatalog.NormalizeName(name), StripLocalization(p.GetValue("title")) ?? name, p.GetValue("category"),
             StripLocalization(p.GetValue("manufacturer")), Number(p.GetValue("mass")), Number(p.GetValue("cost")),
             (int)Number(p.GetValue("CrewCapacity")), resources, engines, antennas,
-            FuelCrossfeed: !bool.TryParse(p.GetValue("fuelCrossFeed"), out var crossfeed) || crossfeed);
+            FuelCrossfeed: !bool.TryParse(p.GetValue("fuelCrossFeed"), out var crossfeed) || crossfeed,
+            TechRequired: p.GetValue("TechRequired") is { Length: > 0 } tech ? tech.Trim() : null,
+            Description: StripLocalization(p.GetValue("description")),
+            BulkheadProfiles: (p.GetValue("bulkheadProfiles") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            CrashToleranceMs: Number(p.GetValue("crashTolerance")),
+            MaxTempK: Number(p.GetValue("maxTemp")),
+            Power: power);
+    }
+
+    private const string Charge = "ElectricCharge";
+
+    /// <summary>Electric charge a module makes or uses, per second.</summary>
+    private static IEnumerable<PartPower> ReadPower(ConfigNode m)
+    {
+        // The rate a RESOURCE / INPUT_RESOURCE / OUTPUT_RESOURCE node gives for electric charge.
+        static double Rate(IEnumerable<ConfigNode> nodes) => nodes
+            .Where(n => (n.GetValue("name") ?? n.GetValue("ResourceName")) == Charge)
+            .Sum(n => Number(n.GetValue("rate") ?? n.GetValue("Ratio")));
+        static List<Propellant> Inputs(ConfigNode m) => m.GetNodes("INPUT_RESOURCE")
+            .Select(n => new Propellant(n.GetValue("ResourceName") ?? n.GetValue("name") ?? "", Number(n.GetValue("Ratio") ?? n.GetValue("rate"))))
+            .Where(i => i.Name.Length > 0 && i.Name != Charge).ToList();
+
+        switch (m.GetValue("name"))
+        {
+            case "ModuleDeployableSolarPanel" when (m.GetValue("resourceName") ?? Charge) == Charge:
+                yield return new PartPower(PowerKind.Solar, Number(m.GetValue("chargeRate")),
+                    !string.Equals(m.GetValue("isTracking"), "false", StringComparison.OrdinalIgnoreCase));
+                break;
+            case "ModuleGenerator":
+            {
+                var inputs = Inputs(m);
+                yield return new PartPower(inputs.Count > 0 ? PowerKind.FuelCell : PowerKind.Generator, Rate(m.GetNodes("OUTPUT_RESOURCE")),
+                    Inputs: inputs.Count > 0 ? inputs : null);
+                break;
+            }
+            case "ModuleResourceConverter":
+                if (Rate(m.GetNodes("OUTPUT_RESOURCE")) is var made and > 0)
+                    yield return new PartPower(PowerKind.FuelCell, made, Inputs: Inputs(m));
+                else
+                    yield return new PartPower(PowerKind.Converter, Rate(m.GetNodes("INPUT_RESOURCE")));
+                break;
+            case "ModuleResourceHarvester":
+                yield return new PartPower(PowerKind.Drill, Rate(m.GetNodes("INPUT_RESOURCE")));
+                break;
+            case "ModuleCommand":
+                yield return new PartPower(PowerKind.Command, Rate(m.GetNodes("RESOURCE")));
+                break;
+            case "ModuleReactionWheel":
+                yield return new PartPower(PowerKind.ReactionWheel, Rate(m.GetNodes("RESOURCE")));
+                break;
+            case "ModuleDataTransmitter" when (m.GetValue("requiredResource") ?? Charge) == Charge && Number(m.GetValue("packetInterval")) > 0:
+                // Charge per packet over seconds per packet.
+                yield return new PartPower(PowerKind.Antenna, Number(m.GetValue("packetResourceCost")) / Number(m.GetValue("packetInterval")));
+                break;
+            case "ModuleLight" when !string.Equals(m.GetValue("useResources"), "false", StringComparison.OrdinalIgnoreCase):
+                yield return new PartPower(PowerKind.Light, Number(m.GetValue("resourceAmount")));
+                break;
+            case "ModuleScienceConverter":
+                yield return new PartPower(PowerKind.Lab, Number(m.GetValue("powerRequirement")));
+                break;
+        }
     }
 
     private static KspResource? ReadResource(ConfigNode r) => r.GetValue("name") is { Length: > 0 } name

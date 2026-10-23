@@ -1,0 +1,328 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.EngineeringView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="Mono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ColumnHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <!-- TWR colours: red below 1, amber below 1.3 -->
+        <Style x:Key="TwrText" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+            <Setter Property="Foreground" Value="#66BB6A" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Rating}" Value="Low">
+                    <Setter Property="Foreground" Value="#FFB300" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Rating}" Value="TooLow">
+                    <Setter Property="Foreground" Value="#EF5350" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Lists inside the page's scroll: no scroll of their own, so the wheel scrolls the page. -->
+        <ControlTemplate x:Key="PlainList" TargetType="ListBox">
+            <ItemsPresenter />
+        </ControlTemplate>
+        <CollectionViewSource x:Key="PartsByDrop" Source="{Binding Parts}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- Which design, and where to work out TWR -->
+        <Border DockPanel.Dock="Top" Padding="24,10,16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <WrapPanel>
+                <TextBlock Text="Design" Style="{StaticResource Label}" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding Designs}" SelectedItem="{Binding SelectedDesign}" DisplayMemberPath="Title" MinWidth="260"
+                          AutomationProperties.Name="Design" ToolTip="Ships saved in the VAB and SPH of your linked KSP save, newest first" />
+                <CheckBox Content="Follow the latest save" IsChecked="{Binding FollowLatest}" Margin="16,0,0,0" VerticalAlignment="Center"
+                          ToolTip="Show whichever design was saved last: save in the VAB/SPH and it comes up here" />
+                <TextBlock Text="TWR on" Style="{StaticResource Label}" Margin="24,0,8,0" />
+                <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding SelectedBody}" MinWidth="110" AutomationProperties.Name="TWR on"
+                          ToolTip="The stage table's TWR is worked out at this body's surface gravity and pressure" />
+            </WrapPanel>
+        </Border>
+
+        <Grid>
+            <TextBlock Text="{Binding Empty}" Margin="24,16" FontSize="13">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Note}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasDesign}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <ScrollViewer Padding="24,12,8,16" VerticalScrollBarVisibility="Auto"
+                          Visibility="{Binding HasDesign, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Margin="0,0,16,0">
+                    <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Note}" FontSize="13" />
+
+                    <!-- The headline numbers -->
+                    <ItemsControl ItemsSource="{Binding Headline}" Margin="0,12,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,10,10" Padding="14,8" CornerRadius="4" BorderThickness="1" MinWidth="150"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Label}" Style="{StaticResource ColumnHeader}" />
+                                        <TextBlock Text="{Binding Value}" FontFamily="Cascadia Mono, Consolas" FontSize="14" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" MaxWidth="360" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Things that look wrong -->
+                    <Border Margin="0,4,0,0" Padding="12,8" CornerRadius="4" BorderThickness="1" BorderBrush="#66FFB300" Background="#14FFB300"
+                            Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding Warnings}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StringFormat='•  {0}'}" TextWrapping="Wrap" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+
+                    <!-- Stages, in firing order; picking one shows it in the Rocket pane -->
+                    <StackPanel Visibility="{Binding HasStages, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Stages" Style="{StaticResource SectionHeader}" />
+                        <Grid Margin="12,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="50" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="80" /><ColumnDefinition Width="160" /><ColumnDefinition Width="*" MinWidth="160" /><ColumnDefinition Width="170" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Stage" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Grid.Column="1" Text="Δv vac" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Grid.Column="2" Text="Δv ASL" Style="{StaticResource ColumnHeader}" ToolTip="If the whole stage were flown at Kerbin sea level" />
+                            <TextBlock Grid.Column="3" Text="{Binding TwrHeader}" Style="{StaticResource ColumnHeader}"
+                                       ToolTip="At the start of the stage, on the surface of the body picked above (thrust at its surface pressure)" />
+                            <TextBlock Grid.Column="4" Text="Burn" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Grid.Column="5" Text="Mass start → end" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Grid.Column="6" Text="Engines firing" Style="{StaticResource ColumnHeader}" />
+                            <TextBlock Grid.Column="7" Text="Leaves behind" Style="{StaticResource ColumnHeader}"
+                                       ToolTip="What the next stage drops once this one is spent" />
+                        </Grid>
+                        <ListBox ItemsSource="{Binding Stages}" SelectedItem="{Binding SelectedStage}" Template="{StaticResource PlainList}"
+                                 AutomationProperties.Name="Stages">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Stage, StringFormat='Stage {0}'}" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="50" /><ColumnDefinition Width="90" /><ColumnDefinition Width="90" /><ColumnDefinition Width="80" />
+                                            <ColumnDefinition Width="80" /><ColumnDefinition Width="160" /><ColumnDefinition Width="*" MinWidth="160" /><ColumnDefinition Width="170" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Stage}" Style="{StaticResource Mono}" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="1" Text="{Binding DeltaVVacuum}" Style="{StaticResource Mono}" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding DeltaVSeaLevel}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Twr}" Style="{StaticResource TwrText}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="4" Text="{Binding BurnTime}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="5" Text="{Binding Mass}" Style="{StaticResource Mono}" />
+                                        <TextBlock Grid.Column="6" Text="{Binding Engines}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBlock Grid.Column="7" Text="{Binding Drops}" Style="{StaticResource Note}" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                                   Text="Stage numbers as in KSP (the first to fire is the highest). Pick a stage to see its TWR on every body in the Rocket pane. How it's worked out: Math guide §7.2, §7.4." />
+                    </StackPanel>
+
+                    <!-- Mass and cost by part type | the open mission -->
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="420" />
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="*" MinWidth="320" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="Mass &amp; cost by part type" Style="{StaticResource SectionHeader}" />
+                            <ItemsControl ItemsSource="{Binding MassShares}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" />
+                                                    <ColumnDefinition Width="80" /><ColumnDefinition Width="80" /><ColumnDefinition Width="44" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                                <ProgressBar Grid.Column="1" Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="6" MinHeight="0"
+                                                             VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Share}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Mass}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                                <TextBlock Grid.Column="4" Text="{Binding Cost}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Count}" Style="{StaticResource Note}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                                       Text="Share of the whole craft as loaded (launch clamps included). Part types are dry mass; what the tanks hold is counted once, on top." />
+
+                            <StackPanel Visibility="{Binding HasResources, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Fuel &amp; resources at launch" Style="{StaticResource SectionHeader}" />
+                                <ItemsControl ItemsSource="{Binding Resources}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" /><ColumnDefinition Width="150" /><ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="44" /><ColumnDefinition Width="80" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Mono}" />
+                                                    <ProgressBar Grid.Column="2" Value="{Binding Fraction, Mode=OneWay}" Maximum="1" Height="6" MinHeight="0"
+                                                                 VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                    <TextBlock Grid.Column="3" Text="{Binding Percent}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                                    <TextBlock Grid.Column="4" Text="{Binding Mass}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- How it fits the open mission: the Mission's own design check -->
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Fit for the open mission" Style="{StaticResource SectionHeader}" />
+                            <TextBlock Text="{Binding MissionFitHint}" Style="{StaticResource Note}" />
+                            <Button Content="Check this design against the mission" Command="{Binding CheckWithMissionCommand}"
+                                    HorizontalAlignment="Left" Margin="0,8,0,0"
+                                    Visibility="{Binding CanCheckWithMission, Converter={StaticResource BoolToVisibility}}"
+                                    ToolTip="Makes this the mission's design (as picking it in the Rocket pane does)" />
+                            <StackPanel Visibility="{Binding MissionChecksThis, Converter={StaticResource BoolToVisibility}}">
+                                <Border Margin="0,8,0,0" Padding="10,6" CornerRadius="4" BorderThickness="1"
+                                        Visibility="{Binding Mission.HasDesign, Converter={StaticResource BoolToVisibility}}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="#99EF5350" />
+                                            <Setter Property="Background" Value="#1FEF5350" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Mission.DesignStatus}" Value="Comfortable">
+                                                    <Setter Property="BorderBrush" Value="#9966BB6A" />
+                                                    <Setter Property="Background" Value="#1F66BB6A" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Mission.DesignStatus}" Value="InsideMargin">
+                                                    <Setter Property="BorderBrush" Value="#99FFB300" />
+                                                    <Setter Property="Background" Value="#1FFFB300" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Mission.DesignVerdict}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding Mission.PhaseChecks}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Mark}" FontWeight="Bold" />
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock><Run Text="■ " Foreground="{Binding Color, Mode=OneWay}" /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
+                                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding Needed}" Style="{StaticResource Mono}" VerticalAlignment="Top" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding Mission.SurfaceChecks}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Mark}" FontWeight="Bold" />
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Title}" />
+                                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding Twr}" Style="{StaticResource TwrText}" VerticalAlignment="Top" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Parts, by the stage that drops them; picking one shows it in the Part pane -->
+                    <TextBlock Text="Parts" Style="{StaticResource SectionHeader}" />
+                    <ListBox ItemsSource="{Binding Source={StaticResource PartsByDrop}}" SelectedItem="{Binding SelectedPart}"
+                             Template="{StaticResource PlainList}" IsSynchronizedWithCurrentItem="False" AutomationProperties.Name="Parts">
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="4,10,0,4" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsUnlocked}" Value="False">
+                                        <Setter Property="Opacity" Value="0.55" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" /><ColumnDefinition Width="110" /><ColumnDefinition Width="50" />
+                                        <ColumnDefinition Width="80" /><ColumnDefinition Width="90" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" Style="{StaticResource Note}" FontStyle="Italic" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Count}" Style="{StaticResource Mono}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Mass}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Cost}" Style="{StaticResource Mono}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                               Text="Mass with what the tanks hold at launch; cost as KSP charges it, for the fuel actually loaded. Greyed parts aren't unlocked in this save. Pick one to see it in the Part pane. How it's worked out: Math guide §7.5." />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,52 @@
+# Pushing a v* tag on main (git tag v0.2.0 && git push origin v0.2.0) builds that commit and publishes
+# a GitHub Release with KspFlightPlanner-0.2.0.exe attached. The tag must match <Version> in Directory.Build.props.
+# A tag with a dash (v0.2.0-rc.1, with that <Version>) is a pre-release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag is on main
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "$env:GITHUB_REF_NAME is not on main; release from main only." }
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Check the tag matches the version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/KspFlightPlanner.App -getProperty:Version).Trim()
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME doesn't match <Version> $version in Directory.Build.props." }
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Publish
+        run: dotnet publish src/KspFlightPlanner.App -c Release -o out
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = (Get-Item out/KspFlightPlanner.exe).VersionInfo.ProductVersion.Split('+')[0]
+          $exe = "out/KspFlightPlanner-$v.exe"
+          Move-Item out/KspFlightPlanner.exe $exe
+          $pre = if ($env:GITHUB_REF_NAME.Contains('-')) { '--prerelease' } else { $null }
+          gh release create $env:GITHUB_REF_NAME $exe --title "KSP Flight Planner $v" --generate-notes $pre

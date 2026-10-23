@@ -12,7 +12,7 @@ public sealed class PlannerEvents
     /// </summary>
     public event Action? SaveChanged;
 
-    /// <summary>A body's surface bake was saved (Tools › Bake Surface Data); the argument is the body's name.</summary>
+    /// <summary>A body's surface bake was saved (KSP › Bake Surface Data); the argument is the body's name.</summary>
     public event Action<string>? SurfaceDataChanged;
 
     /// <summary>A planning pane handed a plan to the Flight pane; the argument is the new flight's id.</summary>

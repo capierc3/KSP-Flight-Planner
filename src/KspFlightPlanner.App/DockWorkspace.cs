@@ -139,6 +139,12 @@ public sealed class DockWorkspace
         }
 
         var anchorable = Anchorable(info);
+        if (info.OpensBeside is { } beside &&
+            _dock.Layout.Descendents().OfType<LayoutAnchorable>().FirstOrDefault(c => c.ContentId == beside && !c.IsHidden)?.Parent is LayoutAnchorablePane next)
+        {
+            next.Children.Add(anchorable);
+            return anchorable;
+        }
         anchorable.AddToLayout(_dock, info.OpensOnRight ? AnchorableShowStrategy.Right : AnchorableShowStrategy.Left);
         return anchorable;
     }

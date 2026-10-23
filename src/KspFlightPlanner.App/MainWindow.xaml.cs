@@ -15,6 +15,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private WorkMode _mode;
     private string? _activeCalculator;
+    private string? _activeDocument;
 
     public MainViewModel(MissionBuilderViewModel mission, LocationsViewModel locations, VesselsViewModel vessels, TransferPlannerViewModel transfer,
         RendezvousViewModel rendezvous, ResonantOrbitViewModel resonant, FlightViewModel flight, FromHereViewModel fromHere, SaveSync sync, KspLink link, PlannerEvents events)
@@ -67,6 +68,37 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Flying the plans handed over from planning, against the live game.</summary>
     public FlightViewModel Flight { get; }
 
+    /// <summary>The R&amp;D tech tree with the save's research and the player's plan.</summary>
+    public required TechTreeViewModel TechTree { get; init; }
+
+    /// <summary>Every part, with what the save can build.</summary>
+    public required PartsViewModel Parts { get; init; }
+
+    /// <summary>A saved design taken apart; what's picked in it shows in the Rocket pane.</summary>
+    public required EngineeringViewModel Engineering { get; init; }
+
+    /// <summary>Which engine makes the best stage for a payload and Δv.</summary>
+    public required EngineChartViewModel EngineChart { get; init; }
+
+    /// <summary>How far a craft's antennas reach, and from where it can talk home.</summary>
+    public required CommNetViewModel CommNet { get; init; }
+
+    /// <summary>Whether a craft's batteries last the night where it's going.</summary>
+    public required PowerBudgetViewModel PowerBudget { get; init; }
+
+    /// <summary>Every flight recorded while connected, and the recorder.</summary>
+    public required FlightLogViewModel FlightLog { get; init; }
+
+    /// <summary>The Plan document in front (a <see cref="Panes"/> id).</summary>
+    public string? ActiveDocument
+    {
+        get => _activeDocument;
+        private set { if (SetProperty(ref _activeDocument, value)) OnPropertyChanged(nameof(ShowsEngineeringDetail)); }
+    }
+
+    /// <summary>The Rocket pane shows what's picked in the Engineering document while that document is in front.</summary>
+    public bool ShowsEngineeringDetail => ActiveDocument == Panes.Engineering;
+
     /// <summary>One-off burns planned from where the craft is now.</summary>
     public FromHereViewModel FromHere { get; }
     public SaveSync Sync { get; }
@@ -76,7 +108,7 @@ public sealed class MainViewModel : ObservableObject
 
     public PlannerEvents Events { get; }
 
-    /// <summary>Makes the view model for a Tools › Bake Surface Data window.</summary>
+    /// <summary>Makes the view model for a KSP › Bake Surface Data window.</summary>
     public Func<SurfaceBakeViewModel>? NewSurfaceBake { get; init; }
 
     /// <summary>Planning or flying; each has its own window layout.</summary>
@@ -116,6 +148,9 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsTransferInputs));
             OnPropertyChanged(nameof(ShowsRendezvousInputs));
             OnPropertyChanged(nameof(ShowsResonantInputs));
+            OnPropertyChanged(nameof(ShowsEngineChartInputs));
+            OnPropertyChanged(nameof(ShowsCommNetInputs));
+            OnPropertyChanged(nameof(ShowsPowerBudgetInputs));
             OnPropertyChanged(nameof(ShowsNoCalculator));
         }
     }
@@ -123,6 +158,9 @@ public sealed class MainViewModel : ObservableObject
     public bool ShowsTransferInputs => ActiveCalculator == Panes.Transfer;
     public bool ShowsRendezvousInputs => ActiveCalculator == Panes.Rendezvous;
     public bool ShowsResonantInputs => ActiveCalculator == Panes.Resonant;
+    public bool ShowsEngineChartInputs => ActiveCalculator == Panes.EngineChart;
+    public bool ShowsCommNetInputs => ActiveCalculator == Panes.CommNet;
+    public bool ShowsPowerBudgetInputs => ActiveCalculator == Panes.PowerBudget;
     public bool ShowsNoCalculator => ActiveCalculator is null;
 
     /// <summary>Brings a calculator document and its inputs (the Calculators pane) into view.</summary>
@@ -136,13 +174,21 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>A Plan document took focus (or is in front after loading the layout).</summary>
     public void DocumentFocused(string id)
     {
+        ActiveDocument = id;
         if (id is Panes.Transfer or Panes.Rendezvous or Panes.Resonant) ActiveCalculator = id;
+        // The engineering tools are all inputs: bring them forward with the tool (without taking focus).
+        if (id is Panes.EngineChart or Panes.CommNet or Panes.PowerBudget && ActiveCalculator != id)
+        {
+            ActiveCalculator = id;
+            RequestPane(Panes.Calculators, activate: false);
+        }
     }
 
     /// <summary>A screen asked for a pane to be brought into view (the window switches mode if it has to).</summary>
-    public event Action<string>? PaneRequested;
+    /// <remarks>The second argument: also move keyboard focus to it (false just brings it into view).</remarks>
+    public event Action<string, bool>? PaneRequested;
 
-    public void RequestPane(string id) => PaneRequested?.Invoke(id);
+    public void RequestPane(string id, bool activate = true) => PaneRequested?.Invoke(id, activate);
 }
 
 /// <summary>Menu and keyboard commands for the main window.</summary>
@@ -186,7 +232,7 @@ public partial class MainWindow : Window
         _plan.Load();
         _fly.Load();
 
-        viewModel.PaneRequested += id => ShowPane(id);
+        viewModel.PaneRequested += (id, activate) => ShowPane(id, activate);
         SystemEvents.UserPreferenceChanged += UserPreferenceChanged;
         viewModel.Mission.AskToSave = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question) switch
@@ -198,6 +244,9 @@ public partial class MainWindow : Window
         viewModel.Mission.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         viewModel.Mission.Alert = message => MessageBox.Show(this, message, "KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
+        viewModel.FlightLog.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        viewModel.Sync.OtherSaveFound += () => Dispatcher.BeginInvoke(AskToSwitchSave);
         Closing += (_, e) =>
         {
             if (!viewModel.Mission.ConfirmDiscard())
@@ -211,6 +260,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             SystemEvents.UserPreferenceChanged -= UserPreferenceChanged;
+            viewModel.FlightLog.Recorder.Dispose(); // stores the flight being recorded
             viewModel.Sync.Dispose();
             viewModel.Link.Dispose();
         };
@@ -253,11 +303,55 @@ public partial class MainWindow : Window
         _viewModel.Sync.Apply(settings.Result);
     }
 
+    private bool _askingSave;
+
+    /// <summary>
+    /// The game is playing another save than the planner's: warn, and offer to switch to it. "No" carries on as it is
+    /// (nothing recorded) without asking again for this save; the status bar keeps the warning and can ask again.
+    /// </summary>
+    private void AskToSwitchSave()
+    {
+        var sync = _viewModel.Sync;
+        if (_askingSave || !sync.PlayingOtherSave) return;
+        _askingSave = true;
+        try
+        {
+            var mine = sync.SaveName;
+            const string Paused = "Until they match, the planner won't record flights or lay the live game over {0}'s vessels, " +
+                                  "so nothing from KSP ends up in {0}'s plans or flight log.";
+            if (sync.PlayingSave is { } other)
+            {
+                var answer = MessageBox.Show(this,
+                    $"KSP is playing the save \"{other}\", but the planner is set to \"{mine}\".\n\n{string.Format(Paused, mine)}\n\n" +
+                    $"Switch the planner to {other}?",
+                    "KSP is playing another save", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                // Switching brings in the other save's missions: offer to save the open one first.
+                if (answer == MessageBoxResult.Yes && sync.PlayingSave == other && _viewModel.Mission.ConfirmDiscard())
+                    sync.Apply(sync.Settings with { KspSaveName = other });
+                else sync.DismissOtherSave();
+            }
+            else
+            {
+                MessageBox.Show(this,
+                    $"KSP doesn't seem to be playing \"{mine}\": its game mode or vessels don't match that save.\n\n" +
+                    $"{string.Format(Paused, mine)}\n\nPick the save KSP is playing in File › Settings.",
+                    "KSP is playing another save", MessageBoxButton.OK, MessageBoxImage.Warning);
+                sync.DismissOtherSave();
+            }
+        }
+        finally
+        {
+            _askingSave = false;
+        }
+    }
+
+    private void OtherSave_Click(object sender, RoutedEventArgs e) => AskToSwitchSave();
+
     private async void ConnectKsp_Executed(object sender, ExecutedRoutedEventArgs e) => await _viewModel.Link.ToggleAsync();
 
     private SurfaceBakeWindow? _bakeWindow;
 
-    /// <summary>Tools › Bake Surface Data: one window at a time, left open beside the planner.</summary>
+    /// <summary>KSP › Bake Surface Data: one window at a time, left open beside the planner.</summary>
     private void BakeSurface_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         if (_bakeWindow is { IsLoaded: true })
@@ -297,7 +391,7 @@ public partial class MainWindow : Window
     private void ShowPane_Executed(object sender, ExecutedRoutedEventArgs e)
     {
         if (e.Parameter is string id)
-            ShowPane(id, activate: e.OriginalSource is not (Views.LocationListView or Views.VesselListView or Views.FlightListView));
+            ShowPane(id, activate: e.OriginalSource is not (Views.LocationListView or Views.VesselListView or Views.FlightListView or Views.PartListView));
     }
 
     private void SetMode_Executed(object sender, ExecutedRoutedEventArgs e)

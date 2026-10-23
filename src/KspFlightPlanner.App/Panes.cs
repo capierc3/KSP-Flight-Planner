@@ -15,6 +15,9 @@ public sealed record PaneInfo(string Id, string Title, bool IsDocument, WorkMode
 {
     /// <summary>Tool panes open on this side when they aren't in the layout yet.</summary>
     public bool OpensOnRight { get; init; }
+
+    /// <summary>A pane to open as a tab next to, when it's in the layout (otherwise <see cref="OpensOnRight"/> decides).</summary>
+    public string? OpensBeside { get; init; }
 }
 
 /// <summary>Every pane the window can show. The ids are stored in the saved window layouts, so don't rename them.</summary>
@@ -30,6 +33,9 @@ public static class Panes
     public const string Rocket = "rocket";
     public const string Flights = "flights";
     public const string FromHere = "fromhere";
+    public const string FlightLog = "flightlog";
+    public const string Parts = "parts";
+    public const string Part = "part";
 
     // Documents
     public const string Legs = "legs";
@@ -40,6 +46,13 @@ public static class Panes
     public const string Rendezvous = "rendezvous";
     public const string Resonant = "resonant";
     public const string Flight = "flight";
+    public const string FlightReport = "flightreport";
+    public const string FlightCompare = "flightcompare";
+    public const string TechTree = "techtree";
+    public const string Engineering = "engineering";
+    public const string EngineChart = "enginechart";
+    public const string CommNet = "commnet";
+    public const string PowerBudget = "power";
     public const string Guide = "guide";
 
     private static readonly WorkMode[] Plan = [WorkMode.Plan];
@@ -54,9 +67,12 @@ public static class Panes
         new(Notes, "Notes", false, Plan, vm => new MissionNotesView { DataContext = vm.Mission }) { OpensOnRight = true },
         new(Locations, "Locations", false, Both, vm => new LocationListView { DataContext = vm.Locations }),
         new(Vessels, "Vessels", false, Both, vm => new VesselListView { DataContext = vm.Vessels }),
-        new(Rocket, "Rocket", false, Plan, vm => new RocketView { DataContext = vm.Mission }) { OpensOnRight = true },
+        new(Rocket, "Rocket", false, Plan, vm => new RocketPaneView { DataContext = vm }) { OpensOnRight = true },
+        new(Parts, "Parts", false, Plan, vm => new PartListView { DataContext = vm.Parts }) { OpensOnRight = true, OpensBeside = Rocket },
+        new(Part, "Part", false, Plan, vm => new PartDetailView { DataContext = vm.Parts.Detail }) { OpensOnRight = true, OpensBeside = Notes },
         new(Flights, "Flights", false, Fly, vm => new FlightListView { DataContext = vm.Flight }),
         new(FromHere, "From here", false, Fly, vm => new FromHereView { DataContext = vm.FromHere }) { OpensOnRight = true },
+        new(FlightLog, "Flight log", false, [WorkMode.Fly, WorkMode.Plan], vm => new FlightLogListView { DataContext = vm.FlightLog }),
 
         new(Legs, "Legs & phases", true, Plan, vm => new MissionLegsView { DataContext = vm.Mission }),
         new(DvMap, "Δv map", true, Plan, vm => new DvMapView { DataContext = vm.Mission }),
@@ -65,7 +81,14 @@ public static class Panes
         new(Transfer, "Transfer Planner", true, Plan, vm => new TransferPlannerView { DataContext = vm.Transfer }),
         new(Rendezvous, "Rendezvous", true, Plan, vm => new RendezvousView { DataContext = vm.Rendezvous }),
         new(Resonant, "Resonant Orbits", true, Plan, vm => new ResonantOrbitView { DataContext = vm.Resonant }),
+        new(TechTree, "Tech tree", true, Plan, vm => new TechTreeView { DataContext = vm.TechTree }),
+        new(Engineering, "Engineering", true, Plan, vm => new EngineeringView { DataContext = vm.Engineering }),
+        new(EngineChart, "Engine chart", true, Plan, vm => new EngineChartView { DataContext = vm.EngineChart }),
+        new(CommNet, "CommNet", true, Plan, vm => new CommNetView { DataContext = vm.CommNet }),
+        new(PowerBudget, "Power budget", true, Plan, vm => new PowerBudgetView { DataContext = vm.PowerBudget }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
+        new(FlightReport, "Flight report", true, [WorkMode.Fly, WorkMode.Plan], vm => new FlightReportView { DataContext = vm.FlightLog.Report }),
+        new(FlightCompare, "Compare flights", true, [WorkMode.Plan, WorkMode.Fly], vm => new FlightCompareView { DataContext = vm.FlightLog.Compare }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];
 

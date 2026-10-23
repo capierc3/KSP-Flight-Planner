@@ -1,0 +1,59 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.PartListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <CollectionViewSource x:Key="ByCategory" Source="{Binding Items}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Category" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <!-- Every part of the install; locked ones (greyed) only with "Include locked parts". -->
+    <DockPanel Margin="12,10">
+        <TextBlock DockPanel.Dock="Top" Text="Category" Style="{StaticResource Label}" />
+        <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}" Margin="0,0,0,6"
+                  HorizontalAlignment="Stretch" AutomationProperties.Name="Part category" />
+        <TextBlock DockPanel.Dock="Top" Text="Search" Style="{StaticResource Label}" />
+        <TextBox DockPanel.Dock="Top" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"
+                 AutomationProperties.Name="Search parts" ToolTip="Search by name or maker" />
+        <CheckBox DockPanel.Dock="Top" Content="Include locked parts" IsChecked="{Binding ShowAll}" Margin="0,0,0,6"
+                  ToolTip="Also list the parts this save hasn't unlocked yet, greyed out" />
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Summary}" Style="{StaticResource Note}" Margin="0,8,0,0" />
+        <ListBox ItemsSource="{Binding Source={StaticResource ByCategory}}" Background="Transparent" BorderThickness="0"
+                 SelectedItem="{Binding Selected}" SelectionChanged="List_SelectionChanged" IsSynchronizedWithCurrentItem="False"
+                 VirtualizingPanel.IsVirtualizingWhenGrouping="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" Style="{StaticResource SectionHeader}" Margin="4,12,0,4" />
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </ListBox.GroupStyle>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsUnlocked}" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0,1">
+                        <TextBlock TextWrapping="Wrap">
+                            <Run Text="{Binding Title, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding StatusText, Mode=OneWay}" FontStyle="Italic"
+                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding Facts}" Style="{StaticResource Note}" />
+                        <TextBlock Text="{Binding NodeTitle}" Style="{StaticResource Note}" FontStyle="Italic" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
