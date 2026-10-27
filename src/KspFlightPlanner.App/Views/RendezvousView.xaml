@@ -127,6 +127,27 @@
                         <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Note}" FontSize="13" Margin="0,8"
                                    Visibility="{Binding HasNoPlan, Converter={StaticResource BoolToVisibility}}" />
 
+                        <!-- From a craft around another body: the trip there, planned from its orbit, into the target's plane -->
+                        <StackPanel Visibility="{Binding HasTrip, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding TripTitle}" Style="{StaticResource SectionHeader}" Margin="0,6,0,4" />
+                            <TextBlock Text="{Binding TripText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                            <StackPanel Visibility="{Binding HasTripChoice, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource Note}" Margin="0,0,0,4"
+                                           Text="Pick a way: the cheapest in all is chosen for you, trip and meeting together." />
+                                <ListBox ItemsSource="{Binding TripRows}" SelectedIndex="{Binding TripIndex}" BorderThickness="0" Background="Transparent">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,1">
+                                                <TextBlock Text="{Binding When}" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding TripSteps}" ItemTemplate="{StaticResource StepTemplate}" Margin="0,6,0,0" />
+                        </StackPanel>
+
                         <!-- From a craft around another body: the Δv map's steps to the targets' body first -->
                         <StackPanel Visibility="{Binding HasApproach, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="{Binding ApproachTitle}" Style="{StaticResource SectionHeader}" Margin="0,6,0,4" />

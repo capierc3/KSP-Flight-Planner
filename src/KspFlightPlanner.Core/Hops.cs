@@ -31,6 +31,35 @@ public sealed record HopPlan(IReadOnlyList<FlightBurn> Departure, FlightBurn? Ca
 }
 
 /// <summary>
+/// How a hop should arrive besides its height: inclined <see cref="InclinationDeg"/> to the destination's equator (90°
+/// polar), or in the plane with normal <see cref="PlaneNormal"/>, a target craft's orbit there, so meeting it needs no
+/// plane change. The plane fixes the tilt, which way round the orbit goes and where it crosses the equator.
+/// docs/MATH.md §3.9.
+/// </summary>
+public sealed record ArrivalAim(double? InclinationDeg, Vector3d? PlaneNormal = null, string? PlaneName = null)
+{
+    /// <summary>An inclination to arrive at, or null for however the trip arrives.</summary>
+    public static ArrivalAim? Inclined(double? inclinationDeg) => inclinationDeg is { } i ? new ArrivalAim(i) : null;
+
+    /// <summary>Arrive in the plane of <paramref name="orbit"/> (around the destination), named <paramref name="name"/>.</summary>
+    public static ArrivalAim InPlaneOf(string name, OrbitalElements orbit) => new(null, Rendezvous.OrbitNormal(orbit), name);
+
+    /// <summary>The arrival's plane is close enough: within <see cref="Hops.InclinedEnoughDeg"/>.</summary>
+    public bool Met(SoiArrival arrival) => OffDeg(arrival) < Hops.InclinedEnoughDeg;
+
+    /// <summary>How far off the arrival's plane is, in degrees.</summary>
+    public double OffDeg(SoiArrival arrival) => PlaneNormal is { } n
+        ? Vector3d.Angle(Rendezvous.OrbitNormal(arrival.Path), n) * 180 / Math.PI
+        : Math.Abs(arrival.Path.InclinationDeg - InclinationDeg!.Value);
+
+    /// <summary>"a 90° orbit", "Mun Station's orbit".</summary>
+    public string Text => PlaneNormal is null ? $"a {InclinationDeg:0.#}° orbit" : $"{PlaneName}'s orbit";
+
+    /// <summary>"inclined 90°", "in Mun Station's plane".</summary>
+    public string Short => PlaneNormal is null ? $"inclined {InclinationDeg:0.#}°" : $"in {PlaneName}'s plane";
+}
+
+/// <summary>
 /// The three kinds of hop between bodies, with patched conics as KSP flies them, each ending at a periapsis at a chosen
 /// height around the destination and a capture there (or an atmospheric pass):
 /// <list type="bullet">
@@ -229,9 +258,11 @@ public static class Hops
     /// </param>
     /// <param name="inclinationDeg">Arrive inclined this much to the moon's equator (90° polar): a burn on the way tilts
     /// the path (<see cref="TiltOnTheWay"/>), or the course correction does. Null arrives however the transfer does.</param>
+    /// <param name="aim">Instead of <paramref name="inclinationDeg"/>: arrive in a target's orbital plane (or at an inclination).</param>
     public static HopPlan Down(CelestialBody parent, CelestialBody moon, OrbitalElements craft, double earliestUt, double periapsisAltitudeM,
-        bool soonest = false, double? inclinationDeg = null)
+        bool soonest = false, double? inclinationDeg = null, ArrivalAim? aim = null)
     {
+        var goal = aim ?? ArrivalAim.Inclined(inclinationDeg);
         if (moon.Orbit is not { } moonOrbit || moon.ParentId != parent.Id) throw new ArgumentException($"{moon.Name} doesn't orbit {parent.Name}.");
         var mu = parent.Mu;
         var moonPeriod = Kepler.OrbitalPeriod(moonOrbit, mu);
@@ -247,8 +278,8 @@ public static class Hops
             {
                 try
                 {
-                    return (Ut: ut, Result: inclinationDeg is { } inc
-                        ? CorrectTilted(parent, moon, craft, ut, meet, periapsisAltitudeM, inc)
+                    return (Ut: ut, Result: goal is { } g
+                        ? CorrectTilted(parent, moon, craft, ut, meet, periapsisAltitudeM, g)
                         : Correct(parent, moon, craft, ut, meet, periapsisAltitudeM));
                 }
                 catch (ArgumentException) { return (Ut: ut, Result: ((NodeBurn?, SoiArrival)?)null); }
@@ -298,17 +329,17 @@ public static class Hops
             : [];
 
         var departureUt = pick.Transfer.Ut;
-        var aim = new Aim(craft, mu, departureUt, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from));
-        var dv = aim.Tune(ToVector(aim.At, pick.Transfer.Burn), aim.At.Velocity.Normalized)
+        var aimAt = new Aim(craft, mu, departureUt, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from));
+        var dv = aimAt.Tune(ToVector(aimAt.At, pick.Transfer.Burn), aimAt.At.Velocity.Normalized)
                  ?? throw new ArgumentException($"Couldn't find a burn that passes {moon.Name} at {Km(periapsisAltitudeM)}: try another height, or plan again from a rounder orbit.");
-        var transferBurn = new FlightBurn($"Transfer to {moon.Name}", departureUt, NodeBurn.From(aim.At, dv));
-        var plan = Finish([transferBurn], aim.ArrivalAfter(dv)!, moon, note);
-        if (inclinationDeg is { } tilt && !Inclined(plan.Arrival, tilt))
+        var transferBurn = new FlightBurn($"Transfer to {moon.Name}", departureUt, NodeBurn.From(aimAt.At, dv));
+        var plan = Finish([transferBurn], aimAt.ArrivalAfter(dv)!, moon, note);
+        if (goal is { } tilt && !tilt.Met(plan.Arrival))
         {
-            var after = Kepler.ElementsFrom(new StateVector(aim.At.Position, aim.At.Velocity + dv), mu, departureUt);
+            var after = Kepler.ElementsFrom(new StateVector(aimAt.At.Position, aimAt.At.Velocity + dv), mu, departureUt);
             var (aimBurn, arrival) = TiltOnTheWay(after, mu, departureUt, plan.Arrival.CrossingUt, moon, periapsisAltitudeM, tilt,
                                          (p, from) => FollowDown(parent, moon, p, from))
-                                     ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {moon.Name} inclined {tilt:0.#}°.");
+                                     ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {moon.Name} {tilt.Short}.");
             plan = Finish([transferBurn, aimBurn], arrival, moon, note);
         }
         return plan with { Warnings = [.. notes, .. plan.Warnings], Waits = waits };
@@ -384,15 +415,16 @@ public static class Hops
     /// </summary>
     /// <param name="inclinationDeg">Arrive inclined this much to the planet's equator: once out of the moon's sphere, a
     /// burn on the way down tilts the path (<see cref="TiltOnTheWay"/>). Null arrives however the escape does.</param>
+    /// <param name="aim">Instead of <paramref name="inclinationDeg"/>: arrive in a target's orbital plane (or at an inclination).</param>
     public static HopPlan Up(CelestialBody moon, CelestialBody parent, OrbitalElements craft, double earliestUt, double periapsisAltitudeM,
-        double? inclinationDeg = null)
+        double? inclinationDeg = null, ArrivalAim? aim = null)
     {
         var plan = Untilted(moon, parent, craft, earliestUt, periapsisAltitudeM);
-        if (inclinationDeg is not { } tilt || Inclined(plan.Arrival, tilt)) return plan;
+        if ((aim ?? ArrivalAim.Inclined(inclinationDeg)) is not { } tilt || tilt.Met(plan.Arrival)) return plan;
         var a = plan.Arrival;
         var (aimBurn, arrival) = TiltOnTheWay(a.Path, parent.Mu, a.CrossingUt, a.PeriapsisUt, parent, periapsisAltitudeM, tilt,
                                      (p, from) => Relative(Kepler.StateAt(p, parent.Mu, from), parent, from) is var down && ComesDown(down, parent) ? down : null)
-                                 ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {parent.Name} inclined {tilt:0.#}°.");
+                                 ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {parent.Name} {tilt.Short}.");
         return Finish([.. plan.Departure, aimBurn], arrival, parent, UpNote(moon)) with { IsCorrection = plan.IsCorrection };
     }
 
@@ -495,8 +527,9 @@ public static class Hops
     /// correction also tilts the arrival to that inclination to the destination's equator.
     /// </summary>
     public static HopPlan Across(CelestialBody origin, CelestialBody destination, CelestialBody parent, OrbitalElements craft, double earliestUt,
-        double periapsisAltitudeM, double departureUt, double flightTimeS, double? inclinationDeg = null)
+        double periapsisAltitudeM, double departureUt, double flightTimeS, double? inclinationDeg = null, ArrivalAim? aim = null)
     {
+        var goal = aim ?? ArrivalAim.Inclined(inclinationDeg);
         if (origin.Orbit is null || destination.Orbit is null || origin.ParentId != parent.Id || destination.ParentId != parent.Id)
             throw new ArgumentException($"{origin.Name} and {destination.Name} don't both orbit {parent.Name}.");
         var arriveUt = departureUt + flightTimeS;
@@ -539,16 +572,16 @@ public static class Hops
             {
                 var (ut, dv, off) = Eject(craft, origin.Mu, origin.SoiRadiusM, want, departureUt, earliestUt);
                 if (isFlat) offDeg = off;
-                var aim = new Aim(craft, origin.Mu, ut, destination, periapsisAltitudeM, follow);
-                foreach (var start in new[] { dv, Level(origin, destination, parent, aim.At, ut, dv, arriveUt, horizon) }.Distinct())
+                var aimAt = new Aim(craft, origin.Mu, ut, destination, periapsisAltitudeM, follow);
+                foreach (var start in new[] { dv, Level(origin, destination, parent, aimAt.At, ut, dv, arriveUt, horizon) }.Distinct())
                 {
-                    var burn = aim.Tune(start, aim.At.Velocity.Normalized) ?? start;
-                    var path = Kepler.ElementsFrom(new StateVector(aim.At.Position, aim.At.Velocity + burn), origin.Mu, ut);
+                    var burn = aimAt.Tune(start, aimAt.At.Velocity.Normalized) ?? start;
+                    var path = Kepler.ElementsFrom(new StateVector(aimAt.At.Position, aimAt.At.Velocity + burn), origin.Mu, ut);
                     if (LeaveSoi(origin, parent, path, ut, ut + horizon) is not { } exit) continue;
                     try
                     {
                         var (fix, a) = Correct(parent, destination, exit.Path, correctAt(exit), arriveUt, periapsisAltitudeM);
-                        tries.Add((ut, burn, aim.At, exit, fix, a));
+                        tries.Add((ut, burn, aimAt.At, exit, fix, a));
                     }
                     catch (ArgumentException) { }
                 }
@@ -568,13 +601,13 @@ public static class Hops
                           "An orbit in the plane of the transfer would be cheaper.");
         }
 
-        if (inclinationDeg is { } tilt && !Inclined(arrival, tilt))
+        if (goal is { } tilt && !tilt.Met(arrival))
         {
             // The course correction (or one where there was none) takes the tilt as well.
             var ut = correctAt(leaving);
             burns.RemoveAll(b => b.Title == $"Course correction to {destination.Name}");
             var (fix, a) = CorrectTilted(parent, destination, leaving.Path, ut, arriveUt, periapsisAltitudeM, tilt);
-            if (fix is { } f) burns.Add(new FlightBurn($"Course correction to {destination.Name}, inclined {tilt:0.#}°", ut, f));
+            if (fix is { } f) burns.Add(new FlightBurn($"Course correction to {destination.Name}, {tilt.Short}", ut, f));
             arrival = a;
         }
 
@@ -678,10 +711,6 @@ public static class Hops
     /// <summary>How far through the coast (from the last burn to the destination's sphere, or its periapsis) a burn that tilts the arrival is tried.</summary>
     private static readonly double[] TiltAt = [0.05, 0.15, 0.3, 0.5];
 
-    /// <summary>The arrival is within <see cref="InclinedEnoughDeg"/> of <paramref name="inclinationDeg"/>.</summary>
-    private static bool Inclined(SoiArrival arrival, double inclinationDeg) =>
-        Math.Abs(arrival.Path.InclinationDeg - inclinationDeg) < InclinedEnoughDeg;
-
     /// <summary>
     /// The cheapest burn on the coast along <paramref name="path"/> (around a body of gravity <paramref name="mu"/>) between
     /// <paramref name="fromUt"/> and <paramref name="untilUt"/> that tilts the arrival at <paramref name="destination"/> to
@@ -691,7 +720,7 @@ public static class Hops
     /// docs/MATH.md §3.9.
     /// </summary>
     private static (FlightBurn Burn, SoiArrival Arrival)? TiltOnTheWay(OrbitalElements path, double mu, double fromUt, double untilUt,
-        CelestialBody destination, double altitudeM, double inclinationDeg, Func<OrbitalElements, double, SoiArrival?> follow)
+        CelestialBody destination, double altitudeM, ArrivalAim inclinationDeg, Func<OrbitalElements, double, SoiArrival?> follow)
     {
         var found = TiltAt.Select(f => fromUt + f * (untilUt - fromUt)).AsParallel().Select(ut =>
             {
@@ -702,9 +731,11 @@ public static class Hops
         if (found.Count == 0) return null;
         var best = found.MinBy(t => t.Dv.Length);
         var arrival = follow(Kepler.ElementsFrom(new StateVector(best.At.Position, best.At.Velocity + best.Dv), mu, best.Ut), best.Ut)!;
-        return (new FlightBurn($"Aim for a {inclinationDeg:0.#}° orbit of {destination.Name}", best.Ut, NodeBurn.From(best.At, best.Dv))
+        return (new FlightBurn(inclinationDeg.PlaneNormal is null
+            ? $"Aim for a {inclinationDeg.InclinationDeg:0.#}° orbit of {destination.Name}"
+            : $"Aim for {inclinationDeg.Text} around {destination.Name}", best.Ut, NodeBurn.From(best.At, best.Dv))
         {
-            Note = $"Moves where you pass {destination.Name} so you arrive in a {inclinationDeg:0.#}° orbit: far cheaper than turning the orbit once there.",
+            Note = $"Moves where you pass {destination.Name} so you arrive in {inclinationDeg.Text}: far cheaper than turning the orbit once there.",
         }, arrival);
     }
 
@@ -714,10 +745,10 @@ public static class Hops
     /// equator; no burn when it already does. Starts from the plain correction (<see cref="Correct"/>), then from no burn.
     /// </summary>
     private static (NodeBurn? Burn, SoiArrival Arrival) CorrectTilted(CelestialBody parent, CelestialBody destination, OrbitalElements path, double ut,
-        double arriveUt, double altitudeM, double inclinationDeg)
+        double arriveUt, double altitudeM, ArrivalAim inclinationDeg)
     {
         SoiArrival? Follow(OrbitalElements p, double from) => FollowDown(parent, destination, p, from);
-        if (Follow(path, ut) is { } now && Math.Abs(now.PeriapsisAltitudeM - altitudeM) < OnCourseM && Inclined(now, inclinationDeg)) return (null, now);
+        if (Follow(path, ut) is { } now && Math.Abs(now.PeriapsisAltitudeM - altitudeM) < OnCourseM && inclinationDeg.Met(now)) return (null, now);
         var at = Kepler.StateAt(path, parent.Mu, ut);
         var seeds = new List<Vector3d>();
         try
@@ -729,71 +760,96 @@ public static class Hops
         foreach (var seed in seeds)
             if (Tilt(at, parent.Mu, ut, altitudeM, inclinationDeg, Follow, seed) is { } dv)
                 return (NodeBurn.From(at, dv), Follow(Kepler.ElementsFrom(new StateVector(at.Position, at.Velocity + dv), parent.Mu, ut), ut)!);
-        throw new ArgumentException($"Couldn't find a course correction that arrives at {destination.Name} inclined {inclinationDeg:0.#}°.");
+        throw new ArgumentException($"Couldn't find a course correction that arrives at {destination.Name} {inclinationDeg.Short}.");
     }
 
     /// <summary>
     /// A burn at <paramref name="ut"/> on the path through <paramref name="at"/> (around a body of gravity
     /// <paramref name="mu"/>) after which the arrival, followed by <paramref name="follow"/>, passes at
-    /// <paramref name="altitudeM"/> on a path inclined <paramref name="inclinationDeg"/> to the destination's equator. Two
-    /// things to hit with a burn of three parts, so Newton's method takes the least-Δv step each time,
-    /// Δv ← Δv − Jᵀ(JJᵀ)⁻¹·miss, with J the miss's change per m/s along prograde, normal and radial (found by nudging),
-    /// halved until the miss shrinks. The inclination is walked to the goal at most 10° at a time from where the path
-    /// arrives after <paramref name="seed"/>, so each solve starts close. Null when it can't be reached.
+    /// <paramref name="altitudeM"/> and arrives as <paramref name="goal"/> asks: at an inclination to the destination's
+    /// equator (two things to hit), or in a plane (three: the height and the plane normal's two ways of being off). A
+    /// burn has three parts, so Newton's method takes the least-Δv step each time, Δv ← Δv − Jᵀ(JJᵀ)⁻¹·miss, with J the
+    /// miss's change per m/s along prograde, normal and radial (found by nudging), halved until the miss shrinks. The
+    /// inclination (or plane) is walked to the goal at most 10° at a time from where the path arrives after
+    /// <paramref name="seed"/>, so each solve starts close. Null when it can't be reached.
     /// </summary>
-    private static Vector3d? Tilt(StateVector at, double mu, double ut, double altitudeM, double inclinationDeg,
+    private static Vector3d? Tilt(StateVector at, double mu, double ut, double altitudeM, ArrivalAim goal,
         Func<OrbitalElements, double, SoiArrival?> follow, Vector3d seed)
     {
         SoiArrival? After(Vector3d dv) => follow(Kepler.ElementsFrom(new StateVector(at.Position, at.Velocity + dv), mu, ut), ut);
-        // The miss in km of height and degrees of inclination, about equally hard to fix.
-        (double Height, double Tilt)? Miss(Vector3d dv, double goal) =>
-            After(dv) is { } a ? ((a.PeriapsisAltitudeM - altitudeM) / 1000, a.Path.InclinationDeg - goal) : null;
-        static double Size((double Height, double Tilt) m) => Math.Sqrt(m.Height * m.Height + m.Tilt * m.Tilt);
-
         if (After(seed) is not { } start) return null;
+
+        // The goal walked in steps of at most 10°: inclinations, or plane normals turned from the start's toward the goal's.
+        var steps = Math.Max(1, (int)Math.Ceiling(goal.OffDeg(start) / 10));
+        Func<SoiArrival, double[]> Step(int k)
+        {
+            var f = (double)k / steps;
+            if (goal.PlaneNormal is not { } n)
+            {
+                var inc = start.Path.InclinationDeg + (goal.InclinationDeg!.Value - start.Path.InclinationDeg) * f;
+                return a => [a.Path.InclinationDeg - inc];
+            }
+            var from = Rendezvous.OrbitNormal(start.Path);
+            var angle = Vector3d.Angle(from, n);
+            var normal = angle < 1e-9 ? n
+                : (from * Math.Sin((1 - f) * angle) + n * Math.Sin(f * angle)) / Math.Sin(angle); // along the great circle
+            normal = normal.Normalized;
+            // The arrival comes in along its line of approach, and a burn on the way only swings its plane round that line.
+            // So aim for the plane through the line that's nearest the goal's (its normal: the goal's, with the part along
+            // the line taken out), and the miss is how far round the line the arrival's plane still has to swing (degrees).
+            return a =>
+            {
+                var h = Rendezvous.OrbitNormal(a.Path);
+                var line = Kepler.StateAt(a.Path, 1, a.Path.EpochS).Velocity.Normalized;
+                var reachable = normal - line * Vector3d.Dot(normal, line);
+                if (reachable.Length < 1e-6) return [0]; // the goal plane is square to the line: every plane through it is as near
+                reachable = reachable.Normalized;
+                return [Math.Atan2(Vector3d.Dot(Vector3d.Cross(h, reachable), line), Vector3d.Dot(h, reachable)) * 180 / Math.PI];
+            };
+        }
+
         var prograde = at.Velocity.Normalized;
-        var normal = Vector3d.Cross(at.Position, at.Velocity).Normalized;
-        Vector3d[] axes = [prograde, normal, Vector3d.Cross(prograde, normal)];
+        var normalAxis = Vector3d.Cross(at.Position, at.Velocity).Normalized;
+        Vector3d[] axes = [prograde, normalAxis, Vector3d.Cross(prograde, normalAxis)];
         const double nudge = 0.02;
 
         var dv = seed;
-        var from = start.Path.InclinationDeg;
-        var steps = Math.Max(1, (int)Math.Ceiling(Math.Abs(inclinationDeg - from) / 10));
         for (var k = 1; k <= steps; k++)
         {
-            var goal = from + (inclinationDeg - from) * k / steps;
+            var tilt = Step(k);
             var last = k == steps;
+            // The miss: km of height, then degrees of tilt (about equally hard to fix).
+            double[]? Miss(Vector3d burn) =>
+                After(burn) is { } a ? [(a.PeriapsisAltitudeM - altitudeM) / 1000, .. tilt(a)] : null;
+            static double Size(double[] m) => Math.Sqrt(m.Sum(x => x * x));
+
             for (var iteration = 0; ; iteration++)
             {
-                if (Miss(dv, goal) is not { } miss) return null;
-                if (Math.Abs(miss.Height) < (last ? ArrivedM / 2000 : 5) && Math.Abs(miss.Tilt) < (last ? InclinedEnoughDeg / 5 : 1)) break;
+                if (Miss(dv) is not { } miss) return null;
+                if (Math.Abs(miss[0]) < (last ? ArrivedM / 2000 : 5) && miss.Skip(1).All(t => Math.Abs(t) < (last ? InclinedEnoughDeg / 5 : 1))) break;
                 if (iteration == 30) return null;
 
-                var j = new (double Height, double Tilt)[3];
+                // J: the miss's change per m/s along each axis.
+                var j = new double[3][];
                 for (var i = 0; i < 3; i++)
                 {
-                    if (Miss(dv + axes[i] * nudge, goal) is not { } m) return null;
-                    j[i] = ((m.Height - miss.Height) / nudge, (m.Tilt - miss.Tilt) / nudge);
+                    if (Miss(dv + axes[i] * nudge) is not { } m) return null;
+                    j[i] = m.Select((x, r) => (x - miss[r]) / nudge).ToArray();
                 }
                 // y = (JJᵀ)⁻¹·miss, then the step −Jᵀ·y.
-                double a11 = 0, a12 = 0, a22 = 0;
-                foreach (var (h, t) in j)
-                {
-                    a11 += h * h;
-                    a12 += h * t;
-                    a22 += t * t;
-                }
-                var det = a11 * a22 - a12 * a12;
-                if (Math.Abs(det) < 1e-18) return null;
-                var y1 = (a22 * miss.Height - a12 * miss.Tilt) / det;
-                var y2 = (a11 * miss.Tilt - a12 * miss.Height) / det;
+                var size = miss.Length;
+                var jjt = new double[size, size];
+                for (var r = 0; r < size; r++)
+                    for (var c = 0; c < size; c++)
+                        jjt[r, c] = j.Sum(axis => axis[r] * axis[c]);
+                if (Solve(jjt, miss) is not { } y) return null;
                 var step = Vector3d.Zero;
-                for (var i = 0; i < 3; i++) step -= axes[i] * (j[i].Height * y1 + j[i].Tilt * y2);
+                for (var i = 0; i < 3; i++) step -= axes[i] * Enumerable.Range(0, size).Sum(r => j[i][r] * y[r]);
 
-                var size = Size(miss);
+                var now = Size(miss);
                 var moved = false;
                 for (var halving = 0; halving < 12 && !moved; halving++, step *= 0.5)
-                    if (Miss(dv + step, goal) is { } m && Size(m) < size)
+                    if (Miss(dv + step) is { } m && Size(m) < now)
                     {
                         dv += step;
                         moved = true;
@@ -802,6 +858,31 @@ public static class Hops
             }
         }
         return dv;
+    }
+
+    /// <summary>Solves A·x = b (a few unknowns) by elimination with partial pivoting; null when A is singular.</summary>
+    private static double[]? Solve(double[,] a, double[] b)
+    {
+        var n = b.Length;
+        var m = new double[n, n + 1];
+        for (var r = 0; r < n; r++)
+        {
+            for (var c = 0; c < n; c++) m[r, c] = a[r, c];
+            m[r, n] = b[r];
+        }
+        for (var col = 0; col < n; col++)
+        {
+            var pivot = Enumerable.Range(col, n - col).MaxBy(r => Math.Abs(m[r, col]));
+            if (Math.Abs(m[pivot, col]) < 1e-18) return null;
+            for (var c = 0; c <= n; c++) (m[col, c], m[pivot, c]) = (m[pivot, c], m[col, c]);
+            for (var r = 0; r < n; r++)
+            {
+                if (r == col) continue;
+                var f = m[r, col] / m[col, col];
+                for (var c = col; c <= n; c++) m[r, c] -= f * m[col, c];
+            }
+        }
+        return Enumerable.Range(0, n).Select(r => m[r, n] / m[r, r]).ToArray();
     }
 
     // ---------------- Shared ----------------

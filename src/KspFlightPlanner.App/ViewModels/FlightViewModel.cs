@@ -545,7 +545,9 @@ public sealed class FlightViewModel : ObservableObject
         }
         if (orbit is null || orbit.BodyName != f.BodyName)
         {
-            DriftText = f.Approach is not null && orbit?.BodyName is { } there
+            DriftText = f.TripFromBody is not null && orbit?.BodyName is { } on
+                ? $"{craft.Name} is around {on}: fly the trip's burns to {f.BodyName}. Re-plan from here corrects them from the real path."
+                : f.Approach is not null && orbit?.BodyName is { } there
                 ? $"{craft.Name} is around {there}: fly the steps above to {f.BodyName}'s orbit, then Re-plan from here."
                 : $"{craft.Name} isn't in orbit around {f.BodyName} right now.";
             return;
@@ -623,6 +625,28 @@ public sealed class FlightViewModel : ObservableObject
             return;
         }
         var orbit = _sync.OrbitOf(craft);
+        // A rendezvous that starts with a trip from another body: plan it again from wherever the craft is on the way.
+        if (f is { Kind: FlightKind.Rendezvous, TripFromBody: not null } && orbit?.BodyName is { } around && around != f.BodyName && Body(around) is { } aroundBody)
+        {
+            _busy = true;
+            CommandManager.InvalidateRequerySuggested();
+            try
+            {
+                if (await ReplanRendezvousAsync(f, body, orbit.ToElements(), now, aroundBody) is not { } trip) return;
+                Store(trip);
+                Status = $"Re-planned the trip from {craft.Name}'s orbit around {around} at {_calendar.FormatDate(now)}.";
+            }
+            catch (ArgumentException ex)
+            {
+                Status = $"Couldn't re-plan: {ex.Message}";
+            }
+            finally
+            {
+                _busy = false;
+                CommandManager.InvalidateRequerySuggested();
+            }
+            return;
+        }
         if (orbit is null || orbit.BodyName != f.BodyName)
         {
             Status = f.Approach is not null && orbit?.BodyName is { } there
@@ -798,7 +822,8 @@ public sealed class FlightViewModel : ObservableObject
         };
     }
 
-    private async Task<Flight?> ReplanRendezvousAsync(Flight f, CelestialBody body, OrbitalElements start, double now)
+    /// <param name="from">The body the craft is around when that isn't <paramref name="body"/>: the trip there comes first (§4.6).</param>
+    private async Task<Flight?> ReplanRendezvousAsync(Flight f, CelestialBody body, OrbitalElements start, double now, CelestialBody? from = null)
     {
         var left = f.Targets.Where(t => t.ArrivalUt > now).ToList();
         if (left.Count == 0)
@@ -810,7 +835,10 @@ public sealed class FlightViewModel : ObservableObject
         var targets = left.Select(t => new RendezvousTarget(t.Name,
             (t.SaveVesselId is { } id ? _sync.OrbitOf(new FlightCraft(t.Name, id))?.ToElements() : null) ?? t.Orbit)).ToList();
         var request = new RendezvousRequest(body, targets, now + f.LeadS, f.StayS, new RendezvousTarget(f.Craft!.Name, start),
-            DeorbitPeriapsisAltitudeM: f.DeorbitPeriapsisAltitudeM);
+            DeorbitPeriapsisAltitudeM: f.DeorbitPeriapsisAltitudeM)
+        {
+            From = from is null ? null : new TripStart(from, _sync.StockBodies().Values.ToList()),
+        };
         var plan = await Task.Run(() => Rendezvous.Plan(request, new RendezvousChoices()));
         return f with
         {
@@ -820,6 +848,7 @@ public sealed class FlightViewModel : ObservableObject
             PlannedUt = now,
             Note = RendezvousViewModel.SkippedCrossingNote(request, plan, now, "the flight's", canLower: false),
             Approach = null, // planned from around the body, so the way there is flown
+            TripFromBody = from?.Name, // once around the body, the trip is done
         };
     }
 

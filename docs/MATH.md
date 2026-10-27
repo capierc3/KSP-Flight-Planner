@@ -885,7 +885,16 @@ To Duna (100 km, the cheapest window), the course correction for 90° is **16.2 
   ```
   with v∞ from the Hohmann transfer (§3.2) and t the coast after the course correction, 0.9 of the transfer. Kerbin → Duna's 60 km low orbit at 90°: v∞ = 826.1 m/s, r_p = 380 km and μ = 3.0136×10¹¹ give b = 692.9 km; t = 5.87×10⁶ s, so Δv ≈ 2 × 692,857 × sin 45° / 5,871,602 = **0.17 m/s**. It ignores the Sun's pull on the way, so it's shown as an estimate.
 
-- Code: `Hops.TiltOnTheWay`, `Hops.CorrectTilted`, `Hops.Tilt` (the `inclinationDeg` of `Hops.Down`, `Hops.Up`, `Hops.Across` and `TripPlanner.Options`); Plan mode: `ArrivalTilt.Plan`, `ArrivalTilt.RuleOfThumb`, `LegTools.FindArrival`, `LegTools.EvaluateArrival`, `LegTools.ApplyArrival`; tested in `TripPlannerTests` and `LegToolsTests`
+**Arriving in a target's plane** (§4.6). To meet a craft there, the goal is its orbit's plane, not just its inclination: the tilt *and* where it crosses the equator. But the burn on the way only swings the arrival's plane round the line of approach (the incoming velocity v̂ as it enters the sphere of influence). Planes through that line are all it can reach for little. So the goal each step is the reachable plane nearest the target's, with normal
+
+```
+n* = (n − (n·v̂) v̂) / |n − (n·v̂) v̂|      n: the target's orbit normal
+miss = (height miss in km, the angle in degrees round v̂ from the arrival's normal h to n*)
+```
+
+and the same Newton step solves it. What's left over, the angle between v̂ and the target's plane, is a plane change at the destination. It depends on where the line of approach points, which turns with the moon round its planet, so the trip to a target tries several departures (§4.6).
+
+- Code: `Hops.TiltOnTheWay`, `Hops.CorrectTilted`, `Hops.Tilt`, `ArrivalAim` (the `inclinationDeg` or `aim` of `Hops.Down`, `Hops.Up`, `Hops.Across` and `TripPlanner.Options`); Plan mode: `ArrivalTilt.Plan`, `ArrivalTilt.RuleOfThumb`, `LegTools.FindArrival`, `LegTools.EvaluateArrival`, `LegTools.ApplyArrival`; tested in `TripPlannerTests` and `LegToolsTests`
 - Source: Curtis 8.9–8.10 (the hyperbolic approach, its aiming radius and the B-plane idea of where it passes); Newton's method for an underdetermined system (the minimum-norm step, Jᵀ(JJᵀ)⁻¹)
 
 ## 4. Meeting a craft in orbit (rendezvous)
@@ -999,26 +1008,36 @@ Worked example — KSC at UT 0: λ = −74.5575° + 90° = **15.4425°**; a quar
 
 ### 4.6 Starting from a craft around another body
 
-The Rendezvous pane can start from a craft (or the craft you're flying in KSP) that orbits another body than the targets: a lander around the Mun meeting a relay around Kerbin, say. It uses the same rule as a mission leg from another body (§6.5). The Δv map's steps go from the craft's body's low orbit to the targets' body's low orbit, and the rendezvous starts on that low orbit, anywhere on it. The map's steps keep their map values (the craft's real orbit may differ from the map's low orbit).
+The Rendezvous pane, and Fly mode's *Rendezvous with the target*, can start from a craft that orbits another body than the target: the shuttle docked at Kerb Station (Kerbin, §8.16) meeting Mun Station, or a relay round the Mun that needs a repair. The trip there and the meeting are planned as one, from the craft's real orbit.
 
-To date the rendezvous burns, the plan estimates how long the steps take. Each step between a moon and the planet it orbits counts as a Hohmann half-orbit (§2.1) around the planet, between the moon's orbit and the planet's low orbit:
+Going to the Mun first and meeting the target after (two plans) arrives in whatever orbit the trip happens to give, so the meeting pays for a plane change at the Mun, which is dear. Planning them together does three things:
 
-```
-a = (r_moon + R_planet + h_low) / 2
-t = π·√(a³ / μ_planet)                for each moon ↔ planet step; time inside the moon's SOI is left out
-rendezvous start = start time + Σ t   (rounded up to the minute)
-```
+1. **Arrive near the target's height.** The capture is into a round orbit just under the target, 5 % of its height lower (3 to 30 km): a lower orbit catches up (§4.3), so the meeting is a small Hohmann. When that would be under the body's safe parking height, it's just over the target instead.
+   ```
+   gap = clamp(0.05 · h_target, 3 km, 30 km)
+   h   = h_target − gap   if that's ≥ the safe parking height, else h_target + gap
+   ```
+2. **Arrive near the target's plane.** The trip's burn on the way swings the arrival into the reachable plane nearest the target's (§3.9).
+3. **Leave when that plane is nearest.** The line the trip comes in along turns with the moon, so the trip is planned leaving at 8 times spread over half the moon's orbit, then at a quarter and an eighth of that spacing either side of the cheapest. Each is planned with the meeting after it (§4.1 from the capture orbit). The pane offers:
+   - **Cheapest**: the least Δv for trip and meeting together.
+   - **Balanced**: the soonest meeting costing at most 10 % more than the cheapest.
+   - **Meets soonest**: the soonest meeting (of meetings within ten minutes, the cheaper).
 
-A step between planets waits for a launch window, which matters far more than the flight, so there is no estimate: pick the window on the Transfer Planner (§3.4) and set the start time to the arrival. On the Flight pane the steps are shown first; once the craft is around the targets' body, Re-plan (§8.4) plans the rendezvous from its real orbit.
+   Ways that coincide are shown once ("Balanced · meets soonest").
 
-Worked example: from the Mun to Kerbin's 80 km orbit (μ = 3.5316×10¹², Mun orbit r = 12,000,000 m, low orbit 680,000 m):
+A trip across, between planets, keeps to its launch windows (§3.8) instead of trying departures. If the trip can't be planned from the craft's orbit, the Δv map's way stands in: its steps to the targets' body's low orbit, and the rendezvous from anywhere on that orbit, started after the map's trip time (a Hohmann half-orbit round the planet per moon ↔ planet step, t = π·√(a³/μ)). On the Flight pane, *Re-plan* plans the trip again from wherever the craft is until it's around the target's body, then the meeting from its real orbit.
 
-1. Map steps: Mun low orbit → Mun intercept (310) → Kerbin low orbit (860), **1,170 m/s** (or 310 when aerobraking into Kerbin's orbit).
-2. a = (12,000,000 + 680,000) / 2 = 6,340,000 m, so t = π·√(6,340,000³ / 3.5316×10¹²) = π × 8,494.7 = **26,686.9 s**, about 7 h 25 m (the map says about 8 hours).
-3. Planning from Year 1, Day 1, 0:00, the rendezvous starts Year 1, Day 2, 1:25 (26,700 s). To a relay at 2,868 km: a 668 m/s transfer burn and a 431 m/s match, **2,269 m/s** in all with the map's steps.
+Worked example (`TripToTargetTests`): from a 100 km Kerbin orbit tilted 1.5° (the shuttle):
 
-- Code: `LegTools.FindApproach`, `LegTools.TripTimeS`, `RendezvousViewModel.BuildRequest`, `FlightViewModel.RefreshDrift`; tested in `LegToolsTests`
-- Source: Hohmann transfer (§2.1, Curtis 6.2), the Δv map (§6.1)
+| Target | Two plans (Go to the Mun, then meet) | One plan, cheapest | Balanced · meets soonest |
+|---|---|---|---|
+| Mun Station: 45 km, tilted 6° | 1,106 + 105 = **1,211 m/s** | 1,109 + 21 = **1,130 m/s**, meets after 27.3 h | 1,124 + 37 = **1,161 m/s**, after 12.1 h |
+| A relay: 200 km, polar (88°) | 1,106 + 912 = **2,018 m/s** | 1,108 + 102 = **1,210 m/s**, after 35.0 h | 1,138 + 132 = **1,270 m/s**, after 18.6 h |
+
+For Mun Station the capture is at 45 − 3 = **42 km**. The trip is an 843.7 m/s transfer, a 3.6 m/s aim on the way and a 262.1 m/s capture, then 16.3 m/s to finish the plane and 4.6 m/s to meet. For the polar relay, two plans would turn a low Mun orbit 88° (most of the 912 m/s); one plan aims on the way for 48.3 m/s and is left 76.4 m/s of plane change, **808 m/s less**.
+
+- Code: `Rendezvous.TripsToTarget`, `Rendezvous.MeetingAltitudeM`, `RendezvousRequest.From`, `RendezvousPlan.TripOptions`; `RendezvousViewModel.BuildRequest` (with the map's way as a fallback: `LegTools.FindApproach`, `LegTools.TripTimeS`); `FromHereViewModel.PlanMeetFarAsync`; `FlightViewModel.ReplanAsync` (`Flight.TripFromBody`); tested in `TripToTargetTests` and `LegToolsTests`
+- Source: the trip planner (§3.7–3.9), the rendezvous planner (§4.1–4.4)
 
 ## 5. Deploying a satellite constellation
 

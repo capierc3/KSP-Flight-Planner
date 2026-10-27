@@ -117,3 +117,48 @@ Notes:
 - [ ] Compare the Δv the pane gives the shuttle with KSP's own readout (stage Δv in vacuum) after undocking it
 
 Notes:
+
+## 3. Meeting a craft around another body (Rendezvous)
+
+The trip there and the meeting are planned as one, from the craft's real orbit: the trip comes in near the target's
+plane, is captured just under (or over) its height, and leaves when the target's plane lines up best. Offers
+**Cheapest**, **Balanced** (soonest meeting within 10 % of the cheapest) and **Meets soonest**. docs/MATH.md §4.6, §3.9.
+
+In the sandbox against the Protogen save (2026-10-27), Kerb Shuttle mk1 → Mun Station gave: Cheapest **1,108 m/s**
+(838 transfer + 3 aim + 252 capture at 49.5 km + 15 to meet), Balanced · meets soonest 1,194 m/s, leaving in 49 min.
+
+### Rendezvous pane (Plan mode)
+
+- [ ] Tools › Rendezvous › Change… › **A craft already in orbit** › pick **Kerb Shuttle mk1 (… docked at Kerb Station)**,
+      add target **Mun Station**
+- [ ] The plan starts with **Fly from Kerbin to Mun**: a note on how it's planned, the ways to go (Cheapest / Balanced …)
+      with total, leave time and meet time, then the burns: Transfer to Mun, Aim for Mun Station's orbit, Capture at Mun
+- [ ] Then the meeting steps (Match planes, phasing/transfer, Match velocity): all small (tens of m/s)
+- [ ] Pick the other way in the list: the burns and meeting change; the total matches the row
+- [ ] The Budget lists "Fly from Kerbin to Mun" and its burns before "Meet Mun Station"
+- [ ] A relay around the Mun (MunLink) as the target: compare the total with Go to Mun + a separate rendezvous (the old
+      way). It should be far cheaper for a tilted relay.
+- [ ] Start from a Mun craft (Grand Lander) with a Kerbin target (Kerb Station): plans the trip up the same way
+- [ ] **Fly** it: the Flight pane shows the trip burns first, then the meeting
+
+Notes:
+
+### Flying it (Fly mode)
+
+- [ ] Flying the station stack with **Plan for: Kerb Shuttle mk1**, target **Mun Station** in KSP
+- [ ] From here › **Rendezvous with the target** (or Go to… › the target) › Plan: "Working out the way to Mun Station…",
+      then **Ways to meet it** with the options, and the trip + meeting burns. The result line splits trip and meeting.
+- [ ] **Send** the first burn (the transfer), undock, fly it. Then in the Flight pane **Re-plan from here** while still
+      around Kerbin: it re-plans the trip from the real path (a course correction).
+- [ ] Once captured around the Mun, Re-plan: plans the meeting from the real orbit
+- [ ] Compare the actual Δv used with the plan (KSP's Δv readout or the flight log)
+
+Notes:
+
+### Things to watch for
+
+- [ ] How long planning takes (it tries 12 departure times): note if the pane feels stuck
+- [ ] If the trip can't be planned, the old Δv-map estimate shows instead, saying why. Note the message.
+- [ ] Any burn that looks wrong in KSP's map view (e.g. the aim burn sending the path somewhere odd)
+
+Notes:

@@ -75,6 +75,12 @@ public sealed record Flight
     /// <summary>The way there when the craft starts around another body; null once it's around <see cref="BodyName"/>.</summary>
     public FlightApproach? Approach { get; init; }
 
+    /// <summary>
+    /// A rendezvous that starts with the trip from this body to <see cref="BodyName"/>, planned exactly (its burns come
+    /// first, docs/MATH.md §4.6); re-planned from wherever the craft is until it's around <see cref="BodyName"/>.
+    /// </summary>
+    public string? TripFromBody { get; init; }
+
     /// <summary>The orbit the burns start from (for a launch, the parking orbit), stated at its epoch.</summary>
     public OrbitalElements? StartOrbit { get; init; }
 
@@ -329,7 +335,9 @@ public static class RendezvousFlights
 {
     public static List<FlightBurn> Burns(RendezvousPlan plan)
     {
-        var burns = plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn) { Kind = m.Kind })).ToList();
+        // A trip from another body comes first: its burns as planned (transfer, aim, capture).
+        var burns = (plan.Trip?.Burns ?? []).ToList();
+        burns.AddRange(plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn) { Kind = m.Kind })));
         if (plan.Deorbit is { } d)
             burns.Add(new FlightBurn($"Deorbit {plan.Legs[^1].Target.Name}", d.Ut, d.Burn) { Note = "Docked with the target.", Kind = ManeuverKind.Deorbit });
         return burns;

@@ -32,7 +32,7 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
 /// One way of making a trip (<see cref="Option"/>) or a landing (<see cref="Landing"/>), as a row to pick: what it's best
 /// at, and when, how long and its Δv.
 /// </summary>
-public sealed record TripOptionRow(string Label, string Text, TripOption? Option = null, LandingOption? Landing = null);
+public sealed record TripOptionRow(string Label, string Text, TripOption? Option = null, LandingOption? Landing = null, TripToTarget? Meet = null);
 
 /// <summary>
 /// Fly mode's From here pane: "I'm here, now I want to do X". Plans a one-off burn (or a rendezvous) from the live orbit
@@ -65,6 +65,9 @@ public sealed class FromHereViewModel : ObservableObject
     private OrbitalElements? _plannedFrom;
     private double _plannedUt;
     private RendezvousPlan? _plannedRendezvous;
+    // Meeting a craft around another body: that body, and the meeting's target and request (re-planned per way of going).
+    private CelestialBody? _plannedRendezvousBody;
+    private (RendezvousTarget Target, string Chaser)? _meetFar;
     private FlightCraft? _plannedTarget;
     private CelestialBody? _plannedTo;
     private double _plannedHeight; // a trip's arrival height over _plannedTo
@@ -195,7 +198,7 @@ public sealed class FromHereViewModel : ObservableObject
         set { if (SetProperty(ref _preferDive, value)) Clear(); }
     }
 
-    public string OptionsTitle => _action.Action == QuickAction.Land ? "Ways to land" : "Ways to go";
+    public string OptionsTitle => _action.Action == QuickAction.Land ? "Ways to land" : _meetFar is not null ? "Ways to meet it" : "Ways to go";
 
     /// <summary>Spots on the body the craft is around: wiki landmarks, then the save's flags, landed craft and KerbNet waypoints.</summary>
     public IReadOnlyList<LandingTarget> Spots { get; private set; } = [];
@@ -268,6 +271,7 @@ public sealed class FromHereViewModel : ObservableObject
             if (value is null || !SetProperty(ref _trip, value)) return;
             if (value.Option is { } trip) ShowTrip(trip);
             else if (value.Landing is { } landing) ShowLanding(landing);
+            else if (value.Meet is { } meet) ShowMeet(meet);
         }
     }
 
@@ -294,7 +298,8 @@ public sealed class FromHereViewModel : ObservableObject
                                       "shape. On an orbit in the equator it's at the apoapsis, or two minutes from now when round. Turning a low orbit a long way " +
                                       "is expensive: heading to another body, set the inclination in Go to instead.",
         QuickAction.MatchPlanes => "Target a craft, or a moon of the body you're orbiting, in KSP first. Burns at the cheaper of the next two plane crossings.",
-        QuickAction.Rendezvous => "Target a craft in KSP first. Plans the plane match, phasing and intercept, like the Rendezvous tool.",
+        QuickAction.Rendezvous => "Target a craft in KSP first. Plans the plane match, phasing and intercept, like the Rendezvous tool. " +
+                                  "A craft around another body (a station round the Mun) is met in one plan: the trip there comes in near its plane and height.",
         QuickAction.Deploy => "Spreads the satellites evenly round a circular orbit at this height, like the Resonant Orbits tool. If your orbit doesn't reach " +
                               "that height, it climbs (or drops) there first, then enters the carrier orbit and releases one satellite each lap. " +
                               "Each satellite circularizes itself: release it, switch to it and send it its node. Keep it as a flight to follow along.",
@@ -383,6 +388,17 @@ public sealed class FromHereViewModel : ObservableObject
                 or QuickAction.GoTo or QuickAction.SetInclination))
         {
             Status = $"You're on a path that escapes {body.Name}: capture first (circularize at periapsis, or change the apoapsis).";
+            return;
+        }
+        // A craft targeted around another body: the trip there and the meeting, planned together (§4.6).
+        if ((_action.Action == QuickAction.Rendezvous || _action.Action == QuickAction.GoTo && GoingToCraft) && TargetElsewhere(body) is { } far)
+        {
+            if (orbit.Eccentricity >= 1)
+            {
+                Status = $"You're on a path that escapes {body.Name}: capture first, then plan the trip to {far.Target.Name}.";
+                return;
+            }
+            _ = PlanMeetFarAsync(body, orbit, now, after, far.Target, far.There, far.Craft);
             return;
         }
         try
@@ -674,6 +690,76 @@ public sealed class FromHereViewModel : ObservableObject
         return FlightViewModel.RendezvousBurns(plan);
     }
 
+    /// <summary>The craft targeted in KSP when it's in orbit around another body than <paramref name="body"/>; null otherwise.</summary>
+    private (RendezvousTarget Target, CelestialBody There, FlightCraft? Craft)? TargetElsewhere(CelestialBody body) =>
+        _sync.Link.Game?.Target is { Orbit: { IsClosed: true, BodyName: { } name } o } vessel && name != body.Name
+        && _sync.StockBodies().GetValueOrDefault(name) is { } there
+            ? (new RendezvousTarget(vessel.Name, o.ToElements()), there, _sync.TargetCraft)
+            : null;
+
+    /// <summary>
+    /// Plans meeting <paramref name="target"/> around <paramref name="there"/> from here, off the UI thread: the ways of
+    /// making the trip (cheapest, balanced, meets soonest), each with the meeting from where its capture leaves you.
+    /// </summary>
+    private async Task PlanMeetFarAsync(CelestialBody body, OrbitalElements orbit, double now, double after, RendezvousTarget target,
+        CelestialBody there, FlightCraft? craft)
+    {
+        _busy = true;
+        Status = $"Working out the way to {target.Name} around {there.Name}…";
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var bodies = _sync.StockBodies().Values.ToList();
+            var chaser = _sync.ActiveCraft?.Name ?? "You";
+            var trips = await Task.Run(() => Rendezvous.TripsToTarget(new TripStart(body, bodies), new RendezvousTarget(chaser, orbit), there, target, after));
+            (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
+            (_plannedRendezvousBody, _plannedTarget, _meetFar) = (there, craft, (target, chaser));
+            foreach (var t in trips)
+                TripOptions.Add(new TripOptionRow(t.Label, $"leaves in {Duration(Math.Max(0, t.Trip.DepartureUt - now))} · meets in {Duration(t.MeetUt - now)} · " +
+                                                           Format.Speed0(t.TotalDv), Meet: t));
+            OnPropertyChanged(nameof(HasTripOptions));
+            OnPropertyChanged(nameof(OptionsTitle));
+            SelectedTrip = TripOptions[0];
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>Shows one way of meeting a craft around another body: the trip's burns, then the meeting's from its capture orbit.</summary>
+    private void ShowMeet(TripToTarget way)
+    {
+        if (_meetFar is not var (target, chaser) || _plannedRendezvousBody is not { } there) return;
+        Burns.Clear();
+        try
+        {
+            var capture = way.Trip.Legs[^1].Plan.Capture!;
+            var meet = Rendezvous.Plan(new RendezvousRequest(there, [target], capture.Ut + Rendezvous.BurnGapS, 0, new RendezvousTarget(chaser, way.Captured)));
+            _plannedRendezvous = meet;
+            var burns = way.Trip.Burns.Concat(FlightViewModel.RendezvousBurns(meet)).ToList();
+            for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
+            ResultText = $"{Format.Speed0(way.TotalDv)} in all (trip {Format.Speed0(way.Trip.DeltaV)}, meeting {Format.Speed0(way.MeetDv)}) · " +
+                         $"meets {target.Name} {_calendar.FormatDate(meet.Legs[0].ArrivalUt)} around {there.Name}";
+            var notes = way.Trip.Warnings.ToList();
+            notes.Insert(0, $"Comes in as near {target.Name}'s plane as it can and is captured {Km(Rendezvous.MeetingAltitudeM(there, target.Orbit))} up, " +
+                            "just off its height, so meeting it costs little.");
+            if (FuelNote() is { } fuel) notes.Add(fuel);
+            Status = string.Join(" ", notes);
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        OnPropertyChanged(nameof(HasBurns));
+        RefreshLive();
+    }
+
     /// <summary>The body Go to is set to: the one picked, or the body targeted in KSP. Null for a targeted craft, or no target.</summary>
     private CelestialBody? Destination() =>
         _destination is { IsTarget: true }
@@ -766,6 +852,8 @@ public sealed class FromHereViewModel : ObservableObject
         _plannedRendezvous = null;
         _plannedTarget = null;
         _plannedTo = null;
+        _plannedRendezvousBody = null;
+        _meetFar = null;
         _plannedLanding = null;
         _plannedDeploy = null;
         TripOptions.Clear();
@@ -938,6 +1026,8 @@ public sealed class FromHereViewModel : ObservableObject
             PlannedUt = _plannedUt,
             LeadS = LeadS,
         };
+        if (_plannedRendezvousBody is { } there && _plannedRendezvous is not null)
+            flight = flight with { BodyName = there.Name, TripFromBody = body.Name };
         _events.RequestOpenFlight(_flights.Add(flight));
         Status = $"Kept as the flight \"{flight.Name}\".";
     }
