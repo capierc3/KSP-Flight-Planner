@@ -291,6 +291,23 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Docked_vessel_choices_are_kept_per_save()
+    {
+        var repository = new SettingsRepository(_db);
+        _db.ActiveSave = "Protogen";
+        repository.SaveDockedChoice("Kerb Shuttle mk1", false);
+        repository.SaveDockedChoice("Kerbin Station - Fuel Tank", true);
+        Assert.Equal(new Dictionary<string, bool> { ["Kerb Shuttle mk1"] = false, ["Kerbin Station - Fuel Tank"] = true },
+            repository.LoadDockedChoices());
+
+        repository.SaveDockedChoice("Kerb Shuttle mk1", null); // back to the rule
+        Assert.Equal(["Kerbin Station - Fuel Tank"], repository.LoadDockedChoices().Keys);
+
+        _db.ActiveSave = "SandBox";
+        Assert.Empty(repository.LoadDockedChoices());
+    }
+
+    [Fact]
     public void Live_connection_settings_default_to_stock_krpc_and_round_trip()
     {
         var repository = new SettingsRepository(_db);

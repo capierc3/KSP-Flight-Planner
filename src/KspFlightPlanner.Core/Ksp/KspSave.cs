@@ -74,6 +74,27 @@ public sealed record SavedVessel(string Id, string Name, string Type, string Sit
     /// it docked. Empty when nothing is docked.
     /// </summary>
     public IReadOnlySet<string> DockedNames { get; init; } = new HashSet<string>();
+
+    /// <summary>Which of <see cref="Parts"/> is the root (VESSEL root); the others hang from it by <see cref="SavedPart.ParentIndex"/>.</summary>
+    public int RootIndex { get; init; }
+
+    /// <summary>
+    /// For a craft split off a docked stack (<see cref="DockedCraft"/>): the save id of the stack it's docked in. Null for a
+    /// vessel as the save has it.
+    /// </summary>
+    public string? DockedInId { get; init; }
+}
+
+/// <summary>
+/// A vessel as its docking port remembers it from before it docked (DOCKEDVESSEL): KSP gives the name and type back on
+/// undocking. <paramref name="RootUid"/> is that vessel's root part.
+/// </summary>
+public sealed record DockedVesselInfo(string Name, string Type, string RootUid);
+
+/// <summary>A docking port on a part: its state ("Ready", "Docked (docker)", "Docked (dockee)"…), the port it's docked to, and the vessel it came with.</summary>
+public sealed record SavedDockingPort(string State, string DockedToUid, DockedVesselInfo? CameWith)
+{
+    public bool IsDocked => State.StartsWith("Docked", StringComparison.Ordinal) && DockedToUid is { Length: > 0 } and not "0";
 }
 
 /// <summary>A part of a vessel in the save. <see cref="Name"/> matches <see cref="KspPart.Name"/> in the part catalog.</summary>
@@ -83,6 +104,18 @@ public sealed record SavedPart(string Name, double MassT, IReadOnlyList<PartReso
 {
     /// <summary>Multi-mode engines (e.g. RAPIER): whether the first mode is running; null for other parts.</summary>
     public bool? RunningPrimaryMode { get; init; }
+
+    /// <summary>KSP's id for the part (uid), unique in the save.</summary>
+    public string Uid { get; init; } = "";
+
+    /// <summary>The part it's attached to (an index into the vessel's parts); the root's is its own index.</summary>
+    public int ParentIndex { get; init; }
+
+    /// <summary>A command part: a crew pod or probe core (ModuleCommand).</summary>
+    public bool IsCommand { get; init; }
+
+    /// <summary>The part's docking ports (usually none, or one).</summary>
+    public IReadOnlyList<SavedDockingPort> DockingPorts { get; init; } = [];
 }
 
 /// <summary>An engine module's settings in the save, in the same order as the part's engines in the catalog.</summary>
@@ -240,6 +273,7 @@ public static class KspSaveReader
                 .Where(m => m.GetValue("name") == "ModuleDockingNode" && (m.GetValue("state") ?? "").StartsWith("Docked", StringComparison.Ordinal))
                 .Select(m => m.GetNode("DOCKEDVESSEL")?.GetValue("vesselName"))
                 .OfType<string>().ToHashSet(),
+            RootIndex = int.TryParse(v.GetValue("root"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var root) ? root : 0,
             LaunchUt = Number(v.GetValue("lct")),
             MissionTimeS = Number(v.GetValue("met")),
             LatitudeDeg = Number(v.GetValue("lat")),
@@ -264,6 +298,15 @@ public static class KspSaveReader
             p.Values.Where(v => v.Key == "crew").Select(v => v.Value).ToList())
         {
             RunningPrimaryMode = multiMode is null ? null : !bool.TryParse(multiMode.GetValue("runningPrimary"), out var primary) || primary,
+            Uid = p.GetValue("uid") ?? "",
+            ParentIndex = int.TryParse(p.GetValue("parent"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent) ? parent : 0,
+            IsCommand = modules.Any(m => m.GetValue("name") == "ModuleCommand"),
+            DockingPorts = modules.Where(m => m.GetValue("name") == "ModuleDockingNode")
+                .Select(m => new SavedDockingPort(m.GetValue("state") ?? "", m.GetValue("dockUId") ?? "",
+                    m.GetNode("DOCKEDVESSEL") is { } d && d.GetValue("vesselName") is { } n
+                        ? new DockedVesselInfo(n, d.GetValue("vesselType") ?? "", d.GetValue("rootUId") ?? "")
+                        : null))
+                .ToList(),
         };
     }
 

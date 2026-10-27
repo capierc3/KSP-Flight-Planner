@@ -114,11 +114,31 @@ public sealed class VesselsViewModel : ObservableObject
         if (item?.Vessel is not { } vessel) return;
         _selectedId = vessel.Id;
         var radius = vessel.Orbit?.BodyName is { } body && _sync.StockBodies().TryGetValue(body, out var b) ? b.EquatorialRadiusM : (double?)null;
+        var stack = vessel.DockedInId is { } stackId ? _sync.FindVessel(stackId) : null;
+        var piece = stack is null ? null : _sync.DockedIn(stack).FirstOrDefault(p => p.Craft.Id == vessel.Id);
+        var docked = piece is null ? [] : _sync.DockedIn(vessel);
         Detail = new VesselDetailViewModel(vessel, _sync.Save!.Ut, _sync.Parts.Catalog, radius, FlightsOf(vessel))
         {
             OpenLogCommand = new RelayCommand<VesselFlightRow>(row => OpenLogRequested?.Invoke(row.Id)),
+            DockedNote = piece is not null
+                ? $"Docked at {stack!.Name}. Its parts, fuel and engines are shown on their own, as they'll be once it undocks."
+                : _sync.DockedIn(vessel) is { Count: > 0 } pieces
+                    ? $"Docked here: {string.Join(", ", pieces.Select(p => p.Name))}. Shown as the whole stack, as KSP flies it."
+                    : null,
+            CountsAsChoices = piece is null ? [] : CountsAs(piece, stack!),
+            CountsAs = piece is null ? null : CountsAs(piece, stack!).First(c => c.Choice == _sync.DockedChoice(piece.Name)),
+            // After the pick is done: storing it rebuilds this page.
+            SetCountsAs = piece is null ? null : choice => System.Windows.Application.Current.Dispatcher.BeginInvoke(() => _sync.SetDockedChoice(piece.Name, choice)),
         };
     }
+
+    /// <summary>What a docked vessel can count as: the rule's pick, a craft of its own, or part of the stack.</summary>
+    private static IReadOnlyList<CountsAsOption> CountsAs(DockedPiece piece, SavedVessel stack) =>
+    [
+        new($"Automatic ({(piece.IsCraftByDefault ? "its own craft" : $"part of {stack.Name}")})", null),
+        new("Its own craft", true),
+        new($"Part of {stack.Name}", false),
+    ];
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -143,7 +163,16 @@ public sealed class VesselsViewModel : ObservableObject
                 {
                     var report = VesselAnalysis.Analyze(v, catalog);
                     var dv = report.Engines.Any(e => e.CountedForDeltaV) ? $" · {Units.Dv(report.DeltaVVacuum)}" : "";
-                    body.Children.Add(new VesselTreeItem(v.Name, $"{SaveImport.TypeText(v.Type)} · {Situation(v.Situation)}{dv}", "◇", v));
+                    var item = new VesselTreeItem(v.Name, $"{SaveImport.TypeText(v.Type)} · {Situation(v.Situation)}{dv}", "◇", v);
+                    // The vessels docked into it, each on its own: a craft of its own, or a part of the stack.
+                    foreach (var piece in _sync.DockedIn(v))
+                    {
+                        var own = VesselAnalysis.Analyze(piece.Craft, catalog);
+                        var pieceDv = own.Engines.Any(e => e.CountedForDeltaV) ? $" · {Units.Dv(own.DeltaVVacuum)}" : "";
+                        var role = piece.IsCraft(_sync.DockedChoice(piece.Name)) ? "docked craft" : "station part";
+                        item.Children.Add(new VesselTreeItem(piece.Name, $"{SaveImport.TypeText(piece.Type)} · {role}{pieceDv}", "⧉", piece.Craft));
+                    }
+                    body.Children.Add(item);
                 }
                 inFlight.Children.Add(body);
             }
@@ -183,7 +212,7 @@ public sealed class VesselsViewModel : ObservableObject
     private static string StageCount(DesignReport report) => report.Stages.Count == 1 ? "1 stage" : $"{report.Stages.Count} stages";
 
     private static IEnumerable<VesselTreeItem> Leaves(IEnumerable<VesselTreeItem> items) =>
-        items.SelectMany(i => i.Children.Count == 0 ? (i.Key is null ? [] : [i]) : Leaves(i.Children));
+        items.SelectMany(i => (i.Key is null ? [] : new[] { i }).Concat(Leaves(i.Children)));
 
     /// <summary>Stock bodies in KSP's order (Kerbol, Kerbin, Mun, …); anything else after.</summary>
     private static int BodyOrder(string body) =>
@@ -207,9 +236,42 @@ public sealed record EngineRow(string Engine, string Thrust, string Limit, strin
 /// <summary>One of a vessel's logged flights, on its page: how it went, when, and the figures.</summary>
 public sealed record VesselFlightRow(long Id, string Heading, string Day, string Figures, string Launched);
 
+/// <summary>One thing a docked vessel can count as; <paramref name="Choice"/> null for the rule's pick.</summary>
+public sealed record CountsAsOption(string Name, bool? Choice)
+{
+    public override string ToString() => Name;
+}
+
 /// <summary>Everything about one vessel: status, Δv, fuel, engines, parts, and its logged flights.</summary>
 public sealed class VesselDetailViewModel
 {
+    private CountsAsOption? _countsAs;
+
+    /// <summary>What's docked: where this vessel is docked, or what's docked into it. Null when nothing is.</summary>
+    public string? DockedNote { get; init; }
+
+    public bool HasDockedNote => DockedNote is not null;
+
+    /// <summary>For a vessel docked into another: what it can count as (empty otherwise).</summary>
+    public IReadOnlyList<CountsAsOption> CountsAsChoices { get; init; } = [];
+
+    public bool IsDockedPiece => CountsAsChoices.Count > 0;
+
+    /// <summary>What it counts as now; picking another stores it.</summary>
+    public CountsAsOption? CountsAs
+    {
+        get => _countsAs;
+        set
+        {
+            if (value is null || value == _countsAs) return;
+            var first = _countsAs is null;
+            _countsAs = value;
+            if (!first) SetCountsAs?.Invoke(value.Choice);
+        }
+    }
+
+    public Action<bool?>? SetCountsAs { get; init; }
+
     /// <param name="bodyRadiusM">Radius of the body it orbits, to show altitudes; null if unknown.</param>
     /// <param name="flights">Its flights in the flight log, newest first.</param>
     public VesselDetailViewModel(SavedVessel vessel, double saveUt, PartCatalog catalog, double? bodyRadiusM,

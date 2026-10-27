@@ -838,15 +838,17 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         var list = new List<CraftChoice>();
         var inSave = new HashSet<string>();
 
-        if (_sync.Save is { } save)
+        if (_sync.Save is not null)
         {
-            foreach (var v in save.Vessels)
+            // Craft docked in a stack (a shuttle at a station) are listed after it, as craft of their own.
+            foreach (var v in _sync.Craft)
             {
                 if (!v.IsOrbiting || v.Orbit is not { } o || o.BodyName is not { } name || !bodies.TryGetValue(name, out var body)) continue;
                 if (!double.IsFinite(o.SemiMajorAxisM) || o.SemiMajorAxisM <= 0 || o.Eccentricity is < 0 or >= 1) continue;
                 var orbit = o.ToElements();
                 inSave.Add(v.Id);
-                list.Add(new CraftChoice($"vessel:{v.Id}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)}", body, orbit, v));
+                var docked = v.DockedInId is { } stackId && _sync.FindVessel(stackId) is { } stack ? $" · docked at {stack.Name}" : "";
+                list.Add(new CraftChoice($"vessel:{v.Id}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)}{docked}", body, orbit, v));
             }
         }
 

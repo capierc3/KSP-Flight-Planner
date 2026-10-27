@@ -15,7 +15,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget)
-- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Which save the game is playing; 8.13 Which vessel a logged flight is now; 8.14 Docking and undocking; 8.15 Flying a whole mission
+- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Which save the game is playing; 8.13 Which vessel a logged flight is now; 8.14 Docking and undocking; 8.15 Flying a whole mission; 8.16 Telling docked craft apart
 
 **Where to look for…**
 
@@ -1914,6 +1914,21 @@ The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craf
 
 - Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
 - Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
+
+### 8.16 Telling docked craft apart
+
+A docked stack is one vessel in KSP, so the save lists *Kerb Station* with the shuttle's parts, fuel and engines in it. The planner splits it back into the vessels that docked, so a shuttle can be planned from while it's still docked (**Plan for**, in the Fly pane) and is listed as a craft of its own (Vessels, Rendezvous).
+
+**Cutting the stack.** Every saved part has a `uid` and a `parent` (an index into the vessel's parts; the root's is its own). A docked port (`state = Docked (docker)` or `Docked (dockee)`) has `dockUId`: the part it's docked to. Join each part to its parent, except where the two are a docked pair (a port on one is docked to the other): the groups left are the vessels that docked. The one holding the vessel's `root` part is the stack itself. Each other group is named by the `DOCKEDVESSEL { vesselName, vesselType, rootUId }` of a port in it whose `rootUId` is in the group (that port came with it). Another port in it may remember a stack it docked onto later, which is why the root decides. A port docked to another port of the same vessel (`Docked (same vessel)`) isn't the parent join, so it cuts nothing.
+
+**Craft or station part.** A piece is its own craft when its type is Ship, Lander, Rover or Plane **and** it has a command part (`ModuleCommand`: a pod or probe core) **and** an engine. Everything else (Probe, Relay, Station, Base, Debris, or no command part or engine) is part of the stack. The type decides because a module or fuel tank brought up on its own probe core and engine looks just like a craft otherwise. The player can say otherwise on the piece's page (Vessels: **Counts as**); the say is kept by the piece's name, per save, so it holds when the same shuttle docks again.
+
+A piece takes the stack's orbit and situation (live while connected, §8.2), with only its own parts: its Δv is what it has once it undocks. Its id is the stack's id and its root part's uid (`<pid>#<uid>`). A linked location whose vessel has gone (it docked, or undocked as a new vessel) follows the one craft that has its name.
+
+Worked example, the Protogen save as read on 2026-10-27: *Kerb Station* (Station) has four docked pieces. *Kerb Shuttle mk1* (Ship: pod, probe core, RK-7 engine, 42 parts) and *Homeward Bound 2* (Ship, 36 parts) are craft. *Kerb Station - Electrical* (Probe, no command part left and no engine, 34 parts) and *Kerbin Station - Fuel Tank* (Probe with a probe core and a Skipper, 61 parts) are station parts: the tank flew itself up, but it's a Probe. *Mun Station* has *Grand Lander* (Lander) docked, a craft.
+
+- Code: `DockedCraft.Pieces`, `DockedPiece.IsCraftByDefault`, `WithDockedCraft`, `FindVessel` (`Core/Ksp/DockedCraft.cs`); `SavedPart.ParentIndex`/`DockingPorts` (`KspSave.cs`); `SaveSync.Craft`/`FlyAsId`/`SetDockedChoice`; `SettingsRepository.LoadDockedChoices`; tested in `DockedCraftTests`
+- Source: KSP's save format (`PART` `uid`/`parent`, `VESSEL` `root`, `ModuleDockingNode` `state`/`dockUId`/`DOCKEDVESSEL`), read from a 1.12.5 save
 
 ## Sources
 

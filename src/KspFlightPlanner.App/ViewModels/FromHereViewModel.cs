@@ -97,6 +97,10 @@ public sealed class FromHereViewModel : ObservableObject
         {
             if (e.PropertyName is nameof(KspLink.IsConnected) or nameof(KspLink.InFlight)) RefreshLive();
         };
+        sync.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SaveSync.Save)) RefreshFlyAs();
+        };
 
         PlanCommand = new RelayCommand(Plan, () => !_busy && Here() is not null);
         SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
@@ -300,6 +304,42 @@ public sealed class FromHereViewModel : ObservableObject
         _ => "Burns retrograde at the next apoapsis to drop the periapsis into the atmosphere (or onto the ground).",
     };
 
+    /// <summary>
+    /// What the plan is for while flying a docked stack: the whole stack, or one of the craft docked in it (a shuttle at
+    /// a station). Only the stack when nothing that counts as a craft is docked.
+    /// </summary>
+    public IReadOnlyList<FlyAsOption> FlyAsChoices { get; private set; } = [];
+
+    public FlyAsOption? SelectedFlyAs
+    {
+        get => FlyAsChoices.FirstOrDefault(c => c.Id == _sync.FlyAsId) ?? FlyAsChoices.FirstOrDefault();
+        set
+        {
+            if (value is null || value.Id == _sync.FlyAsId) return;
+            _sync.FlyAsId = value.Id;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CraftText));
+            Clear();
+            Status = null;
+        }
+    }
+
+    public bool HasFlyAs => FlyAsChoices.Count > 1;
+
+    private void RefreshFlyAs()
+    {
+        var stack = _sync.Link.InFlight ? _sync.ActiveStack : null;
+        var choices = stack is null ? [] : _sync.DockedIn(stack).Where(p => p.IsCraft(_sync.DockedChoice(p.Name))).ToList();
+        List<FlyAsOption> options = choices.Count == 0 ? []
+            : [new FlyAsOption($"{stack!.Name} (the whole stack)", null), .. choices.Select(p => new FlyAsOption($"{p.Name} (docked)", p.Craft.Id))];
+        if (options.Select(o => (o.Name, o.Id)).SequenceEqual(FlyAsChoices.Select(o => (o.Name, o.Id)))) return;
+        FlyAsChoices = options;
+        OnPropertyChanged(nameof(FlyAsChoices));
+        OnPropertyChanged(nameof(HasFlyAs));
+        OnPropertyChanged(nameof(SelectedFlyAs));
+        OnPropertyChanged(nameof(CraftText));
+    }
+
     /// <summary>What's being flown, where, and what's targeted.</summary>
     public string CraftText
     {
@@ -309,9 +349,11 @@ public sealed class FromHereViewModel : ObservableObject
             if (!link.IsConnected) return "Not connected to KSP. Use KSP › Connect to KSP, then fly a craft.";
             if (!link.InFlight) return "In KSP, but not flying a craft. Switch to one to plan from where it is.";
             if (link.Game?.Active is not { } active) return "Waiting for the game…";
-            if (Here() is not (var body, var orbit)) return $"{active.Name} isn't in a closed orbit, so there's nothing to plan from yet.";
+            var name = _sync.ActiveCraft?.Name ?? active.Name;
+            if (name != active.Name) name += $", docked at {active.Name}";
+            if (Here() is not (var body, var orbit)) return $"{name} isn't in a closed orbit, so there's nothing to plan from yet.";
             var target = link.Game.Target?.Name ?? link.Game.TargetBody;
-            return $"{active.Name} · {FlightViewModel.OrbitText(orbit, body)} around {body.Name}" + (target is null ? " · no target" : $" · target {target}");
+            return $"{name} · {FlightViewModel.OrbitText(orbit, body)} around {body.Name}" + (target is null ? " · no target" : $" · target {target}");
         }
     }
 
@@ -599,7 +641,7 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The craft being flown as the save last recorded it (its parts, fuel and engines), if it's in the save.</summary>
     private VesselReport? ActiveReport()
     {
-        if (_sync.ActiveCraft?.SaveVesselId is not { } id || _sync.Save?.Vessels.FirstOrDefault(v => v.Id == id) is not { } vessel) return null;
+        if (_sync.ActiveCraft?.SaveVesselId is not { } id || _sync.FindVessel(id) is not { } vessel) return null;
         try { return VesselAnalysis.Analyze(vessel, _sync.Parts.Catalog); }
         catch (Exception) { return null; }
     }
@@ -736,6 +778,7 @@ public sealed class FromHereViewModel : ObservableObject
 
     private void RefreshLive()
     {
+        RefreshFlyAs();
         OnPropertyChanged(nameof(CraftText));
         RefreshDestinations();
         RefreshSpots();
@@ -902,4 +945,10 @@ public sealed class FromHereViewModel : ObservableObject
     private string Duration(double seconds) => seconds < 60 ? $"{seconds:0} s" : _calendar.FormatDuration(seconds);
 
     private static string Km(double metres) => $"{metres / 1000:#,0.#} km";
+}
+
+/// <summary>One choice of what a plan is for while flying a docked stack: the stack (<paramref name="Id"/> null) or a craft docked in it.</summary>
+public sealed record FlyAsOption(string Name, string? Id)
+{
+    public override string ToString() => Name;
 }

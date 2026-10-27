@@ -39,6 +39,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     private string _status = "";
     private string? _problem;
     private int _newVessels;
+    private IReadOnlyDictionary<string, bool> _dockedChoices = new Dictionary<string, bool>();
 
     // A plan that starts "now" moves on this much game time before it's worth re-planning (orbit changes re-plan at once).
     private const double LiveTimeStepS = 60;
@@ -56,6 +57,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         _events = events;
         _settings = settings.Load();
         database.ActiveSave = _settings.KspSaveName;
+        _dockedChoices = settings.LoadDockedChoices();
         // KSP can write the file in several steps; wait for it to settle before reading.
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         _debounce.Tick += (_, _) => { _debounce.Stop(); _ = ReloadAsync(); };
@@ -96,9 +98,69 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     /// <summary>Game time now: the live game's while connected, else when KSP last saved.</summary>
     public double? Now => _link.Game?.Ut ?? Save?.Ut;
 
-    /// <summary>The vessel being flown in KSP (with its save id when it's in the save), or null when not flying one.</summary>
-    public FlightCraft? ActiveCraft =>
-        _link.Game?.Active is { } active ? new FlightCraft(active.Name, SaveIdOf(active)) : null;
+    /// <summary>
+    /// The player's say on a vessel docked into another, by its name: true for a craft of its own, false for part of the
+    /// stack; null for the default rule (<see cref="DockedPiece.IsCraftByDefault"/>).
+    /// </summary>
+    public bool? DockedChoice(string vesselName) => _dockedChoices.TryGetValue(vesselName, out var isCraft) ? isCraft : null;
+
+    /// <summary>Stores the say on a docked vessel (null: the default rule) and has everything read the save again.</summary>
+    public void SetDockedChoice(string vesselName, bool? isCraft)
+    {
+        if (DockedChoice(vesselName) == isCraft) return;
+        _settingsRepository.SaveDockedChoice(vesselName, isCraft);
+        _dockedChoices = _settingsRepository.LoadDockedChoices();
+        OnPropertyChanged(nameof(Save));
+        if (Save is { } save) UpdateStatus(RefreshLinkedLocations(save));
+    }
+
+    /// <summary>
+    /// Every vessel in the save and, after each docked stack, the craft docked in it as vessels of their own (a shuttle at
+    /// a station: <see cref="DockedCraft"/>). Empty with no save.
+    /// </summary>
+    public IReadOnlyList<SavedVessel> Craft => Save?.WithDockedCraft(DockedChoice).ToList() ?? [];
+
+    /// <summary>A vessel by save id, including a craft docked in a stack (whatever it counts as). Null if it's gone.</summary>
+    public SavedVessel? FindVessel(string id) => Save?.FindVessel(id);
+
+    /// <summary>The craft docked in a vessel (whatever each counts as): empty when nothing is.</summary>
+    public IReadOnlyList<DockedPiece> DockedIn(SavedVessel stack) => DockedCraft.Pieces(stack);
+
+    /// <summary>
+    /// The vessel being flown in KSP (with its save id when it's in the save), or null when not flying one. While it's a
+    /// docked stack and <see cref="FlyAsId"/> picks a craft docked in it, that craft: what the planner plans for is then
+    /// the shuttle, not the station it's docked at.
+    /// </summary>
+    public FlightCraft? ActiveCraft
+    {
+        get
+        {
+            if (_link.Game?.Active is not { } active) return null;
+            var id = SaveIdOf(active);
+            if (id is not null && _flyAsId is { } pick && pick.StartsWith(id + "#", StringComparison.Ordinal) && FindVessel(pick) is { } piece)
+                return new FlightCraft(piece.Name, piece.Id);
+            return new FlightCraft(active.Name, id);
+        }
+    }
+
+    /// <summary>The vessel being flown in KSP as the save has it, docked craft and all; null when not flying one in the save.</summary>
+    public SavedVessel? ActiveStack => _link.Game?.Active is { } active && SaveIdOf(active) is { } id ? Save?.Vessels.FirstOrDefault(v => v.Id == id) : null;
+
+    /// <summary>
+    /// Which craft docked in the flown stack to plan for (its <see cref="DockedCraft.PieceId"/>), or null for the whole
+    /// stack. Kept while flying another vessel, so it's still picked on coming back.
+    /// </summary>
+    public string? FlyAsId
+    {
+        get => _flyAsId;
+        set
+        {
+            if (!SetProperty(ref _flyAsId, value)) return;
+            OnPropertyChanged(nameof(ActiveCraft));
+        }
+    }
+
+    private string? _flyAsId;
 
     /// <summary>The vessel targeted in KSP, or null.</summary>
     public FlightCraft? TargetCraft =>
@@ -114,7 +176,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     public SavedOrbit? PathOf(FlightCraft craft)
     {
         SavedOrbit? orbit = null;
-        if (craft.SaveVesselId is { } id) orbit = Save?.Vessels.FirstOrDefault(v => v.Id == id)?.Orbit;
+        if (craft.SaveVesselId is { } id) orbit = FindVessel(id)?.Orbit;
         else if (_link.Game?.Vessels is { } vessels) orbit = vessels.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true)?.Orbit;
         return orbit is { IsPath: true } ? orbit : null;
     }
@@ -126,7 +188,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     public (string? Body, SavedOrbit? Path, bool Landed)? WhereIs(FlightCraft craft)
     {
         (string Situation, SavedOrbit? Orbit)? found = null;
-        if (craft.SaveVesselId is { } id && Save?.Vessels.FirstOrDefault(v => v.Id == id) is { } saved) found = (saved.Situation, saved.Orbit);
+        if (craft.SaveVesselId is { } id && FindVessel(id) is { } saved) found = (saved.Situation, saved.Orbit);
         else if (_link.Game?.Vessels?.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true) is { } live) found = (live.Situation, live.Orbit);
         if (found is not var (situation, orbit)) return null;
         var landed = situation is "LANDED" or "SPLASHED" or "PRELAUNCH";
@@ -180,6 +242,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         _settings = _settingsRepository.Load();
         var saveChanged = _database.ActiveSave != _settings.KspSaveName;
         _database.ActiveSave = _settings.KspSaveName;
+        _dockedChoices = _settingsRepository.LoadDockedChoices();
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(SaveName));
         if (saveChanged)
@@ -195,7 +258,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     {
         if (Save is null || SaveName is null) return [];
         var bodies = StockBodies();
-        return Save.Vessels.Select(v => SaveImport.Convert(v, SaveName, bodies)).ToList();
+        return Craft.Select(v => SaveImport.Convert(v, SaveName, bodies)).ToList();
     }
 
     /// <summary>The custom location already following this vessel, if any.</summary>
@@ -305,13 +368,18 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     private int RefreshLinkedLocations(KspSave save)
     {
         var bodies = StockBodies();
-        var byId = save.Vessels.Where(v => v.Id.Length > 0).GroupBy(v => v.Id).ToDictionary(g => g.Key, g => g.First());
+        var craft = save.WithDockedCraft(DockedChoice).ToList();
+        var byId = craft.Where(v => v.Id.Length > 0).GroupBy(v => v.Id).ToDictionary(g => g.Key, g => g.First());
         var updated = 0;
         foreach (var location in _locations.GetAll().Where(l => l.IsLinked && l.KspSave == SaveName))
         {
-            if (!byId.TryGetValue(location.KspVesselId!, out var vessel)) continue;
+            // A craft that docked (or undocked) has another id now, but keeps its name: follow it by that, when only one has it.
+            if (!byId.TryGetValue(location.KspVesselId!, out var vessel)
+                && craft.Where(v => v.Name == location.Name).Take(2).ToList() is [var renamed] && !byId.ContainsKey(location.KspVesselId!))
+                vessel = renamed;
+            if (vessel is null) continue;
             if (SaveImport.Convert(vessel, SaveName!, bodies).Location is not { } current) continue; // e.g. it landed: keep the last orbit
-            var refreshed = SaveImport.Refresh(location, current);
+            var refreshed = SaveImport.Refresh(location, current) with { KspVesselId = vessel.Id };
             if (refreshed == location) continue;
             _locations.Update(refreshed);
             updated++;
@@ -324,7 +392,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     {
         if (Save is null) return;
         var linked = _locations.GetAll().Where(l => l.IsLinked && l.KspSave == SaveName).ToList();
-        var ids = Save.Vessels.Select(v => v.Id).ToHashSet();
+        var ids = Craft.Select(v => v.Id).ToHashSet();
         var missing = linked.Count(l => !ids.Contains(l.KspVesselId!));
         var linkedIds = linked.Select(l => l.KspVesselId).ToHashSet();
         NewVessels = Candidates().Count(c => c.CanImport && SaveImport.IsUsuallyWanted(c.Vessel) && !linkedIds.Contains(c.Vessel.Id));
