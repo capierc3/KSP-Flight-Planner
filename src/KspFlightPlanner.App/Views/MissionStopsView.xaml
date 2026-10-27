@@ -30,6 +30,8 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Content="Reverse" Command="{Binding ReverseStopsCommand}" Style="{StaticResource SmallButton}"
                             ToolTip="Flip the route (e.g. plan the trip home)" />
+                    <Button Content="Fly this mission" Command="{Binding FlyMissionCommand}" Style="{StaticResource SmallButton}" Margin="6,0,0,0"
+                            ToolTip="Fly it in Fly mode, stop by stop: each step is planned from your craft's real orbit when it gets there, and the steps after it from where it leaves you" />
                 </StackPanel>
                 <TextBlock Text="Stops" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
             </DockPanel>

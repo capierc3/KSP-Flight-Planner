@@ -119,6 +119,20 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         return orbit is { IsPath: true } ? orbit : null;
     }
 
+    /// <summary>
+    /// Where a craft is: the body (null when a landed craft's body isn't known), its path there (null on the ground) and
+    /// whether it's on the ground (landed, splashed or on the pad). Null if it can't be found.
+    /// </summary>
+    public (string? Body, SavedOrbit? Path, bool Landed)? WhereIs(FlightCraft craft)
+    {
+        (string Situation, SavedOrbit? Orbit)? found = null;
+        if (craft.SaveVesselId is { } id && Save?.Vessels.FirstOrDefault(v => v.Id == id) is { } saved) found = (saved.Situation, saved.Orbit);
+        else if (_link.Game?.Vessels?.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true) is { } live) found = (live.Situation, live.Orbit);
+        if (found is not var (situation, orbit)) return null;
+        var landed = situation is "LANDED" or "SPLASHED" or "PRELAUNCH";
+        return (orbit?.BodyName, landed || orbit is not { IsPath: true } ? null : orbit, landed);
+    }
+
     /// <summary>The save vessel a live vessel was matched to, or null when it's not in the save.</summary>
     private string? SaveIdOf(LiveVessel vessel)
     {

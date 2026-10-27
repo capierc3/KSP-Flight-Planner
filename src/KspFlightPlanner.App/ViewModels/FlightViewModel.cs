@@ -53,6 +53,14 @@ public sealed class FlightBurnRow(int number, FlightBurn burn) : ObservableObjec
         (v >= 0.05 ? "+" : v <= -0.05 ? "−" : "") + Math.Abs(v).ToString("0.0", CultureInfo.CurrentCulture) + " m/s";
 }
 
+/// <summary>One step of a mission flight on the Flight pane: what it does, whether it's done, and its plan from where the craft is.</summary>
+public sealed record MissionStepRow(int Number, string Title, string StateText, string DeltaV, string When, string? Note, bool IsCurrent, bool IsDone)
+{
+    public bool HasNote => !string.IsNullOrEmpty(Note);
+    public bool HasState => StateText.Length > 0;
+    public bool HasWhen => When.Length > 0;
+}
+
 /// <summary>
 /// The Flight pane: plans handed over from the planning panes, flown against the live game. Shows each burn's countdown
 /// and whether it's on the craft, sends burns as maneuver nodes, and re-plans from the craft's real orbit when it has
@@ -72,6 +80,8 @@ public sealed class FlightViewModel : ObservableObject
     private readonly FlightRepository _flights;
     private readonly SaveSync _sync;
     private readonly BodyRotation _rotation;
+    private readonly MissionRepository? _missions;
+    private readonly PlannerEvents _events;
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private Flight? _selected;
     private string? _status;
@@ -79,20 +89,30 @@ public sealed class FlightViewModel : ObservableObject
     private bool _isDrifting;
     private bool _busy;
     private (long Id, double Ut)? _autoTried; // the flight and burn last re-planned after
+    private (long Id, int Step)? _heldAt; // a mission stepped back by hand: not moved on by itself from there
+    private SavedMission? _missionToFly;
 
-    public FlightViewModel(FlightRepository flights, SaveSync sync, PlannerEvents events, BodyRotation rotation)
+    public FlightViewModel(FlightRepository flights, SaveSync sync, PlannerEvents events, BodyRotation rotation, MissionRepository? missions = null)
     {
         _flights = flights;
         _sync = sync;
         _rotation = rotation;
+        _missions = missions;
+        _events = events;
         events.OpenFlightRequested += id =>
         {
             Reload();
             SelectedFlight = Flights.FirstOrDefault(f => f.Id == id);
             // A landing sent from a mission comes without burns: plan it now if its craft is already in orbit there.
             if (_selected is { Kind: FlightKind.Landing, Craft: not null, Burns.Count: 0 }) _ = ReplanAsync();
+            // A mission comes unplanned: plan it from the craft, or from where it starts.
+            if (_selected is { Kind: FlightKind.Mission, StepPlans.Count: 0 }) _ = ReplanAsync();
         };
-        events.SaveChanged += Reload; // the open flight closes if it belongs to the last save
+        events.SaveChanged += () =>
+        {
+            Reload(); // the open flight closes if it belongs to the last save
+            RefreshSavedMissions();
+        };
         sync.Link.GameUpdated += _ => RefreshLive();
         sync.Link.PropertyChanged += (_, e) =>
         {
@@ -104,7 +124,12 @@ public sealed class FlightViewModel : ObservableObject
         };
 
         UseActiveCraftCommand = new RelayCommand(() => _ = UseActiveCraftAsync(), () => _selected is not null && _sync.ActiveCraft is not null && !_busy);
-        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(), () => _selected is { Craft: not null } f && CanReplan(f) && !_busy);
+        ReplanCommand = new RelayCommand(() => _ = ReplanAsync(),
+            () => (_selected is { Kind: FlightKind.Mission } || _selected is { Craft: not null } f && CanReplan(f)) && !_busy);
+        NextStepCommand = new RelayCommand(() => _ = StepToAsync(+1), () => _selected is { Kind: FlightKind.Mission } f && f.StepIndex < f.Steps.Count && !_busy);
+        PreviousStepCommand = new RelayCommand(() => _ = StepToAsync(-1), () => _selected is { Kind: FlightKind.Mission, StepIndex: > 0 } && !_busy);
+        FlyMissionCommand = new RelayCommand(() => _events.RequestFlyMission(_missionToFly!.Id), () => _missionToFly is not null);
+        RefreshSavedMissions();
         SendBurnCommand = new RelayCommand<FlightBurnRow>(r => _ = SendAsync([r.Burn], replace: false), r => CanSend && r.State != BurnState.Passed);
         SendNextCommand = new RelayCommand(() => _ = SendAsync([NextOwnBurn()!.Burn], replace: false), () => CanSend && NextOwnBurn() is not null);
         SendAllCommand = new RelayCommand(() => _ = SendAsync(OwnFutureBurns(), replace: true), () => CanSend && OwnFutureBurns().Count > 0);
@@ -122,6 +147,32 @@ public sealed class FlightViewModel : ObservableObject
     public RelayCommand SendNextCommand { get; }
     public RelayCommand SendAllCommand { get; }
     public RelayCommand DeleteCommand { get; }
+    public RelayCommand NextStepCommand { get; }
+    public RelayCommand PreviousStepCommand { get; }
+    public RelayCommand FlyMissionCommand { get; }
+
+    /// <summary>Saved missions, to fly one from Fly mode.</summary>
+    public ObservableCollection<SavedMission> SavedMissions { get; } = [];
+
+    public bool HasSavedMissions => SavedMissions.Count > 0;
+
+    public SavedMission? MissionToFly
+    {
+        get => _missionToFly;
+        set { if (SetProperty(ref _missionToFly, value)) CommandManager.InvalidateRequerySuggested(); }
+    }
+
+    /// <summary>Reads the saved missions again (the list opens, or another save was chosen), keeping the one picked.</summary>
+    public void RefreshSavedMissions()
+    {
+        if (_missions is null) return;
+        var keep = _missionToFly?.Id;
+        SavedMissions.Clear();
+        foreach (var m in _missions.GetAll()) SavedMissions.Add(m);
+        _missionToFly = SavedMissions.FirstOrDefault(m => m.Id == keep) ?? SavedMissions.FirstOrDefault();
+        OnPropertyChanged(nameof(MissionToFly));
+        OnPropertyChanged(nameof(HasSavedMissions));
+    }
 
     /// <summary>Asks the user a yes/no question; the view supplies the dialog.</summary>
     public Func<string, bool> Confirm { get; set; } = _ => true;
@@ -143,7 +194,7 @@ public sealed class FlightViewModel : ObservableObject
     public bool HasNoSelection => _selected is null;
 
     public string NoSelectionText => Flights.Count == 0
-        ? "No flights yet. For a quick burn or a trip from where you are, use the From here pane (Land at a spot lands). Or plan on the Rendezvous, Resonant Orbits or Transfer Planner tool, then click Fly this plan (or window), or Fly this landing on a mission's landing spot."
+        ? "No flights yet. To fly a whole mission, pick a saved one in the Flights pane (or click Fly this mission in Plan mode). For a quick burn or a trip from where you are, use the From here pane (Land at a spot lands). Or plan on the Rendezvous, Resonant Orbits or Transfer Planner tool, then click Fly this plan (or window), or Fly this landing on a mission's landing spot."
         : "Pick a flight in the Flights pane to see its burns and send them to KSP.";
 
     // ---------------- The game ----------------
@@ -184,8 +235,51 @@ public sealed class FlightViewModel : ObservableObject
                               (_selected.LandSooner ? ", the sooner way" : "") + ". Re-plan from the craft's orbit around " + _selected.BodyName + ".",
         FlightKind.Transfer => $"To {_selected.DestinationName} in the window leaving {_selected.OriginName} {_calendar.FormatDate(_selected.TransferDepartureUt)}, " +
                                $"{_calendar.FormatDuration(_selected.TransferFlightTimeS)} there. Re-plan from wherever the craft is on the way.",
+        FlightKind.Mission => _selected.StepIndex >= _selected.Steps.Count
+            ? $"Mission flown: all {_selected.Steps.Count} steps."
+            : $"Step {_selected.StepIndex + 1} of {_selected.Steps.Count}: {_selected.Steps[_selected.StepIndex].Title}. Each step is planned from the craft's real " +
+              "orbit once it gets there, and the steps after it from where it leaves the craft.",
         _ => "",
     };
+
+    // ---------------- A mission ----------------
+
+    public bool HasMission => _selected is { Kind: FlightKind.Mission };
+
+    /// <summary>A mission's steps: the ones flown, the one being flown, and the rest as planned from where it leaves the craft.</summary>
+    public ObservableCollection<MissionStepRow> MissionSteps { get; } = [];
+
+    /// <summary>"1,980 m/s still to burn, landing Year 1, Day 12" — what the steps from here add up to.</summary>
+    public string MissionTotalText
+    {
+        get
+        {
+            if (_selected is not { Kind: FlightKind.Mission } f || f.StepPlans.Count == 0) return "";
+            var planned = f.StepPlans.TakeWhile(p => p.IsPlanned).ToList();
+            var dv = planned.Sum(p => p.DeltaV);
+            var rest = planned.Count < f.StepPlans.Count ? $" for the next {planned.Count} step{(planned.Count == 1 ? "" : "s")}" : "";
+            return $"{Format.Speed0(dv)} still to burn{rest}" + (planned.Count > 0 ? $", done {_calendar.FormatDate(planned[^1].EndUt)}" : "");
+        }
+    }
+
+    private void RebuildMissionSteps()
+    {
+        MissionSteps.Clear();
+        if (_selected is not { Kind: FlightKind.Mission } f) return;
+        for (var i = 0; i < f.Steps.Count; i++)
+        {
+            var step = f.Steps[i];
+            var plan = f.StepPlans.FirstOrDefault(p => p.Step == i);
+            var done = i < f.StepIndex;
+            var current = i == f.StepIndex;
+            var dv = done || plan is not { IsPlanned: true } ? "" : step.Kind == MissionStepKind.Launch ? "by hand" : Format.Speed0(plan.DeltaV);
+            var when = done || plan is not { IsPlanned: true } ? ""
+                : plan.Burns.Count > 0 ? $"{_calendar.FormatDate(plan.Burns[0].Ut)} → {_calendar.FormatDate(plan.EndUt)}"
+                : step.Kind == MissionStepKind.Launch && plan.Assumed ? $"in orbit about {_calendar.FormatDate(plan.EndUt)}" : "";
+            var note = done ? null : plan?.Problem ?? (current ? null : plan?.Note);
+            MissionSteps.Add(new MissionStepRow(i + 1, step.Title, done ? "Done" : current ? "Now" : "", dv, when, note, current, done));
+        }
+    }
 
     public string CraftText => _selected?.Craft is { } craft
         ? $"Flown by {craft.Name}" + (craft.SaveVesselId is null ? " (not in the save yet)" : "")
@@ -237,7 +331,7 @@ public sealed class FlightViewModel : ObservableObject
     private void Store(Flight flight)
     {
         _flights.Update(flight);
-        var i = Flights.IndexOf(_selected!);
+        var i = Flights.ToList().FindIndex(f => f.Id == flight.Id);
         _selected = flight;
         _storing = true;
         try
@@ -259,10 +353,11 @@ public sealed class FlightViewModel : ObservableObject
         Burns.Clear();
         if (_selected is { } f)
             for (var i = 0; i < f.Burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, f.Burns[i]));
+        RebuildMissionSteps();
         foreach (var name in new[]
                  {
                      nameof(HasFlight), nameof(HasNoSelection), nameof(NoSelectionText), nameof(KindText), nameof(CraftText), nameof(Note), nameof(HasNote), nameof(PlannedText), nameof(HasApproach),
-                     nameof(ApproachTitle), nameof(ApproachSteps),
+                     nameof(ApproachTitle), nameof(ApproachSteps), nameof(HasMission), nameof(MissionTotalText),
                  })
             OnPropertyChanged(name);
         RefreshLive();
@@ -285,7 +380,106 @@ public sealed class FlightViewModel : ObservableObject
         }
         RefreshDrift(now);
         ReplanAfterBurn(now);
+        AdvanceMission(now);
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>
+    /// Once the craft has finished a mission step (in orbit after the launch, around the body a trip goes to, on the
+    /// ground…), moves on to the next and plans it, and every step after it, from the craft's real orbit. Only updates
+    /// the flight: nothing is sent to KSP.
+    /// </summary>
+    private void AdvanceMission(double? now)
+    {
+        if (_busy || !_sync.Link.IsConnected || _selected is not { Kind: FlightKind.Mission, Craft: not null } f || now is not { } t
+            || _heldAt == (f.Id, f.StepIndex) || Situation(f, t) is not { } here) return;
+        if (MissionFlights.Current(f.Steps, f.StepIndex, here, f.StepPlans, _sync.StockBodies(), SettleS) == f.StepIndex) return;
+        _ = ReplanMissionAsync(f, advance: true);
+    }
+
+    /// <summary>Where the mission's craft is now, for planning; null without a craft, or when it can't be found.</summary>
+    private MissionSituation? Situation(Flight f, double now)
+    {
+        if (f.Craft is not { } craft || _sync.WhereIs(craft) is not var (body, path, landed)) return null;
+        // A craft on the ground the game doesn't say the body of: where the step being flown starts.
+        body ??= landed ? f.StepPlans.FirstOrDefault(p => p.Step == f.StepIndex)?.StartBodyName ?? f.MissionStart?.BodyName : null;
+        if (body is null || !landed && path is null) return null;
+        return new MissionSituation(body, path?.ToElements(), landed, now);
+    }
+
+    /// <summary>
+    /// Plans a mission from its craft (the step being flown from the real orbit, the rest from where each leaves the
+    /// craft), or without one from where the mission starts. With <paramref name="advance"/>, first moves past the
+    /// steps the craft has finished.
+    /// </summary>
+    private async Task ReplanMissionAsync(Flight f, bool advance)
+    {
+        // Without game time (no save, not connected) the mission is still shown planned, from the start of the game.
+        var now = _sync.Now ?? 0;
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var bodies = _sync.StockBodies();
+            // Landings at a spot need their body's rotation; read it (live, or from the bake) before planning.
+            var rotations = new Dictionary<string, double?>();
+            foreach (var name in f.Steps.Skip(f.StepIndex).Where(s => s is { Kind: MissionStepKind.Land, Landing: not null }).Select(s => s.BodyName).Distinct())
+                if (bodies.GetValueOrDefault(name) is { } body) rotations[name] = await _rotation.InitialRotationDegAsync(body);
+            var context = new MissionPlanContext(bodies, f.LeadS, rotations.GetValueOrDefault, _rotation.Bake,
+                t => t.SaveVesselId is { } id ? _sync.OrbitOf(new FlightCraft(t.Name, id))?.ToElements() : null);
+
+            var here = Situation(f, now);
+            var from = f.StepIndex;
+            if (advance && here is not null) f = f with { StepIndex = MissionFlights.Current(f.Steps, f.StepIndex, here, f.StepPlans, bodies, SettleS) };
+            var was = f.StepPlans.FirstOrDefault(p => p.Step == f.StepIndex);
+            var flight = f;
+            var planned = await Task.Run(() => here is null ? MissionFlights.PlanFromStart(flight, now, context) : MissionFlights.Replan(flight, here, context));
+            Store(planned);
+            Status = MissionStatus(planned, from, was, here is not null, now)
+                     + (_sync.Now is null ? " No game time yet, so it's planned from Year 1, Day 1: connect to KSP or link a save to plan from now." : "");
+        }
+        catch (ArgumentException ex)
+        {
+            Status = $"Couldn't plan the mission: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>What a mission re-plan did, in a line or two: steps finished, what the step being flown costs now.</summary>
+    private string MissionStatus(Flight f, int from, MissionStepPlan? was, bool live, double now)
+    {
+        var parts = new List<string>();
+        var done = f.StepIndex - from;
+        if (done > 0) parts.Add(done == 1 ? $"Step {from + 1} done." : $"Steps {from + 1}–{f.StepIndex} done.");
+        if (f.StepIndex >= f.Steps.Count) return string.Join(" ", parts.Append("That's the whole mission flown."));
+        var plan = f.StepPlans.FirstOrDefault(p => p.Step == f.StepIndex);
+        var where = live ? $"from {f.Craft!.Name}'s real {(plan?.StartOrbit is null ? "position" : "orbit")}" : "from where the mission starts";
+        var step = $"step {f.StepIndex + 1} ({f.Steps[f.StepIndex].Title})";
+        if (plan is { IsPlanned: false }) parts.Add($"Couldn't plan {step}: {plan.Problem}");
+        else
+        {
+            var cost = plan is null || plan.Burns.Count == 0 ? "" : $": {Format.Speed0(plan.DeltaV)}" +
+                (was is { IsPlanned: true, Burns.Count: > 0 } && Math.Abs(was.DeltaV - plan.DeltaV) >= 1 ? $" (was {Format.Speed0(was.DeltaV)})" : "");
+            parts.Add($"Planned {step} {where} at {_calendar.FormatDate(now)}{cost}.");
+            var after = f.StepPlans.Count(p => p.Step > f.StepIndex && p.IsPlanned);
+            if (after > 0) parts.Add(after == 1 ? "The step after it follows on from there." : $"The {after} steps after it follow on from there.");
+        }
+        if (!live && f.Craft is null) parts.Add("Switch to the craft in KSP and click \"Use the craft I'm flying\" to plan from its real orbit.");
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>Moves a mission on a step (or back one) by hand, and plans it from the craft (or from where the mission starts).</summary>
+    private async Task StepToAsync(int by)
+    {
+        if (_selected is not { Kind: FlightKind.Mission } f) return;
+        var index = Math.Clamp(f.StepIndex + by, 0, f.Steps.Count);
+        // Back a step: stay there, even if the craft looks to have finished it, until the player moves on.
+        _heldAt = by < 0 ? (f.Id, index) : null;
+        await ReplanMissionAsync(f with { StepIndex = index }, advance: false);
     }
 
     /// <summary>
@@ -333,6 +527,11 @@ public sealed class FlightViewModel : ObservableObject
         IsDrifting = false;
         if (_selected is not { } f || now is not { } t) { DriftText = ""; return; }
         if (f.Craft is not { } craft) { DriftText = ""; return; }
+        if (f.Kind == FlightKind.Mission && MissionDrift(f, craft) is { } text)
+        {
+            DriftText = text;
+            return;
+        }
         if (Body(f.BodyName) is not { } body) { DriftText = ""; return; }
         var orbit = _sync.OrbitOf(craft);
         if ((f.Kind == FlightKind.Transfer || IsTrip(f)) && _sync.PathOf(craft)?.BodyName is { } around && around != f.BodyName)
@@ -363,6 +562,29 @@ public sealed class FlightViewModel : ObservableObject
             : $"On plan: {Distance(drift)} from the planned path.";
     }
 
+    /// <summary>
+    /// What to say about a mission's craft when it isn't simply on (or off) the planned path: the mission is flown, a
+    /// launch is still to fly, or the craft is around another body than the step's burns are for. Null otherwise.
+    /// </summary>
+    private string? MissionDrift(Flight f, FlightCraft craft)
+    {
+        if (f.StepIndex >= f.Steps.Count) return "The whole mission is flown.";
+        var step = f.Steps[f.StepIndex];
+        if (_sync.WhereIs(craft) is not var (body, path, landed)) return $"{craft.Name} isn't in the game or the save right now.";
+        if (step.Kind == MissionStepKind.Launch)
+            return landed ? $"{craft.Name} is on the ground: launch when you're ready. Once it's in orbit, the next step is planned from there."
+                : $"Climbing to orbit: once {craft.Name} is in a stable orbit, the next step is planned from it.";
+        if (landed) return $"{craft.Name} is on the ground{(body is null ? "" : " on " + body)}.";
+        if (body is not null && body != f.BodyName)
+        {
+            IsDrifting = true;
+            return step.Kind == MissionStepKind.Trip
+                ? $"{craft.Name} is around {body} on the way to {step.BodyName}: Re-plan from here to correct the course from its real path."
+                : $"{craft.Name} is around {body}, but this step's burns are for {f.BodyName}'s orbit: Re-plan from here.";
+        }
+        return path is null ? $"{craft.Name} isn't on a path the planner can follow right now." : null;
+    }
+
     // ---------------- Commands ----------------
 
     /// <summary>The craft being flown becomes the flight's craft, and the flight is planned from its orbit.</summary>
@@ -377,6 +599,11 @@ public sealed class FlightViewModel : ObservableObject
     /// <summary>Plans the rest of the flight again from where the craft really is, starting at least the lead time from now.</summary>
     private async Task ReplanAsync()
     {
+        if (_selected is { Kind: FlightKind.Mission } mission)
+        {
+            await ReplanMissionAsync(mission, advance: _heldAt != (mission.Id, mission.StepIndex));
+            return;
+        }
         if (_selected is not { } f || f.Craft is not { } craft || !CanReplan(f)) return;
         if (Body(f.BodyName) is not { } body) { Status = $"{f.BodyName} isn't in the planner's bodies."; return; }
         if (_sync.Now is not { } now) { Status = "No game time yet: connect to KSP or link a save."; return; }
@@ -597,23 +824,7 @@ public sealed class FlightViewModel : ObservableObject
     }
 
     /// <summary>A rendezvous plan's burns as flight burns, titled with the craft they're for.</summary>
-    public static List<FlightBurn> RendezvousBurns(RendezvousPlan plan)
-    {
-        var burns = plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn) { Kind = m.Kind })).ToList();
-        if (plan.Deorbit is { } d)
-            burns.Add(new FlightBurn($"Deorbit {plan.Legs[^1].Target.Name}", d.Ut, d.Burn) { Note = "Docked with the target.", Kind = ManeuverKind.Deorbit });
-        return burns;
-    }
-
-    private static string Title(Maneuver m) => m.Kind switch
-    {
-        ManeuverKind.PlaneChange => "Match planes",
-        ManeuverKind.Phasing => "Phasing orbit",
-        ManeuverKind.Transfer => "Transfer burn",
-        ManeuverKind.MatchVelocity => "Match velocity",
-        ManeuverKind.Deorbit => "Deorbit",
-        _ => m.Kind.ToString(),
-    };
+    public static List<FlightBurn> RendezvousBurns(RendezvousPlan plan) => RendezvousFlights.Burns(plan);
 
     /// <summary>The flight craft's own burns still to come (not the released satellites').</summary>
     private List<FlightBurn> OwnFutureBurns() =>

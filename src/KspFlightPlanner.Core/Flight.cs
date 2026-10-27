@@ -17,6 +17,8 @@ public enum FlightKind
     Transfer,
     /// <summary>Land at a chosen spot (From here, or a mission's landing spot): re-planned from the craft's real orbit.</summary>
     Landing,
+    /// <summary>A whole mission, step by step: each step planned from the craft's real orbit, the rest from where it leaves the craft.</summary>
+    Mission,
 }
 
 /// <summary>One burn of a flight, as a maneuver node.</summary>
@@ -115,6 +117,14 @@ public sealed record Flight
 
     /// <summary>Satellites released before <see cref="Burns"/> was planned.</summary>
     public int SatellitesReleased { get; init; }
+
+    // Mission inputs: the saved mission, where it starts, its steps and the one being flown. StepPlans are the steps from
+    // that one on, each planned from where the one before leaves the craft; Burns are the first one's.
+    public long? MissionId { get; init; }
+    public MissionStart? MissionStart { get; init; }
+    public IReadOnlyList<MissionStep> Steps { get; init; } = [];
+    public int StepIndex { get; init; }
+    public IReadOnlyList<MissionStepPlan> StepPlans { get; init; } = [];
 
     public override string ToString() => Name;
 
@@ -312,4 +322,26 @@ public static class TransferFlights
             Note = notes.Count > 0 ? string.Join(" ", notes) : null,
         };
     }
+}
+
+/// <summary>A rendezvous plan's burns as flight burns, titled with the craft they're for.</summary>
+public static class RendezvousFlights
+{
+    public static List<FlightBurn> Burns(RendezvousPlan plan)
+    {
+        var burns = plan.Legs.SelectMany(l => l.Maneuvers.Select(m => new FlightBurn($"{Title(m)}: {l.Target.Name}", m.Ut, m.Burn) { Kind = m.Kind })).ToList();
+        if (plan.Deorbit is { } d)
+            burns.Add(new FlightBurn($"Deorbit {plan.Legs[^1].Target.Name}", d.Ut, d.Burn) { Note = "Docked with the target.", Kind = ManeuverKind.Deorbit });
+        return burns;
+    }
+
+    private static string Title(Maneuver m) => m.Kind switch
+    {
+        ManeuverKind.PlaneChange => "Match planes",
+        ManeuverKind.Phasing => "Phasing orbit",
+        ManeuverKind.Transfer => "Transfer burn",
+        ManeuverKind.MatchVelocity => "Match velocity",
+        ManeuverKind.Deorbit => "Deorbit",
+        _ => m.Kind.ToString(),
+    };
 }

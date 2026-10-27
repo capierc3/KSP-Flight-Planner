@@ -243,6 +243,7 @@ public partial class MainWindow : Window
         };
         viewModel.Mission.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        viewModel.Mission.Alert = message => MessageBox.Show(this, message, "KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
         viewModel.FlightLog.Confirm = message => MessageBox.Show(this, message, "KSP Flight Planner",
             MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         viewModel.Sync.OtherSaveFound += () => Dispatcher.BeginInvoke(AskToSwitchSave);

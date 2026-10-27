@@ -134,6 +134,24 @@ public static class TripPlanner
     }
 
     /// <summary>
+    /// The one way a mission flies a trip: through <paramref name="window"/> (the launch window chosen for the mission's
+    /// leg) for its hop across, else the cheapest of <see cref="Options"/>. A route with no hop across ignores the window.
+    /// </summary>
+    /// <param name="inclinationDeg">As for <see cref="Options"/>: the inclination to arrive in, or null.</param>
+    public static TripOption Plan(CelestialBody from, CelestialBody to, OrbitalElements craft, double earliestUt, double altitudeM,
+        IReadOnlyCollection<CelestialBody> bodies, (double DepartureUt, double FlightTimeS)? window = null, double? inclinationDeg = null)
+    {
+        var hops = Route(from, to, bodies);
+        var across = hops.ToList().FindIndex(h => h.Kind == HopKind.Across);
+        if (window is not { } w || across < 0) return Options(from, to, craft, earliestUt, altitudeM, bodies, inclinationDeg)[0];
+        double Height(int i) => i == hops.Count - 1 ? altitudeM : hops[i].To.DefaultParkingAltitudeM;
+        double? Tilt(int i) => i == hops.Count - 1 ? inclinationDeg : null;
+        var before = Legs(hops.Take(across).ToList(), 0, craft, earliestUt, Height, Tilt, soonest: false, window: null);
+        var rest = Legs(hops, across, before.EndOrbit ?? craft, before.EndUt, Height, Tilt, soonest: false, window: w);
+        return new TripOption("", [.. before.Legs, .. rest.Legs]);
+    }
+
+    /// <summary>
     /// Names each option for what it's best at, from its planned burns: the cheapest, the soonest to arrive, the shortest
     /// flight (time in space), the soonest to leave. One best at nothing is dropped; the cheapest comes first. A single
     /// option keeps no name.

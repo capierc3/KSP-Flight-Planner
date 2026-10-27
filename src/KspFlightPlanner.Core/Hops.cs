@@ -61,6 +61,9 @@ public static class Hops
     /// <summary>A tuned burn counts as arriving at the height when it's within this.</summary>
     private const double ArrivedM = 1_000;
 
+    /// <summary>A burn solved in 3D (<c>Aim.Solve</c>) stops when the pass is within this of the height.</summary>
+    private const double SolvedM = 10;
+
     /// <summary>How many places round the orbit an escape burn is tried, and how far above escape speed it's searched (m/s).</summary>
     private const int EscapePlaces = 36;
     private const double EscapeRange = 1_500, EscapeStep = 2;
@@ -152,6 +155,60 @@ public static class Hops
         var periapsisUt = Kepler.NextPeriapsisUt(path, body.Mu, ut) ?? ut;
         var prograde = Vector3d.Cross(state.Position, state.Velocity).Z >= 0;
         return new SoiArrival(ut, path, periapsisUt, Kepler.PeriapsisRadius(path) - body.EquatorialRadiusM, prograde);
+    }
+
+    /// <summary>
+    /// The path round <paramref name="body"/> from the crossing really comes down to its periapsis. Heading inward it does.
+    /// Heading outward, a hyperbola has already passed its periapsis (it leaves the body for good), and an ellipse first
+    /// climbs to its apoapsis, which must be inside the body's sphere of influence or the craft leaves that too.
+    /// </summary>
+    public static bool ComesDown(SoiArrival arrival, CelestialBody body)
+    {
+        var s = Kepler.StateAt(arrival.Path, body.Mu, arrival.CrossingUt);
+        if (Vector3d.Dot(s.Position, s.Velocity) <= 0) return true;
+        if (arrival.Path.Eccentricity >= 1) return false;
+        var apoapsis = arrival.Path.SemiMajorAxisM * (1 + arrival.Path.Eccentricity);
+        return !(body.SoiRadiusM > 0 && double.IsFinite(body.SoiRadiusM)) || apoapsis < body.SoiRadiusM;
+    }
+
+    /// <summary>
+    /// The velocities at <paramref name="position"/> (around a body of gravity <paramref name="mu"/>) on hyperbolas that
+    /// leave with excess velocity <paramref name="vInfinity"/>: the limit of Lambert's problem as the far end goes out along
+    /// it. With θ the angle swept from the position to the asymptote ŝ (either way round), the velocity is
+    /// v = (μ / (k·r·sin θ))·ŝ + k·tan(θ/2)·r̂, k = √(μ/p), where k² solves the energy equation
+    /// tan²(θ/2)·k⁴ + (2μ·cos θ / (r·(1 + cos θ)) − v∞² − 2μ/r)·k² + μ² / (r²·sin²θ) = 0. Up to four answers. docs/MATH.md §3.7.
+    /// </summary>
+    public static IEnumerable<Vector3d> EscapeVelocities(Vector3d position, Vector3d vInfinity, double mu)
+    {
+        var r = position.Length;
+        var rHat = position / r;
+        var vInf = vInfinity.Length;
+        if (vInf < 1e-9) yield break;
+        var s = vInfinity / vInf;
+        var across = Math.Acos(Math.Clamp(Vector3d.Dot(rHat, s), -1, 1));
+        if (across < 1e-6 || Math.PI - across < 1e-6) yield break; // straight out or straight in: no plane to turn in
+        foreach (var theta in new[] { across, 2 * Math.PI - across })
+        {
+            double sin = Math.Sin(theta), cos = Math.Cos(theta), tanHalf = Math.Tan(theta / 2);
+            double a = tanHalf * tanHalf, b = 2 * mu * cos / (r * (1 + cos)) - vInf * vInf - 2 * mu / r, c = mu * mu / (r * r * sin * sin);
+            var disc = b * b - 4 * a * c;
+            if (disc < 0 || a < 1e-12) continue;
+            foreach (var x in new[] { (-b + Math.Sqrt(disc)) / (2 * a), (-b - Math.Sqrt(disc)) / (2 * a) })
+            {
+                if (!(x > 0)) continue;
+                var k = Math.Sqrt(x);
+                var v = s * (mu / (k * r * sin)) + rHat * (k * tanHalf);
+                // The far end along ŝ can be where the path came in from rather than where it goes: keep it only if it
+                // leaves that way. Leaving, at true anomaly ν∞ (cos ν∞ = −1/e), it heads along −sin ν∞·ê + (e − 1/e)·p̂.
+                var eVec = (position * (v.Length * v.Length - mu / r) - v * Vector3d.Dot(position, v)) / mu;
+                var e = eVec.Length;
+                if (e <= 1) continue;
+                var eHat = eVec / e;
+                var pHat = Vector3d.Cross(Vector3d.Cross(position, v).Normalized, eHat);
+                var leaves = (eHat * -Math.Sqrt(1 - 1 / (e * e)) + pHat * (e - 1 / e)).Normalized;
+                if (Vector3d.Dot(leaves, s) > 0.999) yield return v;
+            }
+        }
     }
 
     /// <summary>The orbit around the destination once <paramref name="plan"/>'s capture is flown; null without one.</summary>
@@ -334,7 +391,7 @@ public static class Hops
         if (inclinationDeg is not { } tilt || Inclined(plan.Arrival, tilt)) return plan;
         var a = plan.Arrival;
         var (aimBurn, arrival) = TiltOnTheWay(a.Path, parent.Mu, a.CrossingUt, a.PeriapsisUt, parent, periapsisAltitudeM, tilt,
-                                     (p, from) => Relative(Kepler.StateAt(p, parent.Mu, from), parent, from))
+                                     (p, from) => Relative(Kepler.StateAt(p, parent.Mu, from), parent, from) is var down && ComesDown(down, parent) ? down : null)
                                  ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {parent.Name} inclined {tilt:0.#}°.");
         return Finish([.. plan.Departure, aimBurn], arrival, parent, UpNote(moon)) with { IsCorrection = plan.IsCorrection };
     }
@@ -347,13 +404,14 @@ public static class Hops
         if (moon.Orbit is not { } moonOrbit || moon.ParentId != parent.Id) throw new ArgumentException($"{moon.Name} doesn't orbit {parent.Name}.");
         var mu = moon.Mu;
         var horizon = Kepler.OrbitalPeriod(moonOrbit, parent.Mu) / 2;
-        SoiArrival? Follow(OrbitalElements path, double from) => LeaveSoi(moon, parent, path, from, from + horizon);
+        SoiArrival? Leave(OrbitalElements path, double from) => LeaveSoi(moon, parent, path, from, from + horizon);
+        // Only a path that comes down to its periapsis counts: one flung out of the planet's sphere has its periapsis behind it.
+        SoiArrival? Follow(OrbitalElements path, double from) => Leave(path, from) is { } a && ComesDown(a, parent) ? a : null;
         var note = UpNote(moon);
 
-        var coasting = Follow(craft, earliestUt);
-        if (coasting is not null)
+        if (Leave(craft, earliestUt) is { } coasting)
         {
-            if (OnCourse(coasting, periapsisAltitudeM)) return Finish([], coasting, parent, note) with { IsCorrection = true };
+            if (ComesDown(coasting, parent) && OnCourse(coasting, periapsisAltitudeM)) return Finish([], coasting, parent, note) with { IsCorrection = true };
             // On the way out already: speed up or slow down, or push sideways (which swings where it leaves); the cheaper.
             var aim = new Aim(craft, mu, earliestUt, parent, periapsisAltitudeM, Follow);
             var at = aim.At;
@@ -367,14 +425,19 @@ public static class Hops
 
         if (craft.Eccentricity >= 1) throw new ArgumentException($"The craft is escaping {moon.Name} but won't leave its sphere of influence.");
         var period = Kepler.OrbitalPeriod(craft, mu);
+        var targetR = parent.EquatorialRadiusM + periapsisAltitudeM;
 
-        // The least prograde Δv that brings the periapsis down to the height, burning at ut; null if none does.
-        (double Dv, Aim Aim)? Escape(double ut)
+        // The least Δv that brings the periapsis down to the height, burning at ut; null if none does. Two ways, the
+        // cheaper wins: straight prograde, and aimed in 3D so the craft leaves the moon backwards along its orbit.
+        (double Dv, Aim Aim, Vector3d Burn)? Escape(double ut)
         {
             var aim = new Aim(craft, mu, ut, parent, periapsisAltitudeM, Follow);
             var s = aim.At;
             var start = Math.Max(0, Math.Sqrt(2 * mu / s.Position.Length) - s.Velocity.Length);
-            return aim.FirstRoot(s.Velocity.Normalized, start, start + EscapeRange, EscapeStep) is { } x ? (x, aim) : null;
+            Vector3d? best = aim.FirstRoot(s.Velocity.Normalized, start, start + EscapeRange, EscapeStep) is { } x ? s.Velocity.Normalized * x : null;
+            foreach (var v in EscapeVelocities(s.Position, FallingVInfinity(moonOrbit, parent.Mu, ut, targetR), mu))
+                if (aim.Solve(v - s.Velocity) is { } dv && (best is not { } b || dv.Length < b.Length)) best = dv;
+            return best is { } burn ? (burn.Length, aim, burn) : null;
         }
 
         var step = period / EscapePlaces;
@@ -394,9 +457,24 @@ public static class Hops
             step /= 4;
         }
 
-        var burnDv = best.Aim.At.Velocity.Normalized * best.Dv;
+        var burnDv = best.Aim.Polish(best.Burn);
         return Finish([new FlightBurn($"Leave {moon.Name} for {parent.Name}", bestUt, NodeBurn.From(best.Aim.At, burnDv))], best.Aim.ArrivalAfter(burnDv)!,
             parent, note);
+    }
+
+    /// <summary>
+    /// The excess velocity to leave a moon with so the path falls to <paramref name="periapsisR"/> from the planet's
+    /// centre, with an infinitely large sphere: the moon's distance r_a becomes the apoapsis of an ellipse down to the
+    /// periapsis, whose speed there is √(2μ·r_p / (r_a·(r_a + r_p))) along the moon's way round, so
+    /// v∞ = that − the moon's velocity (backwards along the moon's orbit, mostly). docs/MATH.md §3.7.
+    /// </summary>
+    private static Vector3d FallingVInfinity(OrbitalElements moonOrbit, double parentMu, double ut, double periapsisR)
+    {
+        var m = Kepler.StateAt(moonOrbit, parentMu, ut);
+        var ra = m.Position.Length;
+        var along = Vector3d.Cross(Vector3d.Cross(m.Position, m.Velocity), m.Position).Normalized;
+        var speed = Math.Sqrt(2 * parentMu * periapsisR / (ra * (ra + periapsisR)));
+        return along * speed - m.Velocity;
     }
 
     // ---------------- Across: between two bodies with the same parent ----------------
@@ -772,6 +850,61 @@ public static class Hops
                 previous = f;
             }
             return null;
+        }
+
+        /// <summary>The miss's change per m/s of burn along x, y and z (found by nudging); null where it can't be followed.</summary>
+        private Vector3d? Gradient(Vector3d dv, double miss)
+        {
+            const double nudge = 0.01;
+            double Part(Vector3d axis) => (Miss(dv + axis * nudge) - miss) / nudge;
+            var g = new Vector3d(Part(new Vector3d(1, 0, 0)), Part(new Vector3d(0, 1, 0)), Part(new Vector3d(0, 0, 1)));
+            return double.IsFinite(g.Length) && g.Length > 1e-9 ? g : null;
+        }
+
+        /// <summary>
+        /// A burn that arrives at the height, from <paramref name="seed"/>: one thing to hit with a burn of three parts, so
+        /// Newton's method takes the least-Δv step each time, Δv ← Δv − J·miss / |J|², halved until the miss shrinks.
+        /// Null when it can't get there.
+        /// </summary>
+        public Vector3d? Solve(Vector3d seed)
+        {
+            var dv = seed;
+            var miss = Miss(dv);
+            for (var iteration = 0; iteration < 30; iteration++)
+            {
+                if (!double.IsFinite(miss)) return null;
+                if (Math.Abs(miss) < SolvedM) return dv;
+                if (Gradient(dv, miss) is not { } j) return null;
+                var step = j * (-miss / Vector3d.Dot(j, j));
+                var moved = false;
+                for (var halving = 0; halving < 12 && !moved; halving++, step *= 0.5)
+                    if (Miss(dv + step) is var m && double.IsFinite(m) && Math.Abs(m) < Math.Abs(miss))
+                        (dv, miss, moved) = (dv + step, m, true);
+                if (!moved) return null;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The least Δv near <paramref name="dv"/> (which arrives at the height) that still arrives there: step against
+        /// the burn's own direction with the part that would change the arrival taken out, solve back onto the height,
+        /// and keep it if it's cheaper, growing the step on a success and halving it otherwise. This is where the real,
+        /// finite sphere of influence pays off: a burn placed so the craft leaves on the planet's side needs less.
+        /// </summary>
+        public Vector3d Polish(Vector3d dv)
+        {
+            var size = 5.0;
+            for (var i = 0; i < 60 && size > 0.01; i++)
+            {
+                var miss = Miss(dv);
+                if (!double.IsFinite(miss) || Gradient(dv, miss) is not { } j) break;
+                var jHat = j.Normalized;
+                var down = dv.Normalized - jHat * Vector3d.Dot(dv.Normalized, jHat);
+                if (down.Length < 1e-6) break;
+                if (Solve(dv - down.Normalized * size) is { } c && c.Length < dv.Length - 1e-3) (dv, size) = (c, size * 1.5);
+                else size *= 0.5;
+            }
+            return dv;
         }
 
         /// <summary>Halves [a, b] down to the root when f changes sign across it; null otherwise.</summary>

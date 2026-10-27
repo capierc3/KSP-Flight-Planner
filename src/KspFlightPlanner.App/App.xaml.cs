@@ -35,9 +35,10 @@ public partial class App : Application
             var stockBodies = bodies.GetSystems().FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
-            var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, new MissionRepository(database), settings, sync, bakes, flights);
+            var missions = new MissionRepository(database);
+            var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, missions, settings, sync, bakes, flights);
             var engineering = new EngineeringViewModel(designs, sync, availability, mission);
-            var flight = new FlightViewModel(flights, sync, events, rotation);
+            var flight = new FlightViewModel(flights, sync, events, rotation, missions);
             var logs = new FlightLogRepository(database);
             // The Rocket pane says how the picked design has flown: the flight log keeps rockets by their name at launch.
             mission.FlightHistory = name =>

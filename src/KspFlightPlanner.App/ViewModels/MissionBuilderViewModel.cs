@@ -869,6 +869,9 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         OpenMissionCommand = new RelayCommand<SavedMissionItem>(item => { if (ConfirmDiscard()) OpenMission(item.Mission); },
             item => item is not null && item.Mission.Id != MissionId);
         DeleteMissionCommand = new RelayCommand<SavedMissionItem>(DeleteMission, item => item is not null);
+        FlyMissionCommand = new RelayCommand(FlyMission, () => _flights is not null && _map is not null && Stops.Count > 1);
+        FlySavedMissionCommand = new RelayCommand<SavedMissionItem>(item => FlySavedMission(item.Mission.Id), item => item is not null && _flights is not null);
+        _events.FlyMissionRequested += FlySavedMission;
         InitAdding();
 
         if (_map is not null)
@@ -978,6 +981,53 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                                   "the burns are planned from its real orbit.",
         };
         _events.RequestOpenFlight(_flights.Add(flight));
+    }
+
+    public RelayCommand FlyMissionCommand { get; }
+    public RelayCommand<SavedMissionItem> FlySavedMissionCommand { get; }
+
+    /// <summary>Set by the window: tells the user something (why a mission can't be flown).</summary>
+    public Action<string>? Alert { get; set; }
+
+    /// <summary>
+    /// Hands the open mission to Fly mode as a flight: its stops as steps, each planned from the craft's real orbit when
+    /// it gets there and the rest from where the step before leaves it. The craft being flown flies it when it's at the
+    /// mission's start (on the pad, or in orbit there); otherwise it's planned from the start until one is picked.
+    /// </summary>
+    private void FlyMission()
+    {
+        if (_flights is null || _map is null) return;
+        try
+        {
+            var (start, steps) = MissionFlights.Steps(ToDefinition(), _map, _bodies, Location);
+            var craft = _sync?.ActiveCraft is { } active && _sync.WhereIs(active) is var (body, _, _) && (body is null || body == start.BodyName) ? active : null;
+            var flight = new Flight
+            {
+                Name = DisplayName,
+                Kind = FlightKind.Mission,
+                BodyName = start.BodyName,
+                Craft = craft,
+                MissionId = _missionId,
+                MissionStart = start,
+                Steps = steps,
+            };
+            _events.RequestOpenFlight(_flights.Add(flight));
+        }
+        catch (ArgumentException ex)
+        {
+            Alert?.Invoke($"Can't fly this mission: {ex.Message}");
+        }
+    }
+
+    /// <summary>Flies a saved mission: opens it first (offering to save the one open) unless it's the one open.</summary>
+    private void FlySavedMission(long id)
+    {
+        if (id != _missionId)
+        {
+            if (_missions?.Get(id) is not { } mission || !ConfirmDiscard()) return;
+            OpenMission(mission);
+        }
+        FlyMission();
     }
 
     /// <summary>Starts a landing at a spot: the save's first flag if there is one, else the first landmark, else 0°, 0°.</summary>

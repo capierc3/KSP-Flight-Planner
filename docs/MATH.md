@@ -15,7 +15,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget)
-- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous
+- **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Which save the game is playing; 8.13 Which vessel a logged flight is now; 8.14 Docking and undocking; 8.15 Flying a whole mission
 
 **Where to look for…**
 
@@ -33,6 +33,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Why a mission's legs show a given Δv: §6.1, §6.2
 - Whether your rocket is good enough: §7.3, §7.4
 - A vessel imported from your save, or the live game: §8.1, §8.2
+- Flying a whole mission, each step from where the last one left you: §8.5
 
 ## 1. Foundations
 
@@ -749,12 +750,19 @@ Worked example — Mun (R = 200 km, μ = 6.5138×10¹⁰), from a 100 km circula
 
 Minmus (6° tilt) from 80 km at 20 km: the first chance costs **1,049.9 m/s**, with 440 m/s of it normal. Waiting **6 days 1 hour** (Kerbin days) for Minmus to come near Kerbin's equatorial plane costs **921.0 m/s**, all prograde, which is the Hohmann figure from 80 km. That saves 129 m/s.
 
-**Coming back to the planet.** There's nothing to aim at, so there's no Lambert first guess. The best burn from a round orbit is prograde: it's where the speed you add counts most. Where you burn decides which way you leave the moon, and how hard decides how fast. So:
+**Coming back to the planet.** There's nothing to aim at, so there's no Lambert first guess. Where you burn decides which way you leave the moon, and how hard decides how fast. To fall to the planet you must leave the moon *backwards along its orbit*. From an orbit flat to the moon's path a prograde burn does that, at the right place. From a tilted orbit (a lander's polar orbit, say) no prograde burn points that way, so the burn has to be aimed in 3D. So:
 
-1. **Try 36 places round the orbit.** At each, search the prograde Δv upward from just under escape speed, √(2μ/r) − v, in 2 m/s steps. Follow the path out to the edge of the moon's sphere. There, add the moon's own position and velocity around the planet to get the path around the planet (§1.5). Then halve the step down to the Δv whose planet periapsis is at the asked height, going round the way the planet spins (the same signed periapsis as above). A badly placed burn throws you forward along the moon's orbit and never comes down, so that place is skipped.
-2. **Narrow down** around the place that needed the least Δv: 9 places across a quarter of the step each side, three times.
-3. **Capture** at the planet's periapsis as above. A height inside the planet's atmosphere plans no capture burn: the air does the braking (a reentry, or an aerobraking pass).
-4. **Already leaving** the moon's sphere? The first burn is a course correction, either along the path or sideways to it (sideways swings where you leave), whichever is cheaper.
+1. **Try 36 places round the orbit, two ways at each.** The cheaper wins.
+   - **Prograde.** Search the prograde Δv upward from just under escape speed, √(2μ/r) − v, in 2 m/s steps. Follow the path out to the edge of the moon's sphere. There, add the moon's own position and velocity around the planet to get the path around the planet (§1.5). Then halve the step down to the Δv whose planet periapsis is at the asked height, going round the way the planet spins (the same signed periapsis as above).
+   - **Aimed in 3D.** First the excess speed to leave with, as if the moon's sphere were infinite. The moon's distance r_a becomes the apoapsis of an ellipse down to r_p, whose speed there is v_a = √(2μ_planet·r_p / (r_a·(r_a + r_p))), along the moon's way round. So **v∞ = v_a·t̂ − v_moon**, with t̂ the moon's sideways direction, which points mostly backwards along its orbit. Then the velocity at the craft's position that leaves along v∞, from Lambert's problem with the far end sent to infinity along ŝ = v∞/|v∞|. With θ the angle swept from the position r̂ to ŝ (either way round) and k = √(μ/p):
+     **v = (μ / (k·r·sin θ))·ŝ + k·tan(θ/2)·r̂**, where k² solves the energy equation |v|² = v∞² + 2μ/r:
+     tan²(θ/2)·k⁴ + (2μ·cos θ / (r·(1 + cos θ)) − v∞² − 2μ/r)·k² + μ²/(r²·sin²θ) = 0.
+     That gives up to four answers. An answer only counts if the path *leaves* along ŝ. Some arrive from that direction instead: going out, a hyperbola heads along −sin ν∞·ê + (e − 1/e)·p̂, where cos ν∞ = −1/e, ê is along the eccentricity vector and p̂ = ĥ × ê. Each surviving Δv = v − v_craft is then solved onto the height with the real sphere of influence by Newton's method in 3D: Δv ← Δv − J·miss / |J|², with J the signed miss's change per m/s along x, y and z (found by nudging 0.01 m/s), halved until the miss shrinks, to within 10 m.
+2. **A path that doesn't come down doesn't count.** Leaving the moon's sphere heading outward, a hyperbola around the planet has already passed its periapsis: KSP would fly it out of the planet's sphere. The same goes for an ellipse whose apoapsis is outside the planet's sphere. Such a burn counts as no answer. (Before this rule, a hard enough burn from a tilted orbit "arrived" at a periapsis behind it, as soon as it left the moon's sphere.) A badly placed burn throws you forward along the moon's orbit and never comes down, so that place is skipped.
+3. **Narrow down** around the place that needed the least Δv: 9 places across a quarter of the step each side, three times.
+4. **Polish** the winner. Step against the burn's own direction with the part that would change the arrival taken out (d = Δv̂ − (Δv̂·Ĵ)·Ĵ), solve back onto the height, and keep it if it's cheaper. The step starts at 5 m/s, grows ×1.5 on a success and halves otherwise, down to 0.01 m/s. This is where the real, finite sphere pays off: the burn is placed so the craft leaves on the planet's side.
+5. **Capture** at the planet's periapsis as above. A height inside the planet's atmosphere plans no capture burn: the air does the braking (a reentry, or an aerobraking pass).
+6. **Already leaving** the moon's sphere? The first burn is a course correction, either along the path or sideways to it (sideways swings where you leave), whichever is cheaper. That includes a path that's leaving the planet altogether.
 
 Worked example — from a 30 km round equatorial orbit around the Mun, back to 80 km over Kerbin:
 
@@ -763,13 +771,20 @@ Worked example — from a 30 km round equatorial orbit around the Mun, back to 8
 3. Capture at 80 km: **−851.9 m/s**. Asking for 35 km instead (inside Kerbin's 70 km atmosphere) needs a 263.5 m/s burn, with no capture.
 4. Burn 5 m/s too hard, and the periapsis is at the surface. Half an hour later, an **8.6 m/s retrograde** correction puts it back at 80 km.
 
-From Minmus (20 km) to 80 km over Kerbin: **159.4 m/s**, which matches the Δv map's Minmus → Kerbin edge of 160 m/s.
+From Minmus (20 km) to 80 km over Kerbin: **158.7 m/s**, which matches the Δv map's Minmus → Kerbin edge of 160 m/s.
+
+Worked example — a tilted orbit round Minmus (R = 60 km, μ = 1.7658×10⁹): 11.2 km up, tilted 45° with its node at 45°, back to 150 km over Kerbin:
+
+1. v∞ estimate: Minmus is at r_a = 47,000 km, and r_p = 750 km. v_a = √(2·3.5316×10¹²·750,000 / (47,000,000·47,750,000)) = 48.6 m/s, against Minmus's 274 m/s, so |v∞| ≈ 225 m/s, backwards along its orbit. At r = 71.2 km, escape speed is √(2μ/r) = 222.7 m/s. On the hyperbola the speed is √(222.7² + 225²) = 316.6 m/s, against a round-orbit speed of 157.5 m/s.
+2. Prograde only, no prograde burn on this orbit points that way. Before the fix, the cheapest prograde root was an **829 m/s** burn that escaped Kerbin, "arriving" 36 minutes later at a 150 km periapsis it had already passed.
+3. Aimed in 3D, the burn is **208.0 m/s** (prograde 113.7, normal 173.3, radial 17.0). The craft leaves Minmus's sphere 2.6 hours later and reaches 150 km over Kerbin **58.6 hours** (9.8 Kerbin days) after the burn, where the capture is **−874.7 m/s**.
+4. Across tilts of 30–150° and every node, the burn is 157–287 m/s. The worst is a polar orbit side-on to Minmus's path.
 
 Moon to moon (Mun → Minmus) and planet to planet are hops *across*: §3.8.
 
 **Already on the way, and missing.** A path that crosses the moon's orbit and passes within five of its spheres (or a tenth of its distance), without entering, also counts as on the way: a correction is planned rather than a new transfer. The correction is tried now, a quarter of the way to the meeting and halfway (a plane fix is cheaper later), and the cheapest wins.
 
-- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
+- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`, `Hops.ComesDown`, `Hops.EscapeVelocities`, `Hops.FallingVInfinity`, `Aim.Solve`, `Aim.Polish`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
 - Source: Curtis 8.9–8.10 (patched conics and the sphere of influence); Curtis 5.3 (Lambert's problem); vis-viva (§1.3)
 
 ### 3.8 Trips anywhere: routes, launch windows and options
@@ -1865,6 +1880,40 @@ Worked example: the shuttle (launched Day 80) docks to *Kerb Station* on Day 81;
 
 - Code: `FlightDocking` (`Core/Ksp/FlightDocking.cs`), `FlightLogs.LaunchTimes`, `DockedIn`, `Away`, `EndedIn` (`Core/Ksp/FlightLog.cs`), `SavedVessel.DockedNames` (`KspSave.cs`), `FlightRecorder` (the checks); tested in `FlightDockingTests`
 - Sources: KSP's save format (`ModuleDockingNode` `state`, `DOCKEDVESSEL`); KSP forum notes on undocking names and MET ([undocking rules](https://forum.kerbalspaceprogram.com/profile/100668-claw/content/page/156), [station renamed to the docking craft](https://forum.kerbalspaceprogram.com/topic/190345-space-station-being-renamed-to-the-docking-craft), [vessel naming, 1.4](https://forum.kerbalspaceprogram.com/developerarticles.html/whats-in-a-vessel-name-r206))
+
+### 8.15 Flying a whole mission
+
+**Fly this mission** (Mission pane), **Fly** (Saved missions) or **Fly** in Fly mode's Flights pane turns a mission's stops into steps, flown in order:
+
+| From → to | Steps |
+|---|---|
+| A surface → anywhere else | **Launch** to the body's low orbit (or the stop's, if that's where it goes), at the stop's launch inclination (§2.7). Flown by hand: no burns |
+| An orbit → an orbit around another body | **Go to** the body (§3.8), arriving at the stop's height; through the leg's chosen launch window (§6.3) if it still lies ahead, else the next good one |
+| → a placed craft | **Go to** its body's low orbit if needed, then **Meet** it (§4.1) |
+| → another orbit around the same body | **Change orbit** (below), when the height, shape or a custom orbit's tilt differs from what the craft is in |
+| → a surface | **Go to** the body's low orbit, then **Land** at the stop's spot (§2.9). With no spot on a body with air, the trip aims straight into the atmosphere (periapsis at 0.43 × its height, as aerobraking in §3.8) and the landing has no burns. With no spot and no air, it's landed by hand |
+| A constellation at a stop | **Release** the satellites (§5.2) after getting there |
+| Anything else (an intercept, an escape orbit) | Flown by hand |
+
+**The cascade.** The step being flown is planned from the craft's real orbit (live from the game, §8.2), no burn sooner than the lead time. Every step after it is planned from where the step before leaves the craft, no burn sooner than 300 s after that step ends (`Rendezvous.BurnGapS`). Each step ends in an orbit: after a trip, the orbit its capture burn leaves (or its path, with no capture); after a meeting, the target's orbit; after a launch still to fly, a round orbit at the launch height and inclination, reached 600 s after lift-off. So a launch that reaches 75 km instead of 80 changes the trip after it, and the trip's new arrival changes the landing after that. A step that can't be planned (a landing at a spot without the body's rotation, §2.9) says why, and the steps after it wait for it.
+
+**Moving on.** The step being flown moves on by itself while connected, then everything from there is planned again: a launch once the craft is in an orbit clear of the atmosphere; a trip once it's in orbit around the destination (or on the ground there, or on its way down when a landing comes next); a landing once it's on the ground there; an orbit change once the orbit is within 2 km of the one asked for at both apsides (and 0.1° of its inclination), or 90 s after its last burn; a meeting or a release 90 s after its last burn. **Next step** and **Back a step** do it by hand; after Back a step, the step stays put until you move on.
+
+**Change orbit.** Two apsis burns (§2.1, §2.8): from the periapsis, move the far side to the new apoapsis; then from there, move the near side to the new periapsis. Going lower all round, the periapsis comes down first. A tilt to a custom orbit's inclination is flown at the equator (§2.3), where the craft is slowest: after going up, before coming down.
+
+Worked example: from a round 80 km Kerbin orbit to a round 250 km one at 10° (μ = 3.5316×10¹² m³/s², R = 600 km):
+
+1. r₁ = 680,000 m, r₂ = 850,000 m, transfer a = 765,000 m
+2. Raise the apoapsis: √(μ/r₁) = 2,278.9 m/s; √(μ(2/r₁ − 1/a)) = 2,402.2 m/s → **123.3 m/s**
+3. Raise the periapsis: √(μ(2/r₂ − 1/a)) = 1,921.8 m/s; √(μ/r₂) = 2,038.4 m/s → **116.6 m/s**
+4. Tilt 10° at 250 km: 2 × 2,038.4 × sin 5° = **355.3 m/s** (at 80 km it would be 397.2 m/s)
+
+595 m/s in all, against 637 m/s tilting first.
+
+The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craft is in that orbit the launch is done, and the Minmus trip is planned from it: transfer 924.5 m/s, capture 159.7 m/s into 10 km. The landing at the spot is planned from that capture orbit: deorbit 5.6 m/s, track 2.2 m/s, braking 190.2 m/s.
+
+- Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
+- Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
 
 ## Sources
 

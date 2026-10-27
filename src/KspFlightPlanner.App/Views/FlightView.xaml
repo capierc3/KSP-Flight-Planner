@@ -69,6 +69,68 @@
                 </ItemsControl>
             </StackPanel>
 
+            <!-- A mission: its steps, the one being flown, and the rest as planned from where it leaves the craft -->
+            <StackPanel Margin="0,10,0,0" Visibility="{Binding HasMission, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="◀ Back a step" Command="{Binding PreviousStepCommand}" Style="{StaticResource SmallButton}"
+                                ToolTip="Fly the step before again (it stays the step being flown until you move on)" />
+                        <Button Content="Next step ▶" Command="{Binding NextStepCommand}" Style="{StaticResource SmallButton}" Margin="6,0,0,0"
+                                ToolTip="Count this step as flown and plan the next one from where the craft is. Steps usually move on by themselves" />
+                    </StackPanel>
+                    <TextBlock Text="Steps" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="{Binding MissionTotalText}" Style="{StaticResource Note}" Margin="0,2,0,4" />
+                <ItemsControl ItemsSource="{Binding MissionSteps}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="6,3" CornerRadius="3" Margin="0,1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                <Setter Property="Background" Value="#22FFB300" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                <Setter Property="Opacity" Value="0.55" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding DeltaV}" Style="{StaticResource Value}" Margin="8,0,0,0" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Number, StringFormat='{}{0}.'}" Width="22" />
+                                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <Border Style="{StaticResource StateChip}" Background="#22808080"
+                                                    Visibility="{Binding HasState, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding StateText}" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding When}" Style="{StaticResource Note}" Margin="22,0,0,0"
+                                               Visibility="{Binding HasWhen, Converter={StaticResource BoolToVisibility}}" />
+                                    <TextBlock Text="{Binding Note}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="22,0,0,0"
+                                               Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
             <!-- Drift from the plan, and re-planning -->
             <DockPanel Margin="0,8,0,0">
                 <Button DockPanel.Dock="Right" Content="Re-plan from here" Command="{Binding ReplanCommand}" Padding="10,2"
