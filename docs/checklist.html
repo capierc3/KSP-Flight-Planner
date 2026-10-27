@@ -43,6 +43,7 @@
   section { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
             padding: 4px 18px 14px; margin: 14px 0; }
   h2 { font-size: 17px; margin: 12px 0 8px; display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+  h3, h4, h5, h6 { font-size: 15px; margin: 16px 0 6px; color: var(--accent); }
   h2 .count { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
   h2 .count.full { color: var(--ok); }
   section.collapsed > :not(h2) { display: none; }
@@ -290,6 +291,10 @@ function render() {
       container = sec;
       i++; continue;
     }
+
+    // ### and deeper: a sub-heading inside the current section
+    const sub = l.match(/^(#{3,6}) (.*)$/);
+    if (sub) { container.append(el("h" + sub[1].length, null, inline(sub[2]))); i++; continue; }
 
     if (isRule(l)) { main.append(el("hr")); container = main; i++; continue; }
 
