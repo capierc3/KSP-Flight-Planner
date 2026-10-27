@@ -32,6 +32,15 @@ public sealed record TripOption(string Label, IReadOnlyList<TripLeg> Legs)
 
     public double DeltaV => Burns.Sum(b => b.DeltaV);
 
+    /// <summary>Δv of each leg's first burn: the one that leaves (or the course correction when already on the way).</summary>
+    public double LeaveDv => Legs.Sum(l => l.Plan.Transfer?.DeltaV ?? 0);
+
+    /// <summary>Δv of the burns between leaving and arriving: aiming for an inclination or plane, mid-course corrections.</summary>
+    public double OnTheWayDv => Legs.Sum(l => l.Plan.Departure.Skip(1).Sum(b => b.DeltaV));
+
+    /// <summary>Δv of the captures at each body (none where the air does the braking).</summary>
+    public double CaptureDv => Legs.Sum(l => l.Plan.Capture?.DeltaV ?? 0);
+
     /// <summary>The first burn's time; NaN when there's nothing to burn.</summary>
     public double DepartureUt => Burns.Count > 0 ? Burns[0].Ut : double.NaN;
 

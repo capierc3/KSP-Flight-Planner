@@ -199,3 +199,17 @@ Notes:
       due-east launch and fix the plane in orbit
 
 Notes:
+
+## 5. Where a trip's Δv goes
+
+Fly mode's **Go to…** options now split each total: what it takes to leave, what's burned on the way (aiming for an
+inclination, corrections) and what the capture takes. docs/MATH.md §3.8.
+
+- [ ] From a round ~80 km Kerbin orbit, **Go to… Mun** (30 km): an option reads about
+      *"… · 1,114 m/s (853 to leave + 262 to capture)"*. The 853 should match KSP's own transfer burn.
+- [ ] With an inclination (e.g. 90°): a third part *"+ 35 on the way"* appears
+- [ ] Already on the way (planned again after the transfer burn): the first part reads *"to correct"*
+- [ ] The result line under the burns shows the same split
+- [ ] A trip that aerobrakes (e.g. to Duna, low enough): *"no capture burn"*
+
+Notes:

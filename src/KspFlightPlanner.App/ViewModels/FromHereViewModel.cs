@@ -532,7 +532,16 @@ public sealed class FromHereViewModel : ObservableObject
     {
         var leaves = double.IsNaN(option.DepartureUt) ? "on course" : option.DepartureUt - now < 3600 ? "leaves now" : "leaves in " + Duration(option.DepartureUt - now);
         var there = Duration(option.ArrivalUt - (double.IsNaN(option.DepartureUt) ? now : option.DepartureUt));
-        return $"{leaves} · {there} there · {Format.Speed0(option.DeltaV)}";
+        return $"{leaves} · {there} there · {Format.Speed0(option.DeltaV)} ({Split(option)})";
+    }
+
+    /// <summary>"853 to leave + 262 to capture", with "+ 35 on the way" when there are burns between.</summary>
+    private static string Split(TripOption option)
+    {
+        var parts = new List<string> { $"{option.LeaveDv:N0} {(option.IsCorrection ? "to correct" : "to leave")}" };
+        if (option.OnTheWayDv >= 0.5) parts.Add($"{option.OnTheWayDv:N0} on the way");
+        parts.Add(option.CaptureDv >= 0.5 ? $"{option.CaptureDv:N0} to capture" : "no capture burn");
+        return string.Join(" + ", parts);
     }
 
     /// <summary>Shows one way of making the planned trip: its burns, where it arrives, and anything to know.</summary>
@@ -544,7 +553,7 @@ public sealed class FromHereViewModel : ObservableObject
         var last = option.Legs[^1];
         var to = last.Hop.To;
         var stops = option.Legs.Take(option.Legs.Count - 1).Select(l => $"{l.Hop.To.Name} ({Km(l.AltitudeM)})").ToList();
-        ResultText = $"{Format.Speed0(option.DeltaV)} in all · " + (option.IsCorrection ? "corrected: " : "") +
+        ResultText = $"{Format.Speed0(option.DeltaV)} in all ({Split(option)}) · " + (option.IsCorrection ? "corrected: " : "") +
                      $"arrives {_calendar.FormatDate(option.ArrivalUt)}, {Km(option.Arrival.PeriapsisAltitudeM)} over {to.Name} " +
                      $"({option.Arrival.Path.InclinationDeg:0}° to its equator)" + (last.Plan.Capture is null ? " without a capture burn" : " and captures there") +
                      (stops.Count > 0 ? $" · stops in orbit around {string.Join(", then ", stops)} on the way" : "");

@@ -815,7 +815,7 @@ Moon to moon (Mun → Minmus) and planet to planet are hops *across*: §3.8.
 - the **fastest** flight among cells costing at most 1.25 × the cheapest;
 - the cheapest flight **leaving at the first chance**. It's left out when the cheapest window is already near (within 5 % of a synodic period).
 
-Each is planned in full. Then each is named for what it's best at, by its planned burns: *cheapest*, *arrives soonest*, *shortest flight* (time in space) or *leaves soonest*. One that's best at nothing is dropped. A trip down to a tilted moon (§3.7) offers its cheapest window and leaving at once in the same way.
+Each is planned in full. Then each is named for what it's best at, by its planned burns: *cheapest*, *arrives soonest*, *shortest flight* (time in space) or *leaves soonest*. One that's best at nothing is dropped. A trip down to a tilted moon (§3.7) offers its cheapest window and leaving at once in the same way. Each option shows its total split three ways, summed over the trip's legs: **to leave** (each leg's first burn, or its course correction when already on the way), **on the way** (aim and mid-course burns, §3.9) and **to capture** (none where the air brakes). From a round 80 km Kerbin orbit to a 30 km Mun orbit that's 1,114 m/s: **853 to leave + 262 to capture**. The total people quote for "a Mun transfer" (about 860) is only the first part.
 
 Worked example — Kerbin (100 km round equatorial orbit) to a 100 km orbit around Duna, from UT 1,000,120 s:
 
@@ -833,7 +833,7 @@ From the Mun (30 km) it's the Mun → Kerbin hop first: 260.8 m/s, and 851.9 m/s
 
 **Planned again on the way.** Once out of Kerbin's sphere the craft is around the Sun, and Go to Duna is a hop *down* (§3.7). It's on the way, so it's a correction. In the test, a 2 m/s overburn at Kerbin is fixed with **28.7 m/s**, a quarter of the way to Duna.
 
-- Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`), `TransferFlights.Plan`; the panes are `FromHereViewModel`, `TransferPlannerViewModel` (Fly this window) and `FlightViewModel` (Re-plan); tested in `TripPlannerTests`
+- Code: `TripPlanner.Route`, `TripPlanner.Options`, `TripPlanner.Windows`, `Hops.Across` (with `Eject`, `Level`, `DirectionAt`), `TransferFlights.Plan`, `TripOption.LeaveDv`/`OnTheWayDv`/`CaptureDv`; the panes are `FromHereViewModel`, `TransferPlannerViewModel` (Fly this window) and `FlightViewModel` (Re-plan); tested in `TripPlannerTests`
 - Source: Curtis 8.2–8.10 (patched conics, the sphere of influence, departure and arrival hyperbolas); Lambert's problem (§3.4)
 
 ### 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)

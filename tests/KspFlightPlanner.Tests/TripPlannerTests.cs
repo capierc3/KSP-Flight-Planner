@@ -47,6 +47,24 @@ public sealed class TripPlannerTests : IDisposable
     }
 
     [Fact]
+    public void A_trips_dv_splits_into_leaving_on_the_way_and_capturing()
+    {
+        var now = 1_000_000.0;
+        // From 80 km, flat: about 853 to leave and 262 to capture into a 30 km Mun orbit, nothing between.
+        var flat = TripPlanner.Options(Body("Kerbin"), Body("Mun"), Circular("Kerbin", 80_000), now + 120, 30_000, _bodies)[0];
+        Show(flat, now);
+        Assert.Equal(853, flat.LeaveDv, 5.0);
+        Assert.Equal(262, flat.CaptureDv, 5.0);
+        Assert.Equal(0, flat.OnTheWayDv);
+        Assert.Equal(flat.DeltaV, flat.LeaveDv + flat.OnTheWayDv + flat.CaptureDv, 6);
+
+        // Polar at the Mun: the aim burn is on the way.
+        var polar = TripPlanner.Options(Body("Kerbin"), Body("Mun"), Circular("Kerbin", 80_000), now + 120, 30_000, _bodies, inclinationDeg: 90)[0];
+        Assert.True(polar.OnTheWayDv > 10, $"{polar.OnTheWayDv:0}");
+        Assert.Equal(polar.DeltaV, polar.LeaveDv + polar.OnTheWayDv + polar.CaptureDv, 6);
+    }
+
+    [Fact]
     public void Routes_go_up_to_the_common_parent_across_and_down()
     {
         Assert.Equal("Down Kerbin → Mun", Route("Kerbin", "Mun"));
