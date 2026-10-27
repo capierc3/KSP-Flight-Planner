@@ -244,4 +244,70 @@ public sealed class HopsTests : IDisposable
         Assert.Equal(80_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
         Assert.InRange(plan.Transfer!.DeltaV, 100, 250);
     }
+
+    [Fact]
+    public void Escape_velocities_leave_along_the_asked_asymptote()
+    {
+        var mu = _minmus.Mu;
+        var position = new Vector3d(71_200, 0, 0);
+        var vInf = new Vector3d(-120, 150, 90);
+        var found = Hops.EscapeVelocities(position, vInf, mu).ToList();
+        Assert.NotEmpty(found);
+        foreach (var v in found)
+        {
+            var orbit = Kepler.ElementsFrom(new StateVector(position, v), mu, 0);
+            Assert.True(orbit.Eccentricity > 1);
+            Assert.Equal(vInf.Length * vInf.Length, v.Length * v.Length - 2 * mu / position.Length, 1e-6); // energy: v∞² = v² − 2μ/r
+            var far = Kepler.StateAt(orbit, mu, 1e8);
+            Assert.True(far.Position.Length > 1e9);
+            Assert.True(Vector3d.Dot(far.Velocity.Normalized, vInf.Normalized) > 0.9999);
+        }
+    }
+
+    /// <summary>A round orbit around Minmus at 11.2 km, tilted and turned, stated at UT 1,810,000.</summary>
+    private OrbitalElements MinmusOrbit(double inclinationDeg, double nodeDeg) =>
+        new(_minmus.EquatorialRadiusM + 11_200, 0, inclinationDeg, nodeDeg, 0, 0.3, 1_810_000);
+
+    [Fact]
+    public void A_path_flung_out_of_kerbins_sphere_is_not_an_arrival()
+    {
+        // This orbit used to get an 829 m/s burn that escaped Kerbin, "arriving" at a 150 km periapsis it had already
+        // passed 36 minutes after the burn.
+        var plan = Hops.Up(_minmus, _kerbin, MinmusOrbit(45, 45), 1_810_000, 150_000);
+        Show(plan);
+        Assert.True(Hops.ComesDown(plan.Arrival, _kerbin));
+        Assert.True(plan.Arrival.PeriapsisUt - plan.Transfer!.Ut > 86_400);
+        Assert.Equal(150_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
+        Assert.InRange(plan.Transfer.DeltaV, 150, 300);
+
+        // Flying the burn exactly leaves Minmus as planned, on a path that falls to Kerbin.
+        var flown = Rendezvous.OrbitAfter(plan.Transfer.Ut, plan.Transfer.Burn, MinmusOrbit(45, 45), _minmus.Mu);
+        var left = Hops.LeaveSoi(_minmus, _kerbin, flown, plan.Transfer.Ut, plan.Transfer.Ut + 10 * 86_400)!;
+        Assert.Equal(plan.Arrival.PeriapsisUt, left.PeriapsisUt, 5.0);
+        Assert.True(Hops.ComesDown(left, _kerbin));
+
+        // And the old burn's path is turned down: it's on its way out.
+        var outward = Kepler.ElementsFrom(new StateVector(new Vector3d(47_000_000, 0, 0), new Vector3d(900, 600, 0)), _kerbin.Mu, 0);
+        Assert.False(Hops.ComesDown(new SoiArrival(0, outward, 0, 150_000, true), _kerbin));
+    }
+
+    [Fact]
+    public void A_tilted_orbit_round_minmus_still_gets_the_cheap_way_home()
+    {
+        var worst = 0.0;
+        foreach (var inclination in new[] { 30.0, 60, 90, 120, 150 })
+        foreach (var node in new[] { 0.0, 45, 90, 135, 180, 225, 270, 315 })
+        {
+            var plan = Hops.Up(_minmus, _kerbin, MinmusOrbit(inclination, node), 1_810_000, 150_000);
+            var hours = (plan.Arrival.PeriapsisUt - plan.Transfer!.Ut) / 3_600;
+            _output.WriteLine($"{inclination,4}° node {node,4}°: leave {plan.Transfer.DeltaV:0} m/s (normal {plan.Transfer.Burn.Normal:0}), " +
+                              $"capture {plan.Capture!.DeltaV:0} m/s, {hours:0} h to Kerbin");
+            Assert.True(Hops.ComesDown(plan.Arrival, _kerbin));
+            Assert.Equal(150_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
+            Assert.True(hours > 24);
+            worst = Math.Max(worst, plan.Transfer.DeltaV);
+        }
+        _output.WriteLine($"worst {worst:0} m/s");
+        Assert.True(worst < 300);
+    }
 }
