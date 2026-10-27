@@ -85,6 +85,26 @@ public sealed class DockedCraftTests
         Assert.Equal("Kerbin Station - Fuel Tank", save.FindVessel("station#401")?.Name);
         Assert.Equal("Kerb Station", save.FindVessel("station")?.Name);
         Assert.Null(save.FindVessel("station#999"));
-        Assert.Null(save.FindVessel("gone#301"));
+        Assert.Null(save.FindVessel("gone#999"));
+        // Part uids are unique, so a piece id whose stack is gone still finds that craft wherever it's docked now.
+        Assert.Equal("Kerb Shuttle mk1", save.FindVessel("gone#301")?.Name);
+    }
+
+    [Fact]
+    public void A_craft_planned_for_while_docked_is_still_found_after_it_undocks()
+    {
+        // After undocking KSP makes the shuttle its own vessel with a new id, rooted at the same pod (uid 301).
+        var undocked = string.Join("\n",
+            "GAME", "{", "Title = Test", "Mode = SANDBOX", "FLIGHTSTATE", "{", "UT = 2000",
+            "VESSEL", "{", "pid = station", "name = Kerb Station", "type = Station", "sit = ORBITING", "root = 0",
+            Part("cupola", "100", 0, Command), Part("dockingPort2", "102", 0, Port("Ready", "0")),
+            "}",
+            "VESSEL", "{", "pid = shuttle2", "name = Kerb Shuttle mk1", "type = Ship", "sit = ORBITING", "root = 1",
+            Part("dockingPort2", "300", 1, Port("Ready", "0")), Part("mk1-3pod", "301", 0, Command), Part("LiquidEngineRK-7", "302", 1, Engine),
+            "}",
+            "}", "}", "");
+        var save = KspSaveReader.Parse(undocked);
+        Assert.Equal("shuttle2", save.FindVessel("station#301")?.Id);
+        Assert.Null(save.FindVessel("station#201")); // the electrical module isn't in this save
     }
 }

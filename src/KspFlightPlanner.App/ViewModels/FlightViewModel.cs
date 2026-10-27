@@ -883,9 +883,9 @@ public sealed class FlightViewModel : ObservableObject
             var questions = new List<string>();
             if (f.Craft is null)
                 questions.Add($"This flight has no craft yet, so its burns may not fit {vessel}'s orbit. \"Use the craft I'm flying\" plans it from {vessel}.");
-            else if (burns.All(b => b.ByReleasedCraft) && active == f.Craft)
+            else if (burns.All(b => b.ByReleasedCraft) && _sync.IsSameCraft(active, f.Craft))
                 questions.Add($"This burn is for a released satellite, but you're flying the carrier, {vessel}.");
-            else if (burns.Any(b => !b.ByReleasedCraft) && active != f.Craft)
+            else if (burns.Any(b => !b.ByReleasedCraft) && !_sync.IsSameCraft(active, f.Craft))
                 questions.Add($"You're flying {vessel}, but this flight is flown by {f.Craft.Name}.");
             if (burns.Any(b => !b.ByReleasedCraft) && active is not null && _sync.OrbitOf(active)?.BodyName is { } there && there != f.BodyName)
                 questions.Add($"{vessel} is around {there}, but these burns are for {f.BodyName}'s orbit." +

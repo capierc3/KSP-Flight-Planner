@@ -105,12 +105,22 @@ public static class DockedCraft
         }
     }
 
-    /// <summary>A vessel by save id, or a piece of a docked stack by its <see cref="PieceId"/> (whatever it counts as). Null if gone.</summary>
+    /// <summary>
+    /// A vessel by save id, or a piece of a docked stack by its <see cref="PieceId"/> (whatever it counts as). A piece that
+    /// has since undocked is found as its own vessel (KSP keeps its root part, so the part's uid carries over), and one
+    /// docked somewhere else as a piece of that stack. Null if gone.
+    /// </summary>
     public static SavedVessel? FindVessel(this KspSave save, string id)
     {
         if (save.Vessels.FirstOrDefault(v => v.Id == id) is { } vessel) return vessel;
         var hash = id.IndexOf('#');
-        if (hash <= 0 || save.Vessels.FirstOrDefault(v => v.Id == id[..hash]) is not { } stack) return null;
-        return Pieces(stack).FirstOrDefault(p => p.Craft.Id == id)?.Craft;
+        if (hash <= 0) return null;
+        if (save.Vessels.FirstOrDefault(v => v.Id == id[..hash]) is { } stack && Pieces(stack).FirstOrDefault(p => p.Craft.Id == id) is { } piece)
+            return piece.Craft;
+        var rootUid = id[(hash + 1)..];
+        if (save.Vessels.FirstOrDefault(v => v.RootIndex < v.Parts.Count && v.Parts[v.RootIndex].Uid == rootUid) is { } undocked)
+            return undocked;
+        return save.Vessels.Where(v => v.Parts.Any(p => p.DockingPorts.Any(d => d.IsDocked)))
+            .SelectMany(Pieces).FirstOrDefault(p => p.Craft.Id.EndsWith("#" + rootUid, StringComparison.Ordinal))?.Craft;
     }
 }

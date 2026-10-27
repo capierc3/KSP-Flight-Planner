@@ -137,7 +137,8 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         {
             if (_link.Game?.Active is not { } active) return null;
             var id = SaveIdOf(active);
-            if (id is not null && _flyAsId is { } pick && pick.StartsWith(id + "#", StringComparison.Ordinal) && FindVessel(pick) is { } piece)
+            if (id is not null && _flyAsId is { } pick && pick.StartsWith(id + "#", StringComparison.Ordinal)
+                && FindVessel(pick) is { DockedInId: var dockedIn } piece && dockedIn == id)
                 return new FlightCraft(piece.Name, piece.Id);
             return new FlightCraft(active.Name, id);
         }
@@ -176,7 +177,8 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     public SavedOrbit? PathOf(FlightCraft craft)
     {
         SavedOrbit? orbit = null;
-        if (craft.SaveVesselId is { } id) orbit = FindVessel(id)?.Orbit;
+        if (UndockedLive(craft) is { } undocked) orbit = undocked.Orbit;
+        else if (craft.SaveVesselId is { } id) orbit = FindVessel(id)?.Orbit;
         else if (_link.Game?.Vessels is { } vessels) orbit = vessels.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true)?.Orbit;
         return orbit is { IsPath: true } ? orbit : null;
     }
@@ -188,11 +190,37 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     public (string? Body, SavedOrbit? Path, bool Landed)? WhereIs(FlightCraft craft)
     {
         (string Situation, SavedOrbit? Orbit)? found = null;
-        if (craft.SaveVesselId is { } id && FindVessel(id) is { } saved) found = (saved.Situation, saved.Orbit);
+        if (UndockedLive(craft) is { } undocked) found = (undocked.Situation, undocked.Orbit);
+        else if (craft.SaveVesselId is { } id && FindVessel(id) is { } saved) found = (saved.Situation, saved.Orbit);
         else if (_link.Game?.Vessels?.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true) is { } live) found = (live.Situation, live.Orbit);
         if (found is not var (situation, orbit)) return null;
         var landed = situation is "LANDED" or "SPLASHED" or "PRELAUNCH";
         return (orbit?.BodyName, landed || orbit is not { IsPath: true } ? null : orbit, landed);
+    }
+
+    /// <summary>
+    /// A craft planned for while docked (its id is a <see cref="DockedCraft.PieceId"/>) that has undocked since KSP last
+    /// saved: the live vessel of that name that isn't in the save yet. Null otherwise.
+    /// </summary>
+    private LiveVessel? UndockedLive(FlightCraft craft)
+    {
+        if (craft.SaveVesselId is not { } id || !id.Contains('#') || _link.Game?.Vessels is not { } vessels) return null;
+        var matches = vessels.Where(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true).Take(2).ToList();
+        return matches is [var only] ? only : null;
+    }
+
+    /// <summary>
+    /// Whether two craft are the same ship: the same save vessel (a docked craft that has undocked since is still itself),
+    /// or the same name where one of them isn't in the save yet or can't be found in it.
+    /// </summary>
+    public bool IsSameCraft(FlightCraft? a, FlightCraft? b)
+    {
+        if (a is null || b is null) return a is null && b is null;
+        if (a == b) return true;
+        var foundA = a.SaveVesselId is { } idA ? FindVessel(idA) : null;
+        var foundB = b.SaveVesselId is { } idB ? FindVessel(idB) : null;
+        if (foundA is not null && foundB is not null) return foundA.Id == foundB.Id || (a.Name == b.Name && (UndockedLive(a) ?? UndockedLive(b)) is not null);
+        return a.Name == b.Name;
     }
 
     /// <summary>The save vessel a live vessel was matched to, or null when it's not in the save.</summary>

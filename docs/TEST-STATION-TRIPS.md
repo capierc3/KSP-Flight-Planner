@@ -150,6 +150,9 @@ Notes:
       then **Ways to meet it** with the options, and the trip + meeting burns. The result line splits trip and meeting.
 - [ ] **Send** the first burn (the transfer), undock, fly it. Then in the Flight pane **Re-plan from here** while still
       around Kerbin: it re-plans the trip from the real path (a course correction).
+- [ ] After undocking (before and after KSP saves again), **Send** another burn: no "you're flying X, but this
+      flight is flown by Y" warning, and the Flight pane still shows the shuttle's orbit, not the station's
+- [ ] Switch to the station after undocking: **Plan for** no longer offers the shuttle, and the planner plans for the station
 - [ ] Once captured around the Mun, Re-plan: plans the meeting from the real orbit
 - [ ] Compare the actual Δv used with the plan (KSP's Δv readout or the flight log)
 
