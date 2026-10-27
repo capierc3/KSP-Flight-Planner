@@ -134,7 +134,29 @@ public sealed record LaunchSite(string Name, string BodyName, double LatitudeDeg
 /// How the rocket gets to orbit: the circular parking orbit, how long after lift-off you're in it, and how far around
 /// the planet (from the pad) that is. Tune the last two to your own ascents.
 /// </summary>
-public sealed record AscentProfile(double ParkingAltitudeM, double AscentTimeS = 360, double DownrangeDeg = 30);
+public sealed record AscentProfile(double ParkingAltitudeM, double AscentTimeS = 360, double DownrangeDeg = 30)
+{
+    /// <summary>The average speed gained per second of a climb to orbit, from a typical Kerbin ascent (2,279 m/s in 6 minutes).</summary>
+    public const double ClimbAccel = 6.33;
+
+    /// <summary>The average ground speed over a climb, as a share of the orbital speed (Kerbin: 30° of 600 km in 6 minutes).</summary>
+    public const double DownrangeShare = 0.38;
+
+    /// <summary>
+    /// A starting point for a climb from <paramref name="body"/>'s surface, to tune to your own: Kerbin's usual 80 km in 6
+    /// minutes, 30° downrange; elsewhere the body's safe parking height, reached in v / <see cref="ClimbAccel"/> (2 to 15
+    /// minutes), <see cref="DownrangeShare"/> of the orbital speed over that time downrange. docs/MATH.md §4.5.
+    /// </summary>
+    public static AscentProfile Typical(CelestialBody body)
+    {
+        if (body.Name == LaunchSite.Ksc.BodyName) return new AscentProfile(80_000);
+        var h = body.DefaultParkingAltitudeM;
+        var r = body.EquatorialRadiusM + h;
+        var v = Math.Sqrt(body.Mu / r);
+        var t = Math.Clamp(v / ClimbAccel, 120, 900);
+        return new AscentProfile(h, t, DownrangeShare * v * t / r * 180 / Math.PI);
+    }
+}
 
 public enum LaunchKind
 {

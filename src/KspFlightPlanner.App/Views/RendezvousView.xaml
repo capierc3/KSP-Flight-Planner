@@ -95,7 +95,7 @@
                             Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Calculators}"
                             ToolTip="Edit the start, targets and timing in the Calculators pane" />
                     <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
-                        <TextBlock Text="Launch from the KSC" FontWeight="SemiBold" Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding LaunchTitle}" FontWeight="SemiBold" Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Visibility="{Binding StartFromCraft, Converter={StaticResource BoolToVisibility}}">
                             <Run Text="From " /><Run Text="{Binding SelectedChaser.Title, Mode=OneWay, TargetNullValue='a craft in orbit'}" />
                         </TextBlock>

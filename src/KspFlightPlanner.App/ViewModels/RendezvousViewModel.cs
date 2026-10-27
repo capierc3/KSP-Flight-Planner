@@ -93,6 +93,16 @@ public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpa
 }
 
 /// <summary>
+/// A place to launch from: the KSC, or a landed craft, flag or waypoint on any body (a lander on the Mun lifting off to
+/// meet Mun Station). <paramref name="Key"/> stays the same while the save does.
+/// </summary>
+public sealed record LaunchSpot(string Key, string Name, string Source, CelestialBody Body, double LatitudeDeg, double LongitudeDeg)
+{
+    public string Text => Source.Length == 0 ? $"{Body.Name} — {Name}" : $"{Body.Name} — {Name} ({Source.ToLowerInvariant()})";
+    public override string ToString() => Text;
+}
+
+/// <summary>
 /// The Rendezvous pane: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
 /// KSC or from a craft already in orbit. Burns are shown as exact maneuver-node values or as instructions to fly by feel.
 /// </summary>
@@ -107,10 +117,30 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private readonly SurfaceBakeRepository? _surfaceBakes;
 
-    /// <summary>KSC, with its planet's rotation at UT 0 from the surface bake when there is one (else the assumed 90°).</summary>
-    private LaunchSite Site => _surfaceBakes?.Get(LaunchSite.Ksc.BodyName) is { } bake
-        ? LaunchSite.Ksc with { BodyInitialRotationDeg = bake.InitialRotationDeg }
-        : LaunchSite.Ksc;
+    private readonly BodyRotation? _rotation;
+    private readonly Dictionary<string, double> _rotationDeg = []; // asked of the live game, by body
+    private LaunchSpot? _selectedSpot;
+
+    /// <summary>
+    /// Where the launch lifts off, with its body's rotation at UT 0: from the surface bake, else asked of the live game,
+    /// else (Kerbin only) the stock 90°. Null when that rotation isn't known yet.
+    /// </summary>
+    private LaunchSite? Site
+    {
+        get
+        {
+            var spot = SelectedSpot;
+            if (spot is null) return null;
+            double? theta = _surfaceBakes?.Get(spot.Body.Name) is { } bake ? bake.InitialRotationDeg
+                : _rotationDeg.TryGetValue(spot.Body.Name, out var asked) ? asked
+                : spot.Body.Name == LaunchSite.Ksc.BodyName ? LaunchSite.Ksc.BodyInitialRotationDeg
+                : null;
+            return theta is { } t ? new LaunchSite(spot.Name, spot.Body.Name, spot.LatitudeDeg, spot.LongitudeDeg, t) : null;
+        }
+    }
+
+    /// <summary>The body the launch is from (Kerbin until another spot is picked).</summary>
+    private string LaunchBody => SelectedSpot?.Body.Name ?? LaunchSite.Ksc.BodyName;
 
     private bool _startFromLaunch = true;
     private CraftChoice? _selectedChaser;
@@ -156,9 +186,10 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private readonly Dictionary<string, CustomLocation> _craftLocations = [];
 
     public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
-        FlightRepository? flights = null, DvMapRepository? maps = null, SurfaceBakeRepository? bakes = null)
+        FlightRepository? flights = null, DvMapRepository? maps = null, SurfaceBakeRepository? bakes = null, BodyRotation? rotation = null)
     {
         _surfaceBakes = bakes;
+        _rotation = rotation;
         _sync = sync;
         _maps = maps;
         _locations = locations;
@@ -167,7 +198,11 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         _events = events;
         sync.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SaveSync.Save)) RebuildCrafts();
+            if (e.PropertyName == nameof(SaveSync.Save))
+            {
+                RebuildSpots();
+                RebuildCrafts();
+            }
         };
         sync.Parts.PropertyChanged += (_, e) =>
         {
@@ -186,6 +221,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             _map = null;
             RebuildCrafts();
         };
+        RebuildSpots();
         if (designs is not null) designs.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DesignLibrary.Entries)) RefreshDesignChoices();
@@ -485,6 +521,77 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         set => SetProperty(ref _targetToAdd, value);
     }
 
+    /// <summary>Where a launch can lift off: the KSC, then landed craft, flags and KerbNet waypoints on every body.</summary>
+    public ObservableCollection<LaunchSpot> LaunchSpots { get; } = [];
+
+    public LaunchSpot? SelectedSpot
+    {
+        get => _selectedSpot ?? LaunchSpots.FirstOrDefault();
+        set
+        {
+            if (value is null || value == SelectedSpot) return;
+            var bodyChanged = value.Body.Name != LaunchBody;
+            _selectedSpot = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LaunchTitle));
+            if (bodyChanged)
+            {
+                // A climb from another body: its own parking orbit and a climb to match (a starting point to tune).
+                var ascent = AscentProfile.Typical(value.Body);
+                _parkingAltitudeText = Km(ascent.ParkingAltitudeM);
+                _ascentMinutesText = $"{ascent.AscentTimeS / 60:0.#}";
+                _downrangeText = $"{ascent.DownrangeDeg:0}";
+                foreach (var name in new[] { nameof(ParkingAltitudeText), nameof(AscentMinutesText), nameof(DownrangeText) }) OnPropertyChanged(name);
+                _ = AskRotationAsync(value.Body);
+            }
+            StartChanged();
+        }
+    }
+
+    /// <summary>"Launch from Kerbal Space Center", "Launch from Mun Lander".</summary>
+    public string LaunchTitle => $"Launch from {SelectedSpot?.Name ?? LaunchSite.Ksc.Name}";
+
+    /// <summary>Asks the live game (or the bake) for a body's rotation, then plans again with it.</summary>
+    private async Task AskRotationAsync(CelestialBody body)
+    {
+        if (_rotation is null || _surfaceBakes?.Get(body.Name) is not null || _rotationDeg.ContainsKey(body.Name)) return;
+        if (await _rotation.InitialRotationDegAsync(body) is not { } deg) return;
+        _rotationDeg[body.Name] = deg;
+        if (StartFromLaunch && LaunchBody == body.Name) InputsChanged();
+    }
+
+    /// <summary>The KSC first, then every landed craft, flag and waypoint in the save; keeps the pick when it's still there.</summary>
+    private void RebuildSpots()
+    {
+        var bodies = _sync.StockBodies();
+        var keep = _selectedSpot?.Key;
+        var list = new List<LaunchSpot>();
+        if (bodies.TryGetValue(LaunchSite.Ksc.BodyName, out var kerbin))
+            list.Add(new LaunchSpot("ksc", LaunchSite.Ksc.Name, "", kerbin, LaunchSite.Ksc.LatitudeDeg, LaunchSite.Ksc.LongitudeDeg));
+        foreach (var body in bodies.Values.Where(b => b.ParentId is not null && b.RotationPeriodS != 0)
+                     .OrderBy(b => Array.IndexOf(SavedOrbit.StockBodyOrder, b.Name) is var i and >= 0 ? i : int.MaxValue))
+        {
+            // Landed craft that can fly (not debris, surface experiments or kerbals on EVA), then flags and waypoints.
+            foreach (var v in (_sync.Save?.Vessels ?? []).Where(v => v.Situation is "LANDED" or "SPLASHED" && v.Orbit?.BodyName == body.Name
+                             && SaveImport.IsUsuallyWanted(v) && v.Type is not ("Flag" or "EVA")
+                             && double.IsFinite(v.LatitudeDeg) && double.IsFinite(v.LongitudeDeg)).OrderBy(v => v.Name))
+                list.Add(new LaunchSpot($"vessel:{v.Id}", v.Name, "Landed craft", body, v.LatitudeDeg, v.LongitudeDeg));
+            foreach (var t in Landing.Targets(body, _sync.Save).Where(t => t.Source is "Flag" or "KerbNet waypoint")
+                         .OrderBy(t => t.Source == "Flag" ? 0 : 1).ThenBy(t => t.Name))
+                list.Add(new LaunchSpot($"{body.Name}|{t.Source}|{t.Name}|{t.LatitudeDeg:0.####}|{t.LongitudeDeg:0.####}", t.Name, t.Source, body,
+                    t.LatitudeDeg, t.LongitudeDeg));
+        }
+        if (list.Select(l => l.Key).SequenceEqual(LaunchSpots.Select(l => l.Key))) return;
+        var suspend = _suspend;
+        _suspend = true;
+        LaunchSpots.Clear();
+        foreach (var spot in list) LaunchSpots.Add(spot);
+        _selectedSpot = list.FirstOrDefault(l => l.Key == keep) ?? (keep is null ? null : _selectedSpot);
+        _suspend = suspend;
+        OnPropertyChanged(nameof(SelectedSpot));
+        OnPropertyChanged(nameof(LaunchTitle));
+    }
+
     public string ParkingAltitudeText
     {
         get => _parkingAltitudeText;
@@ -589,6 +696,14 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     /// <summary>Plan from the craft being flown in KSP.</summary>
     private void UseActiveVessel()
     {
+        // On the ground: launch from where it stands.
+        if (_sync.ActiveCraft is { } active && _sync.WhereIs(active) is (_, _, true)
+            && LaunchSpots.FirstOrDefault(s => s.Source == "Landed craft" && s.Name == active.Name) is { } spot)
+        {
+            SelectedSpot = spot;
+            SetStart(mission: false, launch: true);
+            return;
+        }
         if (CraftFor(ActiveKey) is not { } craft) return;
         _suspend = true;
         _selectedChaser = craft;
@@ -956,7 +1071,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     /// the first target's (the mission flies there first); null until there is one.
     /// </summary>
     private string? RouteBody => _startFromMission ? Targets.FirstOrDefault()?.Body.Name
-        : StartFromLaunch ? Site.BodyName : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
+        : StartFromLaunch ? LaunchBody : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
 
     /// <summary>The Δv map's way from a craft around <paramref name="from"/> to a rendezvous around <paramref name="to"/>.</summary>
     private RendezvousApproach? Approach(string from, string to) =>
@@ -1158,7 +1273,13 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         if (!TryNumber(ParkingAltitudeText, out var parkingKm) || parkingKm <= 0) { error = "Enter the parking orbit altitude in km."; return null; }
         if (!TryNumber(AscentMinutesText, out var ascentMin) || ascentMin < 0) { error = "Enter how many minutes the climb to orbit takes."; return null; }
         if (!TryNumber(DownrangeText, out var downrange)) { error = "Enter how far around the planet you reach orbit, in degrees."; return null; }
-        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: Site,
+        if (Site is not { } site)
+        {
+            _ = AskRotationAsync(body);
+            error = $"Launching from {body.Name} needs its rotation: connect to KSP (or bake {body.Name} with KSP › Bake Surface Data) and it plans at once.";
+            return null;
+        }
+        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: site,
             Ascent: new AscentProfile(parkingKm * 1000, ascentMin * 60, downrange), DeorbitPeriapsisAltitudeM: deorbit);
     }
 
@@ -1302,7 +1423,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             new("Parking orbit", $"{alt} km circular, inclination {o.ParkingOrbit.InclinationDeg:0.##}°"),
             new("In orbit by", _calendar.FormatDate(o.InsertionUt)),
         };
-        return new StepRow($"{number}", $"Launch from {Site.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
+        return new StepRow($"{number}", $"Launch from {request.Site!.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
             request.Body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Format.Speed0(dv)}" : "", feel, exact);
     }
 

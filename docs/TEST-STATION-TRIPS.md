@@ -162,3 +162,40 @@ Notes:
 - [ ] Any burn that looks wrong in KSP's map view (e.g. the aim burn sending the path somewhere odd)
 
 Notes:
+
+## 4. Launching from the ground to meet a craft (KSC or any body)
+
+Rendezvous' **Launch from the ground** lifts off from the KSC, or from a landed craft, flag or KerbNet waypoint on any
+body, straight into the target's plane when it can. The climb's defaults follow the body (Kerbin 80 km / 6 min / 30°;
+the Mun 10 km / 2 min / 7°): tune them to your own ascents. A body other than Kerbin needs its rotation, from a surface
+bake or the live game. docs/MATH.md §4.5.
+
+### KSC to Kerb Station
+
+- [ ] Tools › Rendezvous › Change… › **Launch from the ground** › From: **Kerbin — Kerbal Space Center**, target **Kerb Station**
+- [ ] Lift-off times with headings, the first step "Launch from Kerbal Space Center", then the meeting
+- [ ] Fly it: at the planned lift-off, Kerb Station's AN or DN marker should be over the KSC. Climb at the heading, and
+      note how far off the parking orbit's tilt and the meeting's Δv come out
+
+Notes:
+
+### A lander on the Mun to Mun Station
+
+- [ ] Land a craft on the Mun (or use one there) and let KSP save. It's listed under From as *Mun — … (landed craft)*.
+      Debris and surface experiments aren't.
+- [ ] Connected to KSP (or with the Mun baked): pick it and add **Mun Station**. The targets list only shows Mun craft
+      now. Parking 10 km, climb 2 min, downrange 7° are filled in.
+- [ ] Not connected and not baked: the pane says it needs the Mun's rotation. Connect: it plans at once.
+- [ ] Flying the lander: **Use the craft I'm flying** picks its spot and the launch start
+- [ ] Fly it: lift off at the planned time and heading, note the parking orbit's tilt against the station's, and the
+      meeting's Δv against the plan's. Adjust Climb / Downrange to your ascent and plan again.
+
+Notes:
+
+### Things to watch for
+
+- [ ] Picking a spot on another body drops targets around the old one (expected); note anything else that resets
+- [ ] A spot far from the equator (e.g. a flag at 30°) to a near-equatorial station: the plan should fall back to the
+      due-east launch and fix the plane in orbit
+
+Notes:

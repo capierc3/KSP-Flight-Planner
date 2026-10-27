@@ -1003,7 +1003,21 @@ You arrive in the parking orbit at the climb time you enter, at the downrange an
 
 Worked example — KSC at UT 0: λ = −74.5575° + 90° = **15.4425°**; a quarter of a sidereal day (21,549.4 s) later, **105.4425°**. Target at i = 45° from an 80 km parking orbit: v_orbit = 2,278.93 m/s, v_spin = 174.94 m/s, β = 45° → heading = atan2(1,611.47 − 174.94, 1,611.47) = **41.7°**.
 
-- Code: `LaunchSite.InertialLongitudeDeg`, `Rendezvous.LaunchOptions`; tested in `RendezvousTests`
+**Launching from anywhere.** The same works from any body with a surface: a lander on the Mun lifting off to meet Mun Station. The Rendezvous pane's *Launch from the ground* lists the KSC, then every landed craft, flag and KerbNet waypoint in the save, on any body; *Use the craft I'm flying* on a landed craft picks where it stands. The targets must orbit that body. Its starting rotation comes from its surface bake, else the live game (kRPC, asked once), and only Kerbin has a stock value to fall back on. The spot's latitude enters the azimuth as above. A spot far from the equator can't reach a target tilted less than its latitude straight off the ground; the due-east launch then fixes the plane in orbit.
+
+The climb's defaults follow the body, as a starting point to tune:
+
+```
+Kerbin:     80 km, 6 minutes, 30° downrange (a typical ascent)
+elsewhere:  h = the body's safe parking height (10 km above the atmosphere, or 2 km above its highest peak)
+            v = √(μ / (R + h))
+            t = clamp(v / 6.33 m/s², 2 min, 15 min)          6.33: Kerbin's 2,279 m/s gained in 6 minutes
+            downrange = 0.38 · v · t / (R + h)                 0.38: Kerbin's 314 km over the ground in 6 minutes, as a share of v
+```
+
+Worked example (`LaunchFromAnywhereTests`): the Mun (μ = 6.5138×10¹⁰, R = 200 km, peaks 7.06 km) gives h = **10 km**, v = 557 m/s, t = max(88 s, 120 s) = **2 minutes** and downrange 0.38 × 557 × 120 / 210,000 = 0.121 rad = **6.9°**. From a lander at 3.2° N to a station at 53 km tilted 3°, the cheapest is the northbound pass 9.7 h ahead, heading 87.0°, into a 3.0° parking orbit; meeting it from there is a 25.3 m/s transfer and a 24.1 m/s match, **49 m/s**.
+
+- Code: `LaunchSite.InertialLongitudeDeg`, `Rendezvous.LaunchOptions`, `AscentProfile.Typical`; `RendezvousViewModel.LaunchSpots`/`SelectedSpot`; tested in `RendezvousTests` and `LaunchFromAnywhereTests`
 - Source: launch azimuth from spherical trigonometry, sin β = cos i / cos φ ([Braeunig, Orbital Mechanics](http://www.braeunig.us/space/orbmech.htm)); KSP's body `initialRotation` (Kerbin 90°) and `rotationAngle` = initial rotation + 360°·UT / rotation period, the same convention kOS exposes as `BODY:ROTATIONANGLE`. Check it in game the first time: at the planned lift-off, the target's AN or DN marker should be right over the KSC
 
 ### 4.6 Starting from a craft around another body
