@@ -233,7 +233,7 @@ public sealed partial class MissionBuilderViewModel
     }
 
     private DesignChoice SelectDesign(string? path) =>
-        DesignChoices.FirstOrDefault(c => c.Design is not null && c.Path == path) ?? DesignChoices[0];
+        DesignChoices.FirstOrDefault(c => !c.IsNone && c.Path == path) ?? DesignChoices[0];
 
     private void RefreshSavedMissions()
     {

@@ -8,7 +8,7 @@ namespace KspFlightPlanner.Tests;
 public sealed class VesselAnalysisTests : IDisposable
 {
     // Trimmed from a real ModuleManager.ConfigCache (stock parts as KSP 1.12.5 loads them).
-    private const string Cache = """
+    internal const string Cache = """
         patchedNodeCount = 3
         UrlConfig
         {

@@ -14,7 +14,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
-- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget)
+- **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Which save the game is playing; 8.13 Which vessel a logged flight is now; 8.14 Docking and undocking; 8.15 Flying a whole mission; 8.16 Telling docked craft apart
 
 **Where to look for…**
@@ -1516,6 +1516,27 @@ Panels are assumed to face the Sun. Fixed panels (OX-STAT) only do that when the
 
 - Code: `PowerBudget` (`Work`, `InOrbit`, `OnSurface`, `SolarScale`, `EngineEcPerSecond`), `PartCatalogReader` (`PartPower`); tested in `PowerBudgetTests`
 - Source: KSP 1.12 part modules (`ModuleDeployableSolarPanel`, `ModuleGenerator`, `ModuleResourceConverter`, `ModuleCommand`, `ModuleReactionWheel`, `ModuleDataTransmitter` packetResourceCost / packetInterval, `ModuleLight`, `ModuleScienceConverter`, `ModuleResourceHarvester`); the inverse-square solar law; synodic period for the solar day
+
+### 7.9 Δv as fuel: what each phase burns, and refuelling a craft
+
+The Rocket pane checks a saved design **or a craft in flight** (one docked at a station too, §8.16) against the mission, and says what the Δv means in fuel, in KSP's units (what its tank windows show; a unit of liquid fuel or oxidizer is 5 L and 5 kg).
+
+**A craft in flight as a design.** Its Δv with what's in its tanks now (§7.1) becomes one stage: start mass m₀ = its wet mass, end mass m₀·e^(−Δv / vₑ) with vₑ = Isp·g₀, so the design check (§7.3) and TWR check (§7.4) run on it as on a design.
+
+**How propellant splits.** Each engine draws mass at ṁ = F / (Isp·g₀), shared across its propellants by mass (ratio × density). Summed over the engines, that's each propellant's share of whatever mass burns. A design's stages record what they actually burn of each resource (the staging simulation, §7.2).
+
+**What a phase burns.** The design check pours stages into phases in order (§7.3). Within a stage with exhaust speed vₑ = Δv_stage / ln(m_start / m_end), each phase's share Δvᵢ burns mᵢ·(1 − e^(−Δvᵢ / vₑ)) from the mass mᵢ the phase before leaves, and takes the stage's mix.
+
+**Refuelling.** Everything that isn't propellant (the craft, monopropellant, ore…) stays aboard, so for a trip of Δv (the legs plus your margins) the craft must leave with m_empty·(e^(Δv / vₑ) − 1) of propellant, split as above. Pump in whatever's short of that; if it's more than the tanks hold full, no refuel is enough.
+
+Worked example (the tests): an Ant (Isp 315 s, so vₑ = 3,089.1 m/s; liquid fuel : oxidizer 0.9 : 1.1 by units, the same by mass since both are 5 kg) on an FL-T50 that's half full: 45 kg empty, 9 liquid fuel and 11 oxidizer aboard.
+
+1. A 2,000 m/s trip burns 0.045 × (e^(2,000 / 3,089.1) − 1) = **41.0 kg**: 3.69 liquid fuel and 4.51 oxidizer. It has that: nothing to add.
+2. A 5,000 m/s trip burns 182.1 kg: 16.39 liquid fuel and 20.03 oxidizer. **Pump in 7.39 and 9.03**; the tank holds 18 and 22, so it fits.
+3. Full (245 kg), a 500 m/s transfer then a 1,000 m/s capture: the transfer burns 245 × (1 − e^(−500 / 3,089.1)) = 36.6 kg (3.30 liquid fuel), the capture 57.6 kg from the 208.4 kg left.
+
+- Code: `FuelPlan.AsDesign`, `PerPhase`, `ForTrip` (`Core/Ksp/FuelPlan.cs`), `StageResult.Burned` (`StagingSimulation`); the Rocket pane (`MissionBuilderViewModel.RefuelText`); tested in `FuelPlanTests`
+- Source: the rocket equation (Tsiolkovsky); KSP's resource densities and engine `PROPELLANT` ratios from the part data
 
 ## 8. Working with your save and the live game
 

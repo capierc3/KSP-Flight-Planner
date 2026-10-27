@@ -112,10 +112,24 @@ public sealed record ValuePreset(string Text, double? Value)
     public override string ToString() => Text;
 }
 
-/// <summary>An entry in the design picker; <see cref="Design"/> is null for "no design".</summary>
+/// <summary>
+/// An entry in the design picker: a saved design, or a craft in flight (<see cref="Vessel"/>, checked with what's in
+/// its tanks now). Both null for "no design".
+/// </summary>
 public sealed record DesignChoice(DesignEntry? Design, string Title)
 {
-    public string Path => Design?.File.Path ?? "";
+    /// <summary>A craft in flight (a shuttle docked at a station, say) rather than a saved design.</summary>
+    public SavedVessel? Vessel { get; init; }
+
+    /// <summary>The craft's parts, fuel and engines as the save last recorded them.</summary>
+    public VesselReport? VesselReport { get; init; }
+
+    /// <summary>What the check runs on: the design's stages, or the craft as one stage.</summary>
+    public DesignReport? Report { get; init; }
+
+    public bool IsNone => Design is null && Vessel is null;
+
+    public string Path => Vessel is { } v ? "vessel:" + v.Id : Design?.File.Path ?? "";
     public override string ToString() => Title;
 }
 
@@ -817,7 +831,13 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         _missions = missions;
         // Flags, landed craft and waypoints in the save are landing spots: keep the pickers in step with the game.
         _sync = sync;
-        if (sync is not null) sync.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SaveSync.Save)) RefreshLegs(); };
+        // Craft in flight can be checked too: their fuel changes with the save.
+        if (sync is not null) sync.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(SaveSync.Save)) return;
+            RefreshLegs();
+            RefreshDesignChoices();
+        };
         _settings = settings;
         // Surface gravity and pressure for the lander TWR check (stock system, like the Δv map).
         _bodies = StockBodies(bodies);
@@ -1293,7 +1313,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         {
             if (!SetProperty(ref _selectedDesign, value)) return;
             // The picker passes through null while the list is refilled; that isn't the user clearing the choice.
-            if (value is not null) _designPath = value.Design is null ? null : value.Path;
+            if (value is not null) _designPath = value.IsNone ? null : value.Path;
             Recalculate();
             OnPropertyChanged(nameof(FlownText));
         }
@@ -1303,7 +1323,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     public Func<string, string?> FlightHistory { get; set; } = _ => null;
 
     /// <summary>How the picked design has flown so far, from the flight log; null if it hasn't.</summary>
-    public string? FlownText => SelectedDesign?.Design?.Report?.Name is { } name ? FlightHistory(name) : null;
+    public string? FlownText => SelectedDesign?.Report?.Name is { } name ? FlightHistory(name) : null;
 
     /// <summary>The flight log changed: the picked design's history may have too.</summary>
     public void RefreshFlown() => OnPropertyChanged(nameof(FlownText));
@@ -1359,6 +1379,43 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     public string DesignDeltaVText => _check is { } c ? Format.Speed0(c.DesignDeltaV) : "";
 
+    /// <summary>For a craft in flight: the fuel the trip burns (margins included) and what to pump in first.</summary>
+    private Refuel? Refuel { get; set; }
+
+    /// <summary>
+    /// What a craft in flight needs pumped in before it leaves, in KSP's units (a unit of liquid fuel or oxidizer is
+    /// 5 litres), for the whole trip and its margins; or that it already has it. Empty for a saved design.
+    /// </summary>
+    public string RefuelText
+    {
+        get
+        {
+            if (Refuel is not { } r || SelectedDesign?.Vessel is not { } v) return "";
+            var trip = FuelText(r.Lines.Select(l => (l.DisplayName, l.Need)));
+            if (!r.Fits)
+                return $"The trip burns {trip} (margins included), more than {v.Name}'s tanks hold even full: " +
+                       FuelText(r.Lines.Select(l => (l.DisplayName, l.Capacity))) + ". (Units as KSP shows them; one is 5 L.)";
+            if (!r.NeedsFuel) return $"{v.Name} has the fuel aboard: the trip burns {trip} of it, margins included.";
+            return $"Before leaving, pump in {FuelText(r.Lines.Where(l => l.Add > 0.5).Select(l => (l.DisplayName, l.Add)))}. " +
+                   $"The trip burns {trip}, margins included. (Units as KSP shows them; one is 5 L.)";
+        }
+    }
+
+    public bool HasRefuel => RefuelText.Length > 0;
+
+    /// <summary>A craft already in orbit, checked against a mission that starts with a launch: say how to start where it is.</summary>
+    public string StartHint =>
+        SelectedDesign?.Vessel is { } v && v.IsOrbiting && Legs.FirstOrDefault()?.Leg.From.Kind == "Surface"
+            ? $"{v.Name} is already in orbit, but this mission starts on the ground, so it counts a launch. To plan from where it is, " +
+              "make the first stop the place it's at (import it from the Vessels pane: it shows as a place)."
+            : "";
+
+    public bool HasStartHint => StartHint.Length > 0;
+
+    /// <summary>"120 Liquid Fuel, 147 Oxidizer".</summary>
+    private static string FuelText(IEnumerable<(string Name, double Units)> fuel) =>
+        string.Join(", ", fuel.Select(f => $"{f.Units:N0} {f.Name}"));
+
     /// <summary>Every landing and lift-off on the route with the TWR of the stage firing then.</summary>
     public IReadOnlyList<SurfaceRow> SurfaceChecks { get; private set; } = [];
 
@@ -1393,8 +1450,10 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
     }
 
     public string DesignHint => _designs is null || DesignChoices.Count <= 1
-        ? "Link a KSP save (File › Settings) to check one of your saved designs."
-        : "Stages fill the phases in order; vacuum Δv (the Δv map already counts atmospheric losses).";
+        ? "Link a KSP save (File › Settings) to check one of your saved designs or craft."
+        : SelectedDesign?.Vessel is not null
+            ? "A craft in flight is checked with what's in its tanks now (as KSP last saved it), all as one stage."
+            : "Stages fill the phases in order; vacuum Δv (the Δv map already counts atmospheric losses).";
 
     private void RefreshDesignChoices()
     {
@@ -1402,7 +1461,23 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         DesignChoices.Clear();
         DesignChoices.Add(new DesignChoice(null, "— No design —"));
         foreach (var d in _designs?.Entries ?? [])
-            if (d.Report is { Stages.Count: > 0 }) DesignChoices.Add(new DesignChoice(d, d.Title));
+            if (d.Report is { Stages.Count: > 0 }) DesignChoices.Add(new DesignChoice(d, d.Title) { Report = d.Report });
+        // Craft in flight with an engine of their own (docked ones too): check one for a trip from where it is.
+        if (_sync is { Save: not null } sync && sync.Parts.Catalog is { } catalog)
+            foreach (var v in sync.Craft.Where(v => SaveImport.IsUsuallyWanted(v) && v.Type != "Station" && v.Parts.Count > 0))
+            {
+                VesselReport report;
+                try { report = VesselAnalysis.Analyze(v, catalog); }
+                catch (Exception) { continue; }
+                if (!report.Engines.Any(e => e.CountedForDeltaV)) continue;
+                var where = v.DockedInId is { } stackId && sync.FindVessel(stackId) is { } stack ? $"docked at {stack.Name}" : VesselsViewModel.Situation(v.Situation);
+                DesignChoices.Add(new DesignChoice(null, $"In flight: {v.Name} ({where}, {Format.Speed0(report.DeltaVVacuum)} left)")
+                {
+                    Vessel = v,
+                    VesselReport = report,
+                    Report = FuelPlan.AsDesign(v, report, catalog, sync.HomeSurfaceGravity),
+                });
+            }
         // Same file again (KSP re-saved it): keep it selected with its new numbers. A mission's design that isn't
         // in the list (save not read yet, file gone for now) stays remembered for when it comes back.
         _designPath = keep;
@@ -1414,12 +1489,15 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     private void CheckDesign(double missionTotal)
     {
-        _check = SelectedDesign?.Design?.Report is { } report
+        _check = SelectedDesign?.Report is { } report
             ? DesignCheck.Check(Phases.Select(p => new PhaseNeed(p.Name, p.RequiredDv, p.MarginDv)).ToList(), report, SurfaceEvents())
             : null;
 
-        if (_check is { } c && SelectedDesign?.Design?.Report is { } design)
+        Refuel = null;
+        if (_check is { } c && SelectedDesign?.Report is { } design)
         {
+            var catalog = _sync?.Parts.Catalog;
+            var fuel = catalog is null ? null : FuelPlan.PerPhase(design, c, catalog);
             var scale = Math.Max(missionTotal, c.DesignDeltaV);
             StageBlocksTopDown = c.Stages.Select(s =>
             {
@@ -1440,8 +1518,12 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
                         Coverage.InsideMargin => $"{stages} · uses part of its margin",
                         _ => $"short {Format.Speed0(p.Shortfall)}",
                     };
+                if (fuel is not null && fuel[i].Fuel.Count > 0) detail += " · burns " + FuelText(fuel[i].Fuel.Select(f => (f.DisplayName, f.Units)));
                 return new PhaseCheckRow(p.Name, Phases[i].Color, Format.Speed0(p.Required + p.Margin), detail, p.Status);
             }).ToList();
+            // A craft in flight: what to pump in before leaving, for the whole trip and its margins.
+            if (SelectedDesign?.VesselReport is { } vessel && catalog is not null)
+                Refuel = FuelPlan.ForTrip(vessel, catalog, c.RequiredDeltaV + c.MarginDeltaV);
         }
         SurfaceChecks = _check?.Surfaces.Select(s =>
         {
@@ -1465,7 +1547,8 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
             PhaseChecks = [];
         }
         foreach (var p in new[] { nameof(HasDesign), nameof(StageBlocksTopDown), nameof(PhaseChecks), nameof(DesignVerdict),
-                     nameof(DesignStatus), nameof(DesignDeltaVText), nameof(SurfaceChecks), nameof(HasSurfaceChecks) })
+                     nameof(DesignStatus), nameof(DesignDeltaVText), nameof(SurfaceChecks), nameof(HasSurfaceChecks),
+                     nameof(RefuelText), nameof(HasRefuel), nameof(StartHint), nameof(HasStartHint), nameof(DesignHint) })
             OnPropertyChanged(p);
     }
 
@@ -1627,7 +1710,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
         var settings = Legs.Select(l => l.Setting(Phases)).ToList();
         var summaries = MissionPlanner.Summarize(Phases.Select(p => p.ToDefinition()).ToList(), legs, settings, DeploySteps());
         var missionTotal = summaries.Sum(s => s.TotalDv);
-        var design = SelectedDesign?.Design?.Report;
+        var design = SelectedDesign?.Report;
         var scale = design is null ? missionTotal : Math.Max(missionTotal, design.TotalDeltaVVacuum);
         for (var i = 0; i < Phases.Count; i++) Phases[i].Update(summaries[i], i, Phases.Count, scale, design is not null);
         CheckDesign(missionTotal);

@@ -71,3 +71,49 @@ Notes:
 - [ ] Anything named oddly (e.g. "… (docked part)"): that's a docked piece whose port didn't say what it came with
 
 Notes:
+
+## 2. Fuel planning: Δv as fuel, and refuelling a craft
+
+The Rocket pane (Plan mode) checks a saved design **or a craft in flight** against the mission, and says what the Δv
+means in fuel, in KSP's units (one unit of liquid fuel or oxidizer is 5 L). docs/MATH.md §7.9.
+
+### Set up a station-to-station mission
+
+- [ ] In the **Vessels** pane, import **Kerb Station** and **Mun Station** as places if they aren't already (they show
+      under Locations, linked to the save)
+- [ ] New mission: stop 1 **Kerb Station**, stop 2 **Mun Station**. The Rocket pane has **no Launch** phase (just
+      Transfer and so on)
+
+Notes:
+
+### Checking the shuttle
+
+- [ ] Rocket pane, **Check a design or craft**: below the saved designs, *In flight: …* rows, including
+      *In flight: Kerb Shuttle mk1 (docked at Kerb Station, ~2,062 m/s left)*. No stations and no craft without engines.
+- [ ] Pick the shuttle. The hint under the picker says it's checked with what's in its tanks now, as one stage.
+- [ ] The verdict box says Enough / Not enough, and below it one of:
+      *"Kerb Shuttle mk1 has the fuel aboard: the trip burns … of it"*, or
+      *"Before leaving, pump in N Liquid Fuel, M Oxidizer…"*, or
+      *"…more than Kerb Shuttle mk1's tanks hold even full…"*
+- [ ] Each phase row ends with **"burns N Liquid Fuel, M Oxidizer"**. The rows add up to about the trip total.
+- [ ] In KSP, transfer the amount it says to pump in from the station's tanks into the shuttle, let KSP save (switch
+      vessel or go to the Space Center), and check the Rocket pane again: it now says the fuel is aboard.
+- [ ] Raise a phase's margin: the amount to pump in goes up
+
+Notes:
+
+### Checking a design, and the launch hint
+
+- [ ] Pick a saved design (e.g. *Kerb Shuttle mk1* from the VAB list): each phase still shows its fuel, from the stage
+      that burns it. No refuel line (that's only for craft in flight).
+- [ ] Make stop 1 **Kerbin — Surface** and pick the shuttle again: a note says it's already in orbit and the mission
+      counts a launch, with how to start where it is
+
+Notes:
+
+### Things to watch for
+
+- [ ] The picker refreshes when KSP saves. If the selection jumps or flickers while the game is live, note it.
+- [ ] Compare the Δv the pane gives the shuttle with KSP's own readout (stage Δv in vacuum) after undocking it
+
+Notes:
