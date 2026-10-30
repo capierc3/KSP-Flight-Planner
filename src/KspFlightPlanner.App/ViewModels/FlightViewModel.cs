@@ -887,7 +887,8 @@ public sealed class FlightViewModel : ObservableObject
                 questions.Add($"This burn is for a released satellite, but you're flying the carrier, {vessel}.");
             else if (burns.Any(b => !b.ByReleasedCraft) && !_sync.IsSameCraft(active, f.Craft))
                 questions.Add($"You're flying {vessel}, but this flight is flown by {f.Craft.Name}.");
-            if (burns.Any(b => !b.ByReleasedCraft) && active is not null && _sync.OrbitOf(active)?.BodyName is { } there && there != f.BodyName)
+            if (burns.Any(b => !b.ByReleasedCraft) && active is not null && _sync.OrbitOf(active)?.BodyName is { } there
+                && there != f.BodyName && there != f.TripFromBody) // a trip's first burns are around the body it starts from
                 questions.Add($"{vessel} is around {there}, but these burns are for {f.BodyName}'s orbit." +
                               (f.Approach is null ? "" : $" Fly to {f.BodyName} first, then Re-plan from here."));
             if (replace && nodes > 0) questions.Add($"{vessel}'s {(nodes == 1 ? "maneuver node" : $"{nodes} maneuver nodes")} will be replaced.");

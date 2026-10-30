@@ -56,6 +56,13 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     private FlightSample? _lastRead; // the reading before, to spot a mass jump
     private long? _lastLogId; // the log recorded last: a vessel that comes off it carries on a log docked into it
     private readonly Dictionary<ulong, List<Action<FlightLogRecorder>>> _notesFor = []; // for a vessel not recorded yet
+    private double _gameUt = double.NaN; // the game time last read while playing this save, to spot a quickload
+
+    /// <summary>
+    /// A save file this far (game seconds) ahead of the game is left over from play that was undone (a quicksave loaded):
+    /// KSP doesn't write the file on a quickload. Allows for game time read a poll or two before the file was written.
+    /// </summary>
+    private const double StaleSaveS = 60;
 
     public FlightRecorder(KspLink link, SaveSync sync, FlightLogRepository logs)
     {
@@ -68,7 +75,11 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         link.GameUpdated += game =>
         {
             if (game is null) return;
-            if (SaveConfirmed) EndReverted(game.Ut);
+            if (SaveConfirmed)
+            {
+                EndReverted(game.Ut);
+                RewindOthers(game.Ut);
+            }
             OnVesselsRead(game);
         };
         sync.PropertyChanged += OnSyncChanged;
@@ -138,7 +149,11 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         }
         else if (e.PropertyName is nameof(SaveSync.PlayingOtherSave) or nameof(SaveSync.LiveSaveChecked))
         {
-            if (_sync.PlayingOtherSave) Leave(FlightLogEventKind.SwitchedAway, "KSP is playing another save");
+            if (_sync.PlayingOtherSave)
+            {
+                Leave(FlightLogEventKind.SwitchedAway, "KSP is playing another save");
+                _gameUt = double.NaN; // that save's time says nothing about this one's
+            }
             UpdateStatus();
         }
         else if (e.PropertyName == nameof(SaveSync.FileSave) && _sync.FileSave is { } file) EndFromSave(file);
@@ -513,6 +528,8 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     /// </summary>
     private void EndFromSave(KspSave file)
     {
+        // Left over from play that was undone (a quicksave loaded): its dockings and vessels never happened.
+        if (SaveConfirmed && _link.Game is { } game && file.Ut > game.Ut + StaleSaveS) return;
         var changed = false;
         var outcomes = _logs.GetAll().ToDictionary(l => l.Id, l => l.Outcome);
         FlightLogOutcome? OutcomeOf(long id) => outcomes.TryGetValue(id, out var o) && o != FlightLogOutcome.InFlight ? o : null;
@@ -548,6 +565,27 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
         if (reverted.Count == 0) return;
         foreach (var log in _logs.GetInFlight().Where(l => reverted.Contains(l.Id)))
             End(_recorder?.Id == log.Id ? _recorder.Log : log, FlightLogOutcome.Reverted);
+    }
+
+    /// <summary>
+    /// The game went back in time (a quicksave loaded): the open flights not being recorded drop what they noted after it,
+    /// such as a docking flown in the play that was undone. The flight being flown does so itself on its next reading.
+    /// </summary>
+    private void RewindOthers(double ut)
+    {
+        var before = _gameUt;
+        _gameUt = ut;
+        if (!(ut < before - 1)) return; // time went on (or nothing to compare with yet)
+        var changed = false;
+        foreach (var log in _logs.GetInFlight())
+        {
+            if (log.Id == _recorder?.Id) continue;
+            var recorder = new FlightLogRecorder(log);
+            if (!recorder.RewindTo(ut)) continue;
+            _logs.Save(recorder.Log);
+            changed = true;
+        }
+        if (changed) LogsChanged?.Invoke();
     }
 
     private void RefreshOpen() =>

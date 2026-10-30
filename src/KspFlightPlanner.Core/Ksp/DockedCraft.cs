@@ -22,7 +22,7 @@ public sealed record DockedPiece(string Name, string Type, SavedVessel Craft, bo
 /// <summary>
 /// Telling the vessels in a docked stack apart. KSP merges vessels that dock into one, but each docking port keeps the
 /// vessel it came with (DOCKEDVESSEL: its name, type and root part). Cutting the part tree at every docked port pair
-/// gives back one piece per vessel that docked. docs/MATH.md §8.16.
+/// gives back one piece per vessel that docked. docs/SAVE-AND-LIVE-GAME.md §4.
 /// </summary>
 public static class DockedCraft
 {

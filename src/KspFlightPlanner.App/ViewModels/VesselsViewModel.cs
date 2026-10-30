@@ -117,7 +117,7 @@ public sealed class VesselsViewModel : ObservableObject
         var stack = vessel.DockedInId is { } stackId ? _sync.FindVessel(stackId) : null;
         var piece = stack is null ? null : _sync.DockedIn(stack).FirstOrDefault(p => p.Craft.Id == vessel.Id);
         var docked = piece is null ? [] : _sync.DockedIn(vessel);
-        Detail = new VesselDetailViewModel(vessel, _sync.Save!.Ut, _sync.Parts.Catalog, radius, FlightsOf(vessel))
+        Detail = new VesselDetailViewModel(vessel, _sync.Save!.Ut, _sync.Parts.Catalog, radius, FlightsOf(vessel), piece is null ? null : stack!.Name)
         {
             OpenLogCommand = new RelayCommand<VesselFlightRow>(row => OpenLogRequested?.Invoke(row.Id)),
             DockedNote = piece is not null
@@ -274,8 +274,9 @@ public sealed class VesselDetailViewModel
 
     /// <param name="bodyRadiusM">Radius of the body it orbits, to show altitudes; null if unknown.</param>
     /// <param name="flights">Its flights in the flight log, newest first.</param>
+    /// <param name="dockedAt">The station it's docked at, if it's docked into one; null otherwise.</param>
     public VesselDetailViewModel(SavedVessel vessel, double saveUt, PartCatalog catalog, double? bodyRadiusM,
-        IReadOnlyList<FlightLogSummary>? flights = null)
+        IReadOnlyList<FlightLogSummary>? flights = null, string? dockedAt = null)
     {
         Flights = (flights ?? []).Select(l => new FlightLogItem(l))
             .Select(i => new VesselFlightRow(i.Id, i.Rocket == vessel.Name ? i.Outcome : $"{i.Outcome} · as {i.Rocket}", i.LaunchDay, i.Figures, i.Launched))
@@ -286,7 +287,10 @@ public sealed class VesselDetailViewModel
         var body = vessel.Orbit?.BodyName ?? "?";
 
         Title = vessel.Name;
-        Subtitle = $"{Capitalize(SaveImport.TypeText(vessel.Type))} · {VesselsViewModel.Situation(vessel.Situation)} {body}";
+        // Docked: say so first; where the stack is still follows (the docked piece shares its orbit).
+        var where = $"{VesselsViewModel.Situation(vessel.Situation)} {body}";
+        if (dockedAt is not null) where = $"docked at {dockedAt}, {where}";
+        Subtitle = $"{Capitalize(SaveImport.TypeText(vessel.Type))} · {where}";
         HasEngines = report.Engines.Any(e => e.CountedForDeltaV);
         DeltaV = HasEngines ? Units.Dv(report.DeltaVVacuum) : "—";
         DeltaVNote = HasEngines
@@ -327,7 +331,7 @@ public sealed class VesselDetailViewModel
             .ToList();
         Notes = report.Notes;
 
-        var status = new List<Fact> { new("Situation", $"{Capitalize(VesselsViewModel.Situation(vessel.Situation))} {body}") };
+        var status = new List<Fact> { new("Situation", Capitalize(where)) };
         if (vessel.IsOrbiting && vessel.Orbit is { } o && bodyRadiusM is { } radius)
         {
             status.Add(new("Periapsis × apoapsis", $"{Units.Km(o.SemiMajorAxisM * (1 - o.Eccentricity) - radius)} × " +
