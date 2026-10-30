@@ -10,7 +10,7 @@ Each section has the formulas, a worked example, the code that implements them a
 
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
 - **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are; 2.10 Changing the inclination from where you are
-- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options; 3.9 Arriving in a chosen inclination (a polar orbit at the Mun)
+- **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options; 3.9 Arriving in a chosen inclination (a polar orbit at the Mun); 3.10 The next window to every planet
 - **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
@@ -25,6 +25,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A polar or other inclined orbit straight from the launch pad: §2.7
 - A polar (or any inclined) orbit around another body, set on the way there: §3.9; turning the orbit you're in: §2.10
 - A trip to another planet, and its launch window: §3.2, §3.4
+- Which planet has the next launch window: §3.10
 - Burns from your orbit to a moon (Mun, Minmus) and into orbit there, or back to the planet: §3.7
 - Burns from where you are to anywhere else (Duna, Mun → Minmus, Mun → Duna), with a choice of windows: §3.8
 - Landing at a crater, flag or waypoint: §2.6, §1.9; flying it from your real orbit: §2.9
@@ -896,6 +897,35 @@ and the same Newton step solves it. What's left over, the angle between v̂ and 
 
 - Code: `Hops.TiltOnTheWay`, `Hops.CorrectTilted`, `Hops.Tilt`, `ArrivalAim` (the `inclinationDeg` or `aim` of `Hops.Down`, `Hops.Up`, `Hops.Across` and `TripPlanner.Options`); Plan mode: `ArrivalTilt.Plan`, `ArrivalTilt.RuleOfThumb`, `LegTools.FindArrival`, `LegTools.EvaluateArrival`, `LegTools.ApplyArrival`; tested in `TripPlannerTests` and `LegToolsTests`
 - Source: Curtis 8.9–8.10 (the hyperbolic approach, its aiming radius and the B-plane idea of where it passes); Newton's method for an underdetermined system (the minimum-norm step, Jᵀ(JJᵀ)⁻¹)
+
+### 3.10 The next window to every planet
+
+The **Transfer windows** pane (Tools › Transfer windows; on the right in Plan and Fly) lists the next window from a body (Kerbin to start with) to each body that orbits the same parent, soonest first. It counts down on the game clock: the live game's while connected (§8.2), else the save's date. Double-click a row to open it in the Transfer Planner, searched from today.
+
+Each row is a porkchop search (§3.4) with the default orbits: leave a round parking orbit at the origin's low orbit height and capture into one at the destination's, Δv for both included. The search covers 1.1 synodic periods, which always holds a window. But the cheapest point in it isn't always the *next* window: if the one open now is a little dearer than the one a synodic period on, the cheapest would skip it. So the pane takes the first dip instead:
+
+```
+cheapest(d) = min over flight times of total Δv, for each departure column d
+the window  = the first d with cheapest(d) ≤ both neighbours and ≤ 1.5 × the cheapest overall
+```
+
+then zooms in around it (as `TransferPlanner.Plan` does) keeping the departure within a column either side. The search starts 3 % of a synodic period in the past (never before UT 0), so a window whose best day was yesterday is a dip, not the edge of the plot, and shows as **Now**. A row says *Now* from a game day before its best day; once the clock is 3 % of a synodic period past it, that body is searched again from today and the row moves down the list. The rest are kept, so time passing only costs a search when a window goes. A quickload back before the search started searches again too.
+
+Worked example — from Kerbin at UT 0 (`TransferWindowsTests.Lists_every_planet_from_kerbin_soonest_first`):
+
+| To | Best day | Δv (eject + capture) | Flight |
+|---|---|---|---|
+| Moho | Year 1, Day 5 | 5,533.6 m/s | 119 d |
+| Jool | Year 1, Day 204 | 5,036.9 m/s | 1,480 d |
+| Duna | Year 1, Day 231 | 1,707.5 m/s | 270 d |
+| Eeloo | Year 1, Day 240 | 3,588.6 m/s | 2,180 d |
+| Dres | Year 1, Day 362 | 3,505.6 m/s | 594 d |
+| Eve | Year 2, Day 105 | 2,582.4 m/s | 205 d |
+
+Duna's matches the Transfer Planner's best window from UT 0. Once it has gone, the next Duna window is one synodic period (about 2.1 Kerbin years) later. Two days after its best day it still shows as *Now*, not the one two years on.
+
+- Code: `TransferWindows.All`, `TransferWindows.Next`; the pane: `TransferWindowsViewModel`; tested in `TransferWindowsTests`
+- Source: as §3.4 (porkchop plots); the synodic period from §3.2
 
 ## 4. Meeting a craft in orbit (rendezvous)
 

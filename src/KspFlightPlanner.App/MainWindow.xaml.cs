@@ -86,6 +86,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Whether a craft's batteries last the night where it's going.</summary>
     public required PowerBudgetViewModel PowerBudget { get; init; }
 
+    /// <summary>The next launch window to each planet, counting down on the game clock.</summary>
+    public required TransferWindowsViewModel Windows { get; init; }
+
     /// <summary>Every flight recorded while connected, and the recorder.</summary>
     public required FlightLogViewModel FlightLog { get; init; }
 

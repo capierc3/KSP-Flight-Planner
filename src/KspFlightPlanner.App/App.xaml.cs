@@ -85,6 +85,7 @@ public partial class App : Application
                 FlightLog = new FlightLogViewModel(new FlightLogRepository(database), recorder, sync, events,
                     new FlightReportViewModel(new FlightLogRepository(database), sync),
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
+                Windows = new TransferWindowsViewModel(bodies, sync),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
@@ -127,6 +128,12 @@ public partial class App : Application
                 viewModel.RequestPane(Panes.FlightReport);
             };
             viewModel.EngineChart.PartPicked += ShowPart;
+            // A row on the Transfer windows list opens that trip in the Transfer Planner, from the game's date.
+            viewModel.Windows.PlanRequested += (origin, destination, ut) =>
+            {
+                viewModel.Transfer.PlanTrip(origin.Id, destination.Id, ut);
+                viewModel.RequestPane(Panes.Transfer);
+            };
             new MainWindow(viewModel).Show();
             if (sync.Settings.KrpcConnectOnStartup) _ = link.ConnectAsync();
         }

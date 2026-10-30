@@ -108,6 +108,8 @@
                 </MenuItem>
                 <MenuItem Header="_Tools">
                     <MenuItem Header="_Transfer Planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Transfer}" />
+                    <MenuItem Header="Transfer _windows" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Windows}"
+                              ToolTip="The next launch window to each planet, soonest first" />
                     <MenuItem Header="_Rendezvous" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rendezvous}" />
                     <MenuItem Header="Res_onant Orbits" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Resonant}" />
                     <Separator />
