@@ -29,7 +29,7 @@ public sealed record SaveVerdict(SaveVerdictKind Kind, string? Save = null)
 /// <summary>
 /// Tells which save the running game is playing. KSP writes the save it's playing every time the scene changes
 /// (including a few seconds after loading it), so a save written now with the game's mode and time is the one. Before any
-/// write, the game's vessels are looked for in each save. docs/MATH.md §8.12.
+/// write, the game's vessels are looked for in each save. docs/SAVE-AND-LIVE-GAME.md §1.
 /// </summary>
 public static class LiveSaveMatch
 {

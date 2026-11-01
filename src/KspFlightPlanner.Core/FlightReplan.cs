@@ -115,7 +115,7 @@ public static class FlightReplan
     {
         tofMax = Math.Min(tofMax, latestArrival - depStart);
         if (tofMax <= Math.Max(60, tofMin) - 1) tofMin = Math.Max(60, tofMax * 0.8);
-        var best = Rendezvous.CheapestIntercept(chaser, target, body.Mu, depStart, depEnd, tofMin, tofMax);
+        var best = Rendezvous.CheapestIntercept(chaser, target, body.Mu, depStart, depEnd, tofMin, tofMax, Rendezvous.LowestPassRadiusM(body));
         return Rendezvous.Intercept(body, chaser, target, best.DepartureUt, best.FlightTimeS);
     }
 

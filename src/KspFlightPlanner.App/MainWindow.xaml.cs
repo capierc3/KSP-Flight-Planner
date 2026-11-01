@@ -86,6 +86,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Whether a craft's batteries last the night where it's going.</summary>
     public required PowerBudgetViewModel PowerBudget { get; init; }
 
+    /// <summary>The next launch window to each planet, counting down on the game clock.</summary>
+    public required TransferWindowsViewModel Windows { get; init; }
+
     /// <summary>Every flight recorded while connected, and the recorder.</summary>
     public required FlightLogViewModel FlightLog { get; init; }
 
@@ -403,7 +406,7 @@ public partial class MainWindow : Window
 
     private void About_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        MessageBox.Show(this, $"KSP Flight Planner {BuildInfo.Version}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
+        MessageBox.Show(this, $"KSP Flight Planner {BuildInfo.Version}{(BuildInfo.Branch is "" ? "" : $" ({BuildInfo.Branch})")}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
                               "Every formula is explained in the Math Guide (F1).",
             "About KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
     }

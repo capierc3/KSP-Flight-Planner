@@ -167,6 +167,25 @@ public sealed class FlightLogTests : IDisposable
         Assert.Equal([FlightLogEventKind.Launch, FlightLogEventKind.Quickload], log.Events.Select(e => e.Kind));
     }
 
+    [Fact]
+    public void A_quickload_while_another_vessel_is_flown_drops_what_this_log_noted_after_it()
+    {
+        // The station's log noted a shuttle docking during play that was then undone by loading a quicksave from before it.
+        var station = new FlightLogRecorder("Mun Station", At(100, "ORBITING"), null);
+        station.Add(At(200, "ORBITING"));
+        station.NoteDocking(Launch + 500, FlightLogEventKind.Docked, "Shuttle docked", "Shuttle", 31, joined: false);
+
+        Assert.True(station.RewindTo(Launch + 300));
+        var log = station.Log;
+        Assert.Equal([100, 200], log.Samples.Select(s => s.MetS));
+        Assert.Equal([FlightLogEventKind.Joined, FlightLogEventKind.Quickload], log.Events.Select(e => e.Kind));
+        Assert.Equal(300, log.Events[^1].MetS, 1e-9);
+
+        // Nothing after that point: nothing to drop, and no note.
+        Assert.False(station.RewindTo(Launch + 300));
+        Assert.Equal(2, station.Log.Events.Count);
+    }
+
     // ---------------- Ending from the save ----------------
 
     [Fact]

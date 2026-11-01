@@ -148,7 +148,8 @@
                              ToolTip="Start where the mission is (its last stop), so the plan can be added to the mission" />
                 <TextBlock Text="{Binding MissionStartText}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="28,0,0,4"
                            Visibility="{Binding PickMission, Converter={StaticResource BoolToVisibility}}" />
-                <RadioButton Content="Launch from the KSC" IsChecked="{Binding PickLaunch}" GroupName="Start" Margin="0,2,0,0" />
+                <RadioButton Content="Launch from the ground" IsChecked="{Binding PickLaunch}" GroupName="Start" Margin="0,2,0,0"
+                             ToolTip="Lift off from the KSC, or from a landed craft, flag or waypoint on any body (a lander on the Mun meeting Mun Station)" />
                 <RadioButton Content="A craft already in orbit" IsChecked="{Binding PickCraft}" GroupName="Start" Margin="0,2,0,0" />
                 </StackPanel>
 
@@ -164,6 +165,9 @@
                 </StackPanel>
 
                 <StackPanel Visibility="{Binding StartFromLaunch, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="From" Style="{StaticResource Label}" Margin="0,4,0,0" />
+                    <ComboBox ItemsSource="{Binding LaunchSpots}" SelectedItem="{Binding SelectedSpot}" IsEnabled="{Binding IsStartEditable}"
+                              ToolTip="The KSC, or a landed craft, flag or KerbNet waypoint from your save. The targets must orbit the same body; the climb below starts from that body's usual values." />
                     <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition /><ColumnDefinition Width="8" /><ColumnDefinition />

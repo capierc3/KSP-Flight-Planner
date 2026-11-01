@@ -95,13 +95,13 @@ public sealed class DockWorkspace
         {
             panel.Children.Add(SideColumn(320, [Panes.Mission, Panes.Calculators, Panes.Missions], [Panes.Locations, Panes.Vessels]));
             panel.Children.Add(Documents(Panes.Legs, Panes.DvMap, Panes.Transfer, Panes.Rendezvous, Panes.Resonant));
-            panel.Children.Add(SideColumn(300, [Panes.Rocket], [Panes.Notes]));
+            panel.Children.Add(SideColumn(300, [Panes.Rocket], [Panes.Notes, Panes.Windows]));
         }
         else
         {
             panel.Children.Add(SideColumn(320, [Panes.Flights], [Panes.Vessels]));
             panel.Children.Add(Documents(Panes.Flight));
-            panel.Children.Add(SideColumn(340, [Panes.FromHere]));
+            panel.Children.Add(SideColumn(340, [Panes.FromHere], [Panes.Windows]));
         }
         _dock.Layout = root;
         ReportActiveDocument();

@@ -390,6 +390,22 @@ public sealed class FlightLogRecorder
         Dirty = true;
     }
 
+    /// <summary>
+    /// The game went back to <paramref name="ut"/> (a quicksave loaded) while this log wasn't being recorded: what it noted
+    /// after that never happened (e.g. a docking flown in the play that was undone). Returns whether anything was dropped.
+    /// </summary>
+    public bool RewindTo(double ut)
+    {
+        Flush();
+        var dropped = _samples.RemoveAll(s => s.Ut > ut)
+                      + _events.RemoveAll(e => e.Ut > ut && e.Kind is not (FlightLogEventKind.Launch or FlightLogEventKind.Joined));
+        if (dropped == 0) return false;
+        _events.Add(new FlightLogEvent(ut, ut - _log.LaunchUt, FlightLogEventKind.Quickload,
+            "Loaded a quicksave: the flight after this point was dropped"));
+        Dirty = true;
+        return true;
+    }
+
     /// <summary>The game went back in time (a quicksave loaded): what came after it never happened.</summary>
     private void Rewind(FlightSample sample)
     {
@@ -578,7 +594,7 @@ public static class FlightLogs
 
     /// <summary>
     /// Every launch time a flight is known by: its launch, and the start of each vessel it came off another one as (KSP
-    /// starts a vessel's MET, and its lct, again when it undocks). docs/MATH.md §8.14.
+    /// starts a vessel's MET, and its lct, again when it undocks). docs/SAVE-AND-LIVE-GAME.md §3.
     /// </summary>
     public static IEnumerable<double> LaunchTimes(double launchUt, IEnumerable<FlightLogEvent> events) =>
         events.Where(e => e is { Kind: FlightLogEventKind.Undocked, Joined: true, NewLaunchUt: not null })
@@ -611,7 +627,7 @@ public static class FlightLogs
     /// The save's vessel a flight belongs to now, whatever it has been renamed since: the one the player tagged it to, else
     /// the one launched when the flight was (lct; a vessel split off another gets the time it split) — under the log's
     /// name, else the only one that isn't debris, else the only one. Null when it's gone, or can't be told apart.
-    /// docs/MATH.md §8.13.
+    /// docs/SAVE-AND-LIVE-GAME.md §2.
     /// </summary>
     public static SavedVessel? VesselOf(FlightLogSummary log, KspSave file)
     {

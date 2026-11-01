@@ -105,7 +105,26 @@ public sealed class SettingsRepository(PlannerDatabase database)
 
     public void SaveLastMissionId(long? id) => Write(LastMissionKeyForSave, id?.ToString(CultureInfo.InvariantCulture));
 
-    private string LastMissionKeyForSave => database.ActiveSave is { } save ? $"{LastMissionKey}.{save}" : LastMissionKey;
+    /// <summary>
+    /// The player's say on vessels docked into others, by the docked vessel's name: true counts it as a craft of its own,
+    /// false as part of the stack it's docked in. Missing names take the default rule. One set per save.
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> LoadDockedChoices()
+    {
+        var prefix = DockedKeyPrefix;
+        return ReadAll().Where(p => p.Key.StartsWith(prefix, StringComparison.Ordinal))
+            .ToDictionary(p => p.Key[prefix.Length..], p => p.Value == "craft");
+    }
+
+    /// <summary>Stores the say on one docked vessel; null goes back to the default rule.</summary>
+    public void SaveDockedChoice(string vesselName, bool? isCraft) =>
+        Write(DockedKeyPrefix + vesselName, isCraft switch { true => "craft", false => "part", null => null });
+
+    private string DockedKeyPrefix => database.ActiveSave is { } save ? $"{DockedKey}.{save}." : $"{DockedKey}.";
+
+    private const string DockedKey = "ksp.docked";
+
+    private string LastMissionKeyForSave =>database.ActiveSave is { } save ? $"{LastMissionKey}.{save}" : LastMissionKey;
 
     /// <summary>A stored port number, or null if it's missing or out of range.</summary>
     private static int? Port(string? text) =>

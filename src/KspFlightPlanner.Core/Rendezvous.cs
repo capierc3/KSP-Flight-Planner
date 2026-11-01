@@ -134,7 +134,29 @@ public sealed record LaunchSite(string Name, string BodyName, double LatitudeDeg
 /// How the rocket gets to orbit: the circular parking orbit, how long after lift-off you're in it, and how far around
 /// the planet (from the pad) that is. Tune the last two to your own ascents.
 /// </summary>
-public sealed record AscentProfile(double ParkingAltitudeM, double AscentTimeS = 360, double DownrangeDeg = 30);
+public sealed record AscentProfile(double ParkingAltitudeM, double AscentTimeS = 360, double DownrangeDeg = 30)
+{
+    /// <summary>The average speed gained per second of a climb to orbit, from a typical Kerbin ascent (2,279 m/s in 6 minutes).</summary>
+    public const double ClimbAccel = 6.33;
+
+    /// <summary>The average ground speed over a climb, as a share of the orbital speed (Kerbin: 30° of 600 km in 6 minutes).</summary>
+    public const double DownrangeShare = 0.38;
+
+    /// <summary>
+    /// A starting point for a climb from <paramref name="body"/>'s surface, to tune to your own: Kerbin's usual 80 km in 6
+    /// minutes, 30° downrange; elsewhere the body's safe parking height, reached in v / <see cref="ClimbAccel"/> (2 to 15
+    /// minutes), <see cref="DownrangeShare"/> of the orbital speed over that time downrange. docs/MATH.md §4.5.
+    /// </summary>
+    public static AscentProfile Typical(CelestialBody body)
+    {
+        if (body.Name == LaunchSite.Ksc.BodyName) return new AscentProfile(80_000);
+        var h = body.DefaultParkingAltitudeM;
+        var r = body.EquatorialRadiusM + h;
+        var v = Math.Sqrt(body.Mu / r);
+        var t = Math.Clamp(v / ClimbAccel, 120, 900);
+        return new AscentProfile(h, t, DownrangeShare * v * t / r * 180 / Math.PI);
+    }
+}
 
 public enum LaunchKind
 {
@@ -161,11 +183,23 @@ public sealed record RendezvousRequest(
     double? DeorbitPeriapsisAltitudeM = null)
 {
     public bool IsLaunch => Chaser is null;
+
+    /// <summary>
+    /// The <see cref="Chaser"/> is around another body: a trip to <see cref="Body"/> comes first, arriving in the first
+    /// target's plane (§4.6). Null when the chaser is already around <see cref="Body"/>.
+    /// </summary>
+    public TripStart? From { get; init; }
 }
+
+/// <summary>Where a rendezvous starts when the chaser is around another body than the targets: that body, and every body (for the route).</summary>
+public sealed record TripStart(CelestialBody Body, IReadOnlyCollection<CelestialBody> Bodies);
 
 /// <summary>The user's picks: which launch, which phasing orbit and which porkchop point per leg (null = the planner's choice).</summary>
 public sealed record RendezvousChoices(int? Launch = null, IReadOnlyList<PhasingChoice?>? Phasing = null, IReadOnlyList<InterceptPoint?>? Intercepts = null)
 {
+    /// <summary>Which way of making the trip to the targets' body (an index into <see cref="RendezvousPlan.TripOptions"/>); null for the cheapest in all.</summary>
+    public int? Trip { get; init; }
+
     public PhasingChoice? PhasingFor(int leg) => Phasing is { } p && leg < p.Count ? p[leg] : null;
     public InterceptPoint? InterceptFor(int leg) => Intercepts is { } p && leg < p.Count ? p[leg] : null;
 }
@@ -173,7 +207,34 @@ public sealed record RendezvousChoices(int? Launch = null, IReadOnlyList<Phasing
 public sealed record RendezvousPlan(IReadOnlyList<LaunchOption> LaunchOptions, int LaunchIndex, IReadOnlyList<LegPlan> Legs, Maneuver? Deorbit)
 {
     public LaunchOption? Launch => LaunchIndex >= 0 && LaunchIndex < LaunchOptions.Count ? LaunchOptions[LaunchIndex] : null;
-    public double OrbitalDv => Legs.Sum(l => l.TotalDv) + (Deorbit?.DeltaV ?? 0);
+
+    /// <summary>The ways of making the trip to the targets' body, each with what meeting the first target costs after it (§4.6). Empty without a trip.</summary>
+    public IReadOnlyList<TripToTarget> TripOptions { get; init; } = [];
+
+    public int TripIndex { get; init; } = -1;
+
+    /// <summary>The trip flown first, from the chaser's body; null when it starts around the targets' body.</summary>
+    public TripOption? Trip => TripIndex >= 0 && TripIndex < TripOptions.Count ? TripOptions[TripIndex].Trip : null;
+
+    /// <summary>Every burn in orbit: the trip's, the legs' and the deorbit.</summary>
+    public double OrbitalDv => (Trip?.DeltaV ?? 0) + Legs.Sum(l => l.TotalDv) + (Deorbit?.DeltaV ?? 0);
+}
+
+/// <summary>
+/// One way of making the trip to the targets' body: the trip, the orbit its capture leaves the craft in, and the first
+/// meeting from there. <see cref="Label"/> says what it's best at. When the meeting starts with a phasing orbit, the
+/// capture goes straight onto it (§4.6), so <see cref="Captured"/> is the phasing orbit and <see cref="Leg"/> has no
+/// phasing burn of its own.
+/// </summary>
+/// <param name="Parked">The round orbit a plain capture would give, just under the target: what the meeting is planned from.</param>
+public sealed record TripToTarget(string Label, TripOption Trip, OrbitalElements Captured, LegPlan Leg, OrbitalElements Parked)
+{
+    public double MeetDv => Leg.TotalDv;
+    public double MeetUt => Leg.ArrivalUt;
+    public double TotalDv => Trip.DeltaV + MeetDv;
+
+    /// <summary>The capture goes straight onto the meeting's phasing orbit.</summary>
+    public bool CapturesIntoPhasing => Leg.Phasing is not null && Leg.Maneuvers.All(m => m.Phasing is null);
 }
 
 /// <summary>
@@ -203,6 +264,12 @@ public static class Rendezvous
 
     /// <summary>Waiting longer than this many of your orbits for a window makes the planner look at phasing orbits.</summary>
     public const double PhasingWaitOrbits = 3;
+
+    /// <summary>How many departure times, spread over half the moon's orbit, a trip to meet a craft round another body tries (§4.6).</summary>
+    public const int DepartureTries = 8;
+
+    /// <summary>A "balanced" trip to meet a craft may cost this much more (a fraction) than the cheapest, to meet sooner.</summary>
+    public const double BalancedExtra = 0.10;
 
     /// <summary>Phasing orbits are offered for 1 to this many laps (more laps: a smaller change, so cheaper, but slower).</summary>
     public const int MaxPhasingLaps = 6;
@@ -238,18 +305,155 @@ public static class Rendezvous
             start = request.EarliestUt;
         }
 
+        // From around another body: the trip there first, into the first target's plane.
+        IReadOnlyList<TripToTarget> trips = [];
+        var tripIndex = -1;
+        LegPlan? afterTrip = null;
+        if (request.From is { } from)
+        {
+            var found = TripsToTarget(from, request.Chaser!, body, first, request.EarliestUt, choices.PhasingFor(0)).ToList();
+            tripIndex = choices.Trip is { } t && t >= 0 && t < found.Count ? t : 0;
+            // A transfer picked on the porkchop plot: the meeting (and so maybe the capture) planned again with it.
+            if (choices.InterceptFor(0) is { } picked)
+                found[tripIndex] = MeetAfterCapture(body, found[tripIndex].Trip, found[tripIndex].Parked, first, choices.PhasingFor(0), picked,
+                    found[tripIndex].Label);
+            trips = found;
+            afterTrip = found[tripIndex].Leg;
+        }
+
         var legs = new List<LegPlan>();
         for (var i = 0; i < request.Targets.Count; i++)
         {
-            var leg = PlanLeg(body, chaser, request.Targets[i], start, choices.PhasingFor(i), choices.InterceptFor(i));
+            var leg = i == 0 && afterTrip is not null
+                ? afterTrip
+                : PlanLeg(body, chaser, request.Targets[i], start, choices.PhasingFor(i), choices.InterceptFor(i));
             legs.Add(leg);
             chaser = request.Targets[i].Orbit; // docked: you now fly the target's orbit
             start = leg.ArrivalUt + Math.Max(request.StayS, BurnGapS);
         }
 
         var deorbit = request.DeorbitPeriapsisAltitudeM is { } pe ? Deorbit(body, chaser, start, pe) : null;
-        return new RendezvousPlan(launches, launchIndex, legs, deorbit);
+        return new RendezvousPlan(launches, launchIndex, legs, deorbit) { TripOptions = trips, TripIndex = tripIndex };
     }
+
+    /// <summary>
+    /// The height to arrive at for meeting a craft: a little under it (a lower orbit catches up, §4.3), or over it when
+    /// under would be too low to orbit safely. The gap is 5% of the target's height, 3 to 30 km.
+    /// </summary>
+    public static double MeetingAltitudeM(CelestialBody body, OrbitalElements target)
+    {
+        var height = Kepler.PeriapsisRadius(target) - body.EquatorialRadiusM;
+        var gap = Math.Clamp(0.05 * height, 3_000, 30_000);
+        var safe = body.DefaultParkingAltitudeM;
+        return height - gap >= safe ? height - gap : Math.Max(safe, height + gap);
+    }
+
+    /// <summary>
+    /// The ways of going from <paramref name="chaser"/> (around <paramref name="from"/>'s body) to <paramref name="body"/>
+    /// for meeting <paramref name="target"/> there: each trip arrives in the target's plane at
+    /// <see cref="MeetingAltitudeM"/> (or, when that can't be planned, at its inclination, then however it arrives), and
+    /// the meeting is planned from the orbit its capture leaves. Cheapest in all first; then the one that meets soonest,
+    /// when that's another. docs/MATH.md §4.6.
+    /// </summary>
+    public static IReadOnlyList<TripToTarget> TripsToTarget(TripStart from, RendezvousTarget chaser, CelestialBody body, RendezvousTarget target,
+        double earliestUt, PhasingChoice? phasing = null)
+    {
+        if (from.Body.Id == body.Id) throw new ArgumentException($"{chaser.Name} is already around {body.Name}.");
+        var altitude = MeetingAltitudeM(body, target.Orbit);
+        string? problem = null;
+
+        // Where the trip comes in from swings round with the moon it's to or from, and only a plane through that line of
+        // approach can be had cheaply. So leaving at times spread over half the moon's orbit finds the one whose arrival
+        // lines up with the target's plane. A trip across, between planets, keeps to its launch windows instead.
+        var hops = TripPlanner.Route(from.Body, body, from.Bodies);
+        var moon = hops.Any(h => h.Kind == HopKind.Across) ? null : from.Body.ParentId == body.Id ? from.Body : body;
+        var starts = moon?.Orbit is { } moonOrbit && moon.ParentId is { } parentId && from.Bodies.FirstOrDefault(b => b.Id == parentId) is { } parent
+            ? Enumerable.Range(0, DepartureTries).Select(i => earliestUt + i * Kepler.OrbitalPeriod(moonOrbit, parent.Mu) / 2 / DepartureTries).ToList()
+            : [earliestUt];
+
+        IReadOnlyList<TripOption> TripsFrom(double start)
+        {
+            foreach (var aim in new[] { ArrivalAim.InPlaneOf(target.Name, target.Orbit), ArrivalAim.Inclined(target.Orbit.InclinationDeg), null })
+            {
+                try { return TripPlanner.Options(from.Body, body, chaser.Orbit, start, altitude, from.Bodies, aim: aim); }
+                catch (ArgumentException ex) { lock (starts) problem ??= ex.Message; }
+            }
+            return [];
+        }
+
+        TripToTarget? Meeting(TripOption option)
+        {
+            if (option.Legs[^1].Plan is not { Capture: not null } last || Hops.Captured(last, body) is not { } parked) return null;
+            try { return MeetAfterCapture(body, option, parked, target, phasing); }
+            catch (ArgumentException ex) { lock (starts) problem ??= ex.Message; return null; }
+        }
+
+        var found = starts.AsParallel().Select(start => (Start: start, Trips: TripsFrom(start).Select(Meeting).OfType<TripToTarget>().ToList())).ToList();
+        // Then closer in round the cheapest start: a quarter and an eighth of the spacing either side.
+        if (starts.Count > 1 && found.Where(f => f.Trips.Count > 0).MinBy(f => f.Trips.Min(t => t.TotalDv)) is { } bestStart)
+        {
+            var spacing = starts[1] - starts[0];
+            found.AddRange(new[] { -0.25, -0.125, 0.125, 0.25 }.Select(f => bestStart.Start + f * spacing).Where(t => t >= earliestUt)
+                .AsParallel().Select(start => (Start: start, Trips: TripsFrom(start).Select(Meeting).OfType<TripToTarget>().ToList())));
+        }
+        var trips = found.SelectMany(f => f.Trips).ToList();
+        if (trips.Count == 0) throw new ArgumentException(problem ?? $"No way to meet {target.Name} found.");
+
+        var cheapest = trips.MinBy(t => t.TotalDv)!;
+        // Meetings within ten minutes of each other are as soon: the cheaper of them.
+        var soonest = trips.OrderBy(t => Math.Floor(t.MeetUt / 600)).ThenBy(t => t.TotalDv).First();
+        if (trips.Count == 1 || soonest == cheapest) return [cheapest with { Label = trips.Count == 1 ? "" : "Cheapest · meets soonest" }];
+        // Between the two: the soonest meeting that costs at most BalancedExtra more than the cheapest.
+        var balanced = trips.Where(t => t.TotalDv <= cheapest.TotalDv * (1 + BalancedExtra) && t.MeetUt < cheapest.MeetUt - 3_600)
+            .MinBy(t => t.MeetUt);
+        List<TripToTarget> named = [cheapest with { Label = "Cheapest" }];
+        if (balanced is not null && balanced != soonest) named.Add(balanced with { Label = "Balanced" });
+        named.Add(soonest with { Label = balanced == soonest ? "Balanced · meets soonest" : "Meets soonest" });
+        return named;
+    }
+
+    /// <summary>
+    /// The meeting with <paramref name="target"/> after <paramref name="option"/>'s capture, planned from
+    /// <paramref name="parked"/> (the round orbit a plain capture gives). When it would start with a phasing burn right at
+    /// the capture, the two are one burn: the capture slows the craft from its arriving path straight onto the phasing
+    /// orbit, instead of onto the round orbit and then off it again. Otherwise the meeting starts a little after a plain
+    /// capture, as before. docs/MATH.md §4.6.
+    /// </summary>
+    public static TripToTarget MeetAfterCapture(CelestialBody body, TripOption option, OrbitalElements parked, RendezvousTarget target,
+        PhasingChoice? phasing = null, InterceptPoint? intercept = null, string label = "")
+    {
+        var mu = body.Mu;
+        var last = option.Legs[^1].Plan;
+        var capture = last.Capture ?? throw new ArgumentException($"The trip has no capture at {body.Name}.");
+
+        var leg = PlanLeg(body, parked, target, capture.Ut, phasing, intercept);
+        if (leg.Maneuvers.Count > 0 && leg.Maneuvers[0] is { Kind: ManeuverKind.Phasing } first && Math.Abs(first.Ut - capture.Ut) < 1)
+        {
+            var phasingOrbit = OrbitAfter(first, parked, mu);
+            var trip = WithCapture(option, capture, last.Arrival.Path, phasingOrbit, mu,
+                $"Capture onto a phasing orbit at {body.Name} ({Km(first.PeriapsisAltitudeM)} × {Km(first.ApoapsisAltitudeM)})",
+                $"Captures straight onto the phasing orbit for meeting {target.Name}: {first.Phasing!.Orbits} lap{(first.Phasing.Orbits == 1 ? "" : "s")}, then the transfer.");
+            return new TripToTarget(label, trip, phasingOrbit, leg with { StartOrbit = phasingOrbit, Maneuvers = leg.Maneuvers.Skip(1).ToList() }, parked);
+        }
+
+        // No phasing orbit to fold in: a plain capture, then the meeting a little after it.
+        var plain = WithCapture(option, capture, last.Arrival.Path, parked, mu, capture.Title, capture.Note);
+        leg = PlanLeg(body, parked, target, capture.Ut + BurnGapS, phasing, intercept);
+        return new TripToTarget(label, plain, parked, leg, parked);
+    }
+
+    /// <summary><paramref name="option"/> with its last capture taking the craft from <paramref name="arriving"/> onto <paramref name="onto"/>.</summary>
+    private static TripOption WithCapture(TripOption option, FlightBurn capture, OrbitalElements arriving, OrbitalElements onto, double mu,
+        string title, string? note)
+    {
+        var before = Kepler.StateAt(arriving, mu, capture.Ut);
+        var after = Kepler.StateAt(onto, mu, capture.Ut);
+        var burn = capture with { Title = title, Note = note, Burn = NodeBurn.From(before, after.Velocity - before.Velocity) };
+        var lastLeg = option.Legs[^1];
+        return option with { Legs = [.. option.Legs.Take(option.Legs.Count - 1), lastLeg with { Plan = lastLeg.Plan with { Capture = burn } }] };
+    }
+
+    private static string Km(double m) => $"{m / 1000:0.#} km";
 
     /// <summary>The cheapest launch in orbital Δv; within 10 m/s of it, the one that arrives first.</summary>
     private static int BestLaunch(CelestialBody body, IReadOnlyList<LaunchOption> launches, RendezvousTarget first, RendezvousChoices choices)
@@ -299,57 +503,72 @@ public static class Rendezvous
         var t = startUt;
 
         // 1. Match planes at the cheaper of the next two crossings (unless it's so small the transfer takes it up).
+        Maneuver? plane = null;
         if (RelativeInclinationDeg(orbit, target.Orbit, mu) > PlaneToleranceDeg
-            && MatchPlane(body, orbit, target.Orbit, t) is var (plane, tilted) && plane.DeltaV >= SmallPlaneChangeDv)
+            && MatchPlane(body, orbit, target.Orbit, t) is var (tilt, tilted) && tilt.DeltaV >= SmallPlaneChangeDv)
         {
-            maneuvers.Add(plane);
+            plane = tilt;
             orbit = tilted;
-            t = plane.Ut + BurnGapS;
         }
 
-        // 2. Phase: wait for the window, or fly a phasing orbit to bring it sooner.
-        var guide = Guide(orbit, target.Orbit, mu, t);
-        var options = PhasingOptions(body, orbit, target.Orbit, guide, t);
+        // 2. Phase: wait for the window, or fly a phasing orbit to bring it sooner. After a plane change the phasing is
+        // part of the same burn: one burn turns the craft into the target's plane at the phasing orbit's speed.
+        var phaseAt = plane?.Ut ?? t;
+        var guide = Guide(orbit, target.Orbit, mu, phaseAt);
+        var options = PhasingOptions(body, orbit, target.Orbit, guide, phaseAt);
         var chosen = phasing switch
         {
-            null => AutoPhasing(guide, options, t),
+            null => AutoPhasing(guide, options, phaseAt),
             { Orbits: 0 } => null,
-            { } c => options.FirstOrDefault(o => o.Choice == c) ?? AutoPhasing(guide, options, t),
+            { } c => options.FirstOrDefault(o => o.Choice == c) ?? AutoPhasing(guide, options, phaseAt),
         };
         if (chosen is null && !double.IsFinite(guide.WaitS))
             chosen = options.OrderBy(o => o.ExtraDv).FirstOrDefault()
                 ?? throw new ArgumentException($"You and {target.Name} fly in step, and no phasing orbit fits. Change orbit first.");
 
-        double predicted, halfWindow;
+        double predicted, halfWindow, earliest;
         if (chosen is not null)
         {
-            var state = Kepler.StateAt(orbit, mu, t);
+            var state = Kepler.StateAt(orbit, mu, phaseAt);
             var dv = state.Velocity.Normalized * chosen.BurnDv;
             var after = new StateVector(state.Position, state.Velocity + dv);
-            var phasingOrbit = Kepler.ElementsFrom(after, mu, t);
-            maneuvers.Add(Burn(ManeuverKind.Phasing, t, state, dv, phasingOrbit, body) with { Phasing = chosen });
+            var phasingOrbit = Kepler.ElementsFrom(after, mu, phaseAt);
+            if (plane is not null)
+            {
+                var before = Kepler.StateAt(chaser, mu, phaseAt);
+                maneuvers.Add(Burn(ManeuverKind.PlaneChange, phaseAt, before, after.Velocity - before.Velocity, phasingOrbit, body) with
+                {
+                    AtAscendingNode = plane.AtAscendingNode,
+                    RelativeInclinationDeg = plane.RelativeInclinationDeg,
+                    Phasing = chosen,
+                });
+            }
+            else maneuvers.Add(Burn(ManeuverKind.Phasing, phaseAt, state, dv, phasingOrbit, body) with { Phasing = chosen });
             orbit = phasingOrbit;
             predicted = chosen.DepartureUt;
             halfWindow = 0.5 * chosen.PeriodS;
+            earliest = phaseAt + BurnGapS;
         }
         else
         {
-            predicted = t + guide.WaitS;
+            if (plane is not null) maneuvers.Add(plane);
+            predicted = phaseAt + guide.WaitS;
             halfWindow = Math.Min(0.5 * guide.SynodicPeriodS, Math.Max(guide.ChaserPeriodS, guide.TargetPeriodS));
+            earliest = plane is null ? t : plane.Ut + BurnGapS;
         }
 
         // 3. Transfer: Lambert intercepts around the predicted window; the cheapest (or the one picked) is flown. Sharing the
         // target's orbit, the phasing lap has already brought you to it: a short hop of a quarter to under half an orbit
         // closes what's left (a half-orbit hop would be a 180° transfer, which Lambert can't solve).
-        var earliest = t + (chosen is null ? 0 : BurnGapS);
         var depStart = Math.Max(earliest, predicted - halfWindow);
         var depEnd = Math.Max(depStart + 60, predicted + halfWindow);
         var (tofMin, tofMax) = guide.SameOrbit
             ? (0.15 * guide.TargetPeriodS, 0.45 * guide.TargetPeriodS)
             : (0.5 * guide.TransferTimeS, 1.5 * guide.TransferTimeS);
-        var plot = Porkchop(orbit, target.Orbit, mu, depStart, depEnd, tofMin, tofMax);
-        var best = Refine(orbit, target.Orbit, mu, plot, earliest);
-        var flown = intercept is not null && Cost(orbit, target.Orbit, mu, intercept.DepartureUt, intercept.FlightTimeS) is { } c2 && double.IsFinite(c2)
+        var floor = LowestPassRadiusM(body);
+        var plot = Porkchop(orbit, target.Orbit, mu, depStart, depEnd, tofMin, tofMax, floor);
+        var best = Refine(orbit, target.Orbit, mu, plot, earliest, floor);
+        var flown = intercept is not null && Cost(orbit, target.Orbit, mu, intercept.DepartureUt, intercept.FlightTimeS, floor) is { } c2 && double.IsFinite(c2)
             ? intercept : best;
 
         var (transfer, arrival) = Intercept(body, orbit, target.Orbit, flown.DepartureUt, flown.FlightTimeS);
@@ -376,7 +595,13 @@ public static class Rendezvous
     public static double RelativeInclinationDeg(OrbitalElements a, OrbitalElements b, double mu) =>
         Vector3d.Angle(Normal(a, mu), Normal(b, mu)) * RadToDeg;
 
-    private static Vector3d Normal(OrbitalElements orbit, double mu)
+    private static Vector3d Normal(OrbitalElements orbit, double mu) => OrbitNormal(orbit, mu);
+
+    /// <summary>
+    /// The direction of an orbit's angular momentum: the normal of its plane, on the side it goes round anticlockwise
+    /// from. The body's gravity only scales the speed, so any positive <paramref name="mu"/> gives the same direction.
+    /// </summary>
+    public static Vector3d OrbitNormal(OrbitalElements orbit, double mu = 1)
     {
         var s = Kepler.StateAt(orbit, mu, orbit.EpochS);
         return Vector3d.Cross(s.Position, s.Velocity).Normalized;
@@ -477,7 +702,7 @@ public static class Rendezvous
         var speed = state.Velocity.Length;
         var n2 = TwoPi / guide.TargetPeriodS;
         var delta = Wrap2Pi((guide.RequiredLeadDeg - guide.CurrentLeadDeg) * DegToRad);
-        var floor = Math.Max(body.AtmosphereHeightM, body.HighestElevationM ?? 0) + 1_000;
+        var floor = LowestPassRadiusM(body) - body.EquatorialRadiusM;
 
         var options = new List<PhasingOption>();
         for (var k = 1; k <= MaxPhasingLaps; k++)
@@ -515,40 +740,63 @@ public static class Rendezvous
 
     // ---------------- Lambert intercept ----------------
 
+    /// <summary>
+    /// The lowest a path may pass round <paramref name="body"/>: 1 km over its atmosphere, or over its highest peak on a body
+    /// without air. A transfer that dips lower would be slowed by the air (or hit a mountain) and miss. docs/MATH.md §4.4.
+    /// </summary>
+    public static double LowestPassRadiusM(CelestialBody body) =>
+        body.EquatorialRadiusM + Math.Max(body.AtmosphereHeightM, body.HighestElevationM ?? 0) + 1_000;
+
     /// <summary>Δv of leaving the chaser's orbit at <paramref name="dep"/> and matching the target after <paramref name="tof"/>; NaN when unsolvable.</summary>
-    private static double Cost(OrbitalElements chaser, OrbitalElements target, double mu, double dep, double tof)
+    private static double Cost(OrbitalElements chaser, OrbitalElements target, double mu, double dep, double tof, double floorRadiusM)
     {
         var c = Kepler.StateAt(chaser, mu, dep);
         var tgt = Kepler.StateAt(target, mu, dep + tof);
-        if (Solve(c, tgt.Position, dep, tof, mu) is not { } s) return double.NaN;
+        if (Solve(c, tgt.Position, dep, tof, mu, floorRadiusM) is not { } s) return double.NaN;
         return (s.DepartureVelocity - c.Velocity).Length + (tgt.Velocity - s.ArrivalVelocity).Length;
     }
 
     /// <summary>
     /// Lambert's problem, prograde about the chaser's orbit, keeping only answers that really arrive: next to a 180° transfer
     /// the transfer plane is undefined and the formulas divide by almost zero, so the result is flown (propagated) and
-    /// rejected if it ends more than 10 m from where it should.
+    /// rejected if it ends more than 10 m from where it should. A path that passes its periapsis below
+    /// <paramref name="floorRadiusM"/> on the way (into the air, or the ground) is rejected too.
     /// </summary>
-    private static Lambert.Solution? Solve(StateVector chaser, Vector3d arrival, double dep, double tof, double mu)
+    private static Lambert.Solution? Solve(StateVector chaser, Vector3d arrival, double dep, double tof, double mu, double floorRadiusM)
     {
         var h = Vector3d.Cross(chaser.Position, chaser.Velocity);
         if (Lambert.Solve(chaser.Position, arrival, tof, mu, h) is not { } s) return null;
         var departing = new StateVector(chaser.Position, s.DepartureVelocity);
         if (!double.IsFinite(s.DepartureVelocity.Length) || 2 / chaser.Position.Length - s.DepartureVelocity.Length * s.DepartureVelocity.Length / mu <= 0)
             return null; // not a closed orbit
-        var flown = Kepler.StateAt(Kepler.ElementsFrom(departing, mu, dep), mu, dep + tof).Position;
-        return (flown - arrival).Length <= 10 ? s : null;
+        var path = Kepler.ElementsFrom(departing, mu, dep);
+        var flown = Kepler.StateAt(path, mu, dep + tof).Position;
+        if ((flown - arrival).Length > 10) return null;
+        return DipsBelow(path, mu, dep, dep + tof, floorRadiusM) ? null : s;
+    }
+
+    /// <summary>
+    /// The path comes lower than <paramref name="floorRadiusM"/> between <paramref name="fromUt"/> and <paramref name="toUt"/>.
+    /// Between its ends the height only dips below both by passing periapsis, so that's the one point to check. When an end
+    /// is itself under the floor (a craft already that low), the floor is that end's height instead.
+    /// </summary>
+    public static bool DipsBelow(OrbitalElements path, double mu, double fromUt, double toUt, double floorRadiusM)
+    {
+        var rp = Kepler.PeriapsisRadius(path);
+        var lowestEnd = Math.Min(Kepler.StateAt(path, mu, fromUt).Position.Length, Kepler.StateAt(path, mu, toUt).Position.Length);
+        if (rp >= Math.Min(floorRadiusM, lowestEnd) - 1) return false;
+        return Kepler.NextPeriapsisUt(path, mu, fromUt) is { } pe && pe < toUt;
     }
 
     private static PorkchopPlot Porkchop(OrbitalElements chaser, OrbitalElements target, double mu, double depStart, double depEnd,
-        double tofMin, double tofMax, int columns = 100, int rows = 60)
+        double tofMin, double tofMax, double floorRadiusM, int columns = 100, int rows = 60)
     {
         var grid = new double[columns * rows];
         Parallel.For(0, columns, col =>
         {
             var dep = depStart + (depEnd - depStart) * col / (columns - 1);
             for (var row = 0; row < rows; row++)
-                grid[row * columns + col] = Cost(chaser, target, mu, dep, tofMin + (tofMax - tofMin) * row / (rows - 1));
+                grid[row * columns + col] = Cost(chaser, target, mu, dep, tofMin + (tofMax - tofMin) * row / (rows - 1), floorRadiusM);
         });
         return new PorkchopPlot(depStart, depEnd, tofMin, tofMax, columns, rows, grid);
     }
@@ -557,14 +805,15 @@ public static class Rendezvous
     /// The cheapest intercept (transfer + match-velocity Δv) leaving between <paramref name="depStart"/> and
     /// <paramref name="depEnd"/> with a flight time in the given range. Searching, not fixing the times, steers clear of
     /// the 180° transfer, where a tiny tilt between the orbits makes Lambert's answer enormous. docs/MATH.md §8.4.
+    /// Paths passing below <paramref name="floorRadiusM"/> (see <see cref="LowestPassRadiusM"/>) are left out.
     /// </summary>
     public static InterceptPoint CheapestIntercept(OrbitalElements chaser, OrbitalElements target, double mu, double depStart, double depEnd,
-        double tofMin, double tofMax) =>
-        Refine(chaser, target, mu, Porkchop(chaser, target, mu, depStart, Math.Max(depEnd, depStart + 1), Math.Max(60, tofMin), Math.Max(tofMin + 1, tofMax), 40, 30),
-            depStart);
+        double tofMin, double tofMax, double floorRadiusM) =>
+        Refine(chaser, target, mu, Porkchop(chaser, target, mu, depStart, Math.Max(depEnd, depStart + 1), Math.Max(60, tofMin), Math.Max(tofMin + 1, tofMax),
+            floorRadiusM, 40, 30), depStart, floorRadiusM);
 
     /// <summary>The cheapest grid cell, then a few rounds of zooming in around it (as in the Transfer Planner).</summary>
-    private static InterceptPoint Refine(OrbitalElements chaser, OrbitalElements target, double mu, PorkchopPlot plot, double earliest)
+    private static InterceptPoint Refine(OrbitalElements chaser, OrbitalElements target, double mu, PorkchopPlot plot, double earliest, double floorRadiusM)
     {
         var bestCost = double.PositiveInfinity;
         double bestDep = 0, bestTof = 0;
@@ -583,7 +832,7 @@ public static class Rendezvous
             {
                 var dep = Math.Max(earliest, centreDep + i * depStep / 5);
                 var tof = Math.Max(60, centreTof + j * tofStep / 5);
-                var cost = Cost(chaser, target, mu, dep, tof);
+                var cost = Cost(chaser, target, mu, dep, tof, floorRadiusM);
                 if (cost < bestCost) (bestCost, bestDep, bestTof) = (cost, dep, tof);
             }
             depStep /= 3;
@@ -600,8 +849,9 @@ public static class Rendezvous
         var c = Kepler.StateAt(chaser, mu, departureUt);
         var arrivalUt = departureUt + flightTimeS;
         var tgt = Kepler.StateAt(target, mu, arrivalUt);
-        var s = Solve(c, tgt.Position, departureUt, flightTimeS, mu)
-                ?? throw new ArgumentException("No intercept for that departure and flight time.");
+        var s = Solve(c, tgt.Position, departureUt, flightTimeS, mu, LowestPassRadiusM(body))
+                ?? throw new ArgumentException($"No intercept for that departure and flight time that stays clear of {body.Name}'s " +
+                                               (body.AtmosphereHeightM > 0 ? "atmosphere." : "surface."));
 
         var transferOrbit = Kepler.ElementsFrom(new StateVector(c.Position, s.DepartureVelocity), mu, departureUt);
         var lead = LeadAngle(c, Kepler.StateAt(target, mu, departureUt).Position) * RadToDeg;

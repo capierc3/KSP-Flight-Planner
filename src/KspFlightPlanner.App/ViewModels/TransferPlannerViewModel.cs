@@ -150,6 +150,24 @@ public sealed class TransferPlannerViewModel : LegToolViewModel<TransferLegLink>
         Recalculate();
     }
 
+    /// <summary>
+    /// Shows a trip between two stock bodies searched from <paramref name="earliestUt"/> (the Transfer windows list), with
+    /// the default orbits. Leaves a mission leg being edited first.
+    /// </summary>
+    public void PlanTrip(long originId, long destinationId, double earliestUt)
+    {
+        if (Leg is not null) StopEditingLeg();
+        if (Systems.FirstOrDefault(s => s.Name == BodyRepository.StockSystemName) is { } stock) SelectedSystem = stock;
+        if (Origins.FirstOrDefault(b => b.Id == originId) is not { } origin) return;
+        _suspendRecalculate = true;
+        SelectedOrigin = origin;
+        _suspendRecalculate = true; // the origin turns it off again
+        if (Destinations.FirstOrDefault(b => b.Id == destinationId) is { } destination) SelectedDestination = destination;
+        SetEarliest(earliestUt);
+        _suspendRecalculate = false;
+        Recalculate();
+    }
+
     /// <summary>Back to using the planner on its own; the mission keeps the window last chosen.</summary>
     public override void StopEditingLeg()
     {

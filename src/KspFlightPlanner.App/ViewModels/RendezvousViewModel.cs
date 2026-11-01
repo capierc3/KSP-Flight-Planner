@@ -93,6 +93,16 @@ public sealed record RendezvousLegLink(object Owner, string Title, RendezvousSpa
 }
 
 /// <summary>
+/// A place to launch from: the KSC, or a landed craft, flag or waypoint on any body (a lander on the Mun lifting off to
+/// meet Mun Station). <paramref name="Key"/> stays the same while the save does.
+/// </summary>
+public sealed record LaunchSpot(string Key, string Name, string Source, CelestialBody Body, double LatitudeDeg, double LongitudeDeg)
+{
+    public string Text => Source.Length == 0 ? $"{Body.Name} — {Name}" : $"{Body.Name} — {Name} ({Source.ToLowerInvariant()})";
+    public override string ToString() => Text;
+}
+
+/// <summary>
 /// The Rendezvous pane: meet one or more craft in orbit (relays to repair, debris to deorbit), starting from a launch at
 /// KSC or from a craft already in orbit. Burns are shown as exact maneuver-node values or as instructions to fly by feel.
 /// </summary>
@@ -107,10 +117,30 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private readonly GameCalendar _calendar = GameCalendar.Kerbin;
     private readonly SurfaceBakeRepository? _surfaceBakes;
 
-    /// <summary>KSC, with its planet's rotation at UT 0 from the surface bake when there is one (else the assumed 90°).</summary>
-    private LaunchSite Site => _surfaceBakes?.Get(LaunchSite.Ksc.BodyName) is { } bake
-        ? LaunchSite.Ksc with { BodyInitialRotationDeg = bake.InitialRotationDeg }
-        : LaunchSite.Ksc;
+    private readonly BodyRotation? _rotation;
+    private readonly Dictionary<string, double> _rotationDeg = []; // asked of the live game, by body
+    private LaunchSpot? _selectedSpot;
+
+    /// <summary>
+    /// Where the launch lifts off, with its body's rotation at UT 0: from the surface bake, else asked of the live game,
+    /// else (Kerbin only) the stock 90°. Null when that rotation isn't known yet.
+    /// </summary>
+    private LaunchSite? Site
+    {
+        get
+        {
+            var spot = SelectedSpot;
+            if (spot is null) return null;
+            double? theta = _surfaceBakes?.Get(spot.Body.Name) is { } bake ? bake.InitialRotationDeg
+                : _rotationDeg.TryGetValue(spot.Body.Name, out var asked) ? asked
+                : spot.Body.Name == LaunchSite.Ksc.BodyName ? LaunchSite.Ksc.BodyInitialRotationDeg
+                : null;
+            return theta is { } t ? new LaunchSite(spot.Name, spot.Body.Name, spot.LatitudeDeg, spot.LongitudeDeg, t) : null;
+        }
+    }
+
+    /// <summary>The body the launch is from (Kerbin until another spot is picked).</summary>
+    private string LaunchBody => SelectedSpot?.Body.Name ?? LaunchSite.Ksc.BodyName;
 
     private bool _startFromLaunch = true;
     private CraftChoice? _selectedChaser;
@@ -131,6 +161,8 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private DesignChoice? _selectedDesign;
 
     private int? _launchChoice;
+    private int? _tripChoice; // which way of making the trip to the targets' body (null: the cheapest in all)
+    private string? _tripProblem; // why the trip couldn't be planned exactly, when the Δv map's estimate stands in
     private readonly List<PhasingChoice?> _phasing = [];
     private readonly List<InterceptPoint?> _intercepts = [];
 
@@ -154,9 +186,10 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private readonly Dictionary<string, CustomLocation> _craftLocations = [];
 
     public RendezvousViewModel(SaveSync sync, CustomLocationRepository locations, PlannerEvents events, DesignLibrary? designs = null,
-        FlightRepository? flights = null, DvMapRepository? maps = null, SurfaceBakeRepository? bakes = null)
+        FlightRepository? flights = null, DvMapRepository? maps = null, SurfaceBakeRepository? bakes = null, BodyRotation? rotation = null)
     {
         _surfaceBakes = bakes;
+        _rotation = rotation;
         _sync = sync;
         _maps = maps;
         _locations = locations;
@@ -165,7 +198,11 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         _events = events;
         sync.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SaveSync.Save)) RebuildCrafts();
+            if (e.PropertyName == nameof(SaveSync.Save))
+            {
+                RebuildSpots();
+                RebuildCrafts();
+            }
         };
         sync.Parts.PropertyChanged += (_, e) =>
         {
@@ -184,6 +221,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             _map = null;
             RebuildCrafts();
         };
+        RebuildSpots();
         if (designs is not null) designs.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DesignLibrary.Entries)) RefreshDesignChoices();
@@ -483,6 +521,77 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         set => SetProperty(ref _targetToAdd, value);
     }
 
+    /// <summary>Where a launch can lift off: the KSC, then landed craft, flags and KerbNet waypoints on every body.</summary>
+    public ObservableCollection<LaunchSpot> LaunchSpots { get; } = [];
+
+    public LaunchSpot? SelectedSpot
+    {
+        get => _selectedSpot ?? LaunchSpots.FirstOrDefault();
+        set
+        {
+            if (value is null || value == SelectedSpot) return;
+            var bodyChanged = value.Body.Name != LaunchBody;
+            _selectedSpot = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LaunchTitle));
+            if (bodyChanged)
+            {
+                // A climb from another body: its own parking orbit and a climb to match (a starting point to tune).
+                var ascent = AscentProfile.Typical(value.Body);
+                _parkingAltitudeText = Km(ascent.ParkingAltitudeM);
+                _ascentMinutesText = $"{ascent.AscentTimeS / 60:0.#}";
+                _downrangeText = $"{ascent.DownrangeDeg:0}";
+                foreach (var name in new[] { nameof(ParkingAltitudeText), nameof(AscentMinutesText), nameof(DownrangeText) }) OnPropertyChanged(name);
+                _ = AskRotationAsync(value.Body);
+            }
+            StartChanged();
+        }
+    }
+
+    /// <summary>"Launch from Kerbal Space Center", "Launch from Mun Lander".</summary>
+    public string LaunchTitle => $"Launch from {SelectedSpot?.Name ?? LaunchSite.Ksc.Name}";
+
+    /// <summary>Asks the live game (or the bake) for a body's rotation, then plans again with it.</summary>
+    private async Task AskRotationAsync(CelestialBody body)
+    {
+        if (_rotation is null || _surfaceBakes?.Get(body.Name) is not null || _rotationDeg.ContainsKey(body.Name)) return;
+        if (await _rotation.InitialRotationDegAsync(body) is not { } deg) return;
+        _rotationDeg[body.Name] = deg;
+        if (StartFromLaunch && LaunchBody == body.Name) InputsChanged();
+    }
+
+    /// <summary>The KSC first, then every landed craft, flag and waypoint in the save; keeps the pick when it's still there.</summary>
+    private void RebuildSpots()
+    {
+        var bodies = _sync.StockBodies();
+        var keep = _selectedSpot?.Key;
+        var list = new List<LaunchSpot>();
+        if (bodies.TryGetValue(LaunchSite.Ksc.BodyName, out var kerbin))
+            list.Add(new LaunchSpot("ksc", LaunchSite.Ksc.Name, "", kerbin, LaunchSite.Ksc.LatitudeDeg, LaunchSite.Ksc.LongitudeDeg));
+        foreach (var body in bodies.Values.Where(b => b.ParentId is not null && b.RotationPeriodS != 0)
+                     .OrderBy(b => Array.IndexOf(SavedOrbit.StockBodyOrder, b.Name) is var i and >= 0 ? i : int.MaxValue))
+        {
+            // Landed craft that can fly (not debris, surface experiments or kerbals on EVA), then flags and waypoints.
+            foreach (var v in (_sync.Save?.Vessels ?? []).Where(v => v.Situation is "LANDED" or "SPLASHED" && v.Orbit?.BodyName == body.Name
+                             && SaveImport.IsUsuallyWanted(v) && v.Type is not ("Flag" or "EVA")
+                             && double.IsFinite(v.LatitudeDeg) && double.IsFinite(v.LongitudeDeg)).OrderBy(v => v.Name))
+                list.Add(new LaunchSpot($"vessel:{v.Id}", v.Name, "Landed craft", body, v.LatitudeDeg, v.LongitudeDeg));
+            foreach (var t in Landing.Targets(body, _sync.Save).Where(t => t.Source is "Flag" or "KerbNet waypoint")
+                         .OrderBy(t => t.Source == "Flag" ? 0 : 1).ThenBy(t => t.Name))
+                list.Add(new LaunchSpot($"{body.Name}|{t.Source}|{t.Name}|{t.LatitudeDeg:0.####}|{t.LongitudeDeg:0.####}", t.Name, t.Source, body,
+                    t.LatitudeDeg, t.LongitudeDeg));
+        }
+        if (list.Select(l => l.Key).SequenceEqual(LaunchSpots.Select(l => l.Key))) return;
+        var suspend = _suspend;
+        _suspend = true;
+        LaunchSpots.Clear();
+        foreach (var spot in list) LaunchSpots.Add(spot);
+        _selectedSpot = list.FirstOrDefault(l => l.Key == keep) ?? (keep is null ? null : _selectedSpot);
+        _suspend = suspend;
+        OnPropertyChanged(nameof(SelectedSpot));
+        OnPropertyChanged(nameof(LaunchTitle));
+    }
+
     public string ParkingAltitudeText
     {
         get => _parkingAltitudeText;
@@ -587,6 +696,14 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     /// <summary>Plan from the craft being flown in KSP.</summary>
     private void UseActiveVessel()
     {
+        // On the ground: launch from where it stands.
+        if (_sync.ActiveCraft is { } active && _sync.WhereIs(active) is (_, _, true)
+            && LaunchSpots.FirstOrDefault(s => s.Source == "Landed craft" && s.Name == active.Name) is { } spot)
+        {
+            SelectedSpot = spot;
+            SetStart(mission: false, launch: true);
+            return;
+        }
         if (CraftFor(ActiveKey) is not { } craft) return;
         _suspend = true;
         _selectedChaser = craft;
@@ -620,6 +737,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             BodyName = request.Body.Name,
             Craft = craft,
             Approach = approach,
+            TripFromBody = plan.Trip is not null ? request.From?.Body.Name : null,
             StartOrbit = plan.Launch?.ParkingOrbit ?? request.Chaser?.Orbit,
             Burns = FlightViewModel.RendezvousBurns(plan),
             PlannedUt = request.EarliestUt,
@@ -627,6 +745,8 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             Note = plan.Launch is { } launch
                 ? $"Starts with a launch at {_calendar.FormatDate(launch.LiftoffUt)}, heading {launch.HeadingDeg:0}°. Once in orbit, use the craft you're " +
                   "flying to re-plan from its real orbit."
+                : plan.Trip is not null && request.From is { } tripFrom
+                    ? $"Starts with the trip from {tripFrom.Body.Name} (the first burns). Once you're on your way, Re-plan from here corrects it from your real path."
                 : approach is not null
                     ? $"Starts around {approach.FromBody}: fly to {request.Body.Name}'s {Km(approach.ParkingAltitudeM)} km orbit first (the steps below). " +
                       "The burns are planned from anywhere on that orbit, so once you're there, Re-plan from here."
@@ -708,7 +828,8 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         get
         {
             if (_approach is not { } a || _request is not { } r) return "";
-            var from = $"Fly the Δv map's steps from {a.FromBody}'s {Km(a.FromAltitudeM)} km low orbit (yours may differ) to {r.Body.Name}'s " +
+            var why = _tripProblem is { } problem ? $"The trip couldn't be planned from your orbit ({problem.TrimEnd('.')}), so this is the Δv map's estimate. " : "";
+            var from = why + $"Fly the Δv map's steps from {a.FromBody}'s {Km(a.FromAltitudeM)} km low orbit (yours may differ) to {r.Body.Name}'s " +
                        $"{Km(a.ParkingAltitudeM)} km orbit: {Format.Speed0(a.DeltaV)}" +
                        (a.PlaneChangeDv > 0 ? $", plus up to {Format.Speed0(a.PlaneChangeDv)} for plane changes" : "") + ". ";
             var when = a.TripTimeS is { } trip
@@ -716,6 +837,39 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
                 : $"It waits for a launch window: pick one on the Transfer Planner, and set the start time to when you get to {r.Body.Name}. ";
             return from + when + "Where you'll be on that orbit isn't known yet: once you're there, click \"Use the craft I'm flying\" again " +
                    "(or Re-plan in the Flight pane) to plan the rendezvous from your real orbit.";
+        }
+    }
+
+    // From a craft around another body: the trip there, planned from its real orbit (§4.6).
+
+    /// <summary>The ways of making the trip to the targets' body (cheapest, balanced, meets soonest).</summary>
+    public ObservableCollection<LaunchRow> TripRows { get; } = [];
+
+    /// <summary>The trip's burns, flown before the meeting.</summary>
+    public ObservableCollection<StepRow> TripSteps { get; } = [];
+
+    public bool HasTrip => TripSteps.Count > 0;
+    public bool HasTripChoice => TripRows.Count > 1;
+
+    public string TripTitle => _request?.From is { } from && _request is { } r ? $"Fly from {from.Body.Name} to {r.Body.Name}" : "";
+
+    public string TripText => _request is { From: not null } r && _plan?.Trip is not null && r.Chaser is { } chaser
+        ? $"Planned from {chaser.Name}'s orbit now. The trip comes in as near {r.Targets[0].Name}'s plane as it can, and is captured " +
+          $"{Km(Rendezvous.MeetingAltitudeM(r.Body, r.Targets[0].Orbit))} km up, close to its height, so meeting it below costs little. " +
+          "Once you're on your way, Re-plan in the Flight pane corrects the course from your real path."
+        : "";
+
+    /// <summary>The way of making the trip that's flown; picking another row re-plans from it.</summary>
+    public int TripIndex
+    {
+        get => _plan?.TripIndex ?? -1;
+        set
+        {
+            if (_suspend || value < 0 || value == _plan?.TripIndex) return;
+            _tripChoice = value;
+            _phasing.Clear();
+            _intercepts.Clear();
+            Recalculate();
         }
     }
 
@@ -838,15 +992,17 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         var list = new List<CraftChoice>();
         var inSave = new HashSet<string>();
 
-        if (_sync.Save is { } save)
+        if (_sync.Save is not null)
         {
-            foreach (var v in save.Vessels)
+            // Craft docked in a stack (a shuttle at a station) are listed after it, as craft of their own.
+            foreach (var v in _sync.Craft)
             {
                 if (!v.IsOrbiting || v.Orbit is not { } o || o.BodyName is not { } name || !bodies.TryGetValue(name, out var body)) continue;
                 if (!double.IsFinite(o.SemiMajorAxisM) || o.SemiMajorAxisM <= 0 || o.Eccentricity is < 0 or >= 1) continue;
                 var orbit = o.ToElements();
                 inSave.Add(v.Id);
-                list.Add(new CraftChoice($"vessel:{v.Id}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)}", body, orbit, v));
+                var docked = v.DockedInId is { } stackId && _sync.FindVessel(stackId) is { } stack ? $" · docked at {stack.Name}" : "";
+                list.Add(new CraftChoice($"vessel:{v.Id}", v.Name, $"{SaveImport.TypeText(v.Type)}, {body.Name} {OrbitText(orbit, body)}{docked}", body, orbit, v));
             }
         }
 
@@ -915,7 +1071,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     /// the first target's (the mission flies there first); null until there is one.
     /// </summary>
     private string? RouteBody => _startFromMission ? Targets.FirstOrDefault()?.Body.Name
-        : StartFromLaunch ? Site.BodyName : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
+        : StartFromLaunch ? LaunchBody : Targets.FirstOrDefault()?.Body.Name ?? SelectedChaser?.Body.Name;
 
     /// <summary>The Δv map's way from a craft around <paramref name="from"/> to a rendezvous around <paramref name="to"/>.</summary>
     private RendezvousApproach? Approach(string from, string to) =>
@@ -993,6 +1149,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     {
         if (_suspend) return;
         _launchChoice = null;
+        _tripChoice = null;
         _phasing.Clear();
         _intercepts.Clear();
         Recalculate();
@@ -1022,7 +1179,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         ErrorText = null;
         OnPropertyChanged(nameof(EmptyText));
 
-        var request = BuildRequest(out var approach, out var error);
+        var request = BuildRequest(out var approach, out var fallback, out var error);
         if (request is null)
         {
             ErrorText = error;
@@ -1030,14 +1187,26 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             return;
         }
 
-        var choices = new RendezvousChoices(_launchChoice, _phasing.ToList(), _intercepts.ToList());
+        var choices = new RendezvousChoices(_launchChoice, _phasing.ToList(), _intercepts.ToList()) { Trip = _tripChoice };
         SetBusy(+1);
         try
         {
-            var plan = await Task.Run(() => Rendezvous.Plan(request, choices));
+            string? problem = null;
+            var (planned, plan) = await Task.Run(() =>
+            {
+                try { return (request, Rendezvous.Plan(request, choices)); }
+                catch (ArgumentException ex) when (fallback is not null)
+                {
+                    // The trip there couldn't be planned exactly: the Δv map's estimate of the way there stands in.
+                    problem = ex.Message;
+                    return (fallback, Rendezvous.Plan(fallback, choices with { Trip = null }));
+                }
+            });
             if (version != _version) return;
-            SetPlan(request, plan, approach);
-            SaveLeg(request, plan);
+            _tripProblem = problem;
+            if (problem is null) approach = null;
+            SetPlan(planned, plan, approach);
+            SaveLeg(planned, plan);
         }
         catch (ArgumentException ex)
         {
@@ -1052,9 +1221,12 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     }
 
     /// <param name="approach">From a craft around another body: the Δv map's way to the targets' body, flown first.</param>
-    private RendezvousRequest? BuildRequest(out RendezvousApproach? approach, out string? error)
+    /// <param name="fallback">From a craft around another body: the request with the Δv map's way there instead, used when the
+    /// trip can't be planned from the craft's orbit.</param>
+    private RendezvousRequest? BuildRequest(out RendezvousApproach? approach, out RendezvousRequest? fallback, out string? error)
     {
         approach = null;
+        fallback = null;
         error = null;
         if (Targets.Count == 0) return null;
         var bodies = _sync.StockBodies();
@@ -1080,12 +1252,20 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             var from = new RendezvousTarget(chaser.Name, chaser.Orbit);
             if (chaser.Body.Name != body.Name)
             {
-                // Around another body: the map's steps reach the targets' body's low orbit, and the rendezvous starts there
-                // when they're flown (kept to the minute), from anywhere on that orbit.
+                // Around another body: the trip there is planned from the craft's real orbit, into the first target's plane
+                // (§4.6). Should that fail, the map's steps reach the targets' body's low orbit and the rendezvous starts
+                // there when they're flown (kept to the minute), from anywhere on that orbit.
                 approach = Approach(chaser.Body.Name, body.Name);
-                if (approach is null) { error = $"The Δv map has no way from {chaser.Body.Name} to a low orbit of {body.Name}."; return null; }
-                from = new RendezvousTarget($"{body.Name} parking orbit", ParkingOrbit(body, approach.ParkingAltitudeM));
-                if (approach.TripTimeS is { } trip) start = Math.Ceiling((start + trip) / 60) * 60;
+                if (approach is not null)
+                {
+                    var parking = new RendezvousTarget($"{body.Name} parking orbit", ParkingOrbit(body, approach.ParkingAltitudeM));
+                    var then = approach.TripTimeS is { } trip ? Math.Ceiling((start + trip) / 60) * 60 : start;
+                    fallback = new RendezvousRequest(body, targets, then, StayMinutes * 60, parking, DeorbitPeriapsisAltitudeM: deorbit);
+                }
+                return new RendezvousRequest(body, targets, start, StayMinutes * 60, from, DeorbitPeriapsisAltitudeM: deorbit)
+                {
+                    From = new TripStart(chaser.Body, bodies.Values.ToList()),
+                };
             }
             return new RendezvousRequest(body, targets, start, StayMinutes * 60, from, DeorbitPeriapsisAltitudeM: deorbit);
         }
@@ -1093,7 +1273,13 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         if (!TryNumber(ParkingAltitudeText, out var parkingKm) || parkingKm <= 0) { error = "Enter the parking orbit altitude in km."; return null; }
         if (!TryNumber(AscentMinutesText, out var ascentMin) || ascentMin < 0) { error = "Enter how many minutes the climb to orbit takes."; return null; }
         if (!TryNumber(DownrangeText, out var downrange)) { error = "Enter how far around the planet you reach orbit, in degrees."; return null; }
-        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: Site,
+        if (Site is not { } site)
+        {
+            _ = AskRotationAsync(body);
+            error = $"Launching from {body.Name} needs its rotation: connect to KSP (or bake {body.Name} with KSP › Bake Surface Data) and it plans at once.";
+            return null;
+        }
+        return new RendezvousRequest(body, targets, start, StayMinutes * 60, Site: site,
             Ascent: new AscentProfile(parkingKm * 1000, ascentMin * 60, downrange), DeorbitPeriapsisAltitudeM: deorbit);
     }
 
@@ -1106,6 +1292,8 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
         LaunchRows.Clear();
         LaunchStep = null;
+        TripRows.Clear();
+        TripSteps.Clear();
         ApproachSteps.Clear();
         Legs.Clear();
         PlotLegs.Clear();
@@ -1119,6 +1307,8 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             if (FollowSaveTime && _approach is null && _sync.Now is { } live) LeadNote = SkippedCrossingNote(request, plan, live, "your", canLower: true) ?? "";
             var number = 1;
             foreach (var step in _approach?.Steps ?? []) ApproachSteps.Add(ApproachStepFor(step, number++));
+            foreach (var option in plan.TripOptions) TripRows.Add(TripRowFor(option, now));
+            foreach (var burn in plan.Trip?.Burns ?? []) TripSteps.Add(TripStepFor(burn, now, number++));
             if (plan.Launch is { } launch)
             {
                 foreach (var option in plan.LaunchOptions) LaunchRows.Add(LaunchRowFor(option, now));
@@ -1171,7 +1361,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     private static readonly string[] PlanProperties =
     [
         nameof(LeadNote), nameof(HasLeadNote),
-        nameof(HasPlan), nameof(HasNoPlan), nameof(EmptyText), nameof(HasApproach), nameof(ApproachTitle), nameof(ApproachText), nameof(HasLaunch), nameof(LaunchIndex), nameof(LaunchStep), nameof(DeorbitStep), nameof(HasDeorbit),
+        nameof(HasPlan), nameof(HasNoPlan), nameof(EmptyText), nameof(HasTrip), nameof(HasTripChoice), nameof(TripTitle), nameof(TripText), nameof(TripIndex), nameof(HasApproach), nameof(ApproachTitle), nameof(ApproachText), nameof(HasLaunch), nameof(LaunchIndex), nameof(LaunchStep), nameof(DeorbitStep), nameof(HasDeorbit),
         nameof(CanAddToMission),
     ];
 
@@ -1187,6 +1377,24 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
     }
 
     // ---------------- Formatting the plan ----------------
+
+    private LaunchRow TripRowFor(TripToTarget t, double now) =>
+        new($"{(t.Label.Length > 0 ? t.Label : "The way there")}  ·  {Format.Speed0(t.TotalDv)}",
+            $"leaves {Wait(t.Trip.DepartureUt - now)} · meets {_request?.Targets[0].Name ?? "the target"} {_calendar.FormatDate(t.MeetUt)} · " +
+            $"trip {Format.Speed0(t.Trip.DeltaV)} + meeting {Format.Speed0(t.MeetDv)}");
+
+    private StepRow TripStepFor(FlightBurn b, double now, int number)
+    {
+        var exact = new List<Fact>
+        {
+            new("When", _calendar.FormatDate(b.Ut)),
+            new("UT", Ut(b.Ut)),
+            new("Prograde", $"{b.Burn.Prograde:0.0} m/s"),
+            new("Normal", $"{b.Burn.Normal:0.0} m/s"),
+            new("Radial", $"{b.Burn.Radial:0.0} m/s"),
+        };
+        return new StepRow($"{number}", b.Title, _calendar.FormatDate(b.Ut), Wait(b.Ut - now), Format.Speed0(b.DeltaV), b.Note ?? "", exact);
+    }
 
     private LaunchRow LaunchRowFor(LaunchOption o, double now)
     {
@@ -1215,7 +1423,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
             new("Parking orbit", $"{alt} km circular, inclination {o.ParkingOrbit.InclinationDeg:0.##}°"),
             new("In orbit by", _calendar.FormatDate(o.InsertionUt)),
         };
-        return new StepRow($"{number}", $"Launch from {Site.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
+        return new StepRow($"{number}", $"Launch from {request.Site!.Name}", _calendar.FormatDate(o.LiftoffUt), Wait(o.LiftoffUt - now),
             request.Body.SurfaceToLowOrbitDv is { } dv ? $"≈ {Format.Speed0(dv)}" : "", feel, exact);
     }
 
@@ -1266,6 +1474,12 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         var after = $"Pe {Km(m.PeriapsisAltitudeM)} km · Ap {Km(m.ApoapsisAltitudeM)} km";
         var (title, feel) = m.Kind switch
         {
+            ManeuverKind.PlaneChange when m.Phasing is { } p => ("Match planes and phase",
+                $"Best as a node. At the {(m.AtAscendingNode ? "AN" : "DN")} marker, one burn of {Format.Speed0(m.DeltaV)} " +
+                $"({Signed(b.Normal)} normal, {Signed(b.Prograde)} prograde) tilts you into {target}'s plane and onto a phasing orbit " +
+                (p.Higher ? $"with its far side at {Km(m.ApoapsisAltitudeM)} km" : $"with its far side at {Km(m.PeriapsisAltitudeM)} km") +
+                $". Fly {p.Orbits} full lap{(p.Orbits == 1 ? "" : "s")} ({Minutes(p.Orbits * p.PeriodS)}) — " +
+                (p.Higher ? "the target catches up with you." : "you catch up with the target.")),
             ManeuverKind.PlaneChange => ("Match planes",
                 $"Set {target} as target. At the {(m.AtAscendingNode ? "AN" : "DN")} marker, burn {(b.Normal >= 0 ? "normal" : "anti-normal")} " +
                 $"{Format.Speed0(m.DeltaV)} until the relative inclination reads 0.0° (now {m.RelativeInclinationDeg:0.00}°)."),
@@ -1316,6 +1530,11 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
                     BudgetLines.Add(new BudgetLine($"{step.From.DisplayName} → {step.To.DisplayName}", step.DeltaV,
                         step.PlaneChangeDv > 0 ? $"Δv map; up to {Format.Speed0(step.PlaneChangeDv)} more for a plane change" : "Δv map"));
             }
+            if (plan.Trip is { } tripPlan && request.From is { } tripFrom)
+            {
+                BudgetLines.Add(new BudgetLine($"Fly from {tripFrom.Body.Name} to {request.Body.Name}", null, IsHeader: true));
+                foreach (var b in tripPlan.Burns) BudgetLines.Add(new BudgetLine(b.Title, b.DeltaV));
+            }
             if (plan.Launch is not null)
                 BudgetLines.Add(new BudgetLine($"Launch: {request.Body.Name} surface → {Km(request.Ascent!.ParkingAltitudeM)} km orbit",
                     request.Body.SurfaceToLowOrbitDv, "Estimate; depends on your ascent"));
@@ -1333,6 +1552,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
     private static string KindTitle(Maneuver m) => m.Kind switch
     {
+        ManeuverKind.PlaneChange when m.Phasing is not null => "Match planes and phase",
         ManeuverKind.PlaneChange => "Match planes",
         ManeuverKind.Phasing => "Phasing orbit",
         ManeuverKind.Transfer => "Transfer burn",

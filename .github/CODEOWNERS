@@ -1,0 +1,4 @@
+# Every file in the repo is owned by @capierc3.
+# With "Require review from Code Owners" on in the branch ruleset,
+# PRs into develop and main need their approval before merging.
+* @capierc3

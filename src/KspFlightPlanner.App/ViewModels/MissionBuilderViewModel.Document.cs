@@ -75,7 +75,7 @@ public sealed partial class MissionBuilderViewModel
         }
     }
 
-    public string WindowTitle => $"{_missionName}{(IsDirty ? " *" : "")} — KSP Flight Planner";
+    public string WindowTitle => $"{_missionName}{(IsDirty ? " *" : "")} — KSP Flight Planner {BuildInfo.TitleVersion}";
 
     /// <summary>Every saved mission, most recently saved first.</summary>
     public ObservableCollection<SavedMissionItem> SavedMissions { get; } = [];
@@ -233,7 +233,7 @@ public sealed partial class MissionBuilderViewModel
     }
 
     private DesignChoice SelectDesign(string? path) =>
-        DesignChoices.FirstOrDefault(c => c.Design is not null && c.Path == path) ?? DesignChoices[0];
+        DesignChoices.FirstOrDefault(c => !c.IsNone && c.Path == path) ?? DesignChoices[0];
 
     private void RefreshSavedMissions()
     {

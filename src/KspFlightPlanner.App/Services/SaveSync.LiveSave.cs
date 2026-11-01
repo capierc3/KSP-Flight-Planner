@@ -7,7 +7,7 @@ namespace KspFlightPlanner.App.Services;
 /// <summary>
 /// Which save the running game is playing (kRPC can't name it). Checked on connecting and on every scene change by
 /// looking for the game's vessels in each save, and whenever KSP writes a save: it writes the one it's playing at every
-/// scene change, so a save written with the game's mode and time is the one (docs/MATH.md §8.12). While the game plays
+/// scene change, so a save written with the game's mode and time is the one (docs/SAVE-AND-LIVE-GAME.md §1). While the game plays
 /// another save, its live time and orbits aren't laid over the chosen one, and the flight log doesn't record.
 /// </summary>
 public sealed partial class SaveSync

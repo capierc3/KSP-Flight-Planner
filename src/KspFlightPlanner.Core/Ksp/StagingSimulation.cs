@@ -14,7 +14,11 @@ public sealed record StageResult(
     double ThrustSeaLevelKn,
     double TwrVacuum,
     double TwrSeaLevel,
-    IReadOnlyList<(string Title, int Count)> Engines);
+    IReadOnlyList<(string Title, int Count)> Engines)
+{
+    /// <summary>How much of each propellant the stage burns, in KSP's units (by resource name).</summary>
+    public IReadOnlyDictionary<string, double> Burned { get; init; } = new Dictionary<string, double>();
+}
 
 /// <summary>Everything worked out for a saved design (docs/MATH.md §7.2).</summary>
 /// <param name="LaunchMassT">Mass when the first stage lights (launch clamps excluded, as KSP does).</param>
@@ -130,7 +134,10 @@ public static class StagingSimulation
             if (result.DeltaVVacuum <= 0 && result.BurnTimeS <= 0) continue;
             stages.Add(new StageResult(stage, startMass, result.EndMass, result.DeltaVVacuum, result.DeltaVSeaLevel, result.BurnTimeS,
                 thrust, thrustSeaLevel, thrust / (startMass * surfaceGravity), thrustSeaLevel / (startMass * surfaceGravity),
-                active.GroupBy(e => e.Part.Definition!.Title).Select(g => (g.Key, g.Select(e => e.Part).Distinct().Count())).ToList()));
+                active.GroupBy(e => e.Part.Definition!.Title).Select(g => (g.Key, g.Select(e => e.Part).Distinct().Count())).ToList())
+            {
+                Burned = result.Burned,
+            });
         }
 
         if (unknown.Count > 0)
@@ -185,7 +192,7 @@ public static class StagingSimulation
         return all;
     }
 
-    private static (double DeltaVVacuum, double DeltaVSeaLevel, double BurnTimeS, double EndMass) Burn(List<SimEngine> active,
+    private static (double DeltaVVacuum, double DeltaVSeaLevel, double BurnTimeS, double EndMass, Dictionary<string, double> Burned) Burn(List<SimEngine> active,
         List<SimPart> present, Dictionary<SimPart, int> groups, Dictionary<int, HashSet<int>> feeds, HashSet<SimPart> nextDrop,
         PartCatalog catalog, double startMass, HashSet<string> fired)
     {
@@ -205,6 +212,7 @@ public static class StagingSimulation
             .ToDictionary(p => p.Name, p => Tiers(e, p.Name)));
 
         double mass = startMass, dvVac = 0, dvSea = 0, time = 0;
+        var used = new Dictionary<string, double>();
         var running = active.ToList();
         var dropInUse = false; // whether the parts the next stage drops have had a running engine or a draining tank
         for (var step = 0; step < 10_000 && running.Count > 0; step++)
@@ -240,7 +248,11 @@ public static class StagingSimulation
             var dt = rates.Min(kv => kv.Key.Part.Amounts[kv.Key.Resource] / kv.Value);
             if (dt > 0) fired.UnionWith(running.Select(e => e.Part.Craft.Id));
             foreach (var ((part, resource), rate) in rates)
-                part.Amounts[resource] = Math.Max(0, part.Amounts[resource] - rate * dt);
+            {
+                var taken = Math.Min(part.Amounts[resource], rate * dt);
+                part.Amounts[resource] -= taken;
+                used[resource] = used.GetValueOrDefault(resource) + taken;
+            }
 
             var burned = rates.Sum(kv => kv.Value * dt * catalog.Density(kv.Key.Resource));
             var next = mass - burned;
@@ -253,7 +265,7 @@ public static class StagingSimulation
             time += dt;
             mass = next;
         }
-        return (dvVac, dvSea, time, mass);
+        return (dvVac, dvSea, time, mass, used);
     }
 
     private static string Suffix(string id) => id[(id.LastIndexOf('_') + 1)..];

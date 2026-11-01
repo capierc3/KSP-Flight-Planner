@@ -3,7 +3,7 @@ namespace KspFlightPlanner.Core.Ksp;
 /// <summary>
 /// Telling dockings and undockings apart from two listings of the game's vessels, one from before and one from after.
 /// KSP merges two vessels that dock into one of them (the other is gone from the game), and makes a new vessel of the
-/// part that undocks. docs/MATH.md §8.14.
+/// part that undocks. docs/SAVE-AND-LIVE-GAME.md §3.
 /// </summary>
 public static class FlightDocking
 {
