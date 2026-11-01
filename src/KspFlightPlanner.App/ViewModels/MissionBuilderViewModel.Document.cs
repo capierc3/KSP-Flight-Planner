@@ -75,7 +75,7 @@ public sealed partial class MissionBuilderViewModel
         }
     }
 
-    public string WindowTitle => $"{_missionName}{(IsDirty ? " *" : "")} — KSP Flight Planner";
+    public string WindowTitle => $"{_missionName}{(IsDirty ? " *" : "")} — KSP Flight Planner {BuildInfo.TitleVersion}";
 
     /// <summary>Every saved mission, most recently saved first.</summary>
     public ObservableCollection<SavedMissionItem> SavedMissions { get; } = [];

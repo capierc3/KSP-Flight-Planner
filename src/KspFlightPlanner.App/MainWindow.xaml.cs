@@ -406,7 +406,7 @@ public partial class MainWindow : Window
 
     private void About_Executed(object sender, ExecutedRoutedEventArgs e)
     {
-        MessageBox.Show(this, $"KSP Flight Planner {BuildInfo.Version}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
+        MessageBox.Show(this, $"KSP Flight Planner {BuildInfo.Version}{(BuildInfo.Branch is "" ? "" : $" ({BuildInfo.Branch})")}\nBrick Road Software\n\nMission planning for Kerbal Space Program. " +
                               "Every formula is explained in the Math Guide (F1).",
             "About KSP Flight Planner", MessageBoxButton.OK, MessageBoxImage.Information);
     }

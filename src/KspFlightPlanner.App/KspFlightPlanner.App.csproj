@@ -21,6 +21,18 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
+  <!-- Record the git branch so test builds (anything but main/develop) can show their commit in the title bar.
+       No git, or a detached checkout (CI), records nothing / "HEAD", and the title shows just the version. -->
+  <Target Name="StampGitBranch" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-parse --abbrev-ref HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true"
+          StandardOutputImportance="low" StandardErrorImportance="low" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitBranch" />
+    </Exec>
+    <ItemGroup>
+      <AssemblyMetadata Include="GitBranch" Value="$(GitBranch)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <!-- The exe icon (ApplicationIcon) and every window's title-bar/taskbar icon (Icon="/Assets/app.ico"). -->
     <Resource Include="Assets\app.ico" />
