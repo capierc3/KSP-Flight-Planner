@@ -992,6 +992,8 @@ T_p = (Δ + 360°·m) / (n₂·k),   Δ = (φ − θ₀) mod 360°,   m = whole 
 
 For each k = 1…6 the planner offers the m giving a period just below yours (**lower**: faster, you catch up) and just above (**higher**: slower, the target catches up), and skips any that dip into the atmosphere or leave the SOI. The burn changes your speed at the burn point to √(μ·(2/r − 1/a_p)) with a_p = ∛(μ·T_p² / 4π²) (§2.4). More laps means a smaller change, so it's cheaper but slower. The planner waits if the window is within 3 of your orbits; otherwise it picks the cheapest phasing orbit that still beats waiting. When the orbits are the same size (within 0.5%) the lead angle is 0°: the phasing lap brings you back next to the target, and a short hop of ¼ to under ½ an orbit (§4.4) closes what's left.
 
+**Phasing with the plane change.** When the leg starts with a plane change (§4.2), the phasing orbit is planned from that burn's point and time, and the two are one burn: it turns the velocity into the target's plane *and* sets the phasing speed. Δv is |v_phasing − v_before|, the vector difference, which is never more than the two burns apart (the triangle inequality). The burn is titled *Match planes and phase*.
+
 Worked example — both in 200 km circular orbits (T = 2,392.37 s), target 40° ahead, so Δ = 320°. With k = 6: m = 5, T_p = (320° + 5 × 360°) / (6 × 360° / 2,392.37 s) = **2,348.07 s** → a_p = 790,092.7 m, far side at **180.2 km** (lower), burn √(μ(2/800,000 − 1/790,092.7)) − 2,101.07 = **−13.21 m/s** (retrograde), and the same again to stop: about 26 m/s in total over 6 laps (3.9 h). With k = 1 it would be −87.64 m/s with the far side at 79.2 km, but only one lap.
 
 - Code: `Rendezvous.Guide`, `Rendezvous.PhasingOptions`; tested in `RendezvousTests`
@@ -1010,8 +1012,19 @@ The cheapest cell is refined by zooming in, and drawn as a small porkchop plot y
 - **Prograde about your orbit**, not about the planet's north pole, so polar and retrograde orbits work (`Lambert.Solve` takes the reference direction)
 - **180° transfers are unsolvable**: the transfer plane is undefined and the formulas divide by nearly zero, which can give a confidently wrong answer that looks cheaper than Hohmann. Every solution is therefore flown (propagated, §1.4) and thrown away if it ends more than 10 m from the target. That leaves dark gaps on the plot. Between coplanar circular orbits the best transfer sits right next to one, and is found to within a few cm/s of the Hohmann numbers (test: 403.26 / 326.57 m/s, arriving within 10 m)
 
-- Code: `Rendezvous.PlanLeg`, `Rendezvous.Intercept`; tested in `RendezvousTests`
-- Source: Curtis 5.3; the propagation check is this app's safeguard
+**Staying out of the air.** A Lambert path between two orbits can swing well below both (a short hop to a craft ahead in the same orbit dives inward to catch up). Low over Kerbin that means the atmosphere, whose drag slows the craft and throws the intercept off. So every solution is checked against a floor, and dropped (a gap on the plot) if it passes under it:
+
+```
+floor = R + max(atmosphere height, highest peak) + 1 km          Kerbin: 71 km; the Mun: 8.06 km (peaks 7.06 km)
+dips  = r_p < floor  and  the periapsis comes between the burn and the meeting
+```
+
+Between its ends a path only goes lower than both by passing its periapsis, so that is the one point to check. When the start or end is itself under the floor (a craft already that low), the floor drops to it. The same floor keeps phasing orbits (§4.3) out of the air, and the trip planner's intercepts of a moon (§3.7) clear of its planet's.
+
+Worked example (`TripToTargetTests`): a craft at 80 km with Kerb Station (80 km) 30° ahead. The short hop would have to dive under 70 km; it is ruled out, and the planner flies a phasing lap instead, all above 71 km.
+
+- Code: `Rendezvous.PlanLeg`, `Rendezvous.Intercept`, `Rendezvous.LowestPassRadiusM`, `Rendezvous.DipsBelow`; tested in `RendezvousTests` and `TripToTargetTests`
+- Source: Curtis 5.3; the propagation and floor checks are this app's safeguards
 
 ### 4.5 When and where to launch
 
@@ -1069,18 +1082,22 @@ Going to the Mun first and meeting the target after (two plans) arrives in whate
 
    Ways that coincide are shown once ("Balanced · meets soonest").
 
+4. **Capture straight onto the phasing orbit.** A plain capture slows the craft to a round orbit; if the meeting then wants a phasing orbit (§4.3), the craft would burn again to get onto it. Instead the meeting is planned from the round orbit at the capture's own time and place, and when it starts with a phasing burn there, the capture slows the craft straight from its arriving path onto the phasing orbit: one burn of |v_phasing − v_arriving|. Prograde-only, that's the plain capture less the phasing burn for a higher phasing orbit (the saving), or plus it for a lower one (no saving, one burn fewer). When the window is close enough to wait for, the capture is plain and the meeting starts 5 minutes after. When the arrival can't reach the target's plane, the phasing goes with the plane change instead (§4.3).
+
+   Worked example (`TripToTargetTests`): the Mun shuttle (40 km) to Kerb Station (80 km), captured 84 km up. The cheapest way would capture with 848.8 m/s and then burn 7.5 m/s onto a phasing orbit; instead it captures with **841.3 m/s** onto an 84 × 93.1 km phasing orbit, then a 10.9 m/s transfer and 3.3 m/s to match.
+
 A trip across, between planets, keeps to its launch windows (§3.8) instead of trying departures. If the trip can't be planned from the craft's orbit, the Δv map's way stands in: its steps to the targets' body's low orbit, and the rendezvous from anywhere on that orbit, started after the map's trip time (a Hohmann half-orbit round the planet per moon ↔ planet step, t = π·√(a³/μ)). On the Flight pane, *Re-plan* plans the trip again from wherever the craft is until it's around the target's body, then the meeting from its real orbit.
 
 Worked example (`TripToTargetTests`): from a 100 km Kerbin orbit tilted 1.5° (the shuttle):
 
 | Target | Two plans (Go to the Mun, then meet) | One plan, cheapest | Balanced · meets soonest |
 |---|---|---|---|
-| Mun Station: 45 km, tilted 6° | 1,106 + 105 = **1,211 m/s** | 1,109 + 21 = **1,130 m/s**, meets after 27.3 h | 1,124 + 37 = **1,161 m/s**, after 12.1 h |
+| Mun Station: 45 km, tilted 6° | 1,106 + 105 = **1,211 m/s** | 1,109 + 20 = **1,130 m/s**, meets after 27.2 h | 1,124 + 37 = **1,161 m/s**, after 12.1 h |
 | A relay: 200 km, polar (88°) | 1,106 + 912 = **2,018 m/s** | 1,108 + 102 = **1,210 m/s**, after 35.0 h | 1,138 + 132 = **1,270 m/s**, after 18.6 h |
 
-For Mun Station the capture is at 45 − 3 = **42 km**. The trip is an 843.7 m/s transfer, a 3.6 m/s aim on the way and a 262.1 m/s capture, then 16.3 m/s to finish the plane and 4.6 m/s to meet. For the polar relay, two plans would turn a low Mun orbit 88° (most of the 912 m/s); one plan aims on the way for 48.3 m/s and is left 76.4 m/s of plane change, **808 m/s less**.
+For Mun Station the capture is at 45 − 3 = **42 km**. The trip is an 843.7 m/s transfer, a 3.6 m/s aim on the way and a 262.1 m/s capture, then 16.3 m/s to finish the plane, with the phasing orbit in the same burn (§4.3), and 4.0 m/s to meet. For the polar relay, two plans would turn a low Mun orbit 88° (most of the 912 m/s); one plan aims on the way for 48.3 m/s and is left 76.4 m/s of plane change, **808 m/s less**.
 
-- Code: `Rendezvous.TripsToTarget`, `Rendezvous.MeetingAltitudeM`, `RendezvousRequest.From`, `RendezvousPlan.TripOptions`; `RendezvousViewModel.BuildRequest` (with the map's way as a fallback: `LegTools.FindApproach`, `LegTools.TripTimeS`); `FromHereViewModel.PlanMeetFarAsync`; `FlightViewModel.ReplanAsync` (`Flight.TripFromBody`); tested in `TripToTargetTests` and `LegToolsTests`
+- Code: `Rendezvous.TripsToTarget`, `Rendezvous.MeetAfterCapture`, `TripToTarget.CapturesIntoPhasing`, `Rendezvous.MeetingAltitudeM`, `RendezvousRequest.From`, `RendezvousPlan.TripOptions`; `RendezvousViewModel.BuildRequest` (with the map's way as a fallback: `LegTools.FindApproach`, `LegTools.TripTimeS`); `FromHereViewModel.PlanMeetFarAsync`; `FlightViewModel.ReplanAsync` (`Flight.TripFromBody`); tested in `TripToTargetTests` and `LegToolsTests`
 - Source: the trip planner (§3.7–3.9), the rendezvous planner (§4.1–4.4)
 
 ## 5. Deploying a satellite constellation

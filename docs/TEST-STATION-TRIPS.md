@@ -236,3 +236,33 @@ inclination, corrections) and what the capture takes. docs/MATH.md §3.8.
 - [ ] The result line under the burns shows the same split
 
 Notes:
+
+---
+
+## 6. No separate phasing burn, and no intercept through the air
+
+Two fixes from the last run. A trip to meet a station no longer adds a phasing burn of its own: the capture goes straight
+onto the phasing orbit or, when the arrival can't quite reach the station's plane, the plane change does. And no intercept
+(or phasing orbit) passes lower than 1 km over the atmosphere (Kerbin: 71 km), or over the highest peaks on an airless
+moon. docs/MATH.md §4.4 and §4.6.
+
+### Mun Station to Kerb Station (Rendezvous pane, or Fly mode's Rendezvous with the target)
+
+- [ ] The trip's capture reads *"Capture onto a phasing orbit at Kerbin (84 km × … km)"* and no *"Phasing orbit"* burn
+      follows it (if the window is close, it's a plain *"Capture at Kerbin"* and you just wait)
+- [ ] After that capture in KSP, the orbit matches the burn's title (Pe and Ap)
+- [ ] The transfer burn's path stays above 70 km all the way to the meeting (check the map view before burning)
+- [ ] Meeting it works out: close approach within a few km, match velocity about as planned
+
+### Kerb Station to Mun Station
+
+- [ ] If the meeting needs a plane change, it's *"Match planes and phase"*: one burn, normal and prograde parts both shown.
+      No separate *"Phasing orbit"* burn
+- [ ] The Rendezvous diagram still draws the phasing orbit
+
+### Things to watch for
+
+- A phasing orbit picked by hand in the Rendezvous pane still folds into the capture (or plane change)
+- A meeting that can't find an intercept clear of the air says so, rather than planning one through it
+
+Notes:

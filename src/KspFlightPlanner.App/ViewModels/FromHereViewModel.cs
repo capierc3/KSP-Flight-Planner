@@ -748,8 +748,8 @@ public sealed class FromHereViewModel : ObservableObject
         Burns.Clear();
         try
         {
-            var capture = way.Trip.Legs[^1].Plan.Capture!;
-            var meet = Rendezvous.Plan(new RendezvousRequest(there, [target], capture.Ut + Rendezvous.BurnGapS, 0, new RendezvousTarget(chaser, way.Captured)));
+            // The meeting was planned with the trip (its phasing orbit may be part of the capture), so it's used as it is.
+            var meet = new RendezvousPlan([], -1, [way.Leg], null);
             _plannedRendezvous = meet;
             var burns = way.Trip.Burns.Concat(FlightViewModel.RendezvousBurns(meet)).ToList();
             for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
@@ -757,7 +757,9 @@ public sealed class FromHereViewModel : ObservableObject
                          $"meets {target.Name} {_calendar.FormatDate(meet.Legs[0].ArrivalUt)} around {there.Name}";
             var notes = way.Trip.Warnings.ToList();
             notes.Insert(0, $"Comes in as near {target.Name}'s plane as it can and is captured {Km(Rendezvous.MeetingAltitudeM(there, target.Orbit))} up, " +
-                            "just off its height, so meeting it costs little.");
+                            (way.CapturesIntoPhasing
+                                ? "just off its height, straight onto the phasing orbit that brings it round, so there's no separate phasing burn."
+                                : "just off its height, so meeting it costs little."));
             if (FuelNote() is { } fuel) notes.Add(fuel);
             Status = string.Join(" ", notes);
         }

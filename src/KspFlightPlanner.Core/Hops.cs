@@ -306,7 +306,7 @@ public static class Hops
         {
             try
             {
-                var best = Rendezvous.CheapestIntercept(craft, moonOrbit, mu, start, start + window, 0.6 * hohmannS, 1.4 * hohmannS);
+                var best = Rendezvous.CheapestIntercept(craft, moonOrbit, mu, start, start + window, 0.6 * hohmannS, 1.4 * hohmannS, Rendezvous.LowestPassRadiusM(parent));
                 var (transfer, match) = Rendezvous.Intercept(parent, craft, moonOrbit, best.DepartureUt, best.FlightTimeS);
                 return (transfer, transfer.DeltaV + match.DeltaV);
             }

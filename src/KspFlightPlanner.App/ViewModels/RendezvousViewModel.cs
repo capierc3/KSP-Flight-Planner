@@ -1474,6 +1474,12 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
         var after = $"Pe {Km(m.PeriapsisAltitudeM)} km · Ap {Km(m.ApoapsisAltitudeM)} km";
         var (title, feel) = m.Kind switch
         {
+            ManeuverKind.PlaneChange when m.Phasing is { } p => ("Match planes and phase",
+                $"Best as a node. At the {(m.AtAscendingNode ? "AN" : "DN")} marker, one burn of {Format.Speed0(m.DeltaV)} " +
+                $"({Signed(b.Normal)} normal, {Signed(b.Prograde)} prograde) tilts you into {target}'s plane and onto a phasing orbit " +
+                (p.Higher ? $"with its far side at {Km(m.ApoapsisAltitudeM)} km" : $"with its far side at {Km(m.PeriapsisAltitudeM)} km") +
+                $". Fly {p.Orbits} full lap{(p.Orbits == 1 ? "" : "s")} ({Minutes(p.Orbits * p.PeriodS)}) — " +
+                (p.Higher ? "the target catches up with you." : "you catch up with the target.")),
             ManeuverKind.PlaneChange => ("Match planes",
                 $"Set {target} as target. At the {(m.AtAscendingNode ? "AN" : "DN")} marker, burn {(b.Normal >= 0 ? "normal" : "anti-normal")} " +
                 $"{Format.Speed0(m.DeltaV)} until the relative inclination reads 0.0° (now {m.RelativeInclinationDeg:0.00}°)."),
@@ -1546,6 +1552,7 @@ public sealed class RendezvousViewModel : LegToolViewModel<RendezvousLegLink>
 
     private static string KindTitle(Maneuver m) => m.Kind switch
     {
+        ManeuverKind.PlaneChange when m.Phasing is not null => "Match planes and phase",
         ManeuverKind.PlaneChange => "Match planes",
         ManeuverKind.Phasing => "Phasing orbit",
         ManeuverKind.Transfer => "Transfer burn",

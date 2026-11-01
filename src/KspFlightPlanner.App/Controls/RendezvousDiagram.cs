@@ -64,8 +64,8 @@ public sealed class RendezvousDiagram : FrameworkElement
         }
         var match = leg.Maneuvers.Last(m => m.Kind == ManeuverKind.MatchVelocity);
         var transfer = flown.LastOrDefault(f => f.Burn.Kind == ManeuverKind.Transfer);
-        var phasing = flown.FirstOrDefault(f => f.Burn.Kind == ManeuverKind.Phasing);
-        var startOrbit = flown.FirstOrDefault(f => f.Burn.Kind == ManeuverKind.PlaneChange).After ?? leg.StartOrbit;
+        var phasing = flown.FirstOrDefault(f => f.Burn.Phasing is not null); // its own burn, or part of the plane change
+        var startOrbit = flown.FirstOrDefault(f => f.Burn.Kind == ManeuverKind.PlaneChange && f.Burn.Phasing is null).After ?? leg.StartOrbit;
 
         // Frame: looking down on the target's plane, the meeting point straight up.
         var meet = Kepler.StateAt(leg.Target.Orbit, mu, leg.ArrivalUt);

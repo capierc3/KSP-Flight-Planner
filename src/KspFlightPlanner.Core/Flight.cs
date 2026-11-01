@@ -345,6 +345,7 @@ public static class RendezvousFlights
 
     private static string Title(Maneuver m) => m.Kind switch
     {
+        ManeuverKind.PlaneChange when m.Phasing is not null => "Match planes and phase",
         ManeuverKind.PlaneChange => "Match planes",
         ManeuverKind.Phasing => "Phasing orbit",
         ManeuverKind.Transfer => "Transfer burn",
