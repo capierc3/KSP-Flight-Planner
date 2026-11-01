@@ -179,7 +179,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         SavedOrbit? orbit = null;
         if (UndockedLive(craft) is { } undocked) orbit = undocked.Orbit;
         else if (craft.SaveVesselId is { } id) orbit = FindVessel(id)?.Orbit;
-        else if (_link.Game?.Vessels is { } vessels) orbit = vessels.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true)?.Orbit;
+        else orbit = LiveByName(craft)?.Orbit;
         return orbit is { IsPath: true } ? orbit : null;
     }
 
@@ -192,10 +192,23 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         (string Situation, SavedOrbit? Orbit)? found = null;
         if (UndockedLive(craft) is { } undocked) found = (undocked.Situation, undocked.Orbit);
         else if (craft.SaveVesselId is { } id && FindVessel(id) is { } saved) found = (saved.Situation, saved.Orbit);
-        else if (_link.Game?.Vessels?.FirstOrDefault(v => v.Name == craft.Name && Live?.SaveIds.ContainsKey(v) != true) is { } live) found = (live.Situation, live.Orbit);
+        else if (craft.SaveVesselId is null && LiveByName(craft) is { } live) found = (live.Situation, live.Orbit);
         if (found is not var (situation, orbit)) return null;
         var landed = situation is "LANDED" or "SPLASHED" or "PRELAUNCH";
         return (orbit?.BodyName, landed || orbit is not { IsPath: true } ? null : orbit, landed);
+    }
+
+    /// <summary>
+    /// A craft planned for before it was in the save (no save id), in the live game: the vessel of its name that isn't in
+    /// the save yet or, once KSP has saved it, the one being flown with that name, or the only live vessel with it.
+    /// </summary>
+    private LiveVessel? LiveByName(FlightCraft craft)
+    {
+        if (_link.Game?.Vessels is not { } vessels) return null;
+        var named = vessels.Where(v => v.Name == craft.Name).Take(3).ToList();
+        return named.FirstOrDefault(v => Live?.SaveIds.ContainsKey(v) != true)
+               ?? named.FirstOrDefault(v => v.IsActive)
+               ?? (named is [var only] ? only : null);
     }
 
     /// <summary>
