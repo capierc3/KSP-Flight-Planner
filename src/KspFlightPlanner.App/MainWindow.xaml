@@ -112,6 +112,8 @@
                               ToolTip="The next launch window to each planet, soonest first" />
                     <MenuItem Header="_Rendezvous" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Rendezvous}" />
                     <MenuItem Header="Res_onant Orbits" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Resonant}" />
+                    <MenuItem Header="_Aerobraking" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Aerobraking}"
+                              ToolTip="What each pass through a planet's air does to your orbit" />
                     <Separator />
                     <MenuItem Header="_Engineering" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Engineering}" ToolTip="A saved design taken apart" />
                     <MenuItem Header="Engine c_hart" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.EngineChart}" />

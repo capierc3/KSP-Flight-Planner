@@ -9,7 +9,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, SetInclination, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land }
+public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, SetInclination, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land, Aerobrake }
 
 public sealed record QuickActionOption(QuickAction Action, string Name)
 {
@@ -87,8 +87,10 @@ public sealed class FromHereViewModel : ObservableObject
     private string _twrText = Landing.DefaultTwr.ToString(CultureInfo.CurrentCulture);
     private (string? Body, KspSave? Save, string? Target) _spotsFor = ("\0", null, null);
 
-    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events, BodyRotation rotation)
+    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events, BodyRotation rotation, FlightRecorder recorder)
     {
+        Aerobrake = new AerobrakeFlyViewModel(sync, recorder, () => Here());
+        Aerobrake.Changed += Clear;
         _sync = sync;
         _flights = flights;
         _events = events;
@@ -123,7 +125,13 @@ public sealed class FromHereViewModel : ObservableObject
         new(QuickAction.Deploy, "Deploy satellites"),
         new(QuickAction.Deorbit, "Deorbit"),
         new(QuickAction.Land, "Land at a spot"),
+        new(QuickAction.Aerobrake, "Aerobrake"),
     ];
+
+    /// <summary>The Aerobrake action's inputs and its live view of the passes.</summary>
+    public AerobrakeFlyViewModel Aerobrake { get; }
+
+    public bool IsAerobrake => _action.Action == QuickAction.Aerobrake;
 
     public ObservableCollection<FlightBurnRow> Burns { get; } = [];
 
@@ -140,8 +148,9 @@ public sealed class FromHereViewModel : ObservableObject
             _altitudeText = DefaultAltitude();
             _inclinationText = value.Action == QuickAction.SetInclination ? "90" : "";
             foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
-                         nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint) })
+                         nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint), nameof(IsAerobrake) })
                 OnPropertyChanged(name);
+            if (value.Action == QuickAction.Aerobrake) Aerobrake.Activate();
             Clear();
         }
     }
@@ -306,6 +315,9 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.Land => "Pick a spot (or type its latitude and longitude). Tilts your orbit first if it doesn't reach that far north or south, then " +
                             "waits for a pass close to the spot: a deorbit burn half an orbit before, a small burn on the way down to swing the track " +
                             "over it, and a braking burn from 1 km above the ground. On a body with air the landing spot is a rough estimate.",
+        QuickAction.Aerobrake => "Slow down in the air instead of with the engines. Plan it for the burn that sets the periapsis for the next pass (or, when " +
+                                 "the braking is done, lifts it out of the air). Each pass is followed live below, and the drag it measures is " +
+                                 "used for the next.",
         _ => "Burns retrograde at the next apoapsis to drop the periapsis into the atmosphere (or onto the ground).",
     };
 
@@ -385,7 +397,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (Here() is not (var body, var orbit) || _sync.Now is not { } now) return;
         var after = now + LeadS;
         if (orbit.Eccentricity >= 1 && _action.Action is not (QuickAction.CircularizeAtApoapsis or QuickAction.CircularizeAtPeriapsis or QuickAction.SetApoapsis
-                or QuickAction.GoTo or QuickAction.SetInclination))
+                or QuickAction.GoTo or QuickAction.SetInclination or QuickAction.Aerobrake))
         {
             Status = $"You're on a path that escapes {body.Name}: capture first (circularize at periapsis, or change the apoapsis).";
             return;
@@ -434,6 +446,9 @@ public sealed class FromHereViewModel : ObservableObject
                     }
                     if (!TryKm(out var height) || !TryInclination(required: false, out var tilt)) return;
                     _ = PlanTripAsync(body, destination, orbit, now, after, height, tilt);
+                    return;
+                case QuickAction.Aerobrake:
+                    _ = PlanAerobrakeAsync(body, orbit, now);
                     return;
                 case QuickAction.Land:
                     if (LandingFromInputs() is not { } leg) return;
@@ -495,6 +510,49 @@ public sealed class FromHereViewModel : ObservableObject
         catch (ArgumentException ex)
         {
             Status = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Aerobrake: the next step from the orbit now (§9.5), and the burn (or, finishing into a target orbit, the two) for it.
+    /// </summary>
+    private async Task PlanAerobrakeAsync(CelestialBody body, OrbitalElements orbit, double now)
+    {
+        _busy = true;
+        Status = "Working out the periapsis…";
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var (step, problem) = await Aerobrake.NextStepAsync(body, orbit);
+            if (step is null) { Status = problem; return; }
+            var pe = Kepler.PeriapsisRadius(orbit) - body.EquatorialRadiusM;
+            if (!step.Finish && Math.Abs(pe - step.PeriapsisM) < AerobrakeLive.CloseEnoughM)
+            {
+                Status = AerobrakeFlyViewModel.NextStepText(step, orbit, body);
+                return;
+            }
+            var burns = new List<FlightBurn> { AerobrakeLive.SetPeriapsis(body, orbit, now, LeadS, step.PeriapsisM) };
+            if (step.ApoapsisM is { } ap)
+            {
+                var after = Rendezvous.OrbitAfter(burns[0].Ut, burns[0].Burn, orbit, body.Mu);
+                burns.Add(QuickBurns.SetApsis(body, after, burns[0].Ut, 1, ap, apoapsis: true));
+            }
+            (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
+            for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
+            var end = burns.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
+            ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
+            OnPropertyChanged(nameof(HasBurns));
+            Status = step.Why + (step.Finish ? "" : $" Hold {Aerobrake.Attitude.Name.Split(" (")[0].ToLowerInvariant()} through the pass, engines off.");
+            RefreshLive();
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 

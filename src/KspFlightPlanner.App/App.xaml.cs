@@ -71,7 +71,7 @@ public partial class App : Application
                 new RendezvousViewModel(sync, locations, events, designs, flights, maps, bakes, rotation),
                 new ResonantOrbitViewModel(bodies, new ConstellationRepository(database), sync, flights, events),
                 flight,
-                new FromHereViewModel(sync, flights, events, rotation),
+                new FromHereViewModel(sync, flights, events, rotation, recorder),
                 sync,
                 link,
                 events)
@@ -86,6 +86,7 @@ public partial class App : Application
                     new FlightReportViewModel(new FlightLogRepository(database), sync),
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 Windows = new TransferWindowsViewModel(bodies, sync),
+                Aerobraking = new AerobrakingViewModel(bodies, sync),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part

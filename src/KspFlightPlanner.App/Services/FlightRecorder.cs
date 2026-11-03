@@ -91,6 +91,9 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
     /// <summary>Raised when a log was stored, ended or deleted.</summary>
     public event Action? LogsChanged;
 
+    /// <summary>Each reading of the flown vessel (about twice a second), with its name: for panes that follow it live.</summary>
+    public event Action<string, FlightSample>? Sampled;
+
     /// <summary>The planner flight being flown with a vessel of this name, if any (a new log is linked to it).</summary>
     public Func<string, long?> FlightFor { get; set; } = _ => null;
 
@@ -206,6 +209,7 @@ public sealed class FlightRecorder : ObservableObject, IDisposable
             _unsettledReads--;
             return;
         }
+        Sampled?.Invoke(_telemetry.VesselName, sample);
         if (_recorder is null)
         {
             if (!Recordable(_telemetry.VesselType))

@@ -16,6 +16,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
+- **9. Aerobraking** — 9.1 Air density and temperature with height; 9.2 A craft's drag from its parts; 9.3 Pass by pass; 9.4 Choosing the periapsis; 9.5 Flying it
 
 **Where to look for…**
 
@@ -35,6 +36,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Whether your rocket is good enough: §7.3, §7.4
 - A vessel imported from your save, or the live game: §8.1, §8.2
 - Flying a whole mission, each step from where the last one left you: §8.5
+- Slowing down in a planet's air instead of with the engines, and where each pass leaves you: §9.3; which periapsis to aim for: §9.4; following a pass live and measuring the drag: §9.5
 
 ## 1. Foundations
 
@@ -1946,6 +1948,147 @@ The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craf
 
 - Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
 - Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
+
+## 9. Aerobraking
+
+Dip the periapsis into a planet's air and drag slows the craft at the bottom of each orbit. Each pass takes speed off where the craft is fastest, so the apoapsis comes down while the periapsis stays put (it drops a little). Speed taken off for free is Δv not burned. The **Aerobraking** pane (Tools menu, inputs in the Calculators pane) shows what each pass does, and can pick the periapsis (§9.4).
+
+### 9.1 Air density and temperature with height
+
+Pressure P(h) comes from the body's table (§1.7): the wiki's, or your bake's every 1 km where it agrees with the wiki. Density needs a temperature too. Wherever the table also gives a density, the ideal gas law gives the temperature there:
+
+  T = P·M / (ρ·R)
+
+with M the air's molar mass (kg/mol) and R = 8.314462618 J/(mol·K). Between those heights T is a straight line; above and below the last one it stays flat. With no densities at all, the air is taken as one temperature that fits the scale height H: T = H·g·M / R. Then everywhere:
+
+  ρ(h) = P(h)·M / (R·T(h)),  speed of sound a = √(γ·R·T / M)
+
+Why not just read the density off the table? The wiki rounds it to three decimals, so above about 45 km on Kerbin it reads 0.000. Pressure keeps its digits, so ρ from P and T stays good all the way up.
+
+Worked example, Kerbin at 45 km from a bake: P = 36.07 Pa, ρ = 4.802×10⁻⁴ kg/m³, M = 0.0289644 kg/mol:
+
+1. T = 36.07 × 0.0289644 / (4.802×10⁻⁴ × 8.3145) = **262 K**
+2. a = √(1.4 × 8.3145 × 262 / 0.0289644) = **324 m/s**, so a craft at 3,250 m/s is doing Mach 10
+
+The bake's density is the game's air at its standard temperature. KSP warms the air by day and towards the equator, which changes density by a few percent; that isn't modelled.
+
+- Code: `AirModel` (`Aerobraking.cs`); tested in `AerobrakingTests.Air_density_comes_from_pressure_and_temperature`
+- Source: ideal gas law; values from your KSP bake or the KSP wiki
+
+### 9.2 A craft's drag from its parts
+
+KSP gives every part a **drag cube**: a box with an area and a drag value (0 to 1) on each of its six faces (+X, −X, +Y, −Y, +Z, −Z in the part's own axes), measured from the part's model when the game loads. KSP writes them to `PartDatabase.cfg` in its install folder. The rules that turn them into drag are curves in `Physics.cfg`, by Mach number. The planner reads both from your install.
+
+For a craft moving along direction v̂, each visible face of each part adds:
+
+  face drag area = A_face × f(facing, Mach) × Cd_curve(cube drag)^p(Mach)
+
+- **facing** = (n̂·v̂ + 1) / 2, with n̂ the face's outward normal turned into the craft's axes by the part's rotation: 1 for a face pointing into the airflow, ½ side-on, 0 pointing away
+- **f** blends three curves: from DRAG_TAIL (facing 0) to DRAG_SURFACE (facing ½) to DRAG_TIP (facing 1), in straight lines, times DRAG_MULTIPLIER
+- **Cd_curve** is DRAG_CD at the face's cube drag value, raised to the power p = DRAG_CD_POWER at that Mach
+
+The craft's drag area is the sum over every face, times `dragCubeMultiplier × dragMultiplier` (0.1 × 8 in stock). The force is then
+
+  F = ½ρu² × drag area × PR(ρu)
+
+with u the speed through the air and PR the DRAG_PSEUDOREYNOLDS curve, which adds drag in very thin air (×1.19 at ρu = 0.11 kg/m²/s, around 60 km on Kerbin at 3 km/s; ×1 by 45 km).
+
+**Stacked parts hide each other.** Where two parts are joined on stack nodes (`attN` in a craft file or save), the faces they join on are covered: the smaller of the two areas comes off both. The face is the one the node points out of (`node_stack_…` in the part config). Radially attached parts aren't covered.
+
+**Which way the craft points.** The nose is the command part's "up" (+Y); for a design, its root part's. *Engines first* flies along −nose, *nose first* along +nose, *side-on* along the broadest of 12 directions square to the nose. Parts that change shape use their folded-up cube (stowed panels, packed chutes). Wings' lift isn't counted. For a design, only the last stage counts: the parts no decoupler drops (sepI −1), and docking ports.
+
+Worked example: a single 1 m block (every face 1 m², drag value 1), nose first at Mach 10. The curves give tip 4.000, tail 0.1451, surface 0.00259 and multiplier 0.85; Cd_curve(1) = 1, so the power doesn't matter:
+
+1. Front: 1 × 4.000 = 4.000; back: 1 × 0.1451; four sides: 4 × 0.00259 = 0.0104
+2. Sum 4.1555 × 0.85 = 3.532
+3. × 0.1 × 8 = **2.83 m²**
+
+Stack two such blocks end to end and the joined faces disappear: still one front and one back, now eight sides: 2.826 + 4 × 0.00259 × 0.85 × 0.8 = **2.833 m²**, almost no more. Side-on, the pair shows two fronts.
+
+Not yet checked against the game. kRPC can ask KSP for the drag force on a craft (`SimulateAerodynamicForceAt`), which would test this.
+
+- Code: `AeroDataReader.Read`, `AeroPhysics`, `CraftAero.Build`, `CraftAero.DragArea` (`Ksp/AeroData.cs`, `Ksp/CraftAero.cs`); tested in `AerobrakingTests.One_block_nose_first_at_mach_10`, `Stacked_blocks_hide_the_faces_they_touch`
+- Source: KSP 1.12 `Physics.cfg` (its comments describe each curve) and `PartDatabase.cfg`
+
+### 9.3 Pass by pass
+
+Each pass is stepped through, not estimated:
+
+1. **Into the air.** On the orbit coming in (periapsis r_p, energy ε = v²/2 − μ/r), find where r = R + the top of the air on the way down: v_p = √(2(ε + μ/r_p)), h = r_p·v_p, p = h²/μ, e = p/r_p − 1, cos ν = (p/r − 1)/e (§1.3, §1.5). Energy covers both a closed orbit (ε = −μ/(r_a + r_p)) and arriving from far away (ε = v∞²/2).
+2. **Through the air.** Fourth-order Runge–Kutta in the orbit's plane, 0.5 s steps, with gravity −μr/|r|³ and drag F/m against the velocity through the air. The air turns with the planet: its velocity is ω × r with ω = 2π/(rotation period) × cos(inclination). Going round with the spin (0°), the air meets the craft about 175 m/s slower at Kerbin's surface speed than going against it (180°).
+3. **Out.** When r reaches the top of the air going up, the orbit is read off the position and velocity (§1.5). If it's still escaping, that's the end. If it never climbs back out, it **comes down**.
+4. **Again.** The next pass starts from the new periapsis and apoapsis, one orbital period later.
+
+The table shows each pass: speed lost (drag × time step, summed), the peak drag in g, the lowest point, and the orbit after. The heights table runs the same arrival dipping to 45%–93% of the air's height (30–65 km on Kerbin).
+
+**Check: one light pass.** With little drag, ln(v_in/v_out) ≈ (drag area / 2m) × ∫ρ ds. For air thinning by e every H, the column of air along the path near periapsis is ∫ρ ds ≈ ρ_p √(2π r_p H (1+e)/e). For a 100 t craft with 10 m² of drag at 50 km, coming from the Mun's distance with no spin, H = 5,699 m and the column is 43.28 kg/m²: the estimate is 6.94 m/s. Stepped through it's **6.72 m/s**, 3% under; the estimate treats the air as exactly exponential and the path as a parabola.
+
+Worked example: back from the Mun to Kerbin (apoapsis 11,400 km), periapsis 35 km, 79 t, a drag area of 32 m² (about the MunLink shuttle's), wiki air, going round with the spin (μ = 3.5316×10¹² m³/s², R = 600 km):
+
+1. Speed at periapsis: r_p = 635,000 m, r_a = 12,000,000 m: v_p = √(μ(2/r_p − 2/(r_p + r_a))) = **3,250 m/s**
+2. Pass 1 takes off **334 m/s**. By hand, 2,916 m/s at 635 km gives a = 1/(2/r − v²/μ) = 1,348 km and an apoapsis of 2a − r_p − R = 1,461 km. Stepped through (the periapsis drops to 34.1 km) it's **1,466 km**, with the next pass 1.46 h later. Peak drag 0.45 g
+3. Pass 2 takes off **521 m/s**: apoapsis **95 km**, periapsis 17.5 km
+4. Pass 3 **comes down**
+
+So you'd stop after pass 1 at 1,466 km, or after pass 2 burn at apoapsis to lift the periapsis out of the air. Each pass bites harder than the one before: the orbit gets rounder, so more of it is spent in the air.
+
+What it leaves out: lift (a winged craft that pitches up can change a pass a lot), the day and night swing in the air (§9.1), heating, and the periapsis not being over the equator (the pass is flat in the orbit's plane, so the air moves at the equator's speed).
+
+- Code: `Aerobraking.Plan`, `Aerobraking.Sweep`, `AerobrakingViewModel`; tested in `AerobrakingTests` (`Without_drag_the_orbit_comes_out_unchanged`, `Light_pass_matches_the_exponential_air_estimate`, `Passes_lower_the_apoapsis_until_it_comes_down`, `Worked_example_mun_return_at_35_km`)
+- Source: the light-pass estimate is the standard exponential-atmosphere result (e.g. Vinh, Busemann & Culp, *Hypersonic and Planetary Entry Flight Mechanics*); orbit formulas from Curtis (§1)
+
+### 9.4 Choosing the periapsis
+
+The Calculators pane can pick the periapsis for you. Every pick allows for the drag being **30% more** than worked out (`AerobrakeAims.DragMargin`): each pass, flown from the orbit the passes before it leave, must still come back out of the air with 30% more drag. It's checked pass by pass, not all at once, because you see each pass's real result and can nudge the periapsis at apoapsis before the next. Searches are by bisection to 50 m, then rounded to 0.1 km on the safe side.
+
+- **Fewest passes:** the lowest periapsis whose first pass still comes back out with 30% more drag. The most speed off each pass. It stops after the last pass that's still safe, and a burn at apoapsis lifts the periapsis just out of the air (1 km above it).
+- **Gentlest:** the highest periapsis that still brings the apoapsis down to a height you give (7× the air's height to start with: 490 km at Kerbin), within a number of passes you give (10), every pass safe. The least drag each pass. After the last pass, a burn at apoapsis lifts the periapsis just out of the air.
+- **Target orbit:** for each number of passes n up to the most you allow, the periapsis whose pass n leaves the target's apoapsis, or, if that isn't safe, the lowest periapsis that is (stopping higher). Then the burns, by vis-viva (§1.3):
+  - at apoapsis r_a after pass n, lift the periapsis from r_p to the target's r_p′: Δv = √(μ(2/r_a − 2/(r_a + r_p′))) − √(μ(2/r_a − 2/(r_a + r_p)))
+  - if the passes stopped above the target's apoapsis r_a′, at the new periapsis bring it down: Δv = √(μ(2/r_p′ − 2/(r_p′ + r_a))) − √(μ(2/r_p′ − 2/(r_p′ + r_a′)))
+
+  More passes save less and less, so the pick is the fewest passes whose burns come within 20 m/s (or 10%) of the least. A stop within 2% of the target's apoapsis radius counts as there. For comparison, **engines alone**: the same arrival with its periapsis at the target's, slowed there to the target's apoapsis: Δv = √(2(ε + μ/r_p′)) − √(μ(2/r_p′ − 2/(r_p′ + r_a′))).
+
+Why stop short of a low target? Near the end the apoapsis falls off a cliff: in §9.3's example, pass 2 at 35 km leaves 95 km, and 30% more drag on that pass brings the craft down. Stopping a little higher and burning the rest is the safe trade.
+
+Worked example: §9.3's craft (79 t, 32 m²) back from the Mun (apoapsis 11,400 km), into an 80 × 100 km orbit, at most 10 passes:
+
+1. **Fewest passes:** periapsis **32.1 km**, stopping after the last pass that's safe
+2. **Target orbit:** periapsis **42.8 km**, 7 passes down to an apoapsis of 202.3 km (periapsis then 38.0 km). Lower isn't safe on the last pass
+3. At apoapsis, r_a = 802.3 km, r_p = 638.0 km → r_p′ = 680 km: √(μ(2/r_a − 2/1,482.3 km)) − √(μ(2/r_a − 2/1,440.3 km)) = 2,009.6 − 1,974.8 = **34.9 m/s**
+4. At the new periapsis, r_a 802.3 km → r_a′ 700 km: 2,371.1 − 2,295.4 = **75.7 m/s**
+5. 110.6 m/s in all. Engines alone: √(μ(2/680 km − 2/12,680 km)) − 2,295.4 = 3,135.3 − 2,295.4 = **839.9 m/s**, so aerobraking saves **729 m/s**
+6. **Gentlest** down to 1,000 km within 10 passes: periapsis **47.2 km**, 10 passes
+
+- Code: `AerobrakeAims.FewestPasses`, `Gentlest`, `TargetOrbit`, `SafeThrough`, `RaiseBurn`, `LowerBurn`, `EnginesOnly` (`AerobrakeAims.cs`); tested in `AerobrakingTests` (`Fewest_passes_is_the_lowest_that_survives_more_drag`, `Gentlest_is_the_highest_that_gets_down_in_time`, `Target_orbit_stops_where_it_is_safe_and_burns_the_rest`, `Target_orbit_high_enough_is_reached_by_the_passes`, `Burns_by_vis_viva`)
+- Source: vis-viva (§1.3); the 30% margin is the planner's own allowance for the drag model not yet being checked against the game (§9.2)
+
+### 9.5 Flying it: following a pass and measuring the drag
+
+Fly mode's **From here › Aerobrake** does §9.4 from the craft's live orbit, follows each pass from the game's readings (about twice a second), and measures the drag against the model.
+
+**The next step.** From the orbit the craft is on (its periapsis, energy ε = −μ/2a and inclination), the aim picks the periapsis for the next pass, as in §9.4. With the passes still to fly, gentlest and target orbit stop once the apoapsis is within 2% of the goal's radius; every aim stops when no pass from here is safe with 30% more drag. Stopping means lifting the periapsis out of the air (the target's periapsis, or 1 km above the air), and for a target orbit not yet reached, a second burn at the new periapsis brings the apoapsis down (§9.4's two burns). A periapsis already within 300 m of the one wanted needs no burn.
+
+**The burn that sets the periapsis.** At the next apoapsis when that comes before the next periapsis: the vis-viva burn of §1.3, which leaves the apoapsis where it is. On the way in (the apoapsis comes after the pass), a burn along the horizon two minutes from now. With flight-path angle γ (sin γ = r·v / |r||v|), the horizon is cos γ along prograde and −sin γ along radial-out, so the burn is (k cos γ, 0, −k sin γ) in node axes. k = −v cos γ stops all sideways motion (periapsis 0); more k raises the periapsis. The periapsis grows with k, so k is found by bisection, each try put through `Rendezvous.OrbitAfter`.
+
+**The rest of a pass under way.** From the height h, orbital speed v and climb rate v_r the game shows: r = R + h, v_t = √(v² − v_r²), and the pass is stepped on from (r, 0, v_r, v_t) exactly as in §9.3. Re-run on every reading, this says where the craft leaves the air, on what orbit, or that it won't climb back out.
+
+**Measuring the drag.** With the engines off only drag changes the orbital energy ε = v²/2 − μ/r. Between two readings the game's energy fell by Δε; the model says it should fall by the drag's pull times the speed along it:
+
+  dε/dt = −a_d · (v·u)/|u|,  a_d = ½ρ|u|²·C_dA(Mach)/m,  u = v − ω×r (the speed through the air)
+
+averaged over the two readings (trapezoid). Summed over the pass, the game's loss over the model's is the **drag factor**: 1 means the model is right, 1.25 means a quarter more drag. Readings more than 3 s apart, or with the engines on, are skipped (both sums skip the same ones). The factor counts once the model's loss passes 200 J/kg. The next step and the forecasts then use the model's drag times this factor, so after the first pass the predictions follow what the craft really does, while the 30% allowance stays on top. A new attitude starts the measuring again, since the drag is different.
+
+Worked example: a 20 t craft with 16 m² of drag back from the Mun (apoapsis 11,400 km) into Kerbin's air at 45 km, where the "game" flies the pass with 25% more drag than the model:
+
+1. Going in, the model says the pass leaves an apoapsis of **4,248 km**
+2. Over the pass the game's readings lose **454,779 J/kg** of orbital energy; the model, over the same readings, **363,822 J/kg**
+3. Drag factor 454,779 / 363,822 = **1.25**: the next pass is planned with 25% more drag
+4. Speed off: the energy lost, as speed at the height it entered: **147 m/s** (the model alone: 117 m/s)
+5. Moving the periapsis on the way in: from 300 km to 47.3 km, a third of the way down from the Mun's distance (true anomaly −120°), is **130 m/s** two minutes from now. It's cheaper the further out it's done.
+
+- Code: `AerobrakeLive.Next`, `AerobrakeLive.SetPeriapsis`, `AerobrakeTracker` (`AerobrakeLive.cs`); `Aerobraking.Continue`, `Aerobraking.DragNow` (`Aerobraking.cs`); tested in `AerobrakingTests` (`A_pass_continued_from_partway_ends_where_the_whole_pass_does`, `Tracker_measures_how_strong_the_drag_really_was`, `Tracker_ignores_readings_with_the_engines_on`, `Periapsis_set_on_the_way_in_with_a_burn_along_the_horizon`, `Next_step_finishes_once_the_apoapsis_is_down_to_the_target`)
+- Source: energy and vis-viva (§1.3); drag power from the drag equation (§9.2)
 
 ## Sources
 
