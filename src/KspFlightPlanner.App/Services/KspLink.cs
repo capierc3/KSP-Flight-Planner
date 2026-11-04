@@ -29,7 +29,7 @@ public sealed record BakeBodyInfo(string Name, double InitialRotationDeg, double
 /// couple of seconds and, in flight, every vessel's orbit (<see cref="Game"/>); it can also put maneuver nodes on the
 /// vessel being flown.
 /// </summary>
-public sealed class KspLink : ObservableObject, IDisposable
+public sealed partial class KspLink : ObservableObject, IDisposable
 {
     private const string ClientName = "KSP Flight Planner";
 

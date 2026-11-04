@@ -116,6 +116,9 @@ public sealed record SavedPart(string Name, double MassT, IReadOnlyList<PartReso
 
     /// <summary>The part's docking ports (usually none, or one).</summary>
     public IReadOnlyList<SavedDockingPort> DockingPorts { get; init; } = [];
+
+    /// <summary>The names of the part's modules (ModuleCommand, ModuleOrbitalSurveyor…), in the save's order.</summary>
+    public IReadOnlyList<string> ModuleNames { get; init; } = [];
 }
 
 /// <summary>An engine module's settings in the save, in the same order as the part's engines in the catalog.</summary>
@@ -134,6 +137,18 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
 
     /// <summary>The game's CommNet settings (difficulty options); stock defaults when the save doesn't say.</summary>
     public SavedCommNet CommNet { get; init; } = SavedCommNet.Default;
+
+    /// <summary>Every kerbal's trait (Pilot, Engineer, Scientist, Tourist…) by name, from the ROSTER.</summary>
+    public IReadOnlyDictionary<string, string> CrewTraits { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Bodies whose orbital survey is done (the ore overlay is on), by name. ResourceScenario › PLANET_SCAN_DATA.</summary>
+    public IReadOnlySet<string> ScannedBodies { get; init; } = new HashSet<string>();
+
+    /// <summary>Biomes analysed from the ground, as (body, biome) with the biome as KSP stores it. ResourceScenario › BIOME_LOCK_DATA.</summary>
+    public IReadOnlySet<(string Body, string Biome)> AnalysedBiomes { get; init; } = new HashSet<(string, string)>();
+
+    /// <summary>The kerbal is an engineer.</summary>
+    public bool IsEngineer(string kerbal) => CrewTraits.TryGetValue(kerbal, out var trait) && trait == "Engineer";
 }
 
 /// <summary>
@@ -227,9 +242,22 @@ public static class KspSaveReader
         var mode = game.GetValue("Mode") ?? "";
         var research = mode == "SANDBOX" ? null
             : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment") is { } rd ? ReadResearch(rd) : null;
+        var resources = game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResourceScenario")?.GetNode("RESOURCE_SETTINGS");
+        string? BodyById(string? id) => int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)
+            && i >= 0 && i < SavedOrbit.StockBodyOrder.Length ? SavedOrbit.StockBodyOrder[i] : null;
         return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels)
         {
             Waypoints = waypoints, Research = research, CommNet = ReadCommNet(game),
+            CrewTraits = (game.GetNode("ROSTER")?.GetNodes("KERBAL") ?? [])
+                .Select(k => (Name: k.GetValue("name"), Trait: k.GetValue("trait")))
+                .Where(k => k is { Name.Length: > 0, Trait: not null })
+                .GroupBy(k => k.Name!).ToDictionary(g => g.Key, g => g.First().Trait!),
+            ScannedBodies = (resources?.GetNodes("PLANET_SCAN_DATA") ?? [])
+                .Select(n => BodyById(n.GetValue("PlanetId"))).OfType<string>().ToHashSet(),
+            AnalysedBiomes = (resources?.GetNodes("BIOME_LOCK_DATA") ?? [])
+                .Select(n => (Body: BodyById(n.GetValue("PlanetId")), Biome: n.GetValue("BiomeName")))
+                .Where(b => b.Body is not null && b.Biome is { Length: > 0 })
+                .Select(b => (b.Body!, b.Biome!)).ToHashSet(),
         };
     }
 
@@ -307,6 +335,7 @@ public static class KspSaveReader
                         ? new DockedVesselInfo(n, d.GetValue("vesselType") ?? "", d.GetValue("rootUId") ?? "")
                         : null))
                 .ToList(),
+            ModuleNames = modules.Select(m => m.GetValue("name")).OfType<string>().ToList(),
         };
     }
 

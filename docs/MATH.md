@@ -16,6 +16,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
+- **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
 
 **Where to look for…**
 
@@ -35,6 +36,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Whether your rocket is good enough: §7.3, §7.4
 - A vessel imported from your save, or the live game: §8.1, §8.2
 - Flying a whole mission, each step from where the last one left you: §8.5
+- Where the ore is, and how fast a station maps it: §10.1, §10.2
 
 ## 1. Foundations
 
@@ -1946,6 +1948,61 @@ The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craf
 
 - Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
 - Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
+
+## 10. Surveying for ore
+
+The ore survey's rules (what needs an engineer, the three report levels, the orbital survey's button) are in docs/SURVEY.md. This section is the maths: where the ore is, and what a pass maps.
+
+### 10.1 Ore abundance, and what the scanners show
+
+KSP generates ore from the save's seed. The planner's kRPC add-on asks the game itself (`ResourceMap.GetAbundance`), so the numbers are the game's, not a copy of its generator. Read from KSP 1.12's code:
+
+```
+true abundance  A(φ, λ, h)  = what a drill at (φ, λ) mines: asked at its own height h, lock check off
+before analysis A_est(biome) = B(biome) / 1.5     B = the biome's base value (no local variation), the same everywhere in it
+```
+
+A biome counts as analysed once a Surface Scanning Module has run *Perform biome analysis* landed in it (the save's `BIOME_LOCK_DATA`). Until then the narrow-band scanner, KerbNet and the ore overlay all show A_est. Height only matters for resources set up to fade with altitude; Minmus ore doesn't.
+
+Worked example — Min Station over Minmus, Greater Flats not yet analysed, 29.3 km up (in game, 2026-11-04):
+- KerbNet showed **7.03%** at 23°59′ S 23°08′ E (and the same at another spot, in another biome, with the same base).
+- The add-on gave **10.51%** there, at ground height and at 29.3 km alike.
+- 7.03% × 1.5 = **10.55%**: the base. The 10.51% is the base plus the spot's own small variation.
+
+- Code: `mod/KspFlightPlanner.Survey/SurveyService.cs` (`Abundance`, `AbundanceGrid`, `EstimateGrid`), `KspLink.FetchSurveyMapAsync`, `SurveyMap`
+- Source: KSP 1.12 `ResourceMap.GetAbundance`, `ModuleResourceScanner`, `ModuleResourceHarvester`, `KerbNetModeResource` (decompiled)
+
+### 10.2 What a pass maps
+
+The station's ground track comes from its orbit (§1.4) and the body's rotation (§2.9's θ₀ and ω = 2π / T_rot):
+
+```
+r(t)  = the station's position at time t (Kepler, §1.4)
+φ(t)  = asin(r_z / |r|)
+λ(t)  = atan2(r_y, r_x) − θ₀ − ω·t                  wrapped to −180°…180°
+```
+
+A grid point (φ_g, λ_g) is mapped at the first t its great-circle distance from (φ(t), λ(t)) is within ρ = 5° (KerbNet's narrowest view):
+
+```
+cos d = sin φ · sin φ_g + cos φ · cos φ_g · cos(λ − λ_g)  ≥ cos ρ
+```
+
+The track is followed in steps of half a grid degree over the ground (Δt = 0.5° / (v_p / r_p + ω), the fastest the track moves, at periapsis). Each row only checks the longitudes inside the strip, |λ − λ_g| ≤ acos((cos ρ − sin φ sin φ_g) / (cos φ cos φ_g)), or the whole row when the strip takes in a pole. The narrow-band only maps while |r| − R ≤ 500 km. The walk stops early once every point is mapped, or after 20 turns of the body (and 20 orbits) with nothing new, when the pattern only repeats.
+
+Between two readings of a station the time is credited only when both show an engineer and the same body; a level needs its scanner in both (and, for rough, the body's orbital survey done). If the orbit changed between them, the first orbit flies the first half of the time and the second the rest.
+
+A biome reports at a level once half its points are mapped at that level; the report's time is when the point that made it half was mapped.
+
+What turns the ground under the orbit is the body's own spin (T_rot is measured against the stars). The orbit's plane stays fixed against the stars too, so the body's trip around its planet doesn't move the track.
+
+Worked example — Minmus (μ = 1.7658 × 10⁹ m³/s², R = 60 km, T_rot = 40,400 s ≈ 1.9 Kerbin days), polar orbits, time to map all of it (simulated with `SurveyCoverage.Follow`, Kerbin days of 6 h):
+- **50 km circular**: a = 110 km, T = 2π√(a³/μ) = 2π × 868.2 = **5,455 s**. Each orbit the track lands 360° × 5,455 / 40,400 = **48.6°** further west: 90% in 4.7 days, all of it in **8.3 days** (`A_polar_orbit_maps_everything_within_a_few_weeks`).
+- **30 km circular**, the bad case: T = 2π × 642.5 = **4,037 s**, **36.0°** a pass. Ten orbits are 40,370 s, within 30 s of one Minmus day, so the tracks nearly repeat and the last gaps close slowly: 90% in 46 days, all in **92 days**.
+- **28.8 × 30.0 km** (Min Station, 2026-11-04): T = 3,998 s, 35.6° a pass, just far enough from ten orbits a day: all of it in **8.4 days**.
+
+- Code: `SurveyCoverage.Follow`, `.Credit`, `.Mark`; `SurveyReports.Build`; `SurveyTracker`. Tested in `SurveyTests`
+- Source: §1.4, §2.9; great-circle distance: §1.9
 
 ## Sources
 

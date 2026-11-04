@@ -350,6 +350,54 @@ internal static class Migrations
             ksp_save           TEXT,               -- the KSP save it belongs to; NULL = shared by every save
             created_utc        TEXT    NOT NULL
         );
+
+        -- The ore survey (docs/SURVEY.md), per KSP save: grids are row-major from 90° S / 180° W like the surface bakes.
+        -- A body's ore and biomes as the game generates them for the save (through the planner's add-on).
+        CREATE TABLE survey_maps (
+            ksp_save              TEXT NOT NULL,
+            body_name             TEXT NOT NULL,
+            step_deg              REAL NOT NULL,
+            radius_m              REAL NOT NULL,
+            rotation_period_s     REAL NOT NULL,
+            initial_rotation_deg  REAL NOT NULL,
+            abundance             BLOB NOT NULL,     -- float32: true abundance (fraction)
+            estimate              BLOB NOT NULL,     -- float32: what the scanners show before analysis
+            biomes                BLOB NOT NULL,     -- int16 index into biome_names, -1 = none
+            biome_names           TEXT NOT NULL,     -- JSON array, KSP's names (as the save stores them)
+            fetched_utc           TEXT NOT NULL,
+            PRIMARY KEY (ksp_save, body_name)
+        );
+
+        -- When each grid point was first covered, per level (float32 game time, NaN = not yet).
+        CREATE TABLE survey_coverage (
+            ksp_save   TEXT NOT NULL,
+            body_name  TEXT NOT NULL,
+            step_deg   REAL NOT NULL,
+            rough      BLOB NOT NULL,
+            estimate   BLOB NOT NULL,
+            PRIMARY KEY (ksp_save, body_name)
+        );
+
+        -- The last reading of each surveying station; the next one credits the time between.
+        CREATE TABLE survey_readings (
+            ksp_save      TEXT NOT NULL,
+            vessel_id     TEXT NOT NULL,
+            vessel_name   TEXT NOT NULL,
+            reading_json  TEXT NOT NULL,     -- SurveyReading
+            PRIMARY KEY (ksp_save, vessel_id)
+        );
+
+        CREATE TABLE survey_reports (
+            id           INTEGER PRIMARY KEY,
+            ksp_save     TEXT NOT NULL,
+            ut           REAL NOT NULL,      -- the game time of the find
+            body_name    TEXT NOT NULL,
+            biome        TEXT NOT NULL,
+            level        TEXT NOT NULL,      -- SurveyLevel
+            text         TEXT NOT NULL,
+            created_utc  TEXT NOT NULL,
+            UNIQUE (ksp_save, body_name, biome, level)
+        );
         """,
     ];
 

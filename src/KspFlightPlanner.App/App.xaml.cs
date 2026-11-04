@@ -36,6 +36,7 @@ public partial class App : Application
                 ? bodies.GetBodies(stock.Id).ToDictionary(b => b.Name)
                 : [];
             var missions = new MissionRepository(database);
+            var survey = new SurveyTracker(sync, new SurveyRepository(database), link, events);
             var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, missions, settings, sync, bakes, flights);
             var engineering = new EngineeringViewModel(designs, sync, availability, mission);
             var flight = new FlightViewModel(flights, sync, events, rotation, missions);
@@ -86,8 +87,12 @@ public partial class App : Application
                     new FlightReportViewModel(new FlightLogRepository(database), sync),
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 Windows = new TransferWindowsViewModel(bodies, sync),
+                Survey = new SurveyViewModel(survey, sync, link),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
+            // An analysed biome's best spots are spots to land at ("Ore survey").
+            mission.SurveySpots = survey.Spots;
+            viewModel.FromHere.SurveySpots = survey.Spots;
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
             // moves it: the Part pane also refreshes when the plan changes, and that mustn't undo a pick in the tree.
             string? shownPart = null;

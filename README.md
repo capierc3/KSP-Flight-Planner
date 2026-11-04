@@ -79,6 +79,12 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
     tab and linked custom locations follow the game between saves; vessels launched since the last save show up too
   - the Rendezvous pane can start from **the craft you're flying** and add **the craft you've targeted**
   - the Transfer Planner's **Today** button sets the earliest departure to the game's date
+- **Ore survey** — *Tools › Ore survey*: a station with an engineer aboard maps the ore of the body it orbits, a 5° strip
+  either side of its ground track each pass, and files reports at the game time it flew over each biome: rough words
+  (survey scanner), then the narrow-band's ≈ % estimate, then true values and the best spots once you've analysed the
+  biome on the ground. The spots show in *Land at a spot*. It needs the planner's own kRPC add-on for the game's ore map:
+  build and install it with `dotnet build mod/KspFlightPlanner.Survey -c Release -p:Install=true` (KSP closed; it builds
+  against your KSP install, `-p:KspDir=…` for another folder). Rules: docs/SURVEY.md; maths: docs/MATH.md §10.
 - **Fly mode** — the flying side. *Fly this plan* in the Rendezvous pane (or *Fly this deployment* on Resonant
   Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the

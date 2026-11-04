@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The planner's in-game add-on: a kRPC service that answers questions only the running game can, starting with
+    "how much ore is here?". kRPC loads it from GameData like its own services, so it needs kRPC installed.
+
+    It builds against KSP's own DLLs, which aren't in the repo, so it isn't in KspFlightPlanner.sln and CI doesn't build it.
+    Build:            dotnet build mod/KspFlightPlanner.Survey -c Release
+    Build + install:  dotnet build mod/KspFlightPlanner.Survey -c Release -p:Install=true
+    Other KSP folder: add -p:KspDir="C:\path\to\Kerbal Space Program"
+  -->
+  <PropertyGroup>
+    <!-- KSP 1.12 runs on Unity 2019's Mono, which takes .NET Framework 4.x assemblies. -->
+    <TargetFramework>net471</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <AssemblyName>KspFlightPlanner.Survey</AssemblyName>
+    <RootNamespace>KspFlightPlanner.Survey</RootNamespace>
+    <KspDir Condition="'$(KspDir)' == ''">E:\SteamLibrary\steamapps\common\Kerbal Space Program</KspDir>
+    <KspManaged>$(KspDir)\KSP_x64_Data\Managed</KspManaged>
+    <InstallDir>$(KspDir)\GameData\KspFlightPlanner\Plugins</InstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(KspManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(KspManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="KRPC.Core" HintPath="$(KspDir)\GameData\kRPC\KRPC.Core.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="InstallIntoKsp" AfterTargets="Build" Condition="'$(Install)' == 'true'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallDir)" />
+    <Message Importance="high" Text="Installed $(TargetFileName) into $(InstallDir). Restart KSP to load it." />
+  </Target>
+
+</Project>

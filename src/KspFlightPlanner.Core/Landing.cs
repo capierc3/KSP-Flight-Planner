@@ -196,14 +196,14 @@ public static class Landing
 
     /// <summary>
     /// Spots to land at on <paramref name="body"/>: its wiki landmarks, then from the save its flags, landed craft and
-    /// custom (KerbNet) waypoints.
+    /// custom (KerbNet) waypoints, then <paramref name="more"/> (the ore survey's best spots).
     /// </summary>
-    public static IReadOnlyList<LandingTarget> Targets(CelestialBody body, KspSave? save)
+    public static IReadOnlyList<LandingTarget> Targets(CelestialBody body, KspSave? save, IEnumerable<LandingTarget>? more = null)
     {
         var list = body.Landmarks
             .Select(m => new LandingTarget(m.Name, "Landmark", m.LatitudeDeg, m.LongitudeDeg))
             .ToList();
-        if (save is null) return list;
+        if (save is null) return [.. list, .. more ?? []];
         foreach (var v in save.Vessels)
         {
             if (v.Situation is not ("LANDED" or "SPLASHED") || v.Orbit?.BodyName != body.Name
@@ -213,6 +213,7 @@ public static class Landing
         }
         list.AddRange(save.Waypoints.Where(w => w.BodyName == body.Name)
             .Select(w => new LandingTarget(w.Name, "KerbNet waypoint", w.LatitudeDeg, w.LongitudeDeg)));
+        list.AddRange(more ?? []);
         return list;
     }
 
