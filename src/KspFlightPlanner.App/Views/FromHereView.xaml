@@ -112,6 +112,8 @@
                             ToolTip="Add these as maneuver nodes on the craft you're flying (its own nodes stay)" />
                     <Button Content="Keep as a flight" Command="{Binding FlyCommand}" Padding="12,2" Margin="6,0,0,0"
                             ToolTip="Save these burns as a flight and open it in the Flight pane, to follow countdowns and drift" />
+                    <Button Content="Fly it in the background" Command="{Binding BackgroundCommand}" Padding="12,2" Margin="6,0,0,0"
+                            ToolTip="Test: the game flies this meeting on its own (the planner's add-on moves the craft at each burn and burns its fuel), so you can fly something else or watch from the tracking station" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>

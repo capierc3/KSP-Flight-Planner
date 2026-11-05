@@ -108,6 +108,8 @@ public sealed class FromHereViewModel : ObservableObject
         PlanCommand = new RelayCommand(Plan, () => !_busy && Here() is not null);
         SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
         FlyCommand = new RelayCommand(Fly, () => !_busy && Burns.Count > 0);
+        BackgroundCommand = new RelayCommand(() => _ = FlyInBackgroundAsync(),
+            () => !_busy && _sync.Link.InFlight && _plannedRendezvous is not null && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
     }
 
     public IReadOnlyList<QuickActionOption> Actions { get; } =
@@ -130,6 +132,9 @@ public sealed class FromHereViewModel : ObservableObject
     public RelayCommand PlanCommand { get; }
     public RelayCommand SendCommand { get; }
     public RelayCommand FlyCommand { get; }
+
+    /// <summary>Hands a meeting's burns to the planner's add-on, which flies the craft there on its own (test: background trips).</summary>
+    public RelayCommand BackgroundCommand { get; }
 
     public QuickActionOption SelectedAction
     {
@@ -985,6 +990,40 @@ public sealed class FromHereViewModel : ObservableObject
         catch (Exception ex) when (ex is System.InvalidOperationException or KRPC.Client.RPCException)
         {
             Status = ex.Message;
+        }
+        catch (Exception)
+        {
+            Status = "Lost the connection to KSP.";
+        }
+        finally
+        {
+            _busy = false;
+            RefreshLive();
+        }
+    }
+
+    /// <summary>
+    /// Lets the game fly the meeting on its own: the add-on changes the craft's orbit at each burn's time and burns its
+    /// fuel, wherever the player is (another craft, the tracking station), then parks it beside the target at the meeting.
+    /// </summary>
+    private async Task FlyInBackgroundAsync()
+    {
+        if (_plannedRendezvous is not { } plan || _sync.Link.Game?.Active?.Name is not { } vessel) return;
+        var leg = plan.Legs[^1];
+        var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt);
+            Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
+                     $"{_calendar.FormatDate(leg.ArrivalUt)}.";
+        }
+        catch (KRPC.Client.RPCException ex)
+        {
+            Status = ex.Message.Contains("PlannerHaulers", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
+                ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
+                : ex.Message;
         }
         catch (Exception)
         {

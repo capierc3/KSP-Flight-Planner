@@ -17,6 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses
 
 **Where to look for…**
 
@@ -2003,6 +2004,64 @@ Worked example — Minmus (μ = 1.7658 × 10⁹ m³/s², R = 60 km, T_rot = 40,4
 
 - Code: `SurveyCoverage.Follow`, `.Credit`, `.Mark`; `SurveyReports.Build`; `SurveyTracker`. Tested in `SurveyTests`
 - Source: §1.4, §2.9; great-circle distance: §1.9
+
+## 11. Background trips
+
+A craft can fly a planned meeting on its own (From here › **Fly it in the background**): the planner's add-on in KSP changes the craft's orbit at each burn's time and burns its fuel, while the player flies something else or watches from the tracking station. The planner plans; the add-on only follows the plan, inside the game every frame.
+
+### 11.1 Flying a burn without flying the craft
+
+At a burn's time t_b the add-on reads the craft's position and velocity on its current orbit at t_b (in KSP's orbit frame, z to the body's north pole), adds the burn along the node axes of §1.8 and gives the craft the orbit through that point:
+
+```
+r, v       = the craft's orbit at t_b
+prograde   = v / |v|
+normal     = (r × v) / |r × v|
+radial     = prograde × normal                         (outward)
+v'         = v + Δv_pro · prograde + Δv_nrm · normal + Δv_rad · radial
+new orbit  = the orbit through (r, v') around the same body, pinned to t_b (§1.5)
+```
+
+Pinning the new orbit to t_b, not to the moment it's applied, is what makes time warp harmless. At 100,000× one frame is about half an hour of game time, so the burn is usually applied after t_b, but KSP places the craft where the new orbit has it *now*: exactly where it would be had it burnt on time. Overdue burns are applied in order. Between burns KSP carries the craft along its orbit itself, through every change of sphere of influence.
+
+Example: a burn planned for UT 4,240,000 that time warp first reaches at UT 4,241,800 is applied 1,800 s late; the craft's new orbit still starts from its position at 4,240,000, so it appears 1,800 s along the new orbit, not the old one.
+
+At the meeting time t_m the craft is put on the target's own orbit, a safe distance d behind it: the same elements, with only the mean anomaly moved back by the time the target takes to cover d.
+
+```
+d   = clamp(2·(size_target + size_craft) + 50 m, 100 m, 180 m)    size = furthest part from the ship's origin
+Δt  = d / |v_target(t_m)|
+M₀' = M₀ − n·Δt                                                    n = the target's mean motion; every other element copied
+```
+
+Same size, shape and tilt mean the same period, so the gap holds for as long as both are on rails. (The first test instead gave the craft the target's velocity at a point d behind it: a slightly different orbit, whose gap swung by up to about 2·a·Δe ≈ 220 m every orbit and drifted about 47 m a Kerbin day.) The 180 m cap keeps the craft inside the 200 m at which KSP turns physics on for a ship near the one being flown, which docking needs.
+
+The navball still shows a little target speed on the same orbit, about |v|·d / a: the two velocities point in slightly different directions while the distance stays the same.
+
+First the add-on records how close the craft really came, |r_craft(t_m) − r_target(t_m)|, and the speed still to match, |v_craft(t_m) − v_target(t_m)|: the test's measure of how well KSP followed the plan. That speed is paid for in fuel (§11.2) as the final approach.
+
+Example: Kerb Station (a = 700,611 m, |v| = 2,245 m/s, T = 1,960.7 s, so n = 0.0032046 rad/s) and d = 109 m: Δt = 0.0486 s, M₀ moves back 0.000156 rad (0.0089°); the navball shows 2,245 × 109 / 700,611 = **0.35 m/s** while the gap stays 109 m. In the first test (2026-11-04) the craft came within **0 km at 0 m/s** of the planned meeting after a Mun-to-Kerbin trip of 5 burns: KSP flew the planner's patched conics as planned.
+
+**Docking.** Once the player is near (both ships loaded, physics on, no time warp, for 2 s) the add-on picks the target's free port nearest the craft that one of the craft's free ports fits (same port size), turns the craft so its port faces that port (forward against forward, up along up), and moves it so the two port faces are half the ports' magnet reach apart (acquire range, about 0.5 m, so 0.25 m), at the target's velocity and with no spin. The ports' own magnets pull it in. If the craft's port hasn't docked within 10 s it's left there, to dock by hand. This is how Routine Mission Manager places its arrivals.
+
+- Code: `HaulerScenario.DoBurn`, `.Arrive`, `.Dock`, `HaulerShip.Axes`, `.SetOrbit`, `.FollowOrbit`, `.PickPorts`, `.PlaceForDocking` (mod/KspFlightPlanner.Survey)
+- Source: §1.5, §1.8; setting a ship's orbit by copying elements into its own orbit object follows HyperEdit; applying Δv at a time through `Orbit.UpdateFromStateVectors` follows Background Thrust (Phantomical, MIT); placing a ship at a port follows Routine Mission Manager (BSD-2)
+
+### 11.2 The fuel a background burn uses
+
+The add-on burns with one engine kind: of the craft's engines that have fuel on board (air-breathers left out), the kind with the most thrust in all, at its vacuum Isp. The rocket equation turned round (§7.1) gives the propellant mass; the engine's propellant ratio (in units, as its config gives it) times each resource's density splits it:
+
+```
+m_fuel  = m₀ · (1 − e^(−Δv / (Isp · g₀)))                  g₀ = 9.80665 m/s²
+units_i = m_fuel · ratio_i / Σ_j (ratio_j · density_j)
+```
+
+Each propellant is taken from every unlocked tank holding it, in proportion to what each holds. When a propellant runs short, every propellant is cut by the same share s = have_i / units_i (the smallest), and the craft gets only `Isp·g₀·ln(m₀ / (m₀ − s·m_fuel))`; the route then stops there.
+
+Example: 20 t craft, a Terrier (Isp 345 s vacuum, LiquidFuel 0.9 : Oxidizer 1.1, both 0.005 t/unit), 300 m/s: Isp·g₀ = 3,383.3 m/s, m_fuel = 20 × (1 − e^(−0.08867)) = **1.697 t**; Σ ratio·density = 0.9 × 0.005 + 1.1 × 0.005 = 0.01 t, so **152.7 LiquidFuel** and **186.7 Oxidizer**. With only 100 LiquidFuel on board: s = 100 / 152.7 = 0.655, 1.111 t burnt, **193 m/s** of the 300.
+
+- Code: `HaulerShip.MainEngine`, `.Burn`, `.Mass` (mod/KspFlightPlanner.Survey)
+- Source: §7.1; engine and resource values from the game's own part configs
 
 ## Sources
 

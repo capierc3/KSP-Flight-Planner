@@ -23,6 +23,7 @@
   <ItemGroup>
     <Reference Include="Assembly-CSharp" HintPath="$(KspManaged)\Assembly-CSharp.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(KspManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(KspManaged)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="KRPC.Core" HintPath="$(KspDir)\GameData\kRPC\KRPC.Core.dll" Private="false" />
   </ItemGroup>
 
