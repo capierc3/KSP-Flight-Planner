@@ -19,9 +19,10 @@ namespace KspFlightPlanner.Haulers
 
     /// <summary>
     /// Flying the burns; Arrived = parked beside the target, docking as soon as both are loaded; Docked; Stopped;
-    /// OffCourse = a check found it would miss: paused, no more burns, until the planner sends a new plan.
+    /// OffCourse = a check found it would miss: paused, no more burns, until the planner sends a new plan;
+    /// Approaching = met the target with the player there: lined up on a free port's axis, the physics flyer brings it in.
     /// </summary>
-    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse }
+    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching }
 
     /// <summary>
     /// A ship flying a planned trip without anyone at the controls: at each burn's time its orbit is changed as that burn
@@ -44,6 +45,9 @@ namespace KspFlightPlanner.Haulers
         /// </summary>
         public bool Disturbed;
 
+        /// <summary>The physics flyer may fly it when it's loaded near the player (the panel's switch; off once the player takes the controls).</summary>
+        public bool Autopilot = true;
+
         /// <summary>Why the planner couldn't plan it again yet (off course only), so the same reason isn't shown twice.</summary>
         internal string ReplanNote;
 
@@ -56,6 +60,17 @@ namespace KspFlightPlanner.Haulers
         internal uint DockingPortId;
         internal float DockingSince = -1;
         internal bool DockTried;
+
+        // Arriving with the player there (not saved: a save made mid-approach parks it on load): the station port it
+        // comes in to (part id) and since when (real time).
+        internal uint ApproachPortId;
+        internal float ApproachSince = -1;
+
+        // Leaving a station it was docked at (not saved): its own port's part (to find the ship again if KSP renumbers
+        // it after undocking), the station port it left (part id), and whether it's still backing off from it.
+        internal uint ShipPortPartId;
+        internal uint BackOffPortId;
+        internal bool BackingOff;
 
         /// <summary>The next thing due: a burn's time, or the meeting once the burns are done.</summary>
         public double NextUt
@@ -74,6 +89,7 @@ namespace KspFlightPlanner.Haulers
             switch (State)
             {
                 case RouteState.Arrived: return head + "parked beside it, docks when you're nearby";
+                case RouteState.Approaching: return head + "coming in to its port";
                 case RouteState.Docked: return head + "docked";
                 case RouteState.OffCourse: return head + "off course, waiting to be planned again" + (ReplanNote != null ? " (" + ReplanNote + ")" : "");
                 case RouteState.Stopped: return head + "stopped (" + (Log.Count > 0 ? Log[Log.Count - 1] : "") + ")";
@@ -90,6 +106,7 @@ namespace KspFlightPlanner.Haulers
             node.AddValue("meetUt", MeetUt.ToString("R", CultureInfo.InvariantCulture));
             node.AddValue("state", State.ToString());
             node.AddValue("disturbed", Disturbed);
+            node.AddValue("autopilot", Autopilot);
             foreach (var b in Burns)
             {
                 var n = node.AddNode("BURN");
@@ -116,6 +133,7 @@ namespace KspFlightPlanner.Haulers
                 MeetUt = D(node, "meetUt"),
                 State = (RouteState)Enum.Parse(typeof(RouteState), node.GetValue("state")),
                 Disturbed = node.GetValue("disturbed") == "True",
+                Autopilot = node.GetValue("autopilot") != "False",
             };
             foreach (var n in node.GetNodes("BURN"))
                 route.Burns.Add(new HaulerBurn
@@ -127,6 +145,8 @@ namespace KspFlightPlanner.Haulers
                     Title = n.GetValue("title") ?? "",
                     Done = n.GetValue("done") == "True",
                 });
+            // Saved mid-approach: meet again on load (it parks, or lines up again if the player is there).
+            if (route.State == RouteState.Approaching) route.State = RouteState.Flying;
             var log = node.GetNode("LOG");
             if (log != null) route.Log.AddRange(log.GetValues("line"));
             return route;

@@ -80,7 +80,7 @@ namespace KspFlightPlanner.Haulers
             StopWarp();
         }
 
-        private static void StopWarp()
+        internal static void StopWarp()
         {
             try
             {

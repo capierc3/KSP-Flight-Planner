@@ -93,6 +93,8 @@ namespace KspFlightPlanner.Haulers
             try
             {
                 var burn = route.Burns.FirstOrDefault(b => !b.Done);
+                // The autopilot is flying this burn for real (the ship is near the player with physics on): leave it be.
+                if (burn != null && PhysicsFlyer.FliesBurns(route)) return;
                 var ut = burn != null ? burn.Ut : route.MeetUt;
                 // Still off rails (the player is flying it or near it) when a burn comes up: check from where it is now.
                 if (route.Disturbed)
@@ -180,18 +182,99 @@ namespace KspFlightPlanner.Haulers
             var used = "";
             var engine = HaulerShip.MainEngine(ship);
             if (engine != null && closing > 0) HaulerShip.Burn(ship, engine, closing, out used);
+            var head = "Arrived: " + miss + (used.Length > 0 ? "; final approach used " + used : "") + "; " + HaulerShip.Mass(ship).ToString("0.00") + " t left";
 
-            // On the target's own orbit, a few seconds behind it, so the gap holds until the player comes to dock. Under
-            // 200 m, where KSP turns physics on for a ship near the one being flown, so docking can start; 100 m at least.
+            if (LineUp(route, ship, target, head)) return;
+            Park(route, ship, target, head);
+        }
+
+        /// <summary>
+        /// Parks the ship on the target's own orbit, a few seconds behind it, so the gap holds until the player comes to
+        /// dock: under 200 m, where KSP turns physics on for a ship near the one being flown, so docking can start; 100 m
+        /// at least.
+        /// </summary>
+        internal static void Park(HaulerRoute route, Vessel ship, Vessel target, string head)
+        {
+            var to = target.orbitDriver.orbit;
+            var speed = to.getOrbitalVelocityAtUT(Planetarium.GetUniversalTime()).magnitude;
             var behind = Math.Min(MaxParkM, Math.Max(100, 2 * (HaulerShip.Size(target) + HaulerShip.Size(ship)) + 50));
-            HaulerShip.FollowOrbit(ship, to, behind / tVel.magnitude);
-
+            HaulerShip.FollowOrbit(ship, to, behind / speed);
             route.State = RouteState.Arrived;
-            var line = "Arrived: " + miss + "; parked " + behind.ToString("0") + " m behind " + route.TargetName +
-                       (used.Length > 0 ? "; final approach used " + used : "") + "; " + HaulerShip.Mass(ship).ToString("0.00") + " t left";
-            route.Log.Add(line);
-            Debug.Log("[KspFlightPlanner] " + route.VesselName + ": " + line);
+            HaulerScenario.Note(route, head + "; parked " + behind.ToString("0") + " m behind " + route.TargetName + ".", false);
             ScreenMessages.PostScreenMessage(route.VesselName + " has arrived at " + route.TargetName + ": it docks when you're nearby", 8f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        /// <summary>How far out from the port the ship is lined up (m): just outside the 2.25 km at which KSP draws ships.</summary>
+        internal const double LineUpM = 2400;
+
+        /// <summary>The spot it comes in to and stops at, this far straight out from the port (m).</summary>
+        internal const double StandoffM = 150;
+
+        /// <summary>How fast it comes in along the port's axis (m/s, relative to the target).</summary>
+        internal const double ComeInMs = 20;
+
+        /// <summary>
+        /// Meeting a station the player is at (it's loaded) with the autopilot on: instead of parking, the ship is put
+        /// on the axis of a free port that fits, 2.4 km straight out, coming in at 20 m/s. That's just outside the range
+        /// at which KSP draws ships, so it's done out of sight; the ship then comes into view, and the physics flyer
+        /// brakes it to a stop 150 m off the port (docs/MATH.md §11.6). Placed relative to the target's own orbit, so
+        /// only the 2.4 km offset goes through the world/orbit swap. False (and nothing done) when it can't be.
+        /// </summary>
+        private static bool LineUp(HaulerRoute route, Vessel ship, Vessel target, string head)
+        {
+            if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot || !target.loaded || ship.loaded) return false;
+            var port = HaulerShip.PickStationPort(ship, target);
+            if (port == null) return false;
+
+            var now = Planetarium.GetUniversalTime();
+            var axis = (Vector3d)port.nodeTransform.forward;
+            var spot = (Vector3d)port.nodeTransform.position + axis * (StandoffM + LineUpM);
+            var to = target.orbitDriver.orbit;
+            var pos = to.getRelativePositionAtUT(now) + (spot - target.GetWorldPos3D()).xzy;
+            var vel = to.getOrbitalVelocityAtUT(now) + (-axis * ComeInMs).xzy;
+            HaulerShip.SetOrbit(ship, pos, vel, to.referenceBody, now);
+            HaulerShip.RaisePhysicsRange(ship, PhysicsFlyer.PhysicsRangeM);
+
+            route.State = RouteState.Approaching;
+            route.ApproachPortId = port.part.persistentId;
+            route.ApproachSince = Time.time;
+            CourseCheck.StopWarp();
+            HaulerScenario.Note(route, head + "; coming in to " + target.vesselName + "'s " + port.part.partInfo.title + " from " +
+                                       ((StandoffM + LineUpM) / 1000).ToString("0.0") + " km out at " + ComeInMs.ToString("0") + " m/s.", false);
+            ScreenMessages.PostScreenMessage(route.VesselName + " is coming in to " + route.TargetName + ": watch for it", 8f, ScreenMessageStyle.UPPER_CENTER);
+            return true;
+        }
+
+        /// <summary>How long a lined-up ship may take to come into physics range before it's parked instead (real s).</summary>
+        private const float ComeInGiveUpS = 300;
+
+        /// <summary>
+        /// Every frame while a ship is coming in: time warp stays off (on rails it would sail through the station), and
+        /// if the player has gone, the ship never came into physics range, or the autopilot can't fly it, it's parked.
+        /// </summary>
+        internal static void WatchApproach(HaulerRoute route)
+        {
+            var ship = HaulerShip.Find(route.VesselId);
+            var target = HaulerShip.Find(route.TargetId);
+            if (ship == null || target == null)
+            {
+                HaulerScenario.Stop(route, (ship == null ? route.VesselName : route.TargetName) + " is gone.");
+                return;
+            }
+            string why = null;
+            if (!HighLogic.LoadedSceneIsFlight || !target.loaded) why = "you left";
+            else if (!CourseCheck.OffRails(ship) && Time.time - route.ApproachSince > ComeInGiveUpS) why = "it never came into physics range";
+            else if (CourseCheck.OffRails(ship) && !PhysicsFlyer.Flies(route) && route.Autopilot) why = "the autopilot can't fly it";
+            if (why != null)
+            {
+                Park(route, ship, target, "Coming in stopped (" + why + ")");
+                return;
+            }
+            if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0 && TimeWarp.WarpMode == TimeWarp.Modes.HIGH)
+            {
+                TimeWarp.SetRate(0, true);
+                ScreenMessages.PostScreenMessage(route.VesselName + " is coming in: no time warp until it has stopped", 4f, ScreenMessageStyle.UPPER_CENTER);
+            }
         }
     }
 }

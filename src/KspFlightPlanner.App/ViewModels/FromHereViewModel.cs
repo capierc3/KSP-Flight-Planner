@@ -1008,7 +1008,8 @@ public sealed class FromHereViewModel : ObservableObject
     /// </summary>
     private async Task FlyInBackgroundAsync()
     {
-        if (_plannedRendezvous is not { } plan || _sync.Link.Game?.Active?.Name is not { } vessel) return;
+        // The craft picked under "Fly as" when it's docked in the stack being flown (the add-on undocks it first), else the vessel itself.
+        if (_plannedRendezvous is not { } plan || (_sync.ActiveCraft?.Name ?? _sync.Link.Game?.Active?.Name) is not { } vessel) return;
         var leg = plan.Legs[^1];
         var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
         _busy = true;

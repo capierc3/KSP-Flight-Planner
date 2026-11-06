@@ -24,13 +24,26 @@ namespace KspFlightPlanner.Haulers
         public static string StartRoute(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt)
         {
             var scenario = RequireScenario();
-            var ship = HaulerShip.FindByName(vessel);
+            // A ship on its own, or one docked in another vessel (a shuttle at its station), found by its own name; that
+            // one is undocked once the plan has been checked, and backs off before its first burn.
+            Vessel ship;
+            Vessel stack = null;
+            ModuleDockingNode dockedPort = null;
+            try
+            {
+                ship = HaulerShip.FindByName(vessel);
+            }
+            catch (ArgumentException) when ((dockedPort = HaulerShip.FindDockedCraftPort(vessel, out stack)) != null)
+            {
+                ship = stack;
+            }
             var meet = HaulerShip.FindByName(target);
-            if (ship == meet) throw new ArgumentException("A ship can't fly to meet itself.");
-            if (!HaulerShip.InSpace(ship)) throw new ArgumentException(vessel + " isn't in space (" + ship.situation + "): undock and fly it clear first.");
+            if (ship == meet && dockedPort == null) throw new ArgumentException("A ship can't fly to meet itself.");
+            if (stack == meet) throw new ArgumentException(vessel + " is docked at " + target + " already.");
+            if (!HaulerShip.InSpace(ship)) throw new ArgumentException(vessel + " isn't in space (" + ship.situation + ").");
             if (burns.Count == 0 || burns.Count % 4 != 0) throw new ArgumentException("Burns come as four numbers each: time, prograde, normal, radial.");
-            var engine = HaulerShip.MainEngine(ship);
-            if (engine == null) throw new ArgumentException(vessel + " has no engine with fuel on board.");
+            var engine = dockedPort == null ? HaulerShip.MainEngine(ship) : null;
+            if (dockedPort == null && engine == null) throw new ArgumentException(vessel + " has no engine with fuel on board.");
 
             var route = new HaulerRoute
             {
@@ -61,13 +74,30 @@ namespace KspFlightPlanner.Haulers
                 throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it meet " + meet.vesselName + " " + meeting + " off") +
                                             ": not started.");
 
+            // Docked: undock it now (it's loaded, the player is flying the stack); the plan was checked on the stack's orbit,
+            // which is the ship's until it moves off.
+            if (dockedPort != null)
+            {
+                var stationPort = dockedPort.otherNode;
+                dockedPort.Undock();
+                ship = dockedPort.part.vessel;
+                engine = HaulerShip.MainEngine(ship);
+                if (engine == null) throw new ArgumentException(vessel + " is undocked, but has no engine with fuel on board: not started.");
+                route.VesselId = ship.persistentId;
+                route.VesselName = vessel;
+                route.ShipPortPartId = dockedPort.part.persistentId;
+                route.BackOffPortId = stationPort != null ? stationPort.part.persistentId : 0;
+                route.BackingOff = route.BackOffPortId != 0;
+            }
+
             // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
             route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(meet);
 
-            // A ship planned again keeps what happened before on its log.
-            var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId);
+            // A ship planned again keeps what happened before on its log (found by name too: undocking gives a new id).
+            var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (old != null) route.Log.AddRange(old.Log);
-            scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId);
+            scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
+            if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + ".");
             route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
                           route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
                           " t; KSP's prediction meets " + meet.vesselName + " within " + meeting);

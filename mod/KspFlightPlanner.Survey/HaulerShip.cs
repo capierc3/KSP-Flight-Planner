@@ -238,6 +238,85 @@ namespace KspFlightPlanner.Haulers
         }
 
         /// <summary>
+        /// The station's free port to come in to, for a ship that may not be loaded (its ports read from the part
+        /// designs): of the free ports one of the ship's fits, the one facing most towards where the ship is now, so it
+        /// arrives from its own side. Null when none fits. The station must be loaded.
+        /// </summary>
+        public static ModuleDockingNode PickStationPort(Vessel ship, Vessel station)
+        {
+            var mine = ship.loaded
+                ? ship.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree).ToList()
+                : ship.protoVessel.protoPartSnapshots.Where(p => p.partInfo != null && p.partInfo.partPrefab != null)
+                    .SelectMany(p => p.partInfo.partPrefab.FindModulesImplementing<ModuleDockingNode>()).ToList();
+            var toShip = (Vector3)(ship.GetWorldPos3D() - station.GetWorldPos3D()).normalized;
+            ModuleDockingNode best = null;
+            var bestFacing = float.MinValue;
+            foreach (var theirs in station.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree))
+            {
+                if (!mine.Any(m => Fits(m, theirs))) continue;
+                var facing = Vector3.Dot(theirs.nodeTransform.forward, toShip);
+                if (facing > bestFacing) { bestFacing = facing; best = theirs; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The docking port of a craft docked inside another (loaded) vessel, found by the craft's own name as KSP keeps it
+        /// on its port (for undocking it as it was); and the vessel it's docked in. Null when there's none.
+        /// </summary>
+        public static ModuleDockingNode FindDockedCraftPort(string name, out Vessel stack)
+        {
+            stack = null;
+            foreach (var v in FlightGlobals.VesselsLoaded)
+            foreach (var node in v.FindPartModulesImplementing<ModuleDockingNode>())
+            {
+                if (node.otherNode == null || node.vesselInfo == null || node.vesselInfo.name != name) continue;
+                stack = v;
+                return node;
+            }
+            return null;
+        }
+
+        /// <summary>The loaded ship this part is in now; null when it isn't loaded.</summary>
+        public static Vessel VesselOfPart(uint partPersistentId)
+        {
+            foreach (var v in FlightGlobals.VesselsLoaded)
+            foreach (var p in v.parts)
+                if (p.persistentId == partPersistentId) return v;
+            return null;
+        }
+
+        /// <summary>The ship's free port that fits the station's port; null when none does. The ship must be loaded.</summary>
+        public static ModuleDockingNode PortFor(Vessel ship, ModuleDockingNode stationPort) =>
+            !IsFree(stationPort) ? null : ship.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree).FirstOrDefault(m => Fits(m, stationPort));
+
+        /// <summary>The docking port on this (loaded) ship whose part has this id; null if it's gone or taken.</summary>
+        public static ModuleDockingNode FindPort(Vessel v, uint partPersistentId)
+        {
+            if (v == null || !v.loaded) return null;
+            foreach (var p in v.parts)
+                if (p.persistentId == partPersistentId) return p.FindModuleImplementing<ModuleDockingNode>();
+            return null;
+        }
+
+        /// <summary>
+        /// Lets physics run on this ship from further away in orbit: KSP draws a ship from 2.25 km but only turns its
+        /// physics on within 200 m (packs it again past 350 m), so a hauler coming in would be frozen until it was nearly
+        /// there. Only the pack/unpack distances change (changing those and the load distances in one physics tick isn't
+        /// safe), kept inside the load distance; a copy, so other ships keep KSP's defaults.
+        /// </summary>
+        public static void RaisePhysicsRange(Vessel v, float unpackM)
+        {
+            var orbit = v.vesselRanges.orbit;
+            unpackM = Math.Min(unpackM, orbit.load - 50);
+            if (orbit.unpack >= unpackM) return;
+            var ranges = new VesselRanges(v.vesselRanges);
+            ranges.orbit.unpack = unpackM;
+            ranges.orbit.pack = Math.Min(unpackM + 150, ranges.orbit.unload - 50);
+            v.vesselRanges = ranges;
+        }
+
+        /// <summary>
         /// Turns and moves the (loaded, unpacked) ship so its port faces the station's port, a hand's width in front of
         /// it, at the station's speed, so the ports' magnets pull it in, as Routine Mission Manager places its arrivals.
         /// </summary>

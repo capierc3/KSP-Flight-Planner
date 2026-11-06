@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station
 
 **Where to look for…**
 
@@ -2099,6 +2099,114 @@ so the check when it's back on rails calls it off course, well past the 1 km lin
 
 - Code: `CourseCheck.Check`, `.CheckIfResting`, `HaulerScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `HaulerShip.PredictMeeting` (mod/KspFlightPlanner.Survey); `HaulerReplan.Plan` (Core); `HaulerWatch` (App)
 - Source: §1.5, §2.8, §4, §4.6; KSP's `PatchedConics.CalculatePatch`; Clohessy–Wiltshire equations (Curtis 7.4)
+
+### 11.4 The physics flyer: turning the ship
+
+When a hauler is loaded with physics running near the player, the add-on flies it by writing its controls every physics tick, like an autopilot (the toolbar's Haulers panel switches it off; touching the controls of a hauler you're flying does too). It turns the ship so its engines face the next burn, along the node axes of §1.8 as they are now, holds it there, and then flies the burn (§11.5).
+
+The turn is worked out on each of the ship's three control axes (pitch, roll, yaw) separately. The error is the rotation from where the ship points to where it should, as an angle e on each axis (rad). The ship can change its turn rate by at most α = τ / I on that axis, from the torque τ its reaction wheels, RCS and gimbals can make (the smaller of the two directions) and its moment of inertia I. It wants the turn rate that still lets it stop in time, with a margin, but no faster than 0.5 rad/s, and gently at the end:
+
+```
+ω_want = sign(e) · min( √(2 · 0.6·α · |e|),  |e| / 1.5 s,  0.5 rad/s )
+u      = clamp( (ω_want − ω) / (0.25 s · α),  −1, 1 )         the control input on that axis
+```
+
+ω is the ship's turn rate on that axis now. KSP turns the ship against its input (torque = −u · τ on each axis), so the control written is −u. In case that convention is ever the other way, each axis checks itself: when a strong input keeps turning the ship the opposite way (15 ticks more often than not), its sign is flipped and logged.
+
+Example: a 13 t shuttle with I = 20 t·m² on pitch and 5 kN·m of reaction wheel torque, so α = 0.25 rad/s², turning 90° (1.571 rad). It speeds up to the 0.5 rad/s cap in 2 s (0.5 rad), and braking at 0.6α = 0.15 rad/s² takes 0.5² / (2 × 0.15) = 0.833 rad, so it coasts the 0.238 rad between for 0.48 s and brakes for 3.33 s: about **5.8 s**, then a short settle. 10° out it wants min(√(2 × 0.15 × 0.1745), 0.1745 / 1.5) = **0.116 rad/s**.
+
+- Code: `PhysicsFlyer.Attitude.Drive`, `.Learn`, `.AvailableTorque`, `PhysicsFlyer.Pilot` (mod/KspFlightPlanner.Survey); `HaulerPanel`
+- Source: §1.8; a rate profile that can always stop in time (bang-bang with a margin), per axis, as kRPC's and MechJeb's autopilots do; KSP's `ITorqueProvider`
+
+### 11.5 The physics flyer: flying a burn
+
+A real burn takes time, so it's centred on the planned time t_b: it starts half its length early. The length at full throttle comes from the rocket equation (§7.1) with the lit engines' thrust F (thrust limiters applied) and their thrust-weighted vacuum Isp, or the main engine kind's if none is lit yet:
+
+```
+vₑ = Isp · g₀
+t  = m₀ · vₑ / F · (1 − e^(−Δv / vₑ))           start at t_b − t/2
+```
+
+At the start the add-on works out the orbit the burn should leave the ship on, exactly as the rails flyer would make it (§11.1: the ship's position and velocity on its orbit at t_b, plus the planned Δv along the node axes), lights the main engines if none is lit, and from then on steers on the Δv still to go, as KSP's own maneuver node does:
+
+```
+Δv_left = v_goal(t_b) − v_ship(t_b)              both orbits' velocities at t_b (the ship's orbit as it is now)
+throttle = 0                                      while the engines point more than 5° off Δv_left
+throttle = clamp(|Δv_left| / a_max, 0.02, 1)      otherwise: a_max = F / m now, so it eases off over the last second's worth
+done when |Δv_left| < 0.05 m/s, or it starts growing again once under 1 m/s (the last bit overshot)
+```
+
+Because it aims at the goal orbit, not at a fixed direction, the turning of the Δv over a long burn is followed as it goes. It stops early, and says why, when the engines have had no thrust for 3 s (out of fuel), or the ship leaves the sphere of influence mid-burn. Whatever's left is the course check's: before each real burn when the player has stayed near the ship (it never went back on rails), or once it's back on rails (§11.3). Time warp is stopped 90 s before the burn starts (plus a frame's worth at the current rate) when the hauler is loaded near the player, so it unpacks and the autopilot can turn it first; physics warp is stopped during the burn.
+
+Example: the round 1 shuttle (18.17 t) with a Skipper (650 kN, Isp 320 s in vacuum), 252 m/s: vₑ = 320 × 9.80665 = 3,138.1 m/s, t = 18.17 × 3,138.1 / 650 × (1 − e^(−252 / 3,138.1)) = 87.72 × 0.07716 = **6.8 s**, so it lights 3.4 s before the planned time. At about 38 m/s² (650 kN on 17 t), the throttle starts easing off with 38 m/s left; with 1 m/s left it's at 2.6%.
+
+- Code: `PhysicsFlyer.BurnSeconds`, `.StopWarpForBurn`, `PhysicsFlyer.Pilot.StartBurn`, `.FollowBurn`, `.ThrustAxis` (mod/KspFlightPlanner.Survey)
+- Source: §1.8, §7.1, §11.1; steering on the remaining Δv to a goal orbit, as KSP's maneuver node (and MechJeb's node executor) do
+
+### 11.6 The physics flyer: coming in to the station
+
+When the meeting time comes and the player is at the station (it's loaded) with the autopilot on, the hauler isn't parked (§11.1). The add-on picks a free port on the station that one of the hauler's ports fits (the one facing most towards the hauler), and puts the hauler on that port's axis, out of sight:
+
+```
+spot   = port position + axis · 150 m                      where it will stop
+start  = port position + axis · (150 m + 2,400 m)          just outside the 2,250 m at which KSP draws ships
+r      = r_station(now) + (start − station position)        only the 2.4 km offset goes through the world/orbit swap
+v      = v_station(now) − axis · 20 m/s                     coming straight in
+```
+
+Then time warp stops (on rails it would sail through the station), and the hauler's physics range is raised: KSP turns physics on for a ship near the one being flown only within 200 m in orbit, so the hauler's own pack/unpack distances are set to 2,350 m / 2,200 m, inside its load distances. It comes into view at 2.25 km, physics comes on at 2.2 km, and the autopilot brings it in. The speed it wants falls off towards the spot so it can always stop there:
+
+```
+d      = |r_ship − spot|,   v = v_ship − v_station
+b      = min(½ · F/m, 2.5 m/s²)                           the braking it plans on
+v_want = −(r_ship − spot)/d · min(20 m/s, √(2·b·(d − 2 m)), d / 10 s)
+Δv     = v_want − v                                        fire along Δv when it's over 0.6 m/s (until under 0.2),
+                                                           pointed within 8°, throttle = clamp(|Δv| / (F/m), 0.02, 1)
+```
+
+While it's only coasting it faces back along its drift, ready to brake, so the flip happens before the braking burn. Within 20 m of the spot and under 0.3 m/s it has arrived, and docking takes over (for now, the placement of §11.1). If the player leaves before then, it never reaches physics range within 5 minutes, or the autopilot can't fly it, it's parked as in §11.1 instead.
+
+Example: the shuttle with a Skipper (about 38 m/s² at full throttle, so b = 2.5 m/s²). It coasts in at 20 m/s until d / 10 s drops below 20 m/s, at d = 200 m, which is 350 m from the port: there it starts braking at 20 / 10 = 2 m/s², easing off as it slows (the speed it wants halves every 10 × ln 2 = 6.9 s), and it covers the 200 m down to 20 m in 10 × ln(200 / 20) = **23 s**. At 38 m/s², 2 m/s² is a throttle of about 5%.
+
+- Code: `RailsFlyer.LineUp`, `.WatchApproach`, `.Park`, `HaulerShip.PickStationPort`, `.RaisePhysicsRange`, `PhysicsFlyer.Pilot.Approach` (mod/KspFlightPlanner.Survey)
+- Source: §11.1, §11.5; KSP's vessel ranges (`VesselRanges`: load 2,250 m, unpack 200 m in orbit by default); a speed profile that can always stop in time, as MechJeb's docking autopilot uses
+
+### 11.7 The physics flyer: docking
+
+Once the hauler has stopped off the port (§11.6), or is parked beside the station (§11.1) and the player comes near, a hauler with RCS docks itself; one without is placed at the port (§11.1). The ship's port faces the station's port throughout (the shortest turn, roll left as it is), and RCS moves it, as MechJeb's docking autopilot does: round the station to a point straight out from the port, then in along the port's axis.
+
+```
+a      = the station port's axis (out of the port),  p = its position,  q = the ship's port's position
+along  = (q − p) · a              lateral = (q − p) − a · along
+clear  = size_station + size_ship + 10 m          (size = furthest part from the ship's origin)
+entry  = p + a · max(clear, 30 m)
+```
+
+- **Final approach**, when it's in front (along > 0), within max(0.5 m, along/10) of the axis and facing the port within 3°: v_want = −a · min(0.8, max(0.15, along / 20 s)) − lateral / 5 s, slowing to 0.15 m/s for the magnets.
+- **Otherwise to the entry point**, straight if that line keeps at least `clear` from the station's centre, or else 30° at a time round a sphere of radius `clear` about it: v_want towards the goal at min(2 m/s, √(2·½·a_RCS·d), d / 10 s).
+
+RCS makes up the difference, relative to the station, in the ship's own axes (KSP's RCS reads X right, Z along the nose, Y the third), aiming to close it in half a second and doing nothing under 2 cm/s, to save monopropellant; a_RCS is the thrusters' power over the mass, shared over six directions. Each axis checks its sign against how the ship really moves, as the turning does (§11.4). It's docked when its port is (it may become part of the station); after 10 minutes it gives up and is placed at the port instead.
+
+Example: from the entry point 30 m out, it closes at 0.8 m/s until along / 20 s drops below that, at 16 m (17.5 s); then the speed falls with along, 16 m to 3 m in 20 × ln(16 / 3) = 33.5 s; then 0.15 m/s for the last 3 m to the magnets' reach (about 0.25 m), 18 s: about **69 s** from the entry point to the magnets.
+
+- Code: `PhysicsFlyer.Pilot.Dock`, `.Translate`, `.SegmentClear`, `.AroundStep`, `PhysicsFlyer.SignCheck`, `HaulerShip.PortFor` (mod/KspFlightPlanner.Survey)
+- Source: MechJeb's docking autopilot (the route round the target, the corridor, speed caps), read for its ideas; §11.4
+
+### 11.8 The physics flyer: leaving a station
+
+A trip can start with the hauler docked (From here › Fly as the docked craft, then Fly it in the background). The add-on finds it by its own name, as KSP keeps it on its docking port, checks the plan (§11.3) on the docked stack's orbit, which is the hauler's until it moves off, and only then undocks it. Then, with physics on, it backs straight out along the station port's axis on RCS, holding still:
+
+```
+clear  = max(30 m, size_ship + 20 m)
+v_want = axis · min(1 m/s, max(0.2 m/s, (clear − distance) / 5 s))        relative to the station, as in §11.7
+```
+
+until it's `clear` from the port; only then does it turn for its first burn. Without RCS it drifts clear on the undocking push. A burn that's due (within 30 s of its start) ends the backing off once it's 15 m out, and 5 minutes is the most it waits. Going on rails ends it too (nothing to bump into there). The few metres it moves are the course check's (§11.3), before the first burn.
+
+Example: the shuttle, about 10 m long, backs off to max(30, 10 + 20) = **30 m**: 1 m/s until 25 m (5 s × 1 m/s from the end), then slowing (the gap left halves every 3.5 s) to the 0.2 m/s floor at 29 m, and 0.2 m/s for the last metre: 25 + 5 × ln 5 + 5 = **38 s** in all.
+
+- Code: `HaulerService.StartRoute`, `HaulerShip.FindDockedCraftPort`, `.VesselOfPart`, `PhysicsFlyer.Pilot.BackOff` (mod/KspFlightPlanner.Survey); `FromHereViewModel.FlyInBackgroundAsync` (App)
+- Source: §11.3, §11.7
 
 ## Sources
 

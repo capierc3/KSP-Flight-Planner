@@ -10,9 +10,10 @@ namespace KspFlightPlanner.Haulers
     /// routes are kept in the save (this is a scenario module), so they carry on after a restart and rewind with a
     /// quickload or revert.
     ///
-    /// It decides who flies each route: <see cref="RailsFlyer"/> while the ship is on rails (the only flyer so far; the
-    /// physics flyer, for when the ship is loaded near the player, comes next), and <see cref="CourseCheck"/> in between,
-    /// after the ship or its target has been off rails.
+    /// It decides who flies each route: <see cref="RailsFlyer"/> while the ship is on rails, <see cref="PhysicsFlyer"/>
+    /// while it's loaded with physics running near the player (so far it only points the ship at its next burn; the rails
+    /// flyer still makes the burns), and <see cref="CourseCheck"/> in between, after the ship or its target has been off
+    /// rails.
     /// </summary>
     [KSPScenario(ScenarioCreationOptions.AddToAllGames, GameScenes.FLIGHT, GameScenes.TRACKSTATION, GameScenes.SPACECENTER)]
     public sealed class HaulerScenario : ScenarioModule
@@ -29,6 +30,7 @@ namespace KspFlightPlanner.Haulers
 
         private void OnDestroy()
         {
+            PhysicsFlyer.ReleaseAll();
             GameEvents.onVesselGoOffRails.Remove(OnVesselGoOffRails);
             if (Instance == this) Instance = null;
         }
@@ -70,12 +72,20 @@ namespace KspFlightPlanner.Haulers
             var now = Planetarium.GetUniversalTime();
             foreach (var route in Routes)
             {
+                // Just undocked: KSP may have given the ship a new id; find it again by its port.
+                if (route.ShipPortPartId != 0 && HaulerShip.Find(route.VesselId) == null && HighLogic.LoadedSceneIsFlight
+                    && HaulerShip.VesselOfPart(route.ShipPortPartId) is Vessel again)
+                    route.VesselId = again.persistentId;
                 // Back on rails (or unloaded) after being disturbed: still on course?
                 if (route.State == RouteState.Flying && route.Disturbed) CourseCheck.CheckIfResting(route, now);
                 // A few events in one frame at most; whatever is left goes next frame.
                 for (var i = 0; i < 4 && route.State == RouteState.Flying && route.NextUt <= now; i++)
                     RailsFlyer.Step(route, now);
-                if (route.State == RouteState.Arrived && HighLogic.LoadedSceneIsFlight) RailsFlyer.Dock(route);
+                if (HighLogic.LoadedSceneIsFlight) PhysicsFlyer.Tick(route);
+                if (route.State == RouteState.Approaching) RailsFlyer.WatchApproach(route);
+                // The jump-to-the-port stand-in docks it when the physics flyer can't (no RCS, or it gave up); with the
+                // autopilot switched off, the player docks it.
+                if (route.State == RouteState.Arrived && HighLogic.LoadedSceneIsFlight && route.Autopilot && !PhysicsFlyer.Flies(route)) RailsFlyer.Dock(route);
                 if (route.State == RouteState.OffCourse) CourseCheck.WatchOffCourse(route);
             }
         }
