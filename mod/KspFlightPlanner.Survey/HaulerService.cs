@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using KRPC.Service;
 using KRPC.Service.Attributes;
@@ -54,11 +55,25 @@ namespace KspFlightPlanner.Haulers
             if (route.Burns[0].Ut < now - 5) throw new ArgumentException("The first burn's time has passed: plan again.");
             if (meetUt < route.Burns[route.Burns.Count - 1].Ut) throw new ArgumentException("The meeting can't come before the last burn.");
 
+            // Flown as planned in KSP's own prediction, does it meet the target? A plan that already misses isn't started.
+            var meeting = HaulerShip.PredictMeeting(ship, meet, route.Burns, now, meetUt);
+            if (meeting.Problem != null || meeting.GapM > CourseCheck.OffCourseM || meeting.SpeedMs > CourseCheck.OffCourseMs)
+                throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it meet " + meet.vesselName + " " + meeting + " off") +
+                                            ": not started.");
+
+            // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
+            route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(meet);
+
+            // A ship planned again keeps what happened before on its log.
+            var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId);
+            if (old != null) route.Log.AddRange(old.Log);
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId);
-            route.Log.Add("Started: " + route.Burns.Count + " burns, " + route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned, with " + engine +
-                          "; " + HaulerShip.Mass(ship).ToString("0.00") + " t");
+            route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
+                          route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
+                          " t; KSP's prediction meets " + meet.vesselName + " within " + meeting);
             scenario.Routes.Add(route);
-            ScreenMessages.PostScreenMessage(ship.vesselName + " is flying to " + meet.vesselName + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
+            ScreenMessages.PostScreenMessage(ship.vesselName + (old != null && old.State == RouteState.OffCourse ? " was planned again and is" : " is") +
+                                             " flying to " + meet.vesselName + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
             return route.Summary();
         }
 
@@ -88,6 +103,44 @@ namespace KspFlightPlanner.Haulers
             scenario.Routes.Remove(route);
             return true;
         }
+
+        /// <summary>
+        /// The off-course routes waiting to be planned again, one line each, tab-separated: ship, target, game time now,
+        /// then for the ship and then the target: body, semi-major axis (m), eccentricity, inclination, LAN and argument of
+        /// periapsis (degrees), mean anomaly at epoch (radians), epoch (s). KSP's own orbit elements, as the save has them.
+        /// </summary>
+        [KRPCProcedure]
+        public static IList<string> ReplanRequests()
+        {
+            var list = new List<string>();
+            var scenario = HaulerScenario.Instance;
+            if (scenario == null) return list;
+            var now = Planetarium.GetUniversalTime();
+            foreach (var r in scenario.Routes.Where(r => r.State == RouteState.OffCourse))
+            {
+                var ship = HaulerShip.Find(r.VesselId);
+                var target = HaulerShip.Find(r.TargetId);
+                if (ship == null || target == null) continue;
+                list.Add(string.Join(Tab, new[] { ship.vesselName, target.vesselName, R(now), Elements(ship.orbitDriver.orbit), Elements(target.orbitDriver.orbit) }));
+            }
+            return list;
+        }
+
+        /// <summary>The planner couldn't plan an off-course route again (yet): shown in the game, once per reason.</summary>
+        [KRPCProcedure]
+        public static void ReplanProblem(string vessel, string why)
+        {
+            var route = FindRoute(vessel);
+            if (route != null && route.State == RouteState.OffCourse) CourseCheck.ReplanProblem(route, why);
+        }
+
+        private const string Tab = "\t";
+
+        private static string R(double x) => x.ToString("R", CultureInfo.InvariantCulture);
+
+        private static string Elements(Orbit o) =>
+            string.Join(Tab, new[] { o.referenceBody.bodyName, R(o.semiMajorAxis), R(o.eccentricity), R(o.inclination), R(o.LAN), R(o.argumentOfPeriapsis),
+                R(o.meanAnomalyAtEpoch), R(o.epoch) });
 
         /// <summary>Forgets finished and stopped routes.</summary>
         [KRPCProcedure]

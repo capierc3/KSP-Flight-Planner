@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again
 
 **Where to look for…**
 
@@ -2044,7 +2044,7 @@ Example: Kerb Station (a = 700,611 m, |v| = 2,245 m/s, T = 1,960.7 s, so n = 0.0
 
 **Docking.** Once the player is near (both ships loaded, physics on, no time warp, for 2 s) the add-on picks the target's free port nearest the craft that one of the craft's free ports fits (same port size), turns the craft so its port faces that port (forward against forward, up along up), and moves it so the two port faces are half the ports' magnet reach apart (acquire range, about 0.5 m, so 0.25 m), at the target's velocity and with no spin. The ports' own magnets pull it in. If the craft's port hasn't docked within 10 s it's left there, to dock by hand. This is how Routine Mission Manager places its arrivals.
 
-- Code: `HaulerScenario.DoBurn`, `.Arrive`, `.Dock`, `HaulerShip.Axes`, `.SetOrbit`, `.FollowOrbit`, `.PickPorts`, `.PlaceForDocking` (mod/KspFlightPlanner.Survey)
+- Code: `RailsFlyer.DoBurn`, `.Arrive`, `.Dock`, `HaulerShip.Axes`, `.SetOrbit`, `.FollowOrbit`, `.PickPorts`, `.PlaceForDocking` (mod/KspFlightPlanner.Survey)
 - Source: §1.5, §1.8; setting a ship's orbit by copying elements into its own orbit object follows HyperEdit; applying Δv at a time through `Orbit.UpdateFromStateVectors` follows Background Thrust (Phantomical, MIT); placing a ship at a port follows Routine Mission Manager (BSD-2)
 
 ### 11.2 The fuel a background burn uses
@@ -2062,6 +2062,43 @@ Example: 20 t craft, a Terrier (Isp 345 s vacuum, LiquidFuel 0.9 : Oxidizer 1.1,
 
 - Code: `HaulerShip.MainEngine`, `.Burn`, `.Mass` (mod/KspFlightPlanner.Survey)
 - Source: §7.1; engine and resource values from the game's own part configs
+
+### 11.3 Staying on course, and planning again
+
+The burns are flown open-loop: each is added to whatever orbit the craft is on at its time. On rails nothing else moves the craft, and the burns are applied exactly as the check below assumes, so a craft left alone stays on the plan. Only physics can move it: when it or its target is loaded and off rails (the player flying it or something within about 2 km), a thrust, RCS, an undocking or a bump goes unnoticed by the next burn, which then sends it somewhere else. So the add-on checks the rest of the plan:
+
+- once when the trip starts (a plan that already misses isn't started), and
+- after the craft or its target has been off rails: KSP's "gone off rails" event marks the trip *disturbed*, and it's checked once both are back on rails (or unloaded: the player left, or time warp packed them), or just before the next burn if the player is still there.
+
+A trip that's never disturbed is never checked again.
+
+A check doesn't plan anything. It takes the craft's real orbit now, applies the burns still to come exactly as §11.1 will (all of them, at their times), carries it between them with KSP's own patched conics (the prediction the map view draws, through every change of sphere of influence), and compares it with the target at the meeting time:
+
+```
+gap   = |r_craft(t_m) − r_target(t_m)|
+speed = |v_craft(t_m) − v_target(t_m)|
+off course  when  gap > 1 km,  or  speed > 5 m/s,  or  the craft ends up round another body
+```
+
+Off course, the trip pauses: no more burns, no parking, and time warp stops. The planner (while it's connected) asks the add-on every 3 s for paused trips, plans each again from where the craft really is with the same planning as From here › Go to… a craft (§4.6 when the craft is round another body, the rendezvous of §4 when it's round the target's), and sends the new plan, which replaces the old one and is checked like any other. Two cases come only from a craft caught mid-trip:
+
+- **On a path out of another body** (leaving the Mun): nothing can be planned until it's out. The add-on stops time warp again when it reaches the next body, and the planner plans it then.
+- **On a path out of the target's body** (coming in from another planet): it's captured first, circularizing at periapsis (§2.8's quick burn), and the meeting is planned from that orbit.
+
+When it can't plan one (a periapsis in the air, say), the game says why, once, and the planner tries again 30 s later.
+
+Example (the scale of a nudge): a craft beside Kerb Station's orbit (n = 0.0032046 rad/s) nudged 2 m/s prograde 1,000 s before the meeting drifts, by the Clohessy–Wiltshire equations,
+
+```
+along  y = (4/n)·Δv·sin(nt) − 3·Δv·t = 1,248.2 × 2 × (−0.06297) − 3 × 2 × 1,000 = −6,157 m
+radial x = (2/n)·Δv·(1 − cos(nt))     = 624.1 × 2 × 1.99802                       =  2,494 m
+gap      = √(6,157² + 2,494²) ≈ 6.6 km                                    (nt = 3.2046 rad)
+```
+
+so the check when it's back on rails calls it off course, well past the 1 km line.
+
+- Code: `CourseCheck.Check`, `.CheckIfResting`, `HaulerScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `HaulerShip.PredictMeeting` (mod/KspFlightPlanner.Survey); `HaulerReplan.Plan` (Core); `HaulerWatch` (App)
+- Source: §1.5, §2.8, §4, §4.6; KSP's `PatchedConics.CalculatePatch`; Clohessy–Wiltshire equations (Curtis 7.4)
 
 ## Sources
 

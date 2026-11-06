@@ -27,6 +27,17 @@ public sealed partial class KspLink
     /// <summary>What has happened on a ship's background trip, one line per event.</summary>
     public Task<IList<string>> BackgroundTripLogAsync(string vessel) => CallAsync(c => Haulers<IList<string>>(c, "RouteLog", vessel));
 
+    /// <summary>The background trips the add-on found off course, waiting to be planned again from where each ship is.</summary>
+    public Task<IReadOnlyList<HaulerReplanRequest>> HaulerReplanRequestsAsync() =>
+        CallAsync<IReadOnlyList<HaulerReplanRequest>>(c => Haulers<IList<string>>(c, "ReplanRequests").Select(HaulerReplanRequest.Parse).OfType<HaulerReplanRequest>().ToList());
+
+    /// <summary>Tells the game why an off-course trip couldn't be planned again yet (shown there once per reason).</summary>
+    public Task HaulerReplanProblemAsync(string vessel, string why) => CallAsync(c =>
+    {
+        c.Invoke(HaulerService, "ReplanProblem", [Encoder.Encode(vessel, typeof(string)), Encoder.Encode(why, typeof(string))]);
+        return true;
+    });
+
     private static T Haulers<T>(Connection c, string procedure, params object[] args)
     {
         var encoded = args.Select(a => Encoder.Encode(a, a switch { IList<double> => typeof(IList<double>), IList<string> => typeof(IList<string>), _ => a.GetType() })).ToList();

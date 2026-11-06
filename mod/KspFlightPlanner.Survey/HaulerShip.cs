@@ -116,6 +116,74 @@ namespace KspFlightPlanner.Haulers
             if (vessel.protoVessel != null) vessel.protoVessel.orbitSnapShot = new OrbitSnapshot(orbit);
         }
 
+        // ---------------- Checking the plan ----------------
+
+        /// <summary>Where a check says the ship ends up at the meeting.</summary>
+        internal sealed class Meeting
+        {
+            public double GapM, SpeedMs;
+
+            /// <summary>Set when it doesn't even end up round the target's body.</summary>
+            public string Problem;
+
+            public override string ToString() =>
+                Problem ?? (GapM < 10_000 ? GapM.ToString("0") + " m" : (GapM / 1000).ToString("0.0") + " km") + " at " + SpeedMs.ToString("0.0") + " m/s";
+        }
+
+        /// <summary>
+        /// Where the ship would meet <paramref name="target"/> at <paramref name="meetUt"/> if the burns still to come are
+        /// flown as planned from its orbit now (from <paramref name="fromUt"/>). Uses KSP's own patched conics, the same
+        /// prediction the map view draws, so moving into and out of moons' spheres of influence is followed as KSP will fly
+        /// it. Nothing is planned here: the burns are applied exactly as given, as <see cref="HaulerScenario"/> will.
+        /// </summary>
+        public static Meeting PredictMeeting(Vessel ship, Vessel target, IEnumerable<HaulerBurn> burns, double fromUt, double meetUt)
+        {
+            var o = Copy(ship.orbitDriver.orbit);
+            var t = fromUt;
+            foreach (var b in burns)
+            {
+                if (b.Ut > meetUt) break;
+                o = Coast(o, t, b.Ut);
+                var pos = o.getRelativePositionAtUT(b.Ut);
+                var vel = o.getOrbitalVelocityAtUT(b.Ut);
+                Axes(pos, vel, out var prograde, out var normal, out var radial);
+                var after = new Orbit();
+                after.UpdateFromStateVectors(pos, vel + prograde * b.Prograde + normal * b.Normal + radial * b.Radial, o.referenceBody, b.Ut);
+                o = after;
+                t = Math.Max(t, b.Ut);
+            }
+            o = Coast(o, t, meetUt);
+
+            var to = target.orbitDriver.orbit;
+            if (o.referenceBody != to.referenceBody)
+                return new Meeting { Problem = "ends up round " + o.referenceBody.bodyName + ", not " + to.referenceBody.bodyName };
+            return new Meeting
+            {
+                GapM = (o.getRelativePositionAtUT(meetUt) - to.getRelativePositionAtUT(meetUt)).magnitude,
+                SpeedMs = (o.getOrbitalVelocityAtUT(meetUt) - to.getOrbitalVelocityAtUT(meetUt)).magnitude,
+            };
+        }
+
+        private static Orbit Copy(Orbit o) =>
+            new Orbit(o.inclination, o.eccentricity, o.semiMajorAxis, o.LAN, o.argumentOfPeriapsis, o.meanAnomalyAtEpoch, o.epoch, o.referenceBody);
+
+        /// <summary>The patch of <paramref name="o"/>'s path the ship is on at <paramref name="toUt"/>, following SOI changes.</summary>
+        private static Orbit Coast(Orbit o, double fromUt, double toUt)
+        {
+            var pars = new PatchedConics.SolverParameters();
+            for (var i = 0; i < 8 && toUt > fromUt; i++)
+            {
+                var next = new Orbit();
+                o.StartUT = fromUt;
+                PatchedConics.CalculatePatch(o, next, fromUt, pars, null);
+                if (o.patchEndTransition != Orbit.PatchTransitionType.ENCOUNTER && o.patchEndTransition != Orbit.PatchTransitionType.ESCAPE) return o;
+                if (o.EndUT >= toUt || next.referenceBody == null) return o;
+                fromUt = o.EndUT;
+                o = next;
+            }
+            return o;
+        }
+
         private static bool IsFinite(Vector3d v) =>
             !(double.IsNaN(v.x) || double.IsNaN(v.y) || double.IsNaN(v.z) || double.IsInfinity(v.x) || double.IsInfinity(v.y) || double.IsInfinity(v.z));
 

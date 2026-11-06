@@ -49,3 +49,21 @@ Use the fresh copy **Protogen Hauler Test 2** (Protogen as it was before round 1
 Send me the `[KspFlightPlanner]` lines from `KSP.log` again.
 
 Result (2026-11-05): passed. 5 burns, arrived within 4 m at 0.0 m/s, parked 109 m behind. Flying the station, the shuttle docked about 2 s after the scene loaded. In the save, Kerb Station went from 208 to 274 parts (the shuttle's 66), the shuttle has about 30 LF / 37 Ox left, and the route state is Docked. No errors in KSP.log.
+
+## Round 3: knocked off course, and planned again
+
+New: the add-on checks the rest of the plan once when the trip starts, and again only after the shuttle (or its target) has been off rails, i.e. had physics running because you flew it or something near it. The check runs once both are back on rails (you left, or time warp packed them), or just before the next burn if you're still there. A trip nobody touches is never checked again. It uses KSP's own prediction (the map view's), with the burns still to come. If the ship would miss the target by more than 1 km or 5 m/s, the trip pauses, time warp stops, and the planner plans it again from where the ship is. **Keep the planner running and connected the whole time**: it does the planning.
+
+Use **Protogen Hauler Test** (the round 1 save, shuttle refuelled), and fly the shuttle back: Kerb Station → Mun Station. Close KSP and the planner first: the add-on in GameData and `publish\haulers\KspFlightPlanner.exe` are both new.
+
+- [ ] Load the save and go to Kerb Station. The shuttle may dock itself first (its old trip had arrived); if so, undock it and back off a little.
+- [ ] Target **Mun Station**, then From here › **Go to…** › Plan › **Fly it in the background**. KSP's log line now ends "KSP's prediction meets Mun Station within … m". If instead it says "KSP's own prediction … not started", tell me the message.
+- [ ] Before the first burn, stay on the shuttle and knock it off course: about 10 m/s with RCS or the engine, any direction.
+- [ ] Warp (high enough that the shuttle goes on rails, 50× or more) or switch to the tracking station. Right away: "Kerb Shuttle mk2 is off course (…)", and time warp stops by itself.
+- [ ] Within a few seconds: "Kerb Shuttle mk2 was planned again and is flying to Mun Station on its own".
+- [ ] Go to the tracking station and warp through the trip. No checks should run there (nothing touches it on rails): the log has only the burns.
+- [ ] Optional: switch to the shuttle between burns and leave it alone, then go back to the tracking station. The log gets "is off rails…" then "Back on rails: on course, meets Mun Station within …".
+- [ ] Arrival, parking, and docking when you fly Mun Station, as in round 2.
+- [ ] Optional: once it's in the Mun's sphere of influence on its way in, switch to it and nudge it again. It should be planned again, with a capture burn first if it's still on its way through.
+
+Send me the `[KspFlightPlanner]` lines from `KSP.log`, and anything the planner showed.
