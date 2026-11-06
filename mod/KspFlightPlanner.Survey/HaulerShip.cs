@@ -138,22 +138,7 @@ namespace KspFlightPlanner.Haulers
         /// </summary>
         public static Meeting PredictMeeting(Vessel ship, Vessel target, IEnumerable<HaulerBurn> burns, double fromUt, double meetUt)
         {
-            var o = Copy(ship.orbitDriver.orbit);
-            var t = fromUt;
-            foreach (var b in burns)
-            {
-                if (b.Ut > meetUt) break;
-                o = Coast(o, t, b.Ut);
-                var pos = o.getRelativePositionAtUT(b.Ut);
-                var vel = o.getOrbitalVelocityAtUT(b.Ut);
-                Axes(pos, vel, out var prograde, out var normal, out var radial);
-                var after = new Orbit();
-                after.UpdateFromStateVectors(pos, vel + prograde * b.Prograde + normal * b.Normal + radial * b.Radial, o.referenceBody, b.Ut);
-                o = after;
-                t = Math.Max(t, b.Ut);
-            }
-            o = Coast(o, t, meetUt);
-
+            var o = PathAt(ship, burns, fromUt, meetUt);
             var to = target.orbitDriver.orbit;
             if (o.referenceBody != to.referenceBody)
                 return new Meeting { Problem = "ends up round " + o.referenceBody.bodyName + ", not " + to.referenceBody.bodyName };
@@ -164,8 +149,164 @@ namespace KspFlightPlanner.Haulers
             };
         }
 
-        private static Orbit Copy(Orbit o) =>
-            new Orbit(o.inclination, o.eccentricity, o.semiMajorAxis, o.LAN, o.argumentOfPeriapsis, o.meanAnomalyAtEpoch, o.epoch, o.referenceBody);
+        /// <summary>
+        /// How close two ships' paths come (m) between two times, both left alone on rails: each orbit rebuilt from its
+        /// position and velocity now and sampled 400 times. Used after backing off a station, so the hauler isn't left
+        /// on a path that swings back through it. Infinity when they're round different bodies.
+        /// </summary>
+        /// <summary>
+        /// The closest the ship comes to a point fixed beside the target (the target's position plus
+        /// <paramref name="offset"/>, in the orbit frame) between two times, on their orbits as they are now (with
+        /// <paramref name="dv"/>, orbit frame, added to the ship's velocity now): the same closest approach KSP marks on its
+        /// map, by 240 samples and then a golden-section search round the nearest. Infinity round different bodies.
+        /// </summary>
+        public static double ClosestApproach(Vessel ship, Vector3d dv, Vessel target, Vector3d offset, double fromUt, double toUt, out double atUt)
+        {
+            atUt = fromUt;
+            var now = Planetarium.GetUniversalTime();
+            var so = ship.orbitDriver.orbit;
+            var o = new Orbit();
+            o.UpdateFromStateVectors(so.getRelativePositionAtUT(now), so.getOrbitalVelocityAtUT(now) + dv, so.referenceBody, now);
+            var to = target.orbitDriver.orbit;
+            if (o.referenceBody != to.referenceBody || toUt <= fromUt) return double.PositiveInfinity;
+            double Gap(double t) => (o.getRelativePositionAtUT(t) - (to.getRelativePositionAtUT(t) + offset)).magnitude;
+            const int samples = 240;
+            var best = 0;
+            var bestGap = double.PositiveInfinity;
+            for (var i = 0; i <= samples; i++)
+            {
+                var g = Gap(fromUt + (toUt - fromUt) * i / samples);
+                if (g < bestGap) { bestGap = g; best = i; }
+            }
+            double lo = fromUt + (toUt - fromUt) * Math.Max(0, best - 1) / samples, hi = fromUt + (toUt - fromUt) * Math.Min(samples, best + 1) / samples;
+            const double phi = 0.6180339887;
+            for (var i = 0; i < 40; i++)
+            {
+                double a = hi - phi * (hi - lo), b = lo + phi * (hi - lo);
+                if (Gap(a) < Gap(b)) hi = b; else lo = a;
+            }
+            atUt = (lo + hi) / 2;
+            return Gap(atUt);
+        }
+
+        /// <summary>
+        /// The Δv to add now (orbit frame) so the ship is at the point beside the target at <paramref name="atUt"/>:
+        /// Newton's method on the three components, slopes by nudging each by 0.05 m/s, until it's within 10 m. Null when it
+        /// doesn't get there in 10 steps, or it would take more than 50 m/s.
+        /// </summary>
+        public static Vector3d? AimAt(Vessel ship, Vessel target, Vector3d offset, double atUt)
+        {
+            var now = Planetarium.GetUniversalTime();
+            var so = ship.orbitDriver.orbit;
+            var r0 = so.getRelativePositionAtUT(now);
+            var v0 = so.getOrbitalVelocityAtUT(now);
+            var to = target.orbitDriver.orbit;
+            if (so.referenceBody != to.referenceBody || atUt <= now) return null;
+            var goal = to.getRelativePositionAtUT(atUt) + offset;
+            Vector3d Miss(Vector3d dv)
+            {
+                var o = new Orbit();
+                o.UpdateFromStateVectors(r0, v0 + dv, so.referenceBody, now);
+                return o.getRelativePositionAtUT(atUt) - goal;
+            }
+            var x = Vector3d.zero;
+            for (var i = 0; i < 10; i++)
+            {
+                var g = Miss(x);
+                if (g.magnitude < 10) return x.magnitude <= 50 ? (Vector3d?)x : null;
+                const double h = 0.05;
+                var cx = (Miss(x + new Vector3d(h, 0, 0)) - g) / h;
+                var cy = (Miss(x + new Vector3d(0, h, 0)) - g) / h;
+                var cz = (Miss(x + new Vector3d(0, 0, h)) - g) / h;
+                var det = Vector3d.Dot(cx, Vector3d.Cross(cy, cz));
+                if (Math.Abs(det) < 1e-12) return null;
+                var step = new Vector3d(Vector3d.Dot(-g, Vector3d.Cross(cy, cz)), Vector3d.Dot(cx, Vector3d.Cross(-g, cz)), Vector3d.Dot(cx, Vector3d.Cross(cy, -g))) / det;
+                if (step.magnitude > 20) step = step.normalized * 20;
+                x += step;
+            }
+            return null;
+        }
+
+        public static double ClosestPass(Vessel a, Vessel b, double fromUt, double toUt, double onceFartherThanM = 0)
+        {
+            var now = Planetarium.GetUniversalTime();
+            var oa = Copy(a.orbitDriver.orbit, now);
+            var ob = Copy(b.orbitDriver.orbit, now);
+            if (oa.referenceBody != ob.referenceBody || toUt <= fromUt) return double.PositiveInfinity;
+            // Only the part of the path after it has first got farther than onceFartherThanM counts: that's where it could
+            // swing back. (Counting from the start, a ship just backed off 30-70 m away always looked too close, and it
+            // pushed four times, 2 m/s, in the test of 2026-11-06.)
+            var closest = double.PositiveInfinity;
+            var overall = double.PositiveInfinity;
+            var away = onceFartherThanM <= 0;
+            for (var i = 0; i <= 400; i++)
+            {
+                var t = fromUt + (toUt - fromUt) * i / 400;
+                var d = (oa.getRelativePositionAtUT(t) - ob.getRelativePositionAtUT(t)).magnitude;
+                overall = Math.Min(overall, d);
+                if (!away && d > onceFartherThanM) away = true;
+                if (away) closest = Math.Min(closest, d);
+            }
+            return double.IsPositiveInfinity(closest) ? overall : closest;
+        }
+
+        /// <summary>When the ship leaves its body's sphere of influence on its present path (KSP's patched conics); NaN if it doesn't.</summary>
+        public static double LeavesSphereUt(Vessel ship)
+        {
+            var now = Planetarium.GetUniversalTime();
+            var o = Copy(ship.orbitDriver.orbit, now);
+            o.StartUT = now;
+            PatchedConics.CalculatePatch(o, new Orbit(), now, new PatchedConics.SolverParameters(), null);
+            return o.patchEndTransition == Orbit.PatchTransitionType.ESCAPE ? o.EndUT : double.NaN;
+        }
+
+        /// <summary>
+        /// The patch of the ship's path it's on at <paramref name="toUt"/>, with the burns (those up to then, in time
+        /// order) applied as the rails flyer applies them, carried between them by KSP's patched conics.
+        /// </summary>
+        public static Orbit PathAt(Vessel ship, IEnumerable<HaulerBurn> burns, double fromUt, double toUt)
+        {
+            var o = Copy(ship.orbitDriver.orbit, fromUt);
+            var t = fromUt;
+            var ordered = burns.OrderBy(b => b.Ut).ToList();
+            // Rebuilt once more a minute along, before coasting on (unless a burn or the end comes first). Predicting straight
+            // across a change of sphere of influence from the ship's orbit now and predicting from a point a minute along
+            // disagreed by 25 km leaving the Mun (2026-11-06), so the check and the correction solver (which always has
+            // a burn there) disagreed, and 0 m/s corrections were added over and over. This keeps them the same; it's the
+            // form that predicted the first trip's arrival to within 0 km.
+            var settle = fromUt + 60;
+            if (settle < toUt && (ordered.Count == 0 || ordered[0].Ut > settle))
+            {
+                o = Coast(o, fromUt, settle);
+                o = Copy(o, settle);
+                t = settle;
+            }
+            foreach (var b in ordered)
+            {
+                if (b.Ut > toUt) break;
+                o = Coast(o, t, b.Ut);
+                var pos = o.getRelativePositionAtUT(b.Ut);
+                var vel = o.getOrbitalVelocityAtUT(b.Ut);
+                Axes(pos, vel, out var prograde, out var normal, out var radial);
+                var after = new Orbit();
+                after.UpdateFromStateVectors(pos, vel + prograde * b.Prograde + normal * b.Normal + radial * b.Radial, o.referenceBody, b.Ut);
+                o = after;
+                t = Math.Max(t, b.Ut);
+            }
+            return Coast(o, t, toUt);
+        }
+
+        /// <summary>
+        /// A copy of the orbit through its position and velocity at <paramref name="ut"/>, as the burns are applied. Copying
+        /// its elements instead went wrong on an escape path (leaving the Mun): the check called a ship on course 1,368 km
+        /// off in the test of 2026-11-06, while the same path rebuilt from its position and velocity met within 76 m.
+        /// </summary>
+        private static Orbit Copy(Orbit o, double ut)
+        {
+            var copy = new Orbit();
+            copy.UpdateFromStateVectors(o.getRelativePositionAtUT(ut), o.getOrbitalVelocityAtUT(ut), o.referenceBody, ut);
+            return copy;
+        }
 
         /// <summary>The patch of <paramref name="o"/>'s path the ship is on at <paramref name="toUt"/>, following SOI changes.</summary>
         private static Orbit Coast(Orbit o, double fromUt, double toUt)
@@ -354,7 +495,10 @@ namespace KspFlightPlanner.Haulers
                     if (p.persistentId != partPersistentId) continue;
                     var node = p.FindModuleImplementing<ModuleDockingNode>();
                     var state = node == null ? "" : node.fsm != null ? node.fsm.currentStateName : node.state;
-                    return node != null && (node.otherNode != null || state.StartsWith("Docked") || state.StartsWith("PreAttached"));
+                    // Joined: both ports in one vessel now, or KSP says docked. Not just "pointing at the other port": that's
+                    // already so while the magnets pull it in, and the engines were "shut down" before there was a dock
+                    // (2026-11-06).
+                    return node != null && (node.otherNode != null && node.otherNode.vessel == node.vessel || state.StartsWith("Docked"));
                 }
             }
             return false;
@@ -445,6 +589,12 @@ namespace KspFlightPlanner.Haulers
             var parts = v.loaded
                 ? v.parts.Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p))
                 : v.protoVessel.protoPartSnapshots.Where(p => p.partInfo != null).Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p.partInfo.partPrefab));
+            return PickEngine(parts, name => tanks.TryGetValue(name, out var list) ? list.Sum(t => t.Amount) : 0);
+        }
+
+        /// <summary>The main engine kind among these parts (by name), counting only fuel the amounts say is there.</summary>
+        private static Engine PickEngine(IEnumerable<KeyValuePair<string, Part>> parts, Func<string, double> amount)
+        {
             var kinds = new Dictionary<string, Engine>();
             foreach (var kv in parts)
             {
@@ -453,7 +603,7 @@ namespace KspFlightPlanner.Haulers
                 {
                     var burned = e.propellants.Where(p => !p.ignoreForIsp).ToList();
                     if (burned.Count == 0 || burned.Any(p => p.name == "IntakeAir" || p.name == "IntakeAtm")) continue;
-                    if (burned.Any(p => !tanks.ContainsKey(p.name) || tanks[p.name].Sum(t => t.Amount) <= 0)) continue;
+                    if (burned.Any(p => amount(p.name) <= 0)) continue;
                     var key = kv.Key + "/" + e.engineID;
                     if (!kinds.TryGetValue(key, out var kind))
                     {
@@ -469,6 +619,66 @@ namespace KspFlightPlanner.Haulers
                 }
             }
             return kinds.Values.Where(k => k.IspVacuum > 0).OrderByDescending(k => k.ThrustKn).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// The Δv the ship can still make with its main engine kind, in vacuum, from the fuel it has: as many full sets of
+        /// the engine's propellants (in its ratio) as the scarcest one allows, burnt off its whole mass (rocket equation).
+        /// Zero with no engine or fuel. docs/MATH.md §11.2.
+        /// </summary>
+        public static double DeltaVLeft(Vessel v, out Engine engine)
+        {
+            engine = MainEngine(v);
+            if (engine == null) return 0;
+            var tanks = Tanks(v);
+            return DeltaVLeft(engine, name => tanks.TryGetValue(name, out var list) ? list.Sum(t => t.Amount) : 0, Mass(v));
+        }
+
+        /// <summary>The same for a craft docked in a loaded stack, counting only its own parts (see <see cref="DockedCraftParts"/>).</summary>
+        public static double DeltaVLeft(IList<Part> parts, out Engine engine)
+        {
+            var amounts = new Dictionary<string, double>();
+            double mass = 0;
+            foreach (var p in parts)
+            {
+                mass += p.mass + p.GetResourceMass();
+                foreach (var r in p.Resources)
+                    if (r.flowState) amounts[r.resourceName] = (amounts.TryGetValue(r.resourceName, out var a) ? a : 0) + r.amount;
+            }
+            double Amount(string name) => amounts.TryGetValue(name, out var a) ? a : 0;
+            engine = PickEngine(parts.Where(p => p.partInfo != null).Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p)), Amount);
+            return engine == null ? 0 : DeltaVLeft(engine, Amount, mass);
+        }
+
+        private static double DeltaVLeft(Engine engine, Func<string, double> amount, double mass)
+        {
+            var sets = engine.Propellants.Min(p => p.Value > 0 ? amount(p.Key) / p.Value : double.MaxValue);
+            var perSet = engine.Propellants.Sum(p => p.Value * (PartResourceLibrary.Instance.GetDefinition(p.Key)?.density ?? 0));
+            var fuel = Math.Min(sets * perSet, mass * 0.999);
+            return fuel <= 0 ? 0 : engine.IspVacuum * G0 * Math.Log(mass / (mass - fuel));
+        }
+
+        /// <summary>
+        /// A docked craft's own parts, from its docking port: KSP hangs a docked craft's parts off its port, under the
+        /// station's port (or the other way round, when the craft kept the root), so it's that branch, or everything but
+        /// the station's branch.
+        /// </summary>
+        public static List<Part> DockedCraftParts(ModuleDockingNode craftPort)
+        {
+            var other = craftPort.otherNode != null ? craftPort.otherNode.part : null;
+            var craft = craftPort.part;
+            var list = new List<Part>();
+            void Branch(Part p, List<Part> into) { into.Add(p); foreach (var c in p.children) Branch(c, into); }
+            if (other != null && craft.parent == other) Branch(craft, list);
+            else if (other != null && other.parent == craft)
+            {
+                var station = new List<Part>();
+                Branch(other, station);
+                var not = new HashSet<Part>(station);
+                list.AddRange(craft.vessel.parts.Where(p => !not.Contains(p)));
+            }
+            else Branch(craft, list);
+            return list;
         }
 
         /// <summary>

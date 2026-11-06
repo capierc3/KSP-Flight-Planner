@@ -18,7 +18,7 @@ namespace KspFlightPlanner.Haulers
         private static readonly Dictionary<uint, Pilot> Pilots = new Dictionary<uint, Pilot>();
 
         /// <summary>How long before a burn starts time warp is stopped for a hauler near the player (game s), to turn and settle.</summary>
-        internal const double TurnLeadS = 90;
+        internal const double TurnLeadS = 30;
 
         /// <summary>What the physics flyer is doing with this route's ship now; null when it isn't flying it.</summary>
         internal static string Status(HaulerRoute route) => Pilots.TryGetValue(route.VesselId, out var p) ? p.Status : null;
@@ -46,9 +46,21 @@ namespace KspFlightPlanner.Haulers
             if (route.State == RouteState.Arrived && route.DockingPortId != 0 && HaulerShip.PortDocked(route.DockingPortId))
             {
                 route.State = RouteState.Docked;
-                HaulerScenario.Note(route, "Docked at " + route.TargetName + ".", true);
+                HaulerScenario.Note(route, "Docked at " + route.TargetName + "." + ShutDown(route.DockingPortId), true);
             }
-            if (route.BackingOff && ship != null && !CourseCheck.OffRails(ship)) route.BackingOff = false; // on rails: nothing to bump into
+            // Backing off near the player: no time warp until it's clear (warp would pack it 30 m from the station, on a path
+            // that can swing back through it).
+            if (route.BackingOff && ship != null && ship.loaded && TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0 && TimeWarp.WarpMode == TimeWarp.Modes.HIGH)
+            {
+                CourseCheck.StopWarp();
+                ScreenMessages.PostScreenMessage(route.VesselName + " is clearing the station: no time warp till it's clear", 3f, ScreenMessageStyle.UPPER_CENTER);
+            }
+            // Unloaded (the player left): nothing to bump into, so backing off ends here, checked as it would at its end.
+            if (route.BackingOff && ship != null && !ship.loaded)
+            {
+                route.BackingOff = false;
+                if (route.State == RouteState.Flying) CourseCheck.Check(route, ship, Planetarium.GetUniversalTime(), "After backing off", expected: true);
+            }
             var docking = route.State == RouteState.Arrived && ship != null && ship.loaded && HasRcs(ship);
             var active = route.State == RouteState.Flying || route.State == RouteState.Approaching || docking;
             if (active && ship != null) HaulerShip.RaisePhysicsRange(ship, PhysicsRangeM);
@@ -81,11 +93,39 @@ namespace KspFlightPlanner.Haulers
             var burn = route.Burns.FirstOrDefault(b => !b.Done);
             if (burn == null) return;
             var now = Planetarium.GetUniversalTime();
-            var start = burn.Ut - BurnSeconds(ship, burn.DeltaV) / 2;
+            var start = burn.Ut - StartLead(ship, burn.DeltaV);
             // A frame at this rate covers about rate × 0.1 s of game time: stop early enough not to jump past.
             if (now < start - TurnLeadS - TimeWarp.CurrentRate * 0.1 || now > burn.Ut) return;
             TimeWarp.SetRate(0, true);
             HaulerScenario.Note(route, "Time warp stopped: burn " + (route.Burns.IndexOf(burn) + 1) + " starts in " + Clock(start - now) + ".", true);
+        }
+
+        /// <summary>
+        /// Docked: the hauler's engines are shut down and its RCS thrusters switched off (its own parts only, found from its
+        /// docking port), so nothing on it can fire by accident at the station. Returns what it did, for the log.
+        /// </summary>
+        internal static string ShutDown(uint portPartId)
+        {
+            var stack = HaulerShip.VesselOfPart(portPartId);
+            var port = HaulerShip.FindPort(stack, portPartId);
+            if (port == null || port.otherNode == null) return "";
+            int engines = 0, thrusters = 0;
+            foreach (var part in HaulerShip.DockedCraftParts(port))
+            {
+                foreach (var e in part.FindModulesImplementing<ModuleEngines>())
+                    if (e.EngineIgnited)
+                    {
+                        e.Shutdown();
+                        engines++;
+                    }
+                foreach (var rcs in part.FindModulesImplementing<ModuleRCS>())
+                    if (rcs.rcsEnabled)
+                    {
+                        rcs.rcsEnabled = false;
+                        thrusters++;
+                    }
+            }
+            return engines + thrusters == 0 ? "" : " Shut down " + engines + " engine" + (engines == 1 ? "" : "s") + " and switched off " + thrusters + " RCS block" + (thrusters == 1 ? "" : "s") + ".";
         }
 
         /// <summary>Lets go of every ship (leaving the scene).</summary>
@@ -99,9 +139,36 @@ namespace KspFlightPlanner.Haulers
         /// How long the burn takes at full throttle with the engines that are lit (or the main engine kind, if none is):
         /// t = m₀·vₑ/F · (1 − e^(−Δv/vₑ)). Zero when there's no thrust to be had.
         /// </summary>
-        internal static double BurnSeconds(Vessel v, double deltaV)
+        internal static double BurnSeconds(Vessel v, double deltaV) => Math.Max(MinBurnS, FullBurnSeconds(v, deltaV));
+
+        /// <summary>
+        /// How long before the node a burn starts: the time to make the first half of its Δv, not half its time. The ship
+        /// gets lighter as it burns, so the first half of the Δv takes longer than the second:
+        /// t_half = t · (1 − e^(−Δv/2vₑ)) / (1 − e^(−Δv/vₑ)). Zero when it can't burn.
+        /// </summary>
+        internal static double StartLead(Vessel v, double deltaV)
         {
-            var thrust = LitThrust(v, out var isp);
+            var length = BurnSeconds(v, deltaV);
+            if (length <= 0 || deltaV <= 0) return 0;
+            var isp = 0.0;
+            if (LitThrust(v, out var lit, fullLimiter: true) > 0) isp = lit;
+            else if (HaulerShip.MainEngine(v) is HaulerShip.Engine main) isp = main.IspVacuum;
+            if (isp <= 0) return length / 2;
+            var ve = isp * HaulerShip.G0;
+            return length * (1 - Math.Exp(-deltaV / (2 * ve))) / (1 - Math.Exp(-deltaV / ve));
+        }
+
+        /// <summary>The shortest a burn is made to last (s): the thrust limiter is turned down for smaller ones.</summary>
+        internal const double MinBurnS = 2;
+
+        /// <summary>
+        /// How long the burn takes with the engines at full thrust, thrust limiters at 100% (the autopilot sets them for
+        /// each burn, whatever the player left them at): the lit engines, or the main engine kind if none is lit. Zero
+        /// when there's no thrust to be had.
+        /// </summary>
+        private static double FullBurnSeconds(Vessel v, double deltaV)
+        {
+            var thrust = LitThrust(v, out var isp, fullLimiter: true);
             if (thrust <= 0)
             {
                 var engine = HaulerShip.MainEngine(v);
@@ -114,14 +181,14 @@ namespace KspFlightPlanner.Haulers
         }
 
         /// <summary>The lit engines' full thrust (kN, thrust limiters applied) and their thrust-weighted vacuum Isp.</summary>
-        private static double LitThrust(Vessel v, out double isp)
+        private static double LitThrust(Vessel v, out double isp, bool fullLimiter = false)
         {
             double thrust = 0, flow = 0;
             foreach (var part in v.parts)
             foreach (var e in part.FindModulesImplementing<ModuleEngines>())
             {
                 if (!e.EngineIgnited || e.flameout) continue;
-                var f = e.maxThrust * e.thrustPercentage / 100.0;
+                var f = e.maxThrust * (fullLimiter ? 1.0 : e.thrustPercentage / 100.0);
                 var i = e.atmosphereCurve.Evaluate(0f);
                 if (f <= 0 || i <= 0) continue;
                 thrust += f;
@@ -146,6 +213,30 @@ namespace KspFlightPlanner.Haulers
             return power / 6 / Math.Max(1e-3, HaulerShip.Mass(v));
         }
 
+        /// <summary>
+        /// The Δv its RCS can give from the monopropellant on board (m/s): vacuum Isp of its thrusters (about 240 s) and the
+        /// rocket equation. Used to decide whether a small burn can be made on RCS.
+        /// </summary>
+        internal static double RcsDeltaV(Vessel v)
+        {
+            var thrusters = v.FindPartModulesImplementing<ModuleRCS>();
+            if (thrusters.Count == 0) return 0;
+            var isp = thrusters.Max(t => t.atmosphereCurve.Evaluate(0f));
+            double mono = 0;
+            foreach (var p in v.parts)
+                foreach (var r in p.Resources)
+                    if (r.resourceName == "MonoPropellant" && r.flowState) mono += r.amount * r.info.density;
+            var mass = HaulerShip.Mass(v);
+            return mono <= 0 || mono >= mass ? 0 : isp * HaulerShip.G0 * Math.Log(mass / (mass - mono));
+        }
+
+        /// <summary>
+        /// A burn this small (m/s) is made on RCS when the monopropellant gives at least four times it: no turning, fine
+        /// control. Bigger ones go on the main engine: RCS's Isp is low and its tanks small (a 4.2 m/s correction on RCS took
+        /// about 12 units of 150, 2026-11-06).
+        /// </summary>
+        internal const double RcsBurnMaxMs = 1;
+
         /// <summary>One ship being flown: what it aims for (set each frame), and the controls written each physics tick.</summary>
         private sealed class Pilot
         {
@@ -164,7 +255,20 @@ namespace KspFlightPlanner.Haulers
             internal bool GaveUp;
 
             // The burn being flown: the orbit it should leave the ship on, and how it's going.
-            private HaulerBurn _burn, _checkedFor;
+            private HaulerBurn _burn, _checkedFor, _leavesFor;
+            private double _leavesUt = double.NaN;
+
+            /// <summary>Facing a burn starts this long before it (game s); till then it just holds still.</summary>
+            private const double FaceWithinS = 600;
+
+            // A small burn made on RCS: the Δv still to go (world), pushed along without turning.
+            private bool _rcsBurn;
+            private Vector3d _rcsDv;
+            private const double RcsBurnGiveUpS = 120;
+
+            /// <summary>This burn is small enough for RCS, and the monopropellant gives at least four times it.</summary>
+            private bool UseRcsFor(HaulerBurn burn) =>
+                burn.DeltaV < RcsBurnMaxMs && HasRcs(Vessel) && RcsDeltaV(Vessel) > 4 * burn.DeltaV;
             private Orbit _goal;
             private double _startUt, _startDv, _bestLeft = double.MaxValue;
             private int _number;
@@ -178,13 +282,26 @@ namespace KspFlightPlanner.Haulers
                 _route = route;
                 Vessel = vessel;
                 Vessel.OnFlyByWire += Fly;
+                _rcsWas = Vessel.ActionGroups[KSPActionGroup.RCS];
                 // Stock SAS on the ship being flown would fight the autopilot.
                 if (Vessel == FlightGlobals.ActiveVessel) Vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
             }
 
+            // The player's RCS switch when the autopilot took the ship: the autopilot turns RCS on only while it's moving
+            // the ship sideways (a ship's RCS rarely pushes through its centre of mass, so holding a heading on RCS would
+            // nudge it off course over a long wait), and puts it back when it lets go.
+            private readonly bool _rcsWas;
+
             internal void Release()
             {
                 if (Vessel != null) Vessel.OnFlyByWire -= Fly;
+                RestoreLimiters();
+                if (Vessel != null && Vessel.loaded)
+                {
+                    Vessel.ActionGroups.SetGroup(KSPActionGroup.RCS, _rcsWas);
+                    // Let go with SAS on, so a ship the autopilot stops flying holds still instead of tumbling.
+                    Vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
+                }
                 if (_burn != null)
                     HaulerScenario.Note(_route, "Burn " + _number + " cut short (physics went off): the course check takes it from here.", false);
                 _burn = null;
@@ -224,11 +341,18 @@ namespace KspFlightPlanner.Haulers
                     return;
                 }
                 var burn = _route.Burns.FirstOrDefault(b => !b.Done);
-                if (burn == null)
+                // The match at the meeting is never flown as a burn: centred on the meeting, half of it would come after
+                // reaching the target's position, at speed (the crash of 2026-11-05). It brakes in to a stop instead,
+                // starting early enough to stop with half the engines' push.
+                if (burn == null || burn.Ut >= _route.MeetUt - 1)
                 {
-                    _aim = Vector3d.zero;
-                    _throttle = 0;
-                    Status = "holding still: the burns are done";
+                    if (TimeToBrake(now)) StartApproach(burn);
+                    else
+                    {
+                        _aim = Vector3d.zero;
+                        _throttle = 0;
+                        Status = "coasting in: braking to " + _route.TargetName + " starts in " + Clock(_brakeAt - now);
+                    }
                     return;
                 }
                 _number = _route.Burns.IndexOf(burn) + 1;
@@ -238,7 +362,7 @@ namespace KspFlightPlanner.Haulers
                     GiveUp("no engine with fuel to burn with");
                     return;
                 }
-                var start = burn.Ut - length / 2;
+                var start = burn.Ut - StartLead(Vessel, burn.DeltaV);
                 if (now >= start && _attitude.Problem == null)
                 {
                     // Off rails since the last check (it has been all along, if the player stayed): is the plan still good?
@@ -251,14 +375,27 @@ namespace KspFlightPlanner.Haulers
                     StartBurn(burn, now);
                     return;
                 }
-                // Until then, face the burn as its node axes are now.
-                var orbit = Vessel.orbit;
-                HaulerShip.Axes(orbit.getRelativePositionAtUT(now), orbit.getOrbitalVelocityAtUT(now), out var prograde, out var normal, out var radial);
-                var dv = prograde * burn.Prograde + normal * burn.Normal + radial * burn.Radial;
-                _aim = dv.magnitude > 0.01 ? dv.normalized.xzy : Vector3d.zero; // orbit frame → world, as KSP places ships
+                // Until then: hold still while it's far off; within 10 minutes, face the burn as it will be at its time (a
+                // direction fixed in space, so the ship turns once and holds, rather than following the axes round the orbit).
+                // A burn on RCS needs no turning at all.
                 _throttle = 0;
-                Status = "facing burn " + _number + " (" + burn.Title + ", " + burn.DeltaV.ToString("0") + " m/s, " + length.ToString("0") + " s) in " +
-                         Clock(start - now) + ": " + _attitude.ErrorDeg.ToString("0.0") + "° off" + (_attitude.Problem != null ? "; " + _attitude.Problem : "");
+                var orbit = Vessel.orbit;
+                if (_leavesFor != burn)
+                {
+                    _leavesFor = burn;
+                    _leavesUt = HaulerShip.LeavesSphereUt(Vessel);
+                }
+                var onRcs = UseRcsFor(burn);
+                if (burn.Ut - now > FaceWithinS || onRcs || !double.IsNaN(_leavesUt) && burn.Ut > _leavesUt) _aim = Vector3d.zero;
+                else
+                {
+                    HaulerShip.Axes(orbit.getRelativePositionAtUT(burn.Ut), orbit.getOrbitalVelocityAtUT(burn.Ut), out var prograde, out var normal, out var radial);
+                    var dv = prograde * burn.Prograde + normal * burn.Normal + radial * burn.Radial;
+                    _aim = dv.magnitude > 0.01 ? dv.normalized.xzy : Vector3d.zero; // orbit frame → world, as KSP places ships
+                }
+                Status = (_aim == Vector3d.zero ? "holding still for burn " : "facing burn ") + _number + " (" + burn.Title + ", " + burn.DeltaV.ToString("0") + " m/s, " +
+                         (onRcs ? "on RCS" : length.ToString("0") + " s") + ") in " + Clock(start - now) +
+                         (_aim == Vector3d.zero ? "" : ": " + _attitude.ErrorDeg.ToString("0.0") + "° off") + (_attitude.Problem != null ? "; " + _attitude.Problem : "");
                 if (_attitude.Problem != null && now > burn.Ut) GiveUp(_attitude.Problem);
             }
 
@@ -280,8 +417,17 @@ namespace KspFlightPlanner.Haulers
                 _startDv = Left().magnitude;
                 _bestLeft = _startDv;
                 _stalledSince = -1;
-                if (LitThrust(Vessel, out _) <= 0) LightMainEngines();
-                HaulerScenario.Note(_route, "Burn " + _number + " (" + burn.Title + "): flying it for real, " + _startDv.ToString("0.0") + " m/s to go" +
+                _rcsBurn = UseRcsFor(burn);
+                if (!_rcsBurn)
+                {
+                    if (LitThrust(Vessel, out _, fullLimiter: true) <= 0) LightMainEngines();
+                    // Thrust limiters: full, or turned down so a small burn still lasts MinBurnS (the player's settings come back after).
+                    var full = FullBurnSeconds(Vessel, burn.DeltaV);
+                    var percent = full > 0 && full < MinBurnS ? (float)Math.Max(1, 100 * full / MinBurnS) : 100f;
+                    SetLimiters(percent);
+                    HaulerScenario.Note(_route, "Thrust limiters at " + percent.ToString("0") + "% for burn " + _number + ".", false);
+                }
+                HaulerScenario.Note(_route, "Burn " + _number + " (" + burn.Title + "): flying it for real" + (_rcsBurn ? " on RCS" : "") + ", " + _startDv.ToString("0.0") + " m/s to go" +
                                             (now > burn.Ut ? ", " + (now - burn.Ut).ToString("0") + " s late" : "") + ".", true);
             }
 
@@ -297,6 +443,21 @@ namespace KspFlightPlanner.Haulers
                 }
                 var left = Left();
                 var size = left.magnitude;
+                if (_rcsBurn)
+                {
+                    // On RCS: no turning; push along what's left, holding still.
+                    _aim = Vector3d.zero;
+                    _throttle = 0;
+                    _rcsDv = left.xzy;
+                    if (size < DoneMs || size > _bestLeft + 0.1 && _bestLeft < 1 || now - _startUt > RcsBurnGiveUpS)
+                    {
+                        EndBurn(now, size < 0.5 ? null : "RCS too weak to finish it");
+                        return;
+                    }
+                    _bestLeft = Math.Min(_bestLeft, size);
+                    Status = "burn " + _number + " on RCS: " + size.ToString("0.00") + " of " + _startDv.ToString("0.00") + " m/s to go";
+                    return;
+                }
                 _aim = size > 1e-6 ? left.normalized.xzy : Vector3d.zero;
                 var thrust = LitThrust(Vessel, out _);
                 var accel = thrust / Math.Max(1e-3, HaulerShip.Mass(Vessel)); // m/s² at full throttle
@@ -331,13 +492,42 @@ namespace KspFlightPlanner.Haulers
             private void EndBurn(double now, string problem)
             {
                 _throttle = 0;
+                _rcsBurn = false;
+                _rcsDv = Vector3d.zero;
+                RestoreLimiters();
                 var left = _burn != null && _goal != null && Vessel.orbit.referenceBody == _goal.referenceBody ? Left().magnitude : double.NaN;
                 HaulerScenario.Note(_route, "Burn " + _number + " flown in " + (now - _startUt).ToString("0") + " s: " +
                                             (double.IsNaN(left) ? "" : (_startDv - left).ToString("0.0") + " of " + _startDv.ToString("0.0") + " m/s, " +
                                                                      left.ToString("0.00") + " m/s off") +
-                                            (problem != null ? "; " + problem : "") + ". The course check tidies up once it's back on rails.", problem != null);
+                                            (problem != null ? "; " + problem : "") + ".", problem != null);
                 _burn = null;
                 _goal = null;
+                // Checked straight away, while there's the most time to fix it: a real burn is never quite the instant one.
+                CourseCheck.Check(_route, Vessel, now, "After burn " + _number);
+            }
+
+            // The thrust limiters the player had on each engine, while a burn has them set (null when not).
+            private Dictionary<ModuleEngines, float> _savedLimits;
+
+            /// <summary>Sets every engine's thrust limiter for a burn, keeping the player's settings to put back.</summary>
+            private void SetLimiters(float percent)
+            {
+                if (_savedLimits == null) _savedLimits = new Dictionary<ModuleEngines, float>();
+                foreach (var part in Vessel.parts)
+                foreach (var e in part.FindModulesImplementing<ModuleEngines>())
+                {
+                    if (!_savedLimits.ContainsKey(e)) _savedLimits[e] = e.thrustPercentage;
+                    e.thrustPercentage = percent;
+                }
+            }
+
+            /// <summary>Puts the player's thrust limiters back.</summary>
+            private void RestoreLimiters()
+            {
+                // The limiters stay where the autopilot last left them: the setting the player had when it took over (low,
+                // for docking at the other station, say) is rarely what's wanted at the end of the trip (the player's call,
+                // 2026-11-06).
+                _savedLimits = null;
             }
 
             /// <summary>Coming in, it's done when it's this close to the spot off the port (m) and this slow (m/s).</summary>
@@ -348,6 +538,25 @@ namespace KspFlightPlanner.Haulers
 
             /// <summary>The engines fire when the velocity it wants is this far off (m/s), and stop once it's within StopFiringMs.</summary>
             private const double FireMs = 0.6, StopFiringMs = 0.2;
+
+            /// <summary>Coming in, it stops at a hold point this far from the station at least (m), farther for big ships.</summary>
+            private const double HoldM = 50;
+
+            /// <summary>Close in, the time to go it keeps (s): closing speed about the distance over this.</summary>
+            private const double TimeToGoS = 30;
+
+            /// <summary>Corrections coming in smaller than this (m/s) are made on RCS; bigger ones on the main engine.</summary>
+            private const double RcsFixMs = 1;
+
+            private bool _fixSideways, _braking;
+
+            /// <summary>Coming in slower than this (m/s), the thrust limiters go down so full throttle is <see cref="GentleAccel"/> (m/s²).</summary>
+            private const double GentleBelowMs = 60, GentleAccel = 3;
+
+            /// <summary>Slower than this (m/s) and within 300 m, the last of coming in is on RCS.</summary>
+            private const double RcsInMs = 2;
+
+            private float _approachLimit = -1;
 
             /// <summary>Close in, the speed it wants is the distance over this (s): a long, gentle braking burn.</summary>
             private const double EaseS = 10;
@@ -363,17 +572,23 @@ namespace KspFlightPlanner.Haulers
             private void Approach()
             {
                 var station = HaulerShip.Find(_route.TargetId);
-                var port = HaulerShip.FindPort(station, _route.ApproachPortId);
-                if (port == null)
+                if (station == null)
                 {
-                    GiveUp("the port it was coming in to is gone or taken");
+                    GiveUp(_route.TargetName + " is gone");
                     return;
                 }
-                var axis = (Vector3d)port.nodeTransform.forward;
-                var spot = (Vector3d)port.nodeTransform.position + axis * RailsFlyer.StandoffM;
-                var r = Vessel.CoMD - spot;
-                var v = Vessel.obt_velocity - station.obt_velocity;
+                if (_route.ApproachPortId == 0 && station.loaded && HaulerShip.PickStationPort(Vessel, station) is ModuleDockingNode picked)
+                    _route.ApproachPortId = picked.part.persistentId;
+
+                // It comes in to a hold point near the station on the side it arrives from (both ships' sizes plus 15 m out,
+                // 50 m at least), and stops there; docking then takes it round to the port on RCS.
+                var centre = station.GetWorldPos3D();
+                if (_route.ApproachHoldDir == Vector3d.zero) _route.ApproachHoldDir = (Vessel.CoMD - centre).normalized;
+                var holdM = Math.Max(HoldM, HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 15);
+                var hold = centre + _route.ApproachHoldDir * holdM;
+                var r = Vessel.CoMD - hold;
                 var d = r.magnitude;
+                var v = Vessel.obt_velocity - station.obt_velocity;
                 var speed = v.magnitude;
 
                 if (!_lit && LitThrust(Vessel, out _) <= 0)
@@ -381,34 +596,132 @@ namespace KspFlightPlanner.Haulers
                     LightMainEngines();
                     _lit = true;
                 }
-                var accel = LitThrust(Vessel, out _) / Math.Max(1e-3, HaulerShip.Mass(Vessel));
+                // Slow (under 60 m/s): the thrust limiters down so full throttle is a gentle 3 m/s²; fast: full.
+                var mass = Math.Max(1e-3, HaulerShip.Mass(Vessel));
+                var fullAccel = LitThrust(Vessel, out _, fullLimiter: true) / mass;
+                var percent = speed < GentleBelowMs && fullAccel > 0 ? (float)Math.Max(1, Math.Min(100, 100 * GentleAccel / fullAccel)) : 100f;
+                if (Math.Abs(percent - _approachLimit) > 1)
+                {
+                    SetLimiters(percent);
+                    _approachLimit = percent;
+                }
+                var accel = LitThrust(Vessel, out _) / mass;
+                if (AvoidStation(station, centre, v, speed, fullAccel))
+                {
+                    if (_approachLimit < 99)
+                    {
+                        SetLimiters(100f);
+                        _approachLimit = 100f;
+                    }
+                    return;
+                }
                 if (d < ArrivedM && speed < StillMs)
                 {
                     _throttle = 0;
                     _aim = Vector3d.zero;
+                    _translating = false;
+                    _approachLimit = -1;
                     _route.State = RouteState.Arrived;
-                    HaulerScenario.Note(_route, "Stopped " + d.ToString("0") + " m off the spot in front of " + station.vesselName + "'s " +
-                                                port.part.partInfo.title + " at " + speed.ToString("0.00") + " m/s: docking.", true);
+                    HaulerScenario.Note(_route, "Holding " + (Vessel.CoMD - centre).magnitude.ToString("0") + " m from " + station.vesselName + " at " +
+                                                speed.ToString("0.00") + " m/s: docking.", true);
                     return;
                 }
 
-                var brake = Math.Min(0.5 * accel, MaxBrake);
-                var wantSpeed = Math.Min(RailsFlyer.ComeInMs, Math.Min(Math.Sqrt(2 * brake * Math.Max(0, d - 2)), d / EaseS));
-                var want = d > 1e-3 ? -r / d * wantSpeed : Vector3d.zero;
-                var dv = want - v;
-                var off = dv.magnitude;
-                _firing = _firing ? off > StopFiringMs : off > FireMs;
-                if (_firing) _aim = dv / off;
-                else if (speed > 0.5) _aim = -v / speed; // face back along the drift, ready to brake
-                _throttle = _firing && _attitude.ErrorDeg < 8 && accel > 0 ? (float)Math.Max(0.02, Math.Min(1, off / accel)) : 0;
-                Status = "coming in: " + (d + RailsFlyer.StandoffM).ToString("0") + " m from the port, " + speed.ToString("0.0") + " m/s, " +
-                         (_throttle > 0 ? "braking, throttle " + (_throttle * 100).ToString("0") + "%" : _firing ? "turning to brake" : "coasting");
+                // Far out: the intercept as KSP's own map marks it. The closest approach to the hold point, from both orbits
+                // (twice a second); at checkpoints by the time to it (10, 5, 2 and 1 minute out, and straight away when coming
+                // in starts), if it's off by more than 800, 200, 100 or 50 m, one correction solved to put the closest approach
+                // on the hold point; coasting between, with time warp allowed till 20 s before the next checkpoint. Close in
+                // (the last minute, or when it's time to brake), straight-line steering, which is accurate there.
+                var now = Planetarium.GetUniversalTime();
+                var offset = (Vector3d)(hold - centre).xzy;
+                if (Time.time - _caAt > 0.5f)
+                {
+                    _caAt = Time.time;
+                    _ca = HaulerShip.ClosestApproach(Vessel, Vector3d.zero, station, offset, now, now + Math.Max(600, Math.Min(3600, _route.MeetUt - now + 900)), out _caUt);
+                }
+                var tca = _caUt - now;
+                var stopDistance = speed * speed / (2 * Math.Max(0.1, 0.5 * fullAccel));
+                var closeIn = tca < 60 || d < 1000 || d < 1.5 * stopDistance + 200 || double.IsInfinity(_ca);
+                if (!closeIn)
+                {
+                    FarOut(station, v, speed, accel, tca, now, offset);
+                    return;
+                }
+                _route.ApproachNextCheckUt = double.NaN;
+                _correcting = false;
+
+                // Close in, flown as a pilot flies the last of an intercept (docs/MATH.md §11.6): along the line, brake
+                // whenever it's closing over a fifth faster than it wants (about the distance over 30 s, never faster than it
+                // can stop, never faster than it already is); sideways, keep the pass within a tenth of the distance.
+                var los = d > 1e-3 ? -r / d : Vector3d.zero;
+                var closing = Vector3d.Dot(v, los);
+                var sideways = v - los * closing;
+                var toGo = closing > 0.2 ? d / closing : double.PositiveInfinity;
+                var miss = closing > 0.2 ? sideways.magnitude * toGo : double.PositiveInfinity;
+                var b = closing > RailsFlyer.ComeInMs ? 0.5 * fullAccel : Math.Min(0.5 * accel, MaxBrake);
+                var wantClose = Math.Min(Math.Sqrt(2 * b * Math.Max(0, d - 2)), Math.Max(d / TimeToGoS, 0.3));
+                wantClose = Math.Min(wantClose, Math.Max(closing, RailsFlyer.ComeInMs));
+
+                var allowed = Math.Max(5, 0.1 * d);
+                if (miss > allowed || closing <= 0.2) _fixSideways = true;
+                var lateral = _fixSideways ? -sideways : Vector3d.zero;
+                if (lateral.magnitude < 0.05) _fixSideways = false;
+
+                var over = closing - wantClose;
+                _braking = _braking ? over > 0.1 : over > Math.Max(1, 0.2 * wantClose);
+                var along = _braking || closing <= 0.2 ? wantClose - closing : 0;
+                var dv = los * along + lateral;
+                var dvSize = dv.magnitude;
+                var head = "close in: " + d.ToString("0") + " m to go, " + closing.ToString("0.0") + " m/s, pass " +
+                           (double.IsInfinity(miss) ? "–" : miss.ToString("0") + " m") + " off (" + allowed.ToString("0") + " allowed), ";
+
+                if (dvSize < 0.05)
+                {
+                    _throttle = 0;
+                    _translating = false;
+                    _firing = false;
+                    if (speed > 0.5) _aim = -v / speed; // ready to brake
+                    Status = head + "coasting";
+                    return;
+                }
+                // Small fixes on RCS (no turning); braking and anything bigger on the main engine.
+                if (dvSize < RcsFixMs && HasRcs(Vessel) && RcsDeltaV(Vessel) > 4 * dvSize)
+                {
+                    _station = station;
+                    _translating = true;
+                    _wantVel = v + dv;
+                    _throttle = 0;
+                    _firing = false;
+                    if (speed > 0.5) _aim = -v / speed;
+                    Status = head + (along < 0 ? "braking" : "correcting") + " on RCS";
+                    return;
+                }
+                _translating = false;
+                _firing = true;
+                _aim = dv / dvSize;
+                _throttle = _attitude.ErrorDeg < 8 && accel > 0 ? (float)Math.Max(0.02, Math.Min(1, dvSize / accel)) : 0;
+                Status = head + (_throttle > 0 ? (along < 0 ? "braking" : "correcting") + ", throttle " + (_throttle * 100).ToString("0") + "%" : "turning");
             }
 
             // ---------------- Leaving (docs/MATH.md §11.8) ----------------
 
             /// <summary>How fast it backs away from the station it left (m/s), and how far at least (m).</summary>
             private const double BackOffMs = 1, BackOffM = 30;
+
+            /// <summary>Each separation push, backwards along the orbit (m/s), and how many at most.</summary>
+            private const double SeparateMs = 0.5;
+            private const int MaxPushes = 4;
+
+            /// <summary>A separation push on the main engine waits till it's this far out (m), and pushes at this (m/s²).</summary>
+            private const double EngineClearM = 100, PushAccel = 0.5;
+
+            /// <summary>The hauler's path must stay this far from the station (m) until its first burn.</summary>
+            private const double PathClearM = 100;
+
+            private int _pushes;
+
+            /// <summary>Backing off ends stopped against the station, under this (m/s).</summary>
+            private const double StoppedMs = 0.03;
 
             /// <summary>Gives up backing off after this long (real s).</summary>
             private const float BackOffGiveUpS = 300;
@@ -434,17 +747,78 @@ namespace KspFlightPlanner.Haulers
                 var away = (Vessel.CoMD - (Vector3d)port.nodeTransform.position).magnitude;
                 var clear = Math.Max(BackOffM, HaulerShip.Size(Vessel) + 20);
                 var burn = _route.Burns.FirstOrDefault(b => !b.Done);
-                var due = burn != null && now >= burn.Ut - BurnSeconds(Vessel, burn.DeltaV) / 2 - 30;
-                if (away >= clear || Time.time - _backOffSince > BackOffGiveUpS || due && away > 15)
+                var due = burn != null && now >= burn.Ut - StartLead(Vessel, burn.DeltaV) - 30;
+                var rel = Vessel.obt_velocity - stack.obt_velocity;
+                var drift = rel.magnitude;
+                var timedOut = Time.time - _backOffSince > BackOffGiveUpS;
+                _aim = Vector3d.zero;
+                _throttle = 0;
+                var pass = double.NaN;
+                if (away >= clear && !timedOut && !due)
+                {
+                    _station = stack;
+                    // Clear: stop dead against the station first (RCS).
+                    if (_pushes == 0 && drift > StoppedMs && HasRcs(Vessel))
+                    {
+                        _translating = true;
+                        _wantVel = Vector3d.zero;
+                        Status = "stopping " + away.ToString("0") + " m clear of " + stack.vesselName + ": " + drift.ToString("0.00") + " m/s";
+                        return;
+                    }
+                    // Then a push backwards along the orbit (0.5 m/s at a time): a slightly lower, faster orbit that drifts
+                    // steadily away and never swings back through the station, as 30 m and nearly still on rails can. On RCS
+                    // when the monopropellant covers it comfortably (no turning near the station; 0.5 m/s is about 1.6 units
+                    // on 30 t); else on the main engine, gently, once it's 100 m clear.
+                    var backwards = -stack.obt_velocity.normalized;
+                    if (_pushes == 0) _pushes = 1;
+                    var want = backwards * (SeparateMs * _pushes);
+                    var need = want - rel;
+                    if (need.magnitude > StoppedMs)
+                    {
+                        if (HasRcs(Vessel) && RcsDeltaV(Vessel) > 4 * want.magnitude)
+                        {
+                            _translating = true;
+                            _wantVel = want;
+                            Status = "pushing clear of " + stack.vesselName + " on RCS: " + drift.ToString("0.00") + " of " + want.magnitude.ToString("0.0") + " m/s";
+                            return;
+                        }
+                        _translating = false;
+                        if (away < EngineClearM)
+                        {
+                            Status = "drifting out to " + EngineClearM.ToString("0") + " m before pushing clear on the engine: " + away.ToString("0") + " m";
+                            return;
+                        }
+                        if (LitThrust(Vessel, out _, fullLimiter: true) <= 0) LightMainEngines();
+                        var full = LitThrust(Vessel, out _, fullLimiter: true) / Math.Max(1e-3, HaulerShip.Mass(Vessel));
+                        if (full > 0) SetLimiters((float)Math.Max(1, Math.Min(100, 100 * PushAccel / full)));
+                        var accel = LitThrust(Vessel, out _) / Math.Max(1e-3, HaulerShip.Mass(Vessel));
+                        _aim = need.normalized;
+                        _throttle = _attitude.ErrorDeg < 5 && accel > 0 ? (float)Math.Max(0.02, Math.Min(1, need.magnitude / accel)) : 0;
+                        Status = "pushing clear of " + stack.vesselName + " on the engine: " + drift.ToString("0.00") + " of " + want.magnitude.ToString("0.0") + " m/s";
+                        return;
+                    }
+                    _throttle = 0;
+                    // Its path left alone until the first burn starts, once it's 200 m out: clear of the station by 100 m? If not, push again.
+                    var until = burn != null ? burn.Ut - StartLead(Vessel, burn.DeltaV) : now + 3600;
+                    pass = HaulerShip.ClosestPass(Vessel, stack, now + 20, Math.Max(now + 60, until), onceFartherThanM: 200);
+                    if (pass < PathClearM && _pushes < MaxPushes)
+                    {
+                        _pushes++;
+                        return;
+                    }
+                }
+                if (away >= clear || timedOut || due && away > 15)
                 {
                     _route.BackingOff = false;
                     _translating = false;
                     _station = null;
-                    HaulerScenario.Note(_route, "Backed off " + away.ToString("0") + " m from " + stack.vesselName + ": on its way.", false);
+                    HaulerScenario.Note(_route, "Backed off " + away.ToString("0") + " m from " + stack.vesselName + ", drifting " + drift.ToString("0.00") + " m/s" +
+                                                (double.IsNaN(pass) ? "" : "; its path stays " + (double.IsInfinity(pass) ? "far" : pass.ToString("0") + " m") + " clear of it") + ".", false);
+                    // The plan was made from the station's orbit, before backing off moved it: check it now, and plan it again
+                    // from here if need be, while there's still time before the first burn.
+                    CourseCheck.Check(_route, Vessel, now, "After backing off", expected: true);
                     return;
                 }
-                _aim = Vector3d.zero;
-                _throttle = 0;
                 if (!HasRcs(Vessel))
                 {
                     _translating = false;
@@ -480,7 +854,8 @@ namespace KspFlightPlanner.Haulers
             private Vector3d _wantVel; // world velocity relative to the station it should have now
             private bool _translating;
             private float _dockSince = -1;
-            private readonly SignCheck _translateSign = new SignCheck("RCS");
+            // KSP's RCS input pushes the other way on all three axes: the tests flipped y (2026-11-05), then x and z (2026-11-06).
+            private readonly SignCheck _translateSign = new SignCheck("RCS", new Vector3(-1, -1, -1));
             private Vector3d _lastRelVel;
             private Vector3 _lastMove;
 
@@ -524,6 +899,7 @@ namespace KspFlightPlanner.Haulers
                 var mine = (Vector3d)_myPort.nodeTransform.position;
                 var along = Vector3d.Dot(mine - portPos, axis);
                 var lateral = mine - portPos - axis * along;
+                _lateral = lateral;
                 var off = lateral.magnitude;
                 var aligned = _attitude.ErrorDeg < AlignedDeg;
                 _translating = true;
@@ -600,17 +976,24 @@ namespace KspFlightPlanner.Haulers
             /// </summary>
             private void Translate(FlightCtrlState s)
             {
-                if (!_translating || _station == null)
+                var reference = Vessel.ReferenceTransform;
+                Vector3d dv;
+                if (_rcsBurn)
+                    dv = _rcsDv; // a small burn on RCS: what's left of it (gravity makes the sign check useless here, so none)
+                else if (_translating && _station != null)
+                {
+                    // Relative to the station, gravity cancels, so how the ship moves shows the axes' signs.
+                    var rel = Vessel.obt_velocity - _station.obt_velocity;
+                    _translateSign.Learn((Vector3)(Quaternion.Inverse(reference.rotation) * (Vector3)(rel - _lastRelVel)), _lastMove);
+                    _lastRelVel = rel;
+                    dv = _wantVel - rel;
+                }
+                else
                 {
                     s.X = s.Y = s.Z = 0;
                     _lastMove = Vector3.zero;
                     return;
                 }
-                var reference = Vessel.ReferenceTransform;
-                var rel = Vessel.obt_velocity - _station.obt_velocity;
-                _translateSign.Learn((Vector3)(Quaternion.Inverse(reference.rotation) * (Vector3)(rel - _lastRelVel)), _lastMove);
-                _lastRelVel = rel;
-                var dv = _wantVel - rel;
                 if (dv.magnitude < 0.02)
                 {
                     s.X = s.Y = s.Z = 0;
@@ -625,6 +1008,157 @@ namespace KspFlightPlanner.Haulers
                 s.Z = move.y * sign.y;
                 s.Y = move.z * sign.z;
                 _lastMove = move;
+            }
+
+            private double _brakeAt;
+
+            /// <summary>
+            /// Time to start braking in to the target: the speed to lose over half the engines' push, plus a minute's margin,
+            /// before the meeting (or now, if it's closer than that already).
+            /// </summary>
+            private bool TimeToBrake(double now)
+            {
+                var target = HaulerShip.Find(_route.TargetId);
+                if (target == null) return false;
+                var speed = (Vessel.obt_velocity - target.obt_velocity).magnitude;
+                var accel = Math.Max(0.1, LitThrust(Vessel, out _, fullLimiter: true) / Math.Max(1e-3, HaulerShip.Mass(Vessel)));
+                if (accel <= 0.1)
+                {
+                    var main = HaulerShip.MainEngine(Vessel);
+                    if (main != null) accel = main.ThrustKn / Math.Max(1e-3, HaulerShip.Mass(Vessel));
+                }
+                _brakeAt = _route.MeetUt - speed / (0.5 * accel) - 60;
+                return now >= _brakeAt || (Vessel.CoMD - target.GetWorldPos3D()).magnitude < 20000;
+            }
+
+            /// <summary>Switches the route to coming in (the match's own Δv is what the braking burns, with real fuel).</summary>
+            private void StartApproach(HaulerBurn match)
+            {
+                if (match != null) match.Done = true;
+                var target = HaulerShip.Find(_route.TargetId);
+                _route.State = RouteState.Approaching;
+                _route.ApproachStage = -1;
+                _route.ApproachHoldDir = Vector3d.zero;
+                _route.ApproachNextCheckUt = double.NaN;
+                _route.ApproachSince = Time.time;
+                _route.ApproachPortId = target != null && target.loaded && HaulerShip.PickStationPort(Vessel, target) is ModuleDockingNode port ? port.part.persistentId : 0;
+                SetLimiters(100f);
+                HaulerScenario.Note(_route, "Braking in to " + _route.TargetName + " instead of the match burn, " +
+                                            (target != null ? ((Vessel.CoMD - target.GetWorldPos3D()).magnitude / 1000).ToString("0.0") + " km out at " +
+                                                              (Vessel.obt_velocity - target.obt_velocity).magnitude.ToString("0") + " m/s" : "") + ".", true);
+            }
+
+            /// <summary>
+            /// The collision guard: heading at the station (its closest pass inside both ships' sizes plus 20 m) with less
+            /// than the time it needs to stop, it burns flat out back along its drift and away from the station's centre,
+            /// whatever else it was doing. True while it's doing that.
+            /// </summary>
+            private bool AvoidStation(Vessel station, Vector3d centre, Vector3d v, double speed, double accel)
+            {
+                if (speed < 0.5 || accel <= 0) return false;
+                var r = Vessel.CoMD - centre;
+                var tca = -Vector3d.Dot(r, v) / (speed * speed);
+                if (tca <= 0) return false;
+                var pass = r + v * tca;
+                var clear = HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 20;
+                if (pass.magnitude >= clear || tca > speed / (0.8 * accel) + 5) return false;
+                var side = pass.magnitude > 1 ? pass.normalized : Vector3d.Cross(v, Vector3d.up).normalized;
+                _aim = (-v / speed + side).normalized;
+                _firing = true;
+                _throttle = _attitude.ErrorDeg < 30 ? 1f : 0f;
+                Status = "AVOIDING " + station.vesselName + ": closest pass " + pass.magnitude.ToString("0") + " m in " + tca.ToString("0") + " s at " + speed.ToString("0") + " m/s";
+                if (!_warnedAvoid)
+                {
+                    _warnedAvoid = true;
+                    HaulerScenario.Note(_route, "Collision guard: heading at " + station.vesselName + " at " + speed.ToString("0") + " m/s, burning away.", true);
+                }
+                return true;
+            }
+
+            private bool _warnedAvoid;
+
+            private double _ca = double.PositiveInfinity, _caUt;
+            private float _caAt = -10;
+            private bool _correcting;
+            private Orbit _correctGoal; // the orbit a correction coming in should leave it on, and when it was worked out
+            private double _correctUt;
+
+            /// <summary>The checkpoints by the time to closest approach (s), and the miss each allows (m).</summary>
+            private static readonly double[] CheckS = { 600, 300, 120, 60 };
+            private static readonly double[] AllowedM = { 800, 200, 100, 50 };
+
+            /// <summary>
+            /// Far out: coast, and at each checkpoint (by the time to KSP's closest approach) correct once if the closest
+            /// approach misses the hold point by more than that checkpoint allows; the correction is solved through the
+            /// orbits, so it follows the curve two nearby orbits make, not a straight line.
+            /// </summary>
+            private void FarOut(Vessel station, Vector3d v, double speed, double accel, double tca, double now, Vector3d offset)
+            {
+                var stage = 0;
+                while (stage < CheckS.Length && tca <= CheckS[stage]) stage++;
+                var allowed = stage < AllowedM.Length ? AllowedM[Math.Max(0, stage - 1)] : AllowedM[AllowedM.Length - 1];
+                if (stage == 0) allowed = AllowedM[0];
+                // Next checkpoint: the next time boundary below the time to go (the last is the start of close in, at 60 s).
+                var nextAt = stage < CheckS.Length ? now + tca - CheckS[stage] : now + tca - 60;
+                _route.ApproachNextCheckUt = nextAt;
+
+                if (stage != _route.ApproachStage)
+                {
+                    _route.ApproachStage = stage;
+                    if (_ca > allowed && !_correcting)
+                    {
+                        var aimUt = Math.Max(_caUt, now + 90);
+                        if (HaulerShip.AimAt(Vessel, station, offset, aimUt) is Vector3d fix)
+                        {
+                            // Flown as a burn: towards the orbit the correction should leave it on, a fixed Δv in space. Chasing
+                            // a velocity relative to the station instead kept RCS on, fighting the curve two nearby orbits make
+                            // (2026-11-06).
+                            var o = Vessel.orbit;
+                            _correctGoal = new Orbit();
+                            _correctGoal.UpdateFromStateVectors(o.getRelativePositionAtUT(now), o.getOrbitalVelocityAtUT(now) + fix, o.referenceBody, now);
+                            _correctUt = now;
+                            _correcting = true;
+                            HaulerScenario.Note(_route, "Coming in: closest approach " + _ca.ToString("0") + " m in " + Clock(tca) + " (" + allowed.ToString("0") +
+                                                        " allowed): correcting " + fix.magnitude.ToString("0.0") + " m/s.", false);
+                        }
+                    }
+                }
+
+                var head = "closest approach " + (_ca < 10000 ? _ca.ToString("0") + " m" : (_ca / 1000).ToString("0.0") + " km") + " in " + Clock(tca) +
+                           " (" + allowed.ToString("0") + " m allowed, next check in " + Clock(nextAt - now) + "), ";
+                if (_correcting && _correctGoal != null && Vessel.orbit.referenceBody == _correctGoal.referenceBody)
+                {
+                    var need = (_correctGoal.getOrbitalVelocityAtUT(_correctUt) - Vessel.orbit.getOrbitalVelocityAtUT(_correctUt)).xzy;
+                    _translating = false;
+                    if (need.magnitude < 0.05)
+                    {
+                        _correcting = false;
+                        _rcsBurn = false;
+                        _rcsDv = Vector3d.zero;
+                        _throttle = 0;
+                        _caAt = -10; // see where it goes now
+                    }
+                    else if (need.magnitude < RcsFixMs && HasRcs(Vessel) && RcsDeltaV(Vessel) > 4 * need.magnitude)
+                    {
+                        _rcsBurn = true;
+                        _rcsDv = need;
+                        _throttle = 0;
+                        Status = head + "correcting on RCS, " + need.magnitude.ToString("0.00") + " m/s to go";
+                        return;
+                    }
+                    else
+                    {
+                        _rcsBurn = false;
+                        _aim = need.normalized;
+                        _throttle = _attitude.ErrorDeg < 5 && accel > 0 ? (float)Math.Max(0.02, Math.Min(1, need.magnitude / accel)) : 0;
+                        Status = head + "correcting, " + need.magnitude.ToString("0.0") + " m/s to go";
+                        return;
+                    }
+                }
+                _translating = false;
+                _throttle = 0;
+                if (speed > 0.5) _aim = -v / speed; // facing back along its drift, ready to brake
+                Status = head + "coasting";
             }
 
             private void GiveUp(string why)
@@ -663,10 +1197,18 @@ namespace KspFlightPlanner.Haulers
                     return;
                 }
                 var reference = Vessel.ReferenceTransform;
+                var wantRcs = _translating || _rcsBurn;
+                if (wantRcs && !_rcsBalanced)
+                {
+                    // The first time it needs RCS: balance it, so a push doesn't turn the ship too.
+                    _rcsBalanced = true;
+                    if (RcsBalance.Balance(Vessel, out var before, out var after) && after < before)
+                        HaulerScenario.Note(_route, "Balanced its RCS: turning per push " + (100 * before).ToString("0.#") + "% → " + (100 * after).ToString("0.#") + "%.", false);
+                }
+                if (Vessel.ActionGroups[KSPActionGroup.RCS] != wantRcs) Vessel.ActionGroups.SetGroup(KSPActionGroup.RCS, wantRcs);
                 Quaternion target;
                 if (_myPort != null && _theirPort != null && _station != null)
-                    // Docking: the ship's port faces the station's, roll left as it is.
-                    target = Quaternion.FromToRotation(_myPort.nodeTransform.forward, -_theirPort.nodeTransform.forward) * reference.rotation;
+                    target = DockingAttitude(reference);
                 else
                     target = _aim == Vector3d.zero
                         ? reference.rotation
@@ -682,6 +1224,31 @@ namespace KspFlightPlanner.Haulers
                 _lastY = s.Y;
                 _lastZ = s.Z;
             }
+
+            /// <summary>
+            /// Docking: the ship's port faces the station's, and it's rolled about the port's axis so the sideways error lies
+            /// along its X axis (one pair of RCS thrusters fixes it, not two at an angle); the nearer of the two ways round.
+            /// The roll is kept as it is while the error is under half a metre, where its direction means little.
+            /// </summary>
+            private Quaternion DockingAttitude(Transform reference)
+            {
+                var axis = (Vector3)_theirPort.nodeTransform.forward;
+                var facing = Quaternion.FromToRotation(_myPort.nodeTransform.forward, -axis) * reference.rotation;
+                var lateral = Vector3.ProjectOnPlane((Vector3)_lateral, axis);
+                if (lateral.magnitude > 0.5f)
+                {
+                    var right = Vector3.ProjectOnPlane(facing * Vector3.right, axis);
+                    var angle = Vector3.SignedAngle(right, lateral, axis);
+                    if (angle > 90) angle -= 180;
+                    else if (angle < -90) angle += 180;
+                    _roll = angle;
+                }
+                return Quaternion.AngleAxis(_roll, axis) * facing;
+            }
+
+            private float _roll;
+            private bool _rcsBalanced;
+            private Vector3d _lateral;
 
             /// <summary>
             /// Which way the engines push the ship (world): the sum over the main engines' nozzles (thrust is along each
@@ -816,9 +1383,16 @@ namespace KspFlightPlanner.Haulers
         {
             private readonly string _what;
             private Vector3 _score;
+            private readonly bool[] _sure = new bool[3];
             internal Vector3 Sign = Vector3.one;
 
-            internal SignCheck(string what) => _what = what;
+            internal SignCheck(string what) : this(what, Vector3.one) { }
+
+            internal SignCheck(string what, Vector3 start)
+            {
+                _what = what;
+                Sign = start;
+            }
 
             /// <param name="change">How the motion changed since last tick, on each axis.</param>
             /// <param name="command">What was asked for last tick, on each axis, before the sign.</param>
@@ -826,8 +1400,11 @@ namespace KspFlightPlanner.Haulers
             {
                 for (var i = 0; i < 3; i++)
                 {
-                    if (Math.Abs(command[i]) < 0.5f || Math.Abs(change[i]) < 1e-4f) continue;
+                    // Once an axis has shown its direction (15 more agreements than not), it's settled for good: later
+                    // disagreements are pushes the controls didn't make (docking magnets, a bump), not a wrong sign.
+                    if (_sure[i] || Math.Abs(command[i]) < 0.5f || Math.Abs(change[i]) < 1e-4f) continue;
                     _score[i] = Math.Min(15, _score[i] + (Math.Sign(change[i]) == Math.Sign(command[i]) ? 1 : -1));
+                    if (_score[i] >= 15) _sure[i] = true;
                     if (_score[i] > -15) continue;
                     Sign[i] = -Sign[i];
                     _score[i] = 0;

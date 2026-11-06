@@ -10,16 +10,26 @@ namespace KspFlightPlanner.App.Services;
 public sealed record HaulerReplanRequest(string Vessel, string Target, double Now, string ShipBody, OrbitalElements ShipOrbit, string TargetBody,
     OrbitalElements TargetOrbit)
 {
+    /// <summary>The way the trip was planned ("Meets soonest"…), to keep when the fuel allows; empty when there was one.</summary>
+    public string Way { get; init; } = "";
+
+    /// <summary>The Δv in the ship's tanks (m/s), as the add-on reckons it; null from an older add-on.</summary>
+    public double? DeltaVLeft { get; init; }
+
     /// <summary>One of the add-on's tab-separated lines (PlannerHaulers.ReplanRequests); null if it can't be read.</summary>
     public static HaulerReplanRequest? Parse(string line)
     {
         var f = line.Split('\t');
-        if (f.Length != 19) return null;
+        if (f.Length < 19) return null;
         try
         {
             double D(int i) => double.Parse(f[i], NumberStyles.Float, CultureInfo.InvariantCulture);
             OrbitalElements Orbit(int i) => new SavedOrbit(D(i), D(i + 1), D(i + 2), D(i + 3), D(i + 4), D(i + 5), D(i + 6), -1, null).ToElements();
-            return new HaulerReplanRequest(f[0], f[1], D(2), KspLink.PlannerBodyName(f[3]), Orbit(4), KspLink.PlannerBodyName(f[11]), Orbit(12));
+            return new HaulerReplanRequest(f[0], f[1], D(2), KspLink.PlannerBodyName(f[3]), Orbit(4), KspLink.PlannerBodyName(f[11]), Orbit(12))
+            {
+                Way = f.Length > 19 ? f[19] : "",
+                DeltaVLeft = f.Length > 20 ? D(20) : null,
+            };
         }
         catch (FormatException)
         {
@@ -96,7 +106,8 @@ public sealed class HaulerWatch
             var all = bodies.Values.ToList();
             planned = await Task.Run(() =>
             {
-                var trip = HaulerReplan.Plan(shipBody, r.ShipOrbit, r.Vessel, targetBody, new RendezvousTarget(r.Target, r.TargetOrbit), all, r.Now, LeadS, out var wait);
+                var trip = HaulerReplan.Plan(shipBody, r.ShipOrbit, r.Vessel, targetBody, new RendezvousTarget(r.Target, r.TargetOrbit), all, r.Now, LeadS, out var wait,
+                    r.Way, r.DeltaVLeft);
                 return (trip, wait);
             });
         }
@@ -114,7 +125,8 @@ public sealed class HaulerWatch
         try
         {
             var burns = t.Burns.Where(b => !b.ByReleasedCraft).Select(b => (b.Ut, b.Burn, b.Title)).ToList();
-            var summary = await _link.StartBackgroundTripAsync(r.Vessel, r.Target, burns, t.MeetUt);
+            var summary = await _link.StartBackgroundTripAsync(r.Vessel, r.Target, burns, t.MeetUt, t.Way);
+            if (t.Note is { } note) await _link.HaulerNoteAsync(r.Vessel, note);
             _failed.Remove(r.Vessel);
             Replanned?.Invoke(summary);
         }

@@ -35,6 +35,9 @@ namespace KspFlightPlanner.Haulers
         public uint TargetId;
         public string TargetName = "";
         public double MeetUt;
+
+        /// <summary>Which way of making the trip the player picked ("Meets soonest", "Cheapest"…; empty when there was one): replans keep it when the fuel allows.</summary>
+        public string Way = "";
         public RouteState State = RouteState.Flying;
         public List<HaulerBurn> Burns = new List<HaulerBurn>();
         public List<string> Log = new List<string>();
@@ -54,6 +57,14 @@ namespace KspFlightPlanner.Haulers
         /// <summary>The body it was round when found off course: leaving it is worth stopping time warp for.</summary>
         internal string OffCourseBody;
 
+        // Off course: since when (real time), for holding warp while the planner plans it again, and whether the player
+        // has been told the planner isn't answering.
+        internal float OffCourseSince = -1;
+
+        /// <summary>It has just moved into this body's sphere of influence: checked next frame (not saved).</summary>
+        internal string CheckSoon;
+        internal bool WarnedNoPlanner;
+
         // Docking, in this scene only (not saved): when both ships were first seen loaded and unpacked, which port is
         // docking and since when (real time), and whether this scene already tried.
         internal float BothLoadedSince = -1;
@@ -65,6 +76,12 @@ namespace KspFlightPlanner.Haulers
         // comes in to (part id) and since when (real time).
         internal uint ApproachPortId;
         internal float ApproachSince = -1;
+
+        // Coming in (not saved, but kept while the pilot is remade after warp): the side of the station it holds at, the
+        // checkpoint it's reached, and when the next one comes (game time), for stopping warp before it.
+        internal Vector3d ApproachHoldDir;
+        internal int ApproachStage = -1;
+        internal double ApproachNextCheckUt = double.NaN;
 
         // Leaving a station it was docked at (not saved): its own port's part (to find the ship again if KSP renumbers
         // it after undocking), the station port it left (part id), and whether it's still backing off from it.
@@ -93,7 +110,7 @@ namespace KspFlightPlanner.Haulers
                 case RouteState.Docked: return head + "docked";
                 case RouteState.OffCourse: return head + "off course, waiting to be planned again" + (ReplanNote != null ? " (" + ReplanNote + ")" : "");
                 case RouteState.Stopped: return head + "stopped (" + (Log.Count > 0 ? Log[Log.Count - 1] : "") + ")";
-                default: return head + done + " of " + Burns.Count + " burns done, next at UT " + NextUt.ToString("0", CultureInfo.InvariantCulture);
+                default: return head + done + " of " + Burns.Count + " burns done, next " + KSPUtil.dateTimeFormatter.PrintDateCompact(NextUt, true, true);
             }
         }
 
@@ -104,6 +121,7 @@ namespace KspFlightPlanner.Haulers
             node.AddValue("targetId", TargetId);
             node.AddValue("targetName", TargetName);
             node.AddValue("meetUt", MeetUt.ToString("R", CultureInfo.InvariantCulture));
+            node.AddValue("way", Way);
             node.AddValue("state", State.ToString());
             node.AddValue("disturbed", Disturbed);
             node.AddValue("autopilot", Autopilot);
@@ -131,6 +149,7 @@ namespace KspFlightPlanner.Haulers
                 TargetId = uint.Parse(node.GetValue("targetId"), CultureInfo.InvariantCulture),
                 TargetName = node.GetValue("targetName") ?? "",
                 MeetUt = D(node, "meetUt"),
+                Way = node.GetValue("way") ?? "",
                 State = (RouteState)Enum.Parse(typeof(RouteState), node.GetValue("state")),
                 Disturbed = node.GetValue("disturbed") == "True",
                 Autopilot = node.GetValue("autopilot") != "False",

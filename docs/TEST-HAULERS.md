@@ -84,12 +84,12 @@ This fits into round 3: after you press **Fly it in the background** you're stil
 
 ## Round 5: the physics flyer flies a burn (after rounds 3 and 4)
 
-New: a hauler near you with physics on flies its burns for real: it faces the burn, lights its engine half the burn's length early, steers on the Δv still to go and cuts off when it's done, burning its own fuel. Time warp stops by itself 90 s before a burn starts when the hauler is near you.
+New: a hauler near you with physics on flies its burns for real: it faces the burn, lights its engine half the burn's length early, steers on the Δv still to go and cuts off when it's done, burning its own fuel. Time warp stops by itself 30 s before a burn starts when the hauler is near you.
 
 Start a fresh trip for this (a quickload from before round 3, or plan the shuttle again), and this time don't touch the controls.
 
 - [ ] Press **Fly it in the background** while flying the shuttle, and leave it alone. It turns to face burn 1 (round 4).
-- [ ] Warp towards burn 1 (any rate). About 90 s before it starts: "Time warp stopped: burn 1 starts in …".
+- [ ] Warp towards burn 1 (any rate). About 30 s before it starts: "Time warp stopped: burn 1 starts in …".
 - [ ] At the start: "Burn 1 (…): flying it for real, … m/s to go". The engine lights, with flame and sound, and the panel counts the Δv down with the throttle easing off at the end.
 - [ ] At the end: "Burn 1 flown in … s: … of … m/s, 0.0x m/s off" in the log. Note the "off" number and whether it wobbled while burning.
 - [ ] Switch to the tracking station: "Back on rails: on course, meets Mun Station within …" in the log (the course check tidying up after a real burn). The rest of the trip goes on the old way.
@@ -131,3 +131,33 @@ New: you can start a trip with the hauler still docked. Pick it under From here'
 - [ ] It undocks by itself ("Undocked from …" in the log), and the panel shows "backing off from …: … of 30 m" with RCS puffs. Then "Backed off … m from …: on its way", and it turns to face burn 1.
 - [ ] Stay to watch burn 1 for real (round 5), or leave: either is fine. Then the trip, the arrival (be at the other station for round 6) and the docking (round 7). That's the whole round trip with no hands.
 - [ ] Note how far it really backed off, whether it drifted sideways, and whether anything bumped.
+
+## The Haulers panel's next burn and Warp to (check along the way)
+
+The panel (toolbar, in flight and now in the tracking station too) shows each flying trip's next burn: "Next: burn 3 of 5, Transfer burn, 89 m/s", then the game date as KSP's clock shows it ("Y1, D197, 00:53:54") and how long till then. **Warp to … before it** warps to a minute before the burn, or, when the hauler is near you with the autopilot on, to 40 s before the real burn starts (so it can turn first).
+
+- [ ] The date matches KSP's clock style, and the countdown goes down as you watch.
+- [ ] **Warp to** stops at about the time it says, in flight and in the tracking station.
+- [ ] After the last burn it shows "Next: meets …" with the meeting's date.
+
+## Setting the target from the planner
+
+New: From here has a **Target** list (for Go to, Rendezvous and Match planes) of every other craft in space, the ones round your body first. Picking one sets it as KSP's target, as clicking it in map view does, and Go to's **To** switches to "KSP's target". So from the station: **Plan for** the docked shuttle, **Target** the other station, Plan, Fly it in the background, all in the planner.
+
+- [ ] The list shows the other stations and craft (no debris), and the one you pick becomes KSP's target in the game (the target marker shows on it).
+- [ ] Go to's **To** reads "KSP's target: … (rendezvous)" straight after, and Plan works without touching map view.
+
+## Round 9: refuel, then a smoother trip (2026-11-06 fixes)
+
+The save's shuttle is **not** refuelled: the first step is the new Fuel section.
+
+- [ ] Fly Mun Station. Open the **Haulers** panel: a **Fuel** box for Kerb Shuttle mk2 shows its tanks, the station's, and its Δv. Choose **Fill Kerb Shuttle mk2**, then **Start**: the shuttle's numbers rise and the station's fall, over about 30 s, until it's full (or the station runs out). **Stop** works part way.
+- [ ] Try **Unload to the station** with "Keep at least 300 m/s": it stops by itself at about 300 m/s left. Then fill it again.
+- [ ] **Balance RCS** on the stack: it reports the turning per push before and after (or "already balanced").
+- [ ] Drag the panel's bottom-right corner: it resizes, and the trip list grows with it.
+- [ ] Plan for the docked shuttle, target Kerb Station, pick **Meets soonest**, Fly it in the background. After backing off, a small miss now gives "Course correction added: … m/s …; the meeting stays as planned" instead of a replan, and the departure time doesn't jump.
+- [ ] Waiting for a burn: the shuttle holds still (no spin) until 10 minutes before, then turns once to face it and holds. RCS stays off while it's only holding.
+- [ ] After the escape burn and the capture: a course correction rather than a replan (or a replan that keeps "Meets soonest", with a note if fuel forced another way). Small corrections are flown on RCS, with no turning.
+- [ ] Coming in to Kerb Station: it never speeds up towards it. It brakes gently (limiter well down, ~10%), and the last couple of m/s are on RCS.
+- [ ] Docking: it rolls to line the sideways error up with one RCS axis; less wobble and bumping. Look for any "RCS axis … moved the other way" in the log (there shouldn't be any now).
+- [ ] At the end, compare the planned "1d … · 1,2xx m/s" with what it took: the log's "Started" and "Course correction" lines.

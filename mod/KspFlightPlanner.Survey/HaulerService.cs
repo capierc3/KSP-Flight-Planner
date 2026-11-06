@@ -21,7 +21,7 @@ namespace KspFlightPlanner.Haulers
         /// beside the target. Ships are named exactly as in the game. Replaces any route the ship already had.
         /// </summary>
         [KRPCProcedure]
-        public static string StartRoute(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt)
+        public static string StartRoute(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way)
         {
             var scenario = RequireScenario();
             // A ship on its own, or one docked in another vessel (a shuttle at its station), found by its own name; that
@@ -52,6 +52,7 @@ namespace KspFlightPlanner.Haulers
                 TargetId = meet.persistentId,
                 TargetName = meet.vesselName,
                 MeetUt = meetUt,
+                Way = way ?? "",
             };
             for (var i = 0; i < burns.Count; i += 4)
                 route.Burns.Add(new HaulerBurn
@@ -70,9 +71,18 @@ namespace KspFlightPlanner.Haulers
 
             // Flown as planned in KSP's own prediction, does it meet the target? A plan that already misses isn't started.
             var meeting = HaulerShip.PredictMeeting(ship, meet, route.Burns, now, meetUt);
-            if (meeting.Problem != null || meeting.GapM > CourseCheck.OffCourseM || meeting.SpeedMs > CourseCheck.OffCourseMs)
+            if (meeting.Problem != null || meeting.GapM > CourseCheck.Tolerance(meetUt - now) || meeting.SpeedMs > CourseCheck.OffCourseMs)
                 throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it meet " + meet.vesselName + " " + meeting + " off") +
                                             ": not started.");
+
+            // Enough fuel for the whole trip, with a margin for real burns' losses and the braking in? A ship that can't get
+            // there isn't sent (nor, when a replan is the one asking, replanned onto a trip it can't finish).
+            var need = route.Burns.Sum(b => b.DeltaV);
+            var have = dockedPort != null ? HaulerShip.DeltaVLeft(HaulerShip.DockedCraftParts(dockedPort), out _) : HaulerShip.DeltaVLeft(ship, out _);
+            var needWithMargin = need * (1 + FuelMarginShare) + FuelMarginMs;
+            if (have < needWithMargin)
+                throw new ArgumentException(vessel + " has " + have.ToString("0") + " m/s of fuel; this trip needs " + need.ToString("0") + " m/s (" +
+                                            needWithMargin.ToString("0") + " with the margin for real burns): refuel it or plan a cheaper trip.");
 
             // Docked: undock it now (it's loaded, the player is flying the stack); the plan was checked on the stack's orbit,
             // which is the ship's until it moves off.
@@ -99,8 +109,8 @@ namespace KspFlightPlanner.Haulers
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + ".");
             route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
-                          route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
-                          " t; KSP's prediction meets " + meet.vesselName + " within " + meeting);
+                          route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned of " + have.ToString("0") + " m/s in the tanks, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
+                          " t; KSP's prediction meets " + meet.vesselName + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));
             scenario.Routes.Add(route);
             ScreenMessages.PostScreenMessage(ship.vesselName + (old != null && old.State == RouteState.OffCourse ? " was planned again and is" : " is") +
                                              " flying to " + meet.vesselName + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
@@ -151,9 +161,19 @@ namespace KspFlightPlanner.Haulers
                 var ship = HaulerShip.Find(r.VesselId);
                 var target = HaulerShip.Find(r.TargetId);
                 if (ship == null || target == null) continue;
-                list.Add(string.Join(Tab, new[] { ship.vesselName, target.vesselName, R(now), Elements(ship.orbitDriver.orbit), Elements(target.orbitDriver.orbit) }));
+                // Then the way it was planned ("Meets soonest"…) and the Δv in its tanks, so the planner keeps the way if the fuel allows.
+                list.Add(string.Join(Tab, new[] { ship.vesselName, target.vesselName, R(now), Elements(ship.orbitDriver.orbit), Elements(target.orbitDriver.orbit),
+                    r.Way, R(HaulerShip.DeltaVLeft(ship, out _)) }));
             }
             return list;
+        }
+
+        /// <summary>A line from the planner about a ship's route (why it was planned the way it was), shown in the game and logged.</summary>
+        [KRPCProcedure]
+        public static void RouteNote(string vessel, string text)
+        {
+            var route = FindRoute(vessel);
+            if (route != null) HaulerScenario.Note(route, text, true);
         }
 
         /// <summary>The planner couldn't plan an off-course route again (yet): shown in the game, once per reason.</summary>
@@ -165,6 +185,9 @@ namespace KspFlightPlanner.Haulers
         }
 
         private const string Tab = "\t";
+
+        /// <summary>The fuel margin a trip must have on top of its planned Δv: this share of it, plus this many m/s.</summary>
+        private const double FuelMarginShare = 0.05, FuelMarginMs = 30;
 
         private static string R(double x) => x.ToString("R", CultureInfo.InvariantCulture);
 

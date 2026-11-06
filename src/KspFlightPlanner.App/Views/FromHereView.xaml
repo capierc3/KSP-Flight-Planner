@@ -21,6 +21,11 @@
 
             <TextBlock Text="I want to" Style="{StaticResource SectionHeader}" Margin="0,12,0,4" />
             <ComboBox ItemsSource="{Binding Actions}" SelectedItem="{Binding SelectedAction}" />
+            <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsTargetCraft, Converter={StaticResource BoolToVisibility}}"
+                       ToolTip="Sets KSP's target, as clicking the craft in map view does. Go to then goes to it (pick &quot;KSP's target&quot; under To).">
+                <TextBlock Text="Target" VerticalAlignment="Center" Width="100" />
+                <ComboBox ItemsSource="{Binding TargetCrafts}" SelectedItem="{Binding SelectedTargetCraft}" MinWidth="180" HorizontalAlignment="Left" />
+            </DockPanel>
             <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsDestination, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="To" VerticalAlignment="Center" Width="100" />
                 <ComboBox ItemsSource="{Binding Destinations}" SelectedItem="{Binding SelectedDestination}" DisplayMemberPath="Name" MinWidth="120" HorizontalAlignment="Left" />

@@ -41,7 +41,7 @@ namespace KspFlightPlanner.Haulers
                 if (HaulerShip.PortDocked(route.DockingPortId))
                 {
                     route.State = RouteState.Docked;
-                    HaulerScenario.Note(route, "Docked at " + route.TargetName + ".", true);
+                    HaulerScenario.Note(route, "Docked at " + route.TargetName + "." + PhysicsFlyer.ShutDown(route.DockingPortId), true);
                     return;
                 }
                 if (Time.time - route.DockingSince > DockWaitS)
@@ -93,8 +93,9 @@ namespace KspFlightPlanner.Haulers
             try
             {
                 var burn = route.Burns.FirstOrDefault(b => !b.Done);
-                // The autopilot is flying this burn for real (the ship is near the player with physics on): leave it be.
-                if (burn != null && PhysicsFlyer.FliesBurns(route)) return;
+                // The autopilot is flying it (the ship is near the player with physics on): it owns the route, burns and
+                // meeting alike; a check or a burn from here would fight it (the crash of 2026-11-05).
+                if (PhysicsFlyer.Flies(route)) return;
                 var ut = burn != null ? burn.Ut : route.MeetUt;
                 // Still off rails (the player is flying it or near it) when a burn comes up: check from where it is now.
                 if (route.Disturbed)
@@ -236,6 +237,9 @@ namespace KspFlightPlanner.Haulers
             HaulerShip.RaisePhysicsRange(ship, PhysicsFlyer.PhysicsRangeM);
 
             route.State = RouteState.Approaching;
+            route.ApproachStage = -1;
+            route.ApproachHoldDir = Vector3d.zero;
+            route.ApproachNextCheckUt = double.NaN;
             route.ApproachPortId = port.part.persistentId;
             route.ApproachSince = Time.time;
             CourseCheck.StopWarp();
@@ -244,6 +248,43 @@ namespace KspFlightPlanner.Haulers
             ScreenMessages.PostScreenMessage(route.VesselName + " is coming in to " + route.TargetName + ": watch for it", 8f, ScreenMessageStyle.UPPER_CENTER);
             return true;
         }
+
+        /// <summary>A ship due at a station the player is at is lined up this long before the meeting (game s) at the latest...</summary>
+        private const double LineUpEarlyS = 600;
+
+        /// <summary>...or once it's this close (m), whichever comes first: well before KSP loads it at 2.25 km.</summary>
+        private const double LineUpEarlyM = 30000;
+
+        /// <summary>
+        /// Every frame in flight for a flying route: when the player is at the target (it's loaded) and the ship isn't, and
+        /// all that's left is the match at the meeting, the ship is lined up on a port now, while it's still out of sight,
+        /// rather than at the meeting time. Otherwise it can come into KSP's range on its intercept, hundreds of m/s fast,
+        /// with no room to stop (the crash of 2026-11-05). The match's fuel is paid as the rails flyer would.
+        /// </summary>
+        internal static void WatchArrival(HaulerRoute route, double now)
+        {
+            if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot) return;
+            var left = route.Burns.Where(b => !b.Done).ToList();
+            if (left.Count > 1 || left.Count == 1 && left[0].Ut < route.MeetUt - 1) return;
+            var ship = HaulerShip.Find(route.VesselId);
+            var target = HaulerShip.Find(route.TargetId);
+            if (ship == null || target == null || ship.loaded || !target.loaded) return;
+            if (route.MeetUt - now > LineUpEarlyS && (ship.GetWorldPos3D() - target.GetWorldPos3D()).magnitude > LineUpEarlyM) return;
+
+            var used = "";
+            var engine = HaulerShip.MainEngine(ship);
+            foreach (var b in left)
+            {
+                if (engine != null) HaulerShip.Burn(ship, engine, b.DeltaV, out used);
+                b.Done = true;
+            }
+            var head = "Due at " + target.vesselName + " (you're there): lined up early" + (used.Length > 0 ? ", the match used " + used : "") + "; " +
+                       HaulerShip.Mass(ship).ToString("0.00") + " t left";
+            if (!LineUp(route, ship, target, head)) Park(route, ship, target, head);
+        }
+
+        /// <summary>Coming in, time warp stops this long before the next checkpoint (game s).</summary>
+        internal const double WarpStopS = 20;
 
         /// <summary>How long a lined-up ship may take to come into physics range before it's parked instead (real s).</summary>
         private const float ComeInGiveUpS = 300;
@@ -262,7 +303,12 @@ namespace KspFlightPlanner.Haulers
                 return;
             }
             string why = null;
-            if (!HighLogic.LoadedSceneIsFlight || !target.loaded) why = "you left";
+            // Time warp packs it on purpose: the "never came into physics range" clock only runs without warp.
+            if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0) route.ApproachSince = Time.time;
+            // Gone from both: the player is near neither the station nor the ship (riding along keeps the ship loaded).
+            // Packed by time warp isn't gone: warping while riding the ship in (the station not yet loaded) parked it beside
+            // the station, a jump, in the test of 2026-11-06. Only when the ship is unloaded too.
+            if (!HighLogic.LoadedSceneIsFlight || !target.loaded && !ship.loaded) why = "you left";
             else if (!CourseCheck.OffRails(ship) && Time.time - route.ApproachSince > ComeInGiveUpS) why = "it never came into physics range";
             else if (CourseCheck.OffRails(ship) && !PhysicsFlyer.Flies(route) && route.Autopilot) why = "the autopilot can't fly it";
             if (why != null)
@@ -270,10 +316,18 @@ namespace KspFlightPlanner.Haulers
                 Park(route, ship, target, "Coming in stopped (" + why + ")");
                 return;
             }
+            // Time warp is fine while it coasts between checkpoints far out; it stops 20 s before the next one, and there's
+            // none close in (the last minute), where it brakes and steers.
             if (TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0 && TimeWarp.WarpMode == TimeWarp.Modes.HIGH)
             {
-                TimeWarp.SetRate(0, true);
-                ScreenMessages.PostScreenMessage(route.VesselName + " is coming in: no time warp until it has stopped", 4f, ScreenMessageStyle.UPPER_CENTER);
+                var next = route.ApproachNextCheckUt;
+                var now = Planetarium.GetUniversalTime();
+                if (double.IsNaN(next) || now >= next - WarpStopS - TimeWarp.CurrentRate * 0.1)
+                {
+                    CourseCheck.StopWarp();
+                    ScreenMessages.PostScreenMessage(route.VesselName + " is coming in: " + (double.IsNaN(next) ? "no time warp close in" : "checkpoint coming up"), 3f,
+                        ScreenMessageStyle.UPPER_CENTER);
+                }
             }
         }
     }

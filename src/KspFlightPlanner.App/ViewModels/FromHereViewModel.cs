@@ -28,6 +28,12 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
     public override string ToString() => Name;
 }
 
+/// <summary>A craft in the game that can be made KSP's target from the planner (as clicking it in map view does).</summary>
+public sealed record TargetCraftOption(string Name, ulong KrpcId, string Text)
+{
+    public override string ToString() => Text;
+}
+
 /// <summary>
 /// One way of making a trip (<see cref="Option"/>) or a landing (<see cref="Landing"/>), as a row to pick: what it's best
 /// at, and when, how long and its Δv.
@@ -144,7 +150,7 @@ public sealed class FromHereViewModel : ObservableObject
             if (value is null || !SetProperty(ref _action, value)) return;
             _altitudeText = DefaultAltitude();
             _inclinationText = value.Action == QuickAction.SetInclination ? "90" : "";
-            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
+            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsTargetCraft), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
                          nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint) })
                 OnPropertyChanged(name);
             Clear();
@@ -167,6 +173,62 @@ public sealed class FromHereViewModel : ObservableObject
     };
 
     public bool NeedsDestination => _action.Action == QuickAction.GoTo;
+
+    /// <summary>The actions that use KSP's target get a list to set it from, while there are craft to pick.</summary>
+    public bool NeedsTargetCraft => _action.Action is QuickAction.GoTo or QuickAction.Rendezvous or QuickAction.MatchPlanes && TargetCrafts.Count > 0;
+
+    /// <summary>Every other craft in space, the ones round the same body first: picking one sets it as KSP's target.</summary>
+    public IReadOnlyList<TargetCraftOption> TargetCrafts { get; private set; } = [];
+
+    /// <summary>The craft targeted in KSP now, if it's in the list; picking another sets KSP's target to it (and Go to's "To" to KSP's target).</summary>
+    public TargetCraftOption? SelectedTargetCraft
+    {
+        get => _sync.Link.Game?.Vessels?.FirstOrDefault(v => v.IsTarget) is { } t ? TargetCrafts.FirstOrDefault(o => o.KrpcId == t.KrpcId) : null;
+        set
+        {
+            if (value is null || value == SelectedTargetCraft) return;
+            _ = SetTargetAsync(value);
+        }
+    }
+
+    private async Task SetTargetAsync(TargetCraftOption craft)
+    {
+        try
+        {
+            await _sync.Link.SetTargetVesselAsync(craft.KrpcId);
+            RefreshDestinations();
+            if (_action.Action == QuickAction.GoTo) SelectedDestination = _target;
+            Status = null;
+        }
+        catch (Exception ex) when (ex is KRPC.Client.RPCException or ArgumentException or InvalidOperationException)
+        {
+            Status = $"Couldn't set {craft.Name} as the target: {ex.Message}";
+        }
+        OnPropertyChanged(nameof(SelectedTargetCraft));
+    }
+
+    /// <summary>
+    /// Keeps the target list in step with the game: craft in space other than the one being flown (no debris, flags or
+    /// asteroids), those round the same body first, then by name.
+    /// </summary>
+    private void RefreshTargetCrafts()
+    {
+        var vessels = _sync.Link.InFlight ? _sync.Link.Game?.Vessels : null;
+        var here = _sync.Link.Game?.Active?.Orbit?.BodyName;
+        var list = vessels is null ? []
+            : vessels.Where(v => !v.IsActive && v.Orbit is { BodyName: not null } && v.Type is not ("Debris" or "Flag" or "SpaceObject" or "EVA")
+                                 && v.Situation is "ORBITING" or "ESCAPING" or "SUB_ORBITAL")
+                .OrderBy(v => v.Orbit!.BodyName == here ? 0 : 1).ThenBy(v => v.Name, StringComparer.CurrentCulture)
+                .Select(v => new TargetCraftOption(v.Name, v.KrpcId, $"{v.Name} (round {v.Orbit!.BodyName})"))
+                .ToList();
+        if (!list.SequenceEqual(TargetCrafts))
+        {
+            TargetCrafts = list;
+            OnPropertyChanged(nameof(TargetCrafts));
+            OnPropertyChanged(nameof(NeedsTargetCraft));
+        }
+        OnPropertyChanged(nameof(SelectedTargetCraft));
+    }
 
     /// <summary>Change the inclination needs one; Go to a body can take one for the orbit there (left empty, however it arrives).</summary>
     public bool NeedsInclination => _action.Action == QuickAction.SetInclination || _action.Action == QuickAction.GoTo && !GoingToCraft;
@@ -701,8 +763,17 @@ public sealed class FromHereViewModel : ObservableObject
     private List<FlightBurn>? PlanRendezvous(CelestialBody body, OrbitalElements orbit, double after)
     {
         if (TargetOrbit(body, craftOnly: true) is not (var targetName, var targetElements, var craft)) return null;
-        var plan = Rendezvous.Plan(new RendezvousRequest(body, [new RendezvousTarget(targetName, targetElements)], after, 0,
-            new RendezvousTarget(_sync.Link.Game!.Active!.Name, orbit)));
+        var target = new RendezvousTarget(targetName, targetElements);
+        var chaser = _sync.ActiveCraft?.Name ?? _sync.Link.Game!.Active!.Name;
+        // Still on its way in (a stretched orbit back from a moon, or escaping): captured into the target's plane straight
+        // onto the phasing orbit first, not an intercept with all its Δv in the match at the target (docs/MATH.md §4.7).
+        if (ArrivalMeet.Needed(orbit, targetElements))
+        {
+            var arrival = ArrivalMeet.Plan(body, orbit, chaser, target, after - LeadS, LeadS);
+            (_plannedRendezvous, _plannedTarget) = (arrival.Meet, craft);
+            return [.. arrival.Burns];
+        }
+        var plan = Rendezvous.Plan(new RendezvousRequest(body, [target], after, 0, new RendezvousTarget(chaser, orbit)));
         (_plannedRendezvous, _plannedTarget) = (plan, craft);
         return FlightViewModel.RendezvousBurns(plan);
     }
@@ -886,6 +957,7 @@ public sealed class FromHereViewModel : ObservableObject
     private void RefreshLive()
     {
         RefreshFlyAs();
+        RefreshTargetCrafts();
         OnPropertyChanged(nameof(CraftText));
         RefreshDestinations();
         RefreshSpots();
@@ -1016,7 +1088,7 @@ public sealed class FromHereViewModel : ObservableObject
         CommandManager.InvalidateRequerySuggested();
         try
         {
-            var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt);
+            var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
             Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
                      $"{_calendar.FormatDate(leg.ArrivalUt)}.";
         }

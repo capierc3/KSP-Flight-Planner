@@ -26,12 +26,26 @@ namespace KspFlightPlanner.Haulers
         {
             Instance = this;
             GameEvents.onVesselGoOffRails.Add(OnVesselGoOffRails);
+            GameEvents.onVesselSOIChanged.Add(OnVesselSoiChanged);
+        }
+
+        /// <summary>
+        /// A flying hauler moved into another body's sphere of influence: its plan is checked straight away (next frame),
+        /// while a miss is cheapest to put right, and from a point where nothing's left to predict across.
+        /// </summary>
+        private void OnVesselSoiChanged(GameEvents.HostedFromToAction<Vessel, CelestialBody> change)
+        {
+            if (change.host == null) return;
+            foreach (var route in Routes)
+                if (route.State == RouteState.Flying && route.VesselId == change.host.persistentId)
+                    route.CheckSoon = change.to != null ? change.to.bodyName : "";
         }
 
         private void OnDestroy()
         {
             PhysicsFlyer.ReleaseAll();
             GameEvents.onVesselGoOffRails.Remove(OnVesselGoOffRails);
+            GameEvents.onVesselSOIChanged.Remove(OnVesselSoiChanged);
             if (Instance == this) Instance = null;
         }
 
@@ -76,8 +90,18 @@ namespace KspFlightPlanner.Haulers
                 if (route.ShipPortPartId != 0 && HaulerShip.Find(route.VesselId) == null && HighLogic.LoadedSceneIsFlight
                     && HaulerShip.VesselOfPart(route.ShipPortPartId) is Vessel again)
                     route.VesselId = again.persistentId;
+                // Just into another sphere of influence: still on course?
+                if (route.CheckSoon != null)
+                {
+                    var into = route.CheckSoon;
+                    route.CheckSoon = null;
+                    if (route.State == RouteState.Flying && HaulerShip.Find(route.VesselId) is Vessel moved)
+                        CourseCheck.Check(route, moved, now, "Now round " + into);
+                }
                 // Back on rails (or unloaded) after being disturbed: still on course?
                 if (route.State == RouteState.Flying && route.Disturbed) CourseCheck.CheckIfResting(route, now);
+                // Due at a station the player is at: lined up early, while it's still out of sight.
+                if (route.State == RouteState.Flying) RailsFlyer.WatchArrival(route, now);
                 // A few events in one frame at most; whatever is left goes next frame.
                 for (var i = 0; i < 4 && route.State == RouteState.Flying && route.NextUt <= now; i++)
                     RailsFlyer.Step(route, now);
