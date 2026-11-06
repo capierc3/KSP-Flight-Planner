@@ -269,11 +269,9 @@ namespace KspFlightPlanner.Haulers
             var o = Copy(ship.orbitDriver.orbit, fromUt);
             var t = fromUt;
             var ordered = burns.OrderBy(b => b.Ut).ToList();
-            // Rebuilt once more a minute along, before coasting on (unless a burn or the end comes first). Predicting straight
-            // across a change of sphere of influence from the ship's orbit now and predicting from a point a minute along
-            // disagreed by 25 km leaving the Mun (2026-11-06), so the check and the correction solver (which always has
-            // a burn there) disagreed, and 0 m/s corrections were added over and over. This keeps them the same; it's the
-            // form that predicted the first trip's arrival to within 0 km.
+            // Rebuilt once more a minute along, before coasting on (unless a burn or the end comes first), so the check
+            // and the correction solver (which has a burn there) predict the same way. (The 25 km "misses" leaving the Mun
+            // that this was first meant for were real: a burn's last 0.05 m/s; see CourseCheck.Correct.)
             var settle = fromUt + 60;
             if (settle < toUt && (ordered.Count == 0 || ordered[0].Ut > settle))
             {

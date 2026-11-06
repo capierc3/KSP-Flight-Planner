@@ -68,13 +68,14 @@ namespace KspFlightPlanner.Haulers
         /// the speed difference it really arrives with. Nothing is planned: the burns and meeting time stay as they were.
         /// False (and nothing changed) when it doesn't converge, needs more than 60 m/s, or the fuel isn't there.
         /// </summary>
-        private static bool Correct(HaulerRoute route, Vessel ship, Vessel target, double now, string why)
+        private static bool Correct(HaulerRoute route, Vessel ship, Vessel target, double now, string why, bool intoNextBurn = false)
         {
             var left = route.Burns.Where(b => !b.Done).OrderBy(b => b.Ut).ToList();
             var match = left.Count > 0 && left[left.Count - 1].Ut >= route.MeetUt - 1 ? left[left.Count - 1] : null;
             var middle = match != null ? left.Take(left.Count - 1).ToList() : left;
             var next = middle.FirstOrDefault();
-            var insert = next == null || next.Ut > now + 2 * CorrectLeadS;
+            var insert = !intoNextBurn && (next == null || next.Ut > now + 2 * CorrectLeadS);
+            if (intoNextBurn && next == null) return false;
             var fix = insert ? new HaulerBurn { Ut = now + CorrectLeadS, Title = "Course correction" } : next;
             if (fix.Ut >= route.MeetUt - 60) return false;
             var start = new Vector3d(fix.Prograde, fix.Normal, fix.Radial);
@@ -117,10 +118,14 @@ namespace KspFlightPlanner.Haulers
                 Miss(start);
                 return false;
             }
-            // A correction this small isn't worth a burn: the check and the solver only disagree by a hair. On course.
+            // Too small to fly as a burn of its own (a burn stops when under 0.05 m/s is left, so a few hundredths never
+            // happen, and on an escape path a few hundredths is tens of km at the far end, 2026-11-06): folded into the next
+            // planned burn instead, which is big enough to fly exactly. With no burn to fold it into, it's left: on course.
             if (insert && (x - start).magnitude < MinCorrectionMs)
             {
-                HaulerScenario.Note(route, why + "; a correction would be under " + MinCorrectionMs.ToString("0.0") + " m/s: on course.", false);
+                Miss(start);
+                if (next != null && Correct(route, ship, target, now, why, intoNextBurn: true)) return true;
+                HaulerScenario.Note(route, why + "; a correction would be under " + MinCorrectionMs.ToString("0.0") + " m/s, and no burn left to fold it into: on course.", false);
                 return true;
             }
 

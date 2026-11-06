@@ -12,6 +12,13 @@
                 <TextBlock Text="{Binding CraftText}" TextWrapping="Wrap" />
             </Border>
 
+            <!-- Not flying a craft (the tracking station): pick the ship to plan for from the save. -->
+            <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsShipPick, Converter={StaticResource BoolToVisibility}}"
+                       ToolTip="KSP isn't flying a craft, so pick the one to plan for. A craft docked in a station is undocked when its trip starts.">
+                <TextBlock Text="Ship" VerticalAlignment="Center" Width="100" />
+                <ComboBox ItemsSource="{Binding ShipChoices}" SelectedItem="{Binding SelectedShip}" MinWidth="220" HorizontalAlignment="Left" />
+            </DockPanel>
+
             <!-- A docked stack: plan for the whole stack or one craft docked in it (a shuttle at a station). -->
             <DockPanel Margin="0,8,0,0" Visibility="{Binding HasFlyAs, Converter={StaticResource BoolToVisibility}}"
                        ToolTip="You're flying a docked stack. Pick the craft to plan for: its own fuel and engines are used, and it leaves as soon as it undocks.">

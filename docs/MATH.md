@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails
 
 **Where to look for…**
 
@@ -2118,7 +2118,7 @@ J      = [∂g/∂Δv_pro  ∂g/∂Δv_nrm  ∂g/∂Δv_rad]          each by nu
 Δv    ← Δv − J⁻¹ · g(Δv)                              until |g| < 100 m (at most 10 steps, each at most 60 m/s)
 ```
 
-Then the match at the meeting is set to the speed difference it really arrives with, in that moment's node axes. The burns and the meeting time stay as planned, so a trip keeps its schedule. It gives up (and the trip is replanned) when it doesn't converge, the correction would be over 60 m/s, or the fuel isn't there with the margin of §11.2. Nothing is planned in the add-on: it only tunes a burn against the prediction it already checks with. The prediction starts from the ship's position and velocity at the check's time (an orbit rebuilt from them), not a copy of its orbital elements, and is rebuilt once more a minute along before it coasts on (unless a burn comes first). Predicted straight across a change of sphere of influence from the orbit now, and from a point a minute along, the same state came out 25 km apart leaving the Mun; the correction solver always has a burn early on, so it took the second form and the check the first, and 0 m/s corrections were added over and over (2026-11-06). The second form is the one that predicted the first trip's arrival to within 0 km, so both use it now. A correction under 0.2 m/s isn't added (it counts as on course), and the plan is checked again the moment a hauler moves into another body's sphere of influence, from where there's nothing left to predict across.
+Then the match at the meeting is set to the speed difference it really arrives with, in that moment's node axes. The burns and the meeting time stay as planned, so a trip keeps its schedule. It gives up (and the trip is replanned) when it doesn't converge, the correction would be over 60 m/s, or the fuel isn't there with the margin of §11.2. Nothing is planned in the add-on: it only tunes a burn against the prediction it already checks with. The prediction starts from the ship's position and velocity at the check's time (an orbit rebuilt from them), not a copy of its orbital elements, and is rebuilt once more a minute along before it coasts on (unless a burn comes first). On an escape path the trip is very sensitive: a burn stops with under 0.05 m/s left, and on the way out of the Mun those last few hundredths of a m/s are about 25 km at Kerbin, so the check rightly saw a 25 km miss after every escape burn, and the solver rightly found it needed only about 0.04 m/s. Added as a burn of its own, a correction that small stops before it starts (it's already under 0.05 m/s), so it was never flown and was added again and again (2026-11-06). Now a correction under 0.2 m/s is folded into the next planned burn instead (big enough to fly exactly), and only left alone when there's no burn left to fold it into; and the plan is checked again the moment a hauler moves into another body's sphere of influence, from where there's nothing left to predict across.
 
 How far off counts as off course grows with the time to the meeting: 1 km within an hour of it, a kilometre more for each hour further, 5 km at most. Predicting hours ahead through KSP's orbits isn't steady to better than about a kilometre (the same moment came out 29 m and 1,092 m apart, 2026-11-06), and braking in puts the last of it right.
 
@@ -2310,6 +2310,35 @@ The limiters are only changed when that makes it better. The autopilot balances 
 
 - Code: `FuelTransfer.DockedCrafts`, `.Move`, `RcsBalance.Balance`, `HaulerPanel.DrawFuel`, `.DrawRcs` (mod/KspFlightPlanner.Survey)
 - Source: §11.2; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
+
+### 11.10 Docking and undocking on rails
+
+With nobody near (the tracking station, or flying something else), a hauler docks and undocks on the saved records, as KSP would leave them, so the station shows it docked whenever you visit. The parts are written in tree order (each after its parent), as KSP loads them. A backup save ("persistent-before-rails-dock") before each one can be switched on for debugging (`RailsDocking.KeepBackups`); it is off, as each is a full save.
+
+Each part's record holds its parent part and its position p and rotation q relative to the ship's root part. Two docked ships are one record: the docking port of the one that docked hangs off the other's port as its parent ("Docked (docker)" and "Docked (dockee)", each naming the other port's part), the rest of it hangs below its port, and each port remembers its own ship's name, type and root part.
+
+**Undocking** cuts the craft's branch (its port and everything below it) into a record of its own, turned so its own root part r is the root again (the parent links on the way up from r reversed), with every part re-expressed from r, and both ports set free:
+
+```
+p_i' = q_r⁻¹ · (p_i − p_r),    q_i' = q_r⁻¹ · q_i
+```
+
+It's put on the station's orbit 60 m ahead (the mean anomaly moved on by n · 60 m / v), checked at once (§11.3), and flies its trip from there.
+
+**Docking** picks a free port on the station and a free one on the ship that fits it (same size, from the part designs), and moves every part of the ship into the station's frame so the ports are face to face. From each port's part design comes where its face is on the part (l, λ); in each ship's frame the face is at P = p + q·l facing R = q·λ. The ship's port is turned to face the station's (forward against forward, up along up) and moved onto it:
+
+```
+R_h' = LookRotation(−R_s·forward, R_s·up)
+turn = R_h' · R_h⁻¹,     shift = P_s − turn · P_h
+p_i' = shift + turn · p_i,    q_i' = turn · q_i            for every part of the ship
+```
+
+The ship's tree is re-rooted at its port, which then hangs off the station's port; both ports are marked docked to each other, and the ship's engines and RCS blocks are switched off. Then the two old vessels are taken out of the game (not destroyed the usual way, which would count their crew as lost) and the new ones loaded as KSP loads a save's vessels.
+
+Example (Protogen's Kerb Shuttle mk2 at Mun Station): the shuttle's port is at (−1.503, −9.097, 0.000) and the station's at (−0.938, −9.097, 0.000) in the station's frame, 0.566 m apart along x, the two halves of a Clamp-O-Tron pair: the shuttle's port hangs off the station's, and undocking puts the shuttle's command pod back at the root of its own record.
+
+- Code: `RailsDocking.Undock`, `.Dock`, `.FindDockedIn`, `.Reroot`, `.Build`, `.PortPose`, `.Replace` (mod/KspFlightPlanner.Survey); `HaulerService.StartRoute`, `RailsFlyer.Arrive`; From here's ship picker outside flight (App)
+- Source: KSP's save format (VESSEL › PART: parent, position, rotation, attN; ModuleDockingNode: state, dockUId, DOCKEDVESSEL)
 
 ## Sources
 

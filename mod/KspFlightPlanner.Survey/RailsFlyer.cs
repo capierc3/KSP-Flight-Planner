@@ -186,6 +186,19 @@ namespace KspFlightPlanner.Haulers
             var head = "Arrived: " + miss + (used.Length > 0 ? "; final approach used " + used : "") + "; " + HaulerShip.Mass(ship).ToString("0.00") + " t left";
 
             if (LineUp(route, ship, target, head)) return;
+            // Nobody near either ship: docked on rails, on the saved records, as KSP would leave them docked.
+            if (!ship.loaded && !target.loaded)
+            {
+                var targetName = target.vesselName;
+                if (RailsDocking.Dock(ship, target, out var why) != null)
+                {
+                    route.State = RouteState.Docked;
+                    HaulerScenario.Note(route, head + "; docked at " + targetName + " on rails.", false);
+                    ScreenMessages.PostScreenMessage(route.VesselName + " has docked at " + targetName, 6f, ScreenMessageStyle.UPPER_CENTER);
+                    return;
+                }
+                head += "; couldn't dock on rails (" + why + ")";
+            }
             Park(route, ship, target, head);
         }
 

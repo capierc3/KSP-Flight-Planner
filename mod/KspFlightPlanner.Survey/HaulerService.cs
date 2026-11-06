@@ -28,22 +28,25 @@ namespace KspFlightPlanner.Haulers
             // one is undocked once the plan has been checked, and backs off before its first burn.
             Vessel ship;
             Vessel stack = null;
+            Vessel railsStack = null; // docked in a stack that isn't loaded: undocked on rails (RailsDocking)
             ModuleDockingNode dockedPort = null;
             try
             {
                 ship = HaulerShip.FindByName(vessel);
             }
-            catch (ArgumentException) when ((dockedPort = HaulerShip.FindDockedCraftPort(vessel, out stack)) != null)
+            catch (ArgumentException) when ((dockedPort = HaulerShip.FindDockedCraftPort(vessel, out stack)) != null
+                                            || (railsStack = RailsDocking.FindDockedIn(vessel)) != null)
             {
-                ship = stack;
+                ship = stack ?? railsStack;
             }
             var meet = HaulerShip.FindByName(target);
             if (ship == meet && dockedPort == null) throw new ArgumentException("A ship can't fly to meet itself.");
             if (stack == meet) throw new ArgumentException(vessel + " is docked at " + target + " already.");
             if (!HaulerShip.InSpace(ship)) throw new ArgumentException(vessel + " isn't in space (" + ship.situation + ").");
             if (burns.Count == 0 || burns.Count % 4 != 0) throw new ArgumentException("Burns come as four numbers each: time, prograde, normal, radial.");
-            var engine = dockedPort == null ? HaulerShip.MainEngine(ship) : null;
-            if (dockedPort == null && engine == null) throw new ArgumentException(vessel + " has no engine with fuel on board.");
+            var docked = dockedPort != null || railsStack != null;
+            var engine = docked ? null : HaulerShip.MainEngine(ship);
+            if (!docked && engine == null) throw new ArgumentException(vessel + " has no engine with fuel on board.");
 
             var route = new HaulerRoute
             {
@@ -78,7 +81,9 @@ namespace KspFlightPlanner.Haulers
             // Enough fuel for the whole trip, with a margin for real burns' losses and the braking in? A ship that can't get
             // there isn't sent (nor, when a replan is the one asking, replanned onto a trip it can't finish).
             var need = route.Burns.Sum(b => b.DeltaV);
-            var have = dockedPort != null ? HaulerShip.DeltaVLeft(HaulerShip.DockedCraftParts(dockedPort), out _) : HaulerShip.DeltaVLeft(ship, out _);
+            var have = dockedPort != null ? HaulerShip.DeltaVLeft(HaulerShip.DockedCraftParts(dockedPort), out _)
+                : railsStack != null ? double.PositiveInfinity // known once it's undocked, below
+                : HaulerShip.DeltaVLeft(ship, out _);
             var needWithMargin = need * (1 + FuelMarginShare) + FuelMarginMs;
             if (have < needWithMargin)
                 throw new ArgumentException(vessel + " has " + have.ToString("0") + " m/s of fuel; this trip needs " + need.ToString("0") + " m/s (" +
@@ -100,6 +105,24 @@ namespace KspFlightPlanner.Haulers
                 route.BackingOff = route.BackOffPortId != 0;
             }
 
+            // Docked in a stack nobody's near: undocked on rails, 60 m ahead of the station on its orbit.
+            if (railsStack != null)
+            {
+                var stationName = railsStack.vesselName;
+                ship = RailsDocking.Undock(railsStack, vessel, out var why);
+                if (ship == null) throw new ArgumentException("Couldn't undock " + vessel + " on rails: " + why);
+                meet = HaulerShip.Find(meet.persistentId) ?? meet;
+                engine = HaulerShip.MainEngine(ship);
+                have = HaulerShip.DeltaVLeft(ship, out _);
+                if (engine == null) throw new ArgumentException(vessel + " is undocked, but has no engine with fuel on board: not started.");
+                if (have < needWithMargin)
+                    throw new ArgumentException(vessel + " is undocked, but has " + have.ToString("0") + " m/s of fuel; this trip needs " + needWithMargin.ToString("0") +
+                                                " with the margin: not started.");
+                route.VesselId = ship.persistentId;
+                route.VesselName = vessel;
+                route.Log.Add("Undocked from " + stationName + " on rails.");
+            }
+
             // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
             route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(meet);
 
@@ -112,6 +135,8 @@ namespace KspFlightPlanner.Haulers
                           route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned of " + have.ToString("0") + " m/s in the tanks, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
                           " t; KSP's prediction meets " + meet.vesselName + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));
             scenario.Routes.Add(route);
+            // Undocked on rails 60 m ahead of where the plan started: checked now (a course correction, or a plan from here).
+            if (railsStack != null) CourseCheck.Check(route, ship, now, "After undocking on rails", expected: true);
             ScreenMessages.PostScreenMessage(ship.vesselName + (old != null && old.State == RouteState.OffCourse ? " was planned again and is" : " is") +
                                              " flying to " + meet.vesselName + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
             return route.Summary();
