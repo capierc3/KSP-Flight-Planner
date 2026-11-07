@@ -18,13 +18,18 @@ namespace KspFlightPlanner.Haulers
         }
 
         /// <summary>
-        /// Does this station direct its traffic (clearance into its keep-out zone, lanes)? Without it, haulers still
-        /// dock there: one at a time, first come, with only their pilots' own safety stops.
+        /// Does this station direct its traffic (clearance into its keep-out zone, the arrival and departure lanes)? It
+        /// does with a pilot aboard (one in a ship docked to it counts: it's aboard the station as KSP sees it). Without
+        /// one, haulers still come and dock there on their own, kept apart only by their pilots' safety stops.
         /// </summary>
         internal static bool HasTrafficControl(Vessel station, out string why)
         {
             why = "";
-            return true;
+            if (station == null) return false;
+            foreach (var kerbal in station.GetVesselCrew())
+                if (kerbal.trait == "Pilot") return true;
+            why = "no pilot aboard " + station.vesselName;
+            return false;
         }
     }
 }

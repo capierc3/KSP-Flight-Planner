@@ -84,7 +84,9 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   (survey scanner), then the narrow-band's ≈ % estimate, then true values and the best spots once you've analysed the
   biome on the ground. The spots show in *Land at a spot*. It needs the planner's own kRPC add-on for the game's ore map:
   build and install it with `dotnet build mod/KspFlightPlanner.Survey -c Release -p:Install=true` (KSP closed; it builds
-  against your KSP install, `-p:KspDir=…` for another folder). Rules: docs/SURVEY.md; maths: docs/MATH.md §10.
+  against your KSP install, `-p:KspDir=…` for another folder). The add-on needs **kRPC** and **ModuleManager** (both on
+  CKAN); ModuleManager adds the haulers' right-click settings to docking ports and command parts. Rules: docs/SURVEY.md;
+  maths: docs/MATH.md §10.
 - **Fly mode** — the flying side. *Fly this plan* in the Rendezvous pane (or *Fly this deployment* on Resonant
   Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the

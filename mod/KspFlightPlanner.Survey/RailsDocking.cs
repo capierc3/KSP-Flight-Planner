@@ -59,6 +59,41 @@ namespace KspFlightPlanner.Haulers
         private static bool IsFree(P p) => p.Dock != null && (p.Dock.GetValue("state") ?? "") == "Ready";
         private static string DockedName(P p) => p.Dock?.GetNode("DOCKEDVESSEL")?.GetValue("vesselName");
 
+        /// <summary>An unloaded vessel's free docking ports, from its saved parts: each part's persistent id and part name.</summary>
+        internal static List<KeyValuePair<uint, string>> FreePorts(Vessel v)
+        {
+            var list = new List<KeyValuePair<uint, string>>();
+            if (v?.protoVessel == null) return list;
+            foreach (var pp in v.protoVessel.protoPartSnapshots)
+                if (pp.modules.Any(m => m.moduleName == "ModuleDockingNode" && m.moduleValues != null && (m.moduleValues.GetValue("state") ?? "") == "Ready"))
+                    list.Add(new KeyValuePair<uint, string>(pp.persistentId, pp.partName));
+            return list;
+        }
+
+        /// <summary>The part name of the port a craft of this name is docked by, in an unloaded stack (null if none).</summary>
+        internal static string CraftPortPart(Vessel stack, string craftName)
+        {
+            if (stack?.protoVessel == null) return null;
+            foreach (var pp in stack.protoVessel.protoPartSnapshots)
+            foreach (var m in pp.modules)
+            {
+                if (m.moduleName != "ModuleDockingNode" || m.moduleValues == null) continue;
+                var state = m.moduleValues.GetValue("state") ?? "";
+                if (state.StartsWith("Docked", StringComparison.Ordinal) && m.moduleValues.GetNode("DOCKEDVESSEL")?.GetValue("vesselName") == craftName) return pp.partName;
+            }
+            return null;
+        }
+
+        /// <summary>The role (<see cref="ModuleHaulerRole"/>) of a craft of this name docked in an unloaded stack, from its own parts.</summary>
+        internal static string CraftRole(Vessel stack, string craftName)
+        {
+            var parts = Parts(Record(stack));
+            var h = parts.FindIndex(p => Docked(p) && DockedName(p) == craftName);
+            if (h < 0) return ModuleHaulerRole.CrewSupplies;
+            var roles = Branch(parts, h).SelectMany(i => parts[i].Node.GetNodes("MODULE")).Where(m => m.GetValue("name") == nameof(ModuleHaulerRole)).Select(m => m.GetValue("role"));
+            return roles.Any(r => r == ModuleHaulerRole.Tanker) ? ModuleHaulerRole.Tanker : ModuleHaulerRole.CrewSupplies;
+        }
+
         /// <summary>The unloaded stack a craft of this name is docked in (as its port remembers it), or null.</summary>
         internal static Vessel FindDockedIn(string craftName)
         {
@@ -131,7 +166,7 @@ namespace KspFlightPlanner.Haulers
         /// it fits (not one in <paramref name="claimed"/>, another hauler's), the ship's port turned to face the station's,
         /// its parts hung off the station's port. Returns the merged vessel; null, with <paramref name="problem"/>, when it can't.
         /// </summary>
-        internal static Vessel Dock(Vessel ship, Vessel station, out string problem, ICollection<uint> claimed = null)
+        internal static Vessel Dock(Vessel ship, Vessel station, out string problem, ICollection<uint> claimed = null, uint prefer = 0)
         {
             problem = null;
             try
@@ -141,7 +176,8 @@ namespace KspFlightPlanner.Haulers
                 var sp = Parts(sRec);
                 var hp = Parts(hRec);
                 int s = -1, h = -1;
-                foreach (var i in Enumerable.Range(0, sp.Count).Where(i => IsFree(sp[i]) && (claimed == null || !claimed.Contains(sp[i].Pid))))
+                // The booked port first (docs/MATH.md §11.14), then the rest in order.
+                foreach (var i in Enumerable.Range(0, sp.Count).Where(i => IsFree(sp[i]) && (claimed == null || !claimed.Contains(sp[i].Pid))).OrderBy(i => prefer != 0 && sp[i].Pid == prefer ? 0 : 1))
                 {
                     h = Enumerable.Range(0, hp.Count).Where(j => IsFree(hp[j]) && Fits(sp[i].Name, hp[j].Name)).DefaultIfEmpty(-1).First();
                     if (h >= 0) { s = i; break; }
@@ -398,7 +434,7 @@ namespace KspFlightPlanner.Haulers
             PartLoader.getPartInfoByName(partName)?.partPrefab?.FindModuleImplementing<ModuleDockingNode>();
 
         /// <summary>The two ports fit (same size), by their part designs.</summary>
-        private static bool Fits(string a, string b)
+        internal static bool Fits(string a, string b)
         {
             var pa = Prefab(a);
             var pb = Prefab(b);

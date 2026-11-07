@@ -20,9 +20,10 @@ namespace KspFlightPlanner.Haulers
     /// <summary>
     /// Flying the burns; Arrived = parked beside the target, docking as soon as both are loaded; Docked; Stopped;
     /// OffCourse = a check found it would miss: paused, no more burns, until the planner sends a new plan;
-    /// Approaching = met the target with the player there: lined up on a free port's axis, the physics flyer brings it in.
+    /// Approaching = met the target with the player there: lined up on a free port's axis, the physics flyer brings it in;
+    /// Waiting = met the target with no free port: parked 3 km behind it on its orbit till one frees up (PortBooking).
     /// </summary>
-    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching }
+    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching, Waiting }
 
     /// <summary>
     /// A ship flying a planned trip without anyone at the controls: at each burn's time its orbit is changed as that burn
@@ -48,6 +49,19 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>Its pilots have been given this trip on their log (once per route).</summary>
         public bool Credited;
+
+        /// <summary>What it carries (<see cref="ModuleHaulerRole"/>: crew & supplies, or tanker), read from its command parts when the route starts: the ports it may use.</summary>
+        public string Role = ModuleHaulerRole.CrewSupplies;
+
+        /// <summary>The station port booked for it (part persistent id; 0 = none yet): docs/MATH.md §11.14.</summary>
+        public uint BookedPortId;
+
+        /// <summary>Waiting for a free port since (game time), and whether it has said it's been a day.</summary>
+        public double WaitSince;
+        public bool ToldLongWait;
+
+        /// <summary>When it next looks for a free port (real time; not saved).</summary>
+        internal float NextBookTry;
 
         /// <summary>Which way of making the trip the player picked ("Meets soonest", "Cheapest"…; empty when there was one): replans keep it when the fuel allows.</summary>
         public string Way = "";
@@ -125,6 +139,9 @@ namespace KspFlightPlanner.Haulers
             {
                 case RouteState.Arrived: return head + "parked beside it, docks when you're nearby";
                 case RouteState.Approaching: return head + "coming in to its port";
+                case RouteState.Waiting:
+                    return head + "waiting 3 km behind it for a free port, since " + KSPUtil.dateTimeFormatter.PrintDateCompact(WaitSince, true, true) +
+                           (ToldLongWait ? " (over a day: free a port there)" : "");
                 case RouteState.Docked: return head + "docked";
                 case RouteState.OffCourse: return head + "off course, waiting to be planned again" + (ReplanNote != null ? " (" + ReplanNote + ")" : "");
                 case RouteState.Stopped: return head + "stopped (" + (Log.Count > 0 ? Log[Log.Count - 1] : "") + ")";
@@ -143,6 +160,10 @@ namespace KspFlightPlanner.Haulers
             node.AddValue("fromName", FromName);
             foreach (var kerbal in Pilots) node.AddValue("pilot", kerbal);
             node.AddValue("credited", Credited);
+            node.AddValue("role", Role);
+            node.AddValue("bookedPort", BookedPortId);
+            node.AddValue("waitSince", WaitSince.ToString("R", CultureInfo.InvariantCulture));
+            node.AddValue("toldLongWait", ToldLongWait);
             node.AddValue("way", Way);
             node.AddValue("state", State.ToString());
             node.AddValue("disturbed", Disturbed);
@@ -174,6 +195,10 @@ namespace KspFlightPlanner.Haulers
                 FromId = uint.TryParse(node.GetValue("fromId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromId) ? fromId : 0,
                 FromName = node.GetValue("fromName") ?? "",
                 Credited = node.GetValue("credited") == "True",
+                Role = node.GetValue("role") ?? ModuleHaulerRole.CrewSupplies,
+                BookedPortId = uint.TryParse(node.GetValue("bookedPort"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var booked) ? booked : 0,
+                WaitSince = double.TryParse(node.GetValue("waitSince"), NumberStyles.Float, CultureInfo.InvariantCulture, out var waitSince) ? waitSince : 0,
+                ToldLongWait = node.GetValue("toldLongWait") == "True",
                 Way = node.GetValue("way") ?? "",
                 State = (RouteState)Enum.Parse(typeof(RouteState), node.GetValue("state")),
                 Disturbed = node.GetValue("disturbed") == "True",

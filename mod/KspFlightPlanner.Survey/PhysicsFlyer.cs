@@ -29,18 +29,49 @@ namespace KspFlightPlanner.Haulers
         /// <summary>The physics flyer is flying this route's ship and hasn't given up on it.</summary>
         internal static bool Flies(HaulerRoute route) => Pilots.TryGetValue(route.VesselId, out var p) && !p.GaveUp;
 
-        /// <summary>A hauler giving way to another waits this much further out than its hold point (m).</summary>
-        internal const double QueueM = 150;
+        /// <summary>A station's keep-out zone reaches this far from its centre at least (m), farther for big stations and ships.</summary>
+        internal const double ZoneM = 200;
+
+        /// <summary>Haulers waiting their turn in the arrival lane wait this far apart (m), the first at the zone's edge.</summary>
+        internal const double QueueGapM = 60;
+
+        /// <summary>The keep-out zone's radius round this station for this ship (m): 200 m, or both sizes plus 50 m if bigger.</summary>
+        internal static double ZoneRadius(Vessel station, Vessel ship) => Math.Max(ZoneM, HaulerShip.Size(station) + HaulerShip.Size(ship) + 50);
+
+        /// <summary>Straight up from the station, away from the body it's round (world).</summary>
+        internal static Vector3d Up(Vessel station) => (station.CoMD - station.mainBody.position).normalized;
+
+        /// <summary>The station directs its traffic (a pilot aboard: <see cref="HaulerRules.HasTrafficControl"/>).</summary>
+        internal static bool Controlled(Vessel station) => station != null && HaulerRules.HasTrafficControl(station, out _);
+
+        /// <summary>
+        /// Its place in the arrival lane at a controlled station: how many haulers coming in to it started before it
+        /// (0 = first). Each waits <see cref="QueueGapM"/> further down the lane than the one ahead.
+        /// </summary>
+        internal static int QueuePlace(HaulerRoute me, Vessel station)
+        {
+            var place = 0;
+            if (HaulerScenario.Instance == null || station == null) return 0;
+            foreach (var r in HaulerScenario.Instance.Routes)
+            {
+                if (r == me || r.TargetId != station.persistentId || r.State != RouteState.Approaching && r.State != RouteState.Arrived) continue;
+                var ship = HaulerShip.Find(r.VesselId);
+                if (ship == null || !ship.loaded || !Pilots.TryGetValue(r.VesselId, out var p) || p.GaveUp) continue;
+                if (r.QueueSince < me.QueueSince || r.QueueSince == me.QueueSince && r.VesselId < me.VesselId) place++;
+            }
+            return place;
+        }
 
         /// <summary>
         /// Station traffic, in physics (docs/MATH.md §11.11): the hauler <paramref name="me"/> gives way to at this station,
-        /// as "name is doing what"; null when the way is clear. One backing out of its ports always has the way; then one
-        /// docking at it; then one that started coming in to it first (first come, first served). With
-        /// <paramref name="leavingOnly"/> (it's docking already), only one leaving.
+        /// as "name is doing what"; null when the way is clear (its clearance into the keep-out zone). One backing out of
+        /// its ports (and climbing out the departure lane) always has the way; then one docking at it; then one that
+        /// started coming in to it first (first come, first served). With <paramref name="leavingOnly"/> (it's docking
+        /// already), only one leaving. A station without traffic control orders nobody: always null.
         /// </summary>
         internal static string GiveWayTo(HaulerRoute me, Vessel station, bool leavingOnly = false)
         {
-            if (HaulerScenario.Instance == null || station == null) return null;
+            if (HaulerScenario.Instance == null || station == null || !Controlled(station)) return null;
             foreach (var r in HaulerScenario.Instance.Routes)
             {
                 if (r == me) continue;
@@ -615,6 +646,9 @@ namespace KspFlightPlanner.Haulers
 
             private bool _firing, _lit;
 
+            /// <summary>It has said the station it's coming in to has no traffic control.</summary>
+            private bool _toldNoControl;
+
             /// <summary>
             /// Coming in to the port: the speed it wants falls off towards the spot 150 m out so it can always stop there
             /// with the braking it plans on, and the engines make up the difference, pointed along it. While it's only
@@ -629,18 +663,38 @@ namespace KspFlightPlanner.Haulers
                     GiveUp(_route.TargetName + " is gone");
                     return;
                 }
-                if (_route.ApproachPortId == 0 && station.loaded && HaulerShip.PickStationPort(Vessel, station, HaulerScenario.ClaimedPorts(_route)) is ModuleDockingNode picked)
-                    _route.ApproachPortId = picked.part.persistentId;
+                // Its booked port (§11.14), booked now if it has none yet; with none free, it waits out at the zone's edge.
+                if (Time.time >= _route.NextBookTry) PortBooking.Try(_route, Vessel, station);
+                var noPort = _route.BookedPortId == 0;
+                if (!noPort && _route.ApproachPortId != _route.BookedPortId) _route.ApproachPortId = _route.BookedPortId;
 
-                // It comes in to a hold point near the station on the side it arrives from (both ships' sizes plus 15 m out,
-                // 50 m at least), and stops there; docking then takes it round to the port on RCS.
+                // It comes in to a hold point near the station (both ships' sizes plus 15 m out, 50 m at least), and stops
+                // there; docking then takes it round to the port on RCS. With traffic control, the hold point is in the
+                // arrival lane, straight below the station (towards the body); without, on the side it arrives from.
                 var centre = station.GetWorldPos3D();
+                var controlled = Controlled(station);
                 if (_route.ApproachHoldDir == Vector3d.zero) _route.ApproachHoldDir = (Vessel.CoMD - centre).normalized;
-                // Another hauler busy at the station first: it waits further out, its turn to come.
-                var way = GiveWayTo(_route, station);
-                var holdM = Math.Max(HoldM, HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 15) + (way != null ? QueueM : 0);
+                if (controlled) _route.ApproachHoldDir = -Up(station); // follows the station round its orbit
+                else if (!_toldNoControl)
+                {
+                    _toldNoControl = true;
+                    HaulerRules.HasTrafficControl(station, out var noControl);
+                    HaulerScenario.Note(_route, "No traffic control at " + station.vesselName + " (" + noControl + "): coming in on its own.", true);
+                }
+                // Not cleared in yet (another hauler leaving, docking or ahead of it): it waits at the keep-out zone's edge
+                // in the arrival lane, each one in the queue a further 60 m down it.
+                var way = GiveWayTo(_route, station) ?? (noPort ? "no free port yet" : null);
+                var holdM = way != null
+                    ? ZoneRadius(station, Vessel) + QueueGapM * QueuePlace(_route, station)
+                    : Math.Max(HoldM, HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 15);
                 var hold = centre + _route.ApproachHoldDir * holdM;
-                var r = Vessel.CoMD - hold;
+                var dHold = (Vessel.CoMD - hold).magnitude;
+                // The straight way to the hold point passes the station (arriving from above, the lane is below): steered
+                // round it instead, 30° at a time, at the keep-out zone's edge with traffic control (outside the zone till
+                // cleared), else just clear of both ships.
+                var round = controlled ? ZoneRadius(station, Vessel) : HaulerShip.Size(station) + HaulerShip.Size(Vessel) + ClearM;
+                var steerTo = SegmentClear(Vessel.CoMD, hold, centre, Math.Min(round, holdM)) ? hold : AroundStep(Vessel.CoMD, hold, centre, round);
+                var r = Vessel.CoMD - steerTo;
                 var d = r.magnitude;
                 var v = Vessel.obt_velocity - station.obt_velocity;
                 var speed = v.magnitude;
@@ -669,15 +723,16 @@ namespace KspFlightPlanner.Haulers
                     }
                     return;
                 }
-                if (d < ArrivedM && speed < StillMs && way != null)
+                if (dHold < ArrivedM && speed < StillMs && way != null)
                 {
                     _throttle = 0;
                     _aim = Vector3d.zero;
                     _translating = false;
-                    Status = "waiting " + (Vessel.CoMD - centre).magnitude.ToString("0") + " m out: " + way;
+                    Status = (controlled ? "waiting in the arrival lane, " + (Vessel.CoMD - centre).magnitude.ToString("0") + " m below " : "waiting " + (Vessel.CoMD - centre).magnitude.ToString("0") + " m from ") +
+                             station.vesselName + ": " + way;
                     return;
                 }
-                if (d < ArrivedM && speed < StillMs)
+                if (dHold < ArrivedM && speed < StillMs)
                 {
                     _throttle = 0;
                     _aim = Vector3d.zero;
@@ -785,8 +840,35 @@ namespace KspFlightPlanner.Haulers
             /// <summary>Backing off ends stopped against the station, under this (m/s).</summary>
             private const double StoppedMs = 0.03;
 
-            /// <summary>Gives up backing off after this long (real s).</summary>
-            private const float BackOffGiveUpS = 300;
+            /// <summary>Gives up backing off after this long (real s): long enough to climb out a departure lane.</summary>
+            private const float BackOffGiveUpS = 600;
+
+            /// <summary>Out the departure lane once this close to its top (m).</summary>
+            private const double LaneDoneM = 10;
+
+            /// <summary>
+            /// Which way the top of the departure lane is from the station: the ship's own direction from it, raised to 45°
+            /// above the station's horizon if it's lower (keeping its compass direction); straight up if it's directly below.
+            /// </summary>
+            private static Vector3d LaneExitDir(Vector3d fromCentre, Vector3d up)
+            {
+                var dir = fromCentre.normalized;
+                var level = dir - up * Vector3d.Dot(dir, up);
+                if (Vector3d.Dot(dir, up) >= Math.Sin(Math.PI / 4)) return dir;
+                if (level.magnitude < 1e-3) return up;
+                return (level.normalized * Math.Cos(Math.PI / 4) + up * Math.Sin(Math.PI / 4)).normalized;
+            }
+
+            /// <summary>The push at the top of the lane is done once it's within this of the velocity it wants (m/s).</summary>
+            private const double LaneStillMs = 0.1;
+
+            /// <summary>Its velocity (relative to the station) as it reached the top of the lane, which it keeps going at.</summary>
+            private Vector3d? _laneExitVel;
+
+            /// <summary>Fastest it climbs out the departure lane (m/s): 200 m in about 4 minutes, about 2 m/s of RCS start to stop.</summary>
+            private const double LaneMs = 1;
+
+            private bool _laneTop;
 
             private float _backOffSince = -1;
 
@@ -816,7 +898,58 @@ namespace KspFlightPlanner.Haulers
                 _aim = Vector3d.zero;
                 _throttle = 0;
                 var pass = double.NaN;
-                if (away >= clear && !timedOut && !due)
+                var lane = false;
+                if (away >= clear && !timedOut && !due && HasRcs(Vessel) && Controlled(stack))
+                {
+                    // Traffic control: out the departure lane, to the top of the keep-out zone straight above the station
+                    // (round it if the straight way is blocked), then on without stopping, pushed to drift clear (below).
+                    _station = stack;
+                    var centre = stack.CoMD;
+                    // The top of the lane: out to the zone's edge on its own side of the station, raised to at least 45°
+                    // above the station's horizon, so it never crosses back over the station to sit straight above it (the
+                    // test of 2026-11-07 went north, over, then south to line up).
+                    var exit = centre + LaneExitDir(Vessel.CoMD - centre, Up(stack)) * ZoneRadius(stack, Vessel);
+                    var round = HaulerShip.Size(stack) + HaulerShip.Size(Vessel) + ClearM;
+                    var here = Vessel.CoMD;
+                    var goal = SegmentClear(here, exit, centre, round) ? exit : AroundStep(here, exit, centre, round);
+                    var toGo = (exit - here).magnitude;
+                    // Reaching the top is for good: it keeps going from there, never back to the climb (going back to it
+                    // when it overshot made it climb and stop round and round, the test of 2026-11-07).
+                    if (!_laneTop && toGo <= LaneDoneM) _laneTop = true;
+                    if (!_laneTop)
+                    {
+                        var to = goal - here;
+                        var d = to.magnitude;
+                        _translating = true;
+                        _wantVel = d > 0.05 ? to / d * Math.Min(LaneMs, Math.Max(0.2, Math.Min(Math.Sqrt(2 * 0.5 * RcsAccel(Vessel) * d), d / 10))) : Vector3d.zero;
+                        Status = "climbing out the departure lane above " + stack.vesselName + ": " + toGo.ToString("0") + " m to go" + (goal == exit ? "" : " (round the station)");
+                        return;
+                    }
+                    // At the top: no stopping. It keeps its climbing speed and adds the separation push backwards along the
+                    // orbit (0.5 m/s at a time, §11.8): climbing alone would bring it back to the station an orbit later;
+                    // with the push it drifts steadily away. Its path is then checked to stay 100 m clear till its first
+                    // burn, pushing again if not, and the plan is checked (and made again) from here.
+                    if (_laneExitVel == null) _laneExitVel = rel;
+                    if (_pushes == 0) _pushes = 1;
+                    var laneWant = _laneExitVel.Value - stack.obt_velocity.normalized * (SeparateMs * _pushes);
+                    if ((laneWant - rel).magnitude > LaneStillMs)
+                    {
+                        _translating = true;
+                        _wantVel = laneWant;
+                        Status = "out of the departure lane above " + stack.vesselName + ", pushing clear: " + (laneWant - rel).magnitude.ToString("0.00") + " m/s to go";
+                        return;
+                    }
+                    _translating = false;
+                    var laneUntil = burn != null ? burn.Ut - StartLead(Vessel, burn.DeltaV) : now + 3600;
+                    pass = HaulerShip.ClosestPass(Vessel, stack, now + 20, Math.Max(now + 60, laneUntil), onceFartherThanM: 200);
+                    if (pass < PathClearM && _pushes < MaxPushes)
+                    {
+                        _pushes++;
+                        return;
+                    }
+                    lane = true;
+                }
+                else if (away >= clear && !timedOut && !due)
                 {
                     _station = stack;
                     // Clear: stop dead against the station first (RCS).
@@ -874,7 +1007,7 @@ namespace KspFlightPlanner.Haulers
                     _route.BackingOff = false;
                     _translating = false;
                     _station = null;
-                    HaulerScenario.Note(_route, "Backed off " + away.ToString("0") + " m from " + stack.vesselName + ", drifting " + drift.ToString("0.00") + " m/s" +
+                    HaulerScenario.Note(_route, "Backed off " + away.ToString("0") + " m from " + stack.vesselName + (lane ? " out the departure lane" : "") + ", drifting " + drift.ToString("0.00") + " m/s" +
                                                 (double.IsNaN(pass) ? "" : "; its path stays " + (double.IsInfinity(pass) ? "far" : pass.ToString("0") + " m") + " clear of it") + ".", false);
                     // The plan was made from the station's orbit, before backing off moved it: check it now, and plan it again
                     // from here if need be, while there's still time before the first burn.
@@ -1026,6 +1159,7 @@ namespace KspFlightPlanner.Haulers
                 {
                     if (v == Vessel || v == station || v.LandedOrSplashed || v.vesselType == VesselType.Flag) continue;
                     if (station != null && InTrafficAt(v, station)) continue;
+                    if (GivesWayToMe(v)) continue;
                     var r = v.CoMD - Vessel.CoMD;
                     var rel = v.obt_velocity - Vessel.obt_velocity;
                     var sizes = mySize + HaulerShip.Size(v);
@@ -1039,11 +1173,31 @@ namespace KspFlightPlanner.Haulers
                 return worst;
             }
 
-            /// <summary>A hauler coming in to, docking at or leaving <paramref name="station"/>: the station traffic orders it with this one.</summary>
+            /// <summary>
+            /// Another hauler already stopped for this one, which this one outranks: it goes on past while the other holds
+            /// (or backs away), so two haulers never wait for each other for ever. One leaving a station outranks one that
+            /// isn't; otherwise the lower ship id does.
+            /// </summary>
+            private bool GivesWayToMe(Vessel v)
+            {
+                if (!Pilots.TryGetValue(v.persistentId, out var other) || other.GaveUp || other.StoppedFor != Vessel) return false;
+                var meLeaving = _route.BackingOff;
+                var otherLeaving = other._route.BackingOff;
+                return meLeaving != otherLeaving ? meLeaving : Vessel.persistentId < v.persistentId;
+            }
+
+            /// <summary>What its safety stop is holding it for (null when it isn't stopped).</summary>
+            internal Vessel StoppedFor => _stopFor;
+
+            /// <summary>
+            /// A hauler coming in to, docking at or leaving <paramref name="station"/>, when the station directs its traffic:
+            /// the traffic orders it with this one. At a station without traffic control, nothing orders them, so they're
+            /// kept apart by their safety stops like anything else.
+            /// </summary>
             private static bool InTrafficAt(Vessel v, Vessel station)
             {
                 var scenario = HaulerScenario.Instance;
-                if (scenario == null) return false;
+                if (scenario == null || !Controlled(station)) return false;
                 foreach (var r in scenario.Routes)
                 {
                     if (r.VesselId != v.persistentId) continue;
@@ -1071,6 +1225,14 @@ namespace KspFlightPlanner.Haulers
                 if (!PortsStillGood() && !PickDockingPorts(station))
                 {
                     GiveUp("no free port on " + station.vesselName + " that one of its ports fits");
+                    return;
+                }
+                // The magnets have it: hands off while they pull it in (reading the caught port as taken made it give up
+                // at the last moment, the test of 2026-11-07).
+                if (Catching)
+                {
+                    _translating = false;
+                    Status = "docking: the magnets have it";
                     return;
                 }
                 // Station traffic: wait its turn before starting; once moving, hold still while one leaves.
@@ -1142,18 +1304,22 @@ namespace KspFlightPlanner.Haulers
             }
 
             private bool PortsStillGood() =>
-                _myPort != null && _theirPort != null && _myPort.vessel == Vessel && _theirPort.vessel == _station && _theirPort.otherNode == null;
+                _myPort != null && _theirPort != null && _myPort.vessel == Vessel && _theirPort.vessel == _station && (_theirPort.otherNode == null || Catching);
+
+            /// <summary>The two ports' magnets have caught each other: docking is KSP's from here.</summary>
+            private bool Catching => _theirPort != null && _myPort != null && _theirPort.otherNode == _myPort;
 
             /// <summary>The station port it came in to, if still free and one of its ports fits; otherwise the nearest pair.</summary>
             private bool PickDockingPorts(Vessel station)
             {
-                var claimed = HaulerScenario.ClaimedPorts(_route);
-                var theirs = HaulerShip.FindPort(station, _route.ApproachPortId);
+                var claimed = HaulerScenario.PortsNotFor(_route, station);
+                var theirs = HaulerShip.FindPort(station, _route.ApproachPortId != 0 ? _route.ApproachPortId : _route.BookedPortId);
                 var mine = theirs != null && !claimed.Contains(theirs.part.persistentId) ? HaulerShip.PortFor(Vessel, theirs) : null;
                 if (mine == null && !HaulerShip.PickPorts(Vessel, station, out mine, out theirs, claimed)) return false;
                 _myPort = mine;
                 _theirPort = theirs;
                 _route.ApproachPortId = theirs.part.persistentId; // claimed, so no other hauler heads for it
+                _route.BookedPortId = theirs.part.persistentId;
                 _wantRight = Vector3.zero;
                 return true;
             }
@@ -1252,7 +1418,7 @@ namespace KspFlightPlanner.Haulers
                 _route.ApproachNextCheckUt = double.NaN;
                 _route.ApproachSince = Time.time;
                 _route.QueueSince = Time.time;
-                _route.ApproachPortId = target != null && target.loaded && HaulerShip.PickStationPort(Vessel, target, HaulerScenario.ClaimedPorts(_route)) is ModuleDockingNode port ? port.part.persistentId : 0;
+                _route.ApproachPortId = target != null && target.loaded && HaulerShip.PickStationPort(Vessel, target, HaulerScenario.PortsNotFor(_route, target)) is ModuleDockingNode port ? port.part.persistentId : 0;
                 SetLimiters(100f);
                 HaulerScenario.Note(_route, "Braking in to " + _route.TargetName + " instead of the match burn, " +
                                             (target != null ? ((Vessel.CoMD - target.GetWorldPos3D()).magnitude / 1000).ToString("0.0") + " km out at " +
@@ -1400,7 +1566,13 @@ namespace KspFlightPlanner.Haulers
             /// <summary>Every physics tick: the player's hands on the controls switch the autopilot off; otherwise it steers.</summary>
             private void Fly(FlightCtrlState s)
             {
-                if (Vessel == FlightGlobals.ActiveVessel && PlayerSteering(s))
+                // Just switched to: the controls still hold what was flying the last ship (often another hauler's
+                // autopilot), which isn't the player's hands. A second to settle before reading them (the test of
+                // 2026-11-07 turned the autopilot off on every switch).
+                var active = Vessel == FlightGlobals.ActiveVessel;
+                if (active && !_wasActive) _activeSince = Time.time;
+                _wasActive = active;
+                if (active && Time.time - _activeSince > SwitchGraceS && PlayerSteering(s))
                 {
                     _route.Autopilot = false;
                     s.mainThrottle = 0;
@@ -1489,6 +1661,12 @@ namespace KspFlightPlanner.Haulers
             /// The player moved a control: something differs from what the autopilot wrote last tick and isn't at rest.
             /// (Comparing with its own last values works whether or not KSP resets the controls between ticks.)
             /// </summary>
+            private bool _wasActive;
+            private float _activeSince;
+
+            /// <summary>After the player switches to the ship, the controls aren't read as the player's hands for this long (real s).</summary>
+            private const float SwitchGraceS = 1f;
+
             private bool PlayerSteering(FlightCtrlState s) =>
                 Moved(s.pitch, _lastPitch) || Moved(s.yaw, _lastYaw) || Moved(s.roll, _lastRoll) ||
                 Moved(s.X, _lastX) || Moved(s.Y, _lastY) || Moved(s.Z, _lastZ) ||

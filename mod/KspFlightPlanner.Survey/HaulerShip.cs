@@ -383,7 +383,7 @@ namespace KspFlightPlanner.Haulers
         }
 
         /// <summary>A docking port free to dock: not docked, not shielded shut.</summary>
-        private static bool IsFree(ModuleDockingNode n) =>
+        internal static bool IsFree(ModuleDockingNode n) =>
             n != null && n.nodeTransform != null && n.otherNode == null &&
             (n.fsm != null ? n.fsm.currentStateName : n.state) == "Ready";
 
@@ -410,6 +410,14 @@ namespace KspFlightPlanner.Haulers
                 if (d < best) { best = d; shipPort = match; stationPort = theirs; }
             }
             return shipPort != null;
+        }
+
+        /// <summary>The part names of a ship's free docking ports, loaded or not (unloaded: from its saved parts).</summary>
+        public static List<string> FreePortParts(Vessel ship)
+        {
+            if (ship.loaded)
+                return ship.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree).Select(n => n.part.partInfo.name).ToList();
+            return RailsDocking.FreePorts(ship).Select(p => p.Value).ToList();
         }
 
         /// <summary>

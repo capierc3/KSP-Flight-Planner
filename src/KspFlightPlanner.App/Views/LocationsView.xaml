@@ -145,14 +145,14 @@
                               Visibility="{Binding ShowShare, Converter={StaticResource BoolToVisibility}}" />
 
                     <TextBlock Text="Position" Style="{StaticResource SectionHeader}" />
-                    <RadioButton GroupName="LocationPlacement" IsChecked="{Binding IsPlanned}"
+                    <RadioButton IsChecked="{Binding IsPlanned}"
                                  Content="Planned — not built yet (any arrival point)" />
-                    <RadioButton GroupName="LocationPlacement" IsChecked="{Binding IsPlaced}" Margin="0,6,0,0"
+                    <RadioButton IsChecked="{Binding IsPlaced}" Margin="0,6,0,0"
                                  Content="Placed — exists in my save" />
                     <StackPanel Visibility="{Binding IsPlaced, Converter={StaticResource BoolToVisibility}}" Margin="0,8,0,0">
                         <StackPanel Orientation="Horizontal">
-                            <RadioButton GroupName="LocationEntry" IsChecked="{Binding UseElements}" Content="Orbital elements" Margin="0,0,16,0" />
-                            <RadioButton GroupName="LocationEntry" IsChecked="{Binding UsePhaseAngle}" Content="Phase angle from Kerbin" />
+                            <RadioButton IsChecked="{Binding UseElements}" Content="Orbital elements" Margin="0,0,16,0" />
+                            <RadioButton IsChecked="{Binding UsePhaseAngle}" Content="Phase angle from Kerbin" />
                         </StackPanel>
                         <Grid Visibility="{Binding UseElements, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions>

@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the pilots' log; 11.13 The pilot's safety stop
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the pilots' log; 11.13 The pilot's safety stop; 11.14 Booking a port, and waiting for one; 11.15 Which haulers may use a port
 
 **Where to look for…**
 
@@ -2144,6 +2144,8 @@ so the check when it's back on rails calls it off course, well past the 1 km lin
 - Code: `CourseCheck.Check`, `.CheckIfResting`, `HaulerScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `HaulerShip.PredictMeeting`, `.PathAt`, `.Coast` (mod/KspFlightPlanner.Survey); `HaulerReplan.Plan` (Core); `HaulerWatch` (App)
 - Source: §1.5, §2.8, §4, §4.6; KSP's `PatchedConics.CalculatePatch`; Clohessy–Wiltshire equations (Curtis 7.4)
 
+**Starting a trip.** A plan is checked in KSP's own prediction before it starts. Only a meeting predicted more than 50 km off, or not at all, is refused. A smaller miss is started and corrected at its first check: after backing off, after undocking on rails, or the next frame for a ship already free. Over days of flying across a change of sphere of influence, the planner's maths and KSP's drift a few km apart (Kerbin to the Mun came out 8.6 km off at 15.9 m/s, test of 2026-11-07), and that's what the corrections are for. Code: `HaulerService.StartRoute` (`StartMissM`).
+
 ### 11.4 The physics flyer: turning the ship
 
 When a hauler is loaded with physics running near the player, the add-on flies it by writing its controls every physics tick, like an autopilot (the toolbar's Haulers panel switches it off; touching the controls of a hauler you're flying does too). It holds the ship still (damping any turn) until the next burn is 10 minutes away, then turns it so its engines face the burn, along the node axes of §1.8 *at the burn's time*: a direction fixed in space, so the ship turns once and holds (facing the axes as they are now made it follow them round the orbit). Then it flies the burn (§11.5). RCS is on only while the autopilot is moving the ship sideways: a ship's RCS rarely pushes through its centre of mass, so holding a heading on RCS nudges it off course over a long wait. When the autopilot lets go of a ship, it puts the player's RCS switch back and turns SAS on, so the ship holds still instead of tumbling.
@@ -2348,32 +2350,53 @@ Example (Protogen's Kerb Shuttle mk2 at Mun Station): the shuttle's port is at (
 
 ### 11.11 Station traffic
 
-Several haulers can use one station. Two rules keep them apart.
+Several haulers can use one station. Ports are claimed everywhere. In physics, a station with traffic control also gives clearance into its keep-out zone and has lanes; one without leaves its haulers to their pilots.
 
-**Ports are claimed.** A station port is claimed by the hauler coming in to it or docking at it (from when it's picked to when it's docked), and by the hauler that has just left it while it backs off. Every pick of a port, on rails or in physics, leaves out ports other haulers have claimed, and picks from the rest as before (§11.6, §11.7, §11.10). A hauler parked to dock later keeps its claim.
+**Ports are claimed.** A station port is claimed by the hauler coming in to it or docking at it (from when it's picked to when it's docked), and by the hauler that has just left it while it backs off. Every pick of a port, on rails or in physics, leaves out ports other haulers have claimed, and picks from the rest as before (§11.6, §11.7, §11.10). A hauler parked to dock later keeps its claim. This holds at every station, with or without traffic control.
 
-**One at a time near the station, in physics.** Each hauler has its own autopilot, and none of them steers round another hauler, so they take turns. A hauler gives way to:
+**Traffic control.** A station directs its traffic when a pilot is aboard (any kerbal with the Pilot trait, including one in a ship docked to it, §11.12).
 
-1. one backing out of one of the station's ports (it has a burn to make, so it always goes first);
+**The keep-out zone.** Round a controlled station:
+
+```
+zone = max(200 m, size_station + size_ship + 50 m)
+```
+
+Only one hauler at a time moves inside it. A hauler needs clearance to come in, and gives way to:
+
+1. one leaving the station (backing out of a port, then climbing out the departure lane): it has a burn to make, so it always goes first;
 2. one docking at the station;
 3. one that started coming in to the station before it did (first come, first served; the ship's id breaks a tie).
 
-Giving way while coming in, its hold point moves 150 m further out (§11.6) and it waits there, still, until the way is clear. Giving way at the start of docking, it holds still where it is. Once moving to the port, it only gives way to one leaving: it holds still till that one is clear, and the wait doesn't count towards the 10 minutes after which docking gives up.
+**The lanes.** Up is away from the body the station orbits:
 
 ```
-hold_waiting = max(50 m, size_station + size_ship + 15 m) + 150 m
+up = (station − body centre) / |station − body centre|
 ```
 
-Example: two shuttles of about 10 m at Kerb Station (about 30 m across): the first holds max(50, 30 + 10 + 15) = 55 m out and docks, going round the station at most 30 + 10 + 10 = 50 m from its centre; the second waits 55 + 150 = **205 m** out, clear of that, then comes in to its own hold point.
+- **Arrivals wait below the station.** Not cleared, a hauler waits in the arrival lane at the zone's edge, `−up × zone` from the station. Each one queued behind it waits a further 60 m down:
+  ```
+  wait = −up × (zone + 60 m × place)          place = haulers coming in that started before it
+  ```
+  Cleared, its hold point moves in along the same line to `−up × max(50 m, size_station + size_ship + 15 m)`, the hold point of §11.6, and docking takes it round to its port (§11.7). The lane follows the station round its orbit. If the straight way to its waiting or hold point passes the station (arriving from above, say), it's steered round, 30° at a time, at the zone's edge, so it stays outside the zone until it's cleared (the same go-round as §11.7, wider).
+- **Departures leave above it.** A hauler leaving backs straight out of its port as before (§11.8). It then climbs on RCS to the top of the lane: the zone's edge on its own side of the station, raised to at least 45° above the station's horizon if it's lower (`exit = zone × normalize(level·cos 45° + up·sin 45°)`, keeping its compass direction; just `zone × its own direction` if it's already higher). Aiming for the point straight above the station instead made it cross over and come back to line up (test of 2026-11-07). It goes round the station if the straight way is blocked (§11.7's go-round), at up to 1 m/s. At the top it doesn't stop: it keeps its climbing speed and adds §11.8's separation push, 0.5 m/s backwards along the orbit. Climbing alone isn't enough: a purely upward velocity puts it on an orbit that crosses the station's again one orbit later (in the station's frame the ship goes up, back, down and forward again to where it started). The push makes it drift steadily away. Then, as in §11.8, its path is checked to stay 100 m clear of the station until its first burn, with another push if not, and its plan is checked and made again from where it is. Reaching the top is for good: an earlier version stopped there and went back to climbing whenever it overshot by 10 m, round and round, burning half a shuttle's monopropellant (test of 2026-11-07). Without RCS it leaves as in §11.8.
 
-- Code: `HaulerScenario.ClaimedPorts`, `HaulerShip.PickPorts`, `.PickStationPort`, `RailsDocking.Dock`, `PhysicsFlyer.GiveWayTo`, `PhysicsFlyer.Pilot.Approach`, `.Dock` (mod/KspFlightPlanner.Survey)
-- Source: §11.6, §11.7, §11.8
+The two lanes are on opposite sides, so a hauler can come down to its waiting point while another climbs out. Only the last few hundred metres, inside the zone, are one at a time.
+
+Once docking has started, a hauler only gives way to one leaving: it holds still till that one is clear, and the wait doesn't count towards the 10 minutes after which docking gives up.
+
+**Without traffic control.** No clearance, lanes or queue. Each hauler comes in to a hold point on the side it arrives from (§11.6) and docks at a free port. Other haulers count as obstacles for its safety stop (§11.13). The hauler says so once: "No traffic control at X (no pilot aboard X)".
+
+Example: two shuttles of about 10 m at Mun Station (about 30 m across, a pilot aboard). The first is cleared, holds max(50, 30 + 10 + 15) = 55 m below the station, and docks. The zone is max(200, 30 + 10 + 50) = 200 m, so the second waits **200 m** below, and a third 260 m below. Meanwhile a shuttle undocking from the top of the station backs out 30 m, then climbs to 200 m above. It is 400 m from the waiting shuttle.
+
+- Code: `HaulerScenario.ClaimedPorts`, `HaulerShip.PickPorts`, `.PickStationPort`, `RailsDocking.Dock`, `HaulerRules.HasTrafficControl`, `PhysicsFlyer.GiveWayTo`, `.ZoneRadius`, `.Up`, `.QueuePlace`, `PhysicsFlyer.Pilot.Approach`, `.BackOff`, `.Dock` (mod/KspFlightPlanner.Survey)
+- Source: §11.6, §11.7, §11.8; real stations use the same idea: approach from below (R-bar), keep-out sphere, departures away from approaches
 
 ### 11.12 Crew rules and the pilots' log
 
 No maths here, only counting, but the rules decide when the maths above runs at all.
 
-**The rules gate.** Two questions, asked in one place: may this ship fly this route, and does this station direct its traffic? Each answers yes or no with a reason. A route is refused at its start (before anything undocks) when the ship may not fly it, and the physics flyer leaves a ship alone near the player for the same reason, saying why once. For now both always answer yes; the crew rules (a pilot who has flown the trip, a probe flown from a crewed station, a pilot aboard a station for traffic control) go inside them later, without the flying code changing.
+**The rules gate.** Two questions, asked in one place: may this ship fly this route, and does this station direct its traffic? Each answers yes or no with a reason. A route is refused at its start (before anything undocks) when the ship may not fly it, and the physics flyer leaves a ship alone near the player for the same reason, saying why once. A station has traffic control when a pilot is aboard (§11.11). May-fly always answers yes for now; its crew rules (a pilot who has flown the trip, a probe flown from a crewed station) go inside it later, without the flying code changing.
 
 **The pilots' log.** Kept in the save with the routes. For each pilot, one entry per trip they've made:
 
@@ -2394,7 +2417,7 @@ Example: Jeb flies Kerb Shuttle mk2 from Mun Station to Kerb Station four times 
 
 The station traffic (§11.11) orders haulers that use the same station. Anything else near a hauler, such as the player's ship, debris, a hauler bound somewhere else or one whose autopilot gave up, is left to the pilot's own reaction. It runs while the hauler is coming in, docking or backing off, at any station, with or without traffic control.
 
-Each frame it looks at every loaded vessel except its station and the haulers the station traffic orders with it. Each one is treated as moving straight on at its speed now (fine over 20 s and a few hundred metres, where orbital curvature barely shows). With `r` the other's position and `v` its velocity, both relative to the hauler:
+Each frame it looks at every loaded vessel except its station and, at a station with traffic control, the haulers the traffic orders with it. Without traffic control, other haulers count too. Two haulers stopped for each other would wait for ever, so the one that outranks the other goes on past while the other holds or backs away: one leaving outranks one that isn't, otherwise the lower ship id does. Each one is treated as moving straight on at its speed now (fine over 20 s and a few hundred metres, where orbital curvature barely shows). With `r` the other's position and `v` its velocity, both relative to the hauler:
 
 ```
 t*      = clamp(−(r·v) / |v|², 0, 20 s)        time of closest approach, within the next 20 s
@@ -2422,8 +2445,58 @@ r·v < 0 (coming closer): match its 2 m/s and back away at 0.5 m/s
 
 The player's ship is now closing at 0.5 m/s instead of 2 m/s. The hauler goes on when it stops or passes, and the gap stays over 40 m for the next 20 s.
 
-- Code: `PhysicsFlyer.Pilot.SafetyStop`, `.Hazard`, `.InTrafficAt`, `.Translate` (mod/KspFlightPlanner.Survey)
+- Code: `PhysicsFlyer.Pilot.SafetyStop`, `.Hazard`, `.InTrafficAt`, `.GivesWayToMe`, `.Translate` (mod/KspFlightPlanner.Survey)
 - Source: closest approach of two straight-line paths (standard kinematics); §11.11
+
+### 11.14 Booking a port, and waiting for one
+
+A hauler books a port at the station it's going to, so it never arrives at a station with no port free for it. How far ahead a station's ports can be known is the catch: on a trip of a few minutes it's much as it will be, but on a 10-day trip from Minmus, or months from Duna, it means nothing. So the booking is made by time to arrival, not at departure:
+
+```
+book when   t_meet − now ≤ 1 hour
+```
+
+- **Short trips** (the meeting within the hour when the route starts, from a station). The port is booked before the hauler undocks. With none free, the route isn't started: the hauler stays docked, and the planner shows "No free port at X for when it gets there".
+- **Long trips.** The hauler leaves on time. An hour before the meeting it books a port, and with none free it looks again every 5 s.
+
+A booked port is free, fits one of the hauler's free ports (same size), and isn't claimed by another hauler. It counts as a claim from then on (§11.11), until the hauler docks or its route stops. A route planned again on the way (§11.3) keeps its booking. If the booked port is taken anyway (the player docks something there), the hauler books another.
+
+At the station, the booked port is the one it lines up on (§11.6), docks at on rails (§11.10), or docks at in physics (§11.7).
+
+**No free port when it arrives.** On rails, the hauler parks on the station's own orbit, 3 km behind it:
+
+```
+behind_s = 3000 m / v_station           its mean anomaly set back by n × behind_s (n = mean motion)
+```
+
+The same orbit means it holds its place without fuel. At 3 km it's outside physics range (2.2 km here, §11.5), so it stays on rails even when the player is at the station. Every 5 s it looks for a free port. When one frees up, it comes in as it would have on arriving: lined up on the port if the player is at the station, docked on rails if nobody's near either ship, otherwise parked beside the station. In physics (the player riding along), it waits at the keep-out zone's edge instead (§11.11), and if the player leaves, it goes to the 3 km point.
+
+**A day's wait.** After a day of game time (6 hours on Kerbin's clock) it says so once, in the game. The planner's trip list shows "waiting 3 km behind it for a free port, since …", with "over a day: free a port there" after that. It keeps waiting.
+
+Example: Mun Station orbits at about 540 m/s. A hauler arriving with all three free ports booked by others waits 3000 / 540 = **5.6 s** behind it on its orbit, 3 km back. When one of the others docks somewhere else and its booking clears, the waiting hauler books that port within 5 s and comes in.
+
+- Code: `PortBooking.Due`, `.Try`, `.Wait`, `.WatchWaiting`, `HaulerScenario.ClaimedPorts`, `RailsFlyer.Arrive`, `.ComeIn`, `.LineUp`, `.WatchArrival`, `.WatchApproach`, `RailsDocking.FreePorts`, `.CraftPortPart`, `.Dock`, `HaulerService.StartRoute`, `PhysicsFlyer.Pilot.Approach` (mod/KspFlightPlanner.Survey)
+- Source: §11.6, §11.10, §11.11; `HaulerShip.FollowOrbit` for the place on the orbit (§11.1)
+
+### 11.15 Which haulers may use a port
+
+Some ports aren't for every hauler: the port on the end of a station's fuel tank is for tankers, not for a shuttle full of kerbals. Each docking port has a setting and each hauler has a role, both right-click settings in the game (in flight and in the editor). The add-on's ModuleManager patch, `HaulerPorts.cfg`, adds them to every docking port and every command pod and probe core, so it needs ModuleManager installed.
+
+| Port setting ("Haulers") | Open to |
+|---|---|
+| Any hauler (default) | every hauler |
+| Crew & supplies only | crew & supplies haulers |
+| Tankers only | tankers |
+| No haulers | none (dock there by hand) |
+
+A hauler's role ("Hauler role") is Crew & supplies (default) or Tanker. A ship is a tanker if any of its command parts says so. A docked craft's role comes from its own parts, not its station's. The role is read when the route starts and kept with the route.
+
+Wherever a port is picked (booking §11.14, lining up §11.6, docking in physics §11.7, on rails §11.10, the stand-in), the ports not open to the hauler's role are left out, along with those other haulers have claimed (§11.11). A station with no free port open to its role is like one with no free port: a short trip stays docked ("No free port open to tankers at X"), and a long one waits 3 km behind it (§11.14). Both settings are saved with the part, so they survive docking, undocking and saves, and they're read from the save when a station isn't loaded.
+
+Example: Kerb Station has free ports 14 and 20, and port 20 is on the end of its fuel tank, set to Tankers only. A crew shuttle books port 14. A second shuttle, with 14 booked, finds no port open to it and waits behind the station. A tanker arriving at the same time books port 20.
+
+- Code: `ModuleHaulerPort`, `ModuleHaulerRole`, `HaulerPorts.Allows`, `.NotOpenTo`, `.RoleOf`, `HaulerScenario.PortsNotFor`, `RailsDocking.CraftRole`, `HaulerService.StartRoute`; patch `HaulerPorts.cfg` (mod/KspFlightPlanner.Survey)
+- Source: §11.11, §11.14
 
 ## Sources
 

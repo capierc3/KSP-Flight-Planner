@@ -33,8 +33,9 @@ namespace KspFlightPlanner.Haulers
         }
 
         /// <summary>
-        /// Station ports other haulers have claimed (part persistent ids): the one each is coming in to or docking at, and
-        /// the one each has just left while it backs off. A hauler picks a port no other has (docs/MATH.md §11.11).
+        /// Station ports other haulers have claimed (part persistent ids): the one each has booked (§11.14), the one each is
+        /// coming in to or docking at, and the one each has just left while it backs off. A hauler picks a port no other
+        /// has (docs/MATH.md §11.11).
         /// </summary>
         internal static HashSet<uint> ClaimedPorts(HaulerRoute except)
         {
@@ -45,8 +46,20 @@ namespace KspFlightPlanner.Haulers
                 if (r == except) continue;
                 if ((r.State == RouteState.Approaching || r.State == RouteState.Arrived) && r.ApproachPortId != 0) claimed.Add(r.ApproachPortId);
                 if (r.BackingOff && r.BackOffPortId != 0) claimed.Add(r.BackOffPortId);
+                if (r.BookedPortId != 0 && r.State != RouteState.Docked && r.State != RouteState.Stopped) claimed.Add(r.BookedPortId);
             }
             return claimed;
+        }
+
+        /// <summary>
+        /// The station's ports this route's hauler may not pick: those other haulers have claimed, and those not open to
+        /// its role (docs/MATH.md §11.15).
+        /// </summary>
+        internal static HashSet<uint> PortsNotFor(HaulerRoute route, Vessel station)
+        {
+            var shut = ClaimedPorts(route);
+            shut.UnionWith(HaulerPorts.NotOpenTo(station, route.Role));
+            return shut;
         }
 
         public override void OnAwake()
@@ -129,8 +142,13 @@ namespace KspFlightPlanner.Haulers
                 }
                 // Back on rails (or unloaded) after being disturbed: still on course?
                 if (route.State == RouteState.Flying && route.Disturbed) CourseCheck.CheckIfResting(route, now);
+                // An hour from the meeting: a port booked at the station (or, with none free, tried again every few seconds).
+                if (route.State == RouteState.Flying && PortBooking.Due(route, now))
+                    PortBooking.Try(route, HaulerShip.Find(route.VesselId), HaulerShip.Find(route.TargetId));
                 // Due at a station the player is at: lined up early, while it's still out of sight.
                 if (route.State == RouteState.Flying) RailsFlyer.WatchArrival(route, now);
+                // No free port when it got there: waiting behind the station for one.
+                if (route.State == RouteState.Waiting) PortBooking.WatchWaiting(route, now);
                 // A few events in one frame at most; whatever is left goes next frame.
                 for (var i = 0; i < 4 && route.State == RouteState.Flying && route.NextUt <= now; i++)
                     RailsFlyer.Step(route, now);

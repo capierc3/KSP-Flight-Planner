@@ -62,7 +62,7 @@ namespace KspFlightPlanner.Haulers
             if (Time.time - route.BothLoadedSince < SettleS) return;
 
             route.DockTried = true;
-            if (!HaulerShip.PickPorts(ship, station, out var mine, out var theirs, HaulerScenario.ClaimedPorts(route)))
+            if (!HaulerShip.PickPorts(ship, station, out var mine, out var theirs, HaulerScenario.PortsNotFor(route, station)))
             {
                 HaulerScenario.Note(route, "Couldn't dock: " + station.vesselName + " has no free port that fits " + ship.vesselName + "'s.", true);
                 return;
@@ -184,13 +184,27 @@ namespace KspFlightPlanner.Haulers
             var engine = HaulerShip.MainEngine(ship);
             if (engine != null && closing > 0) HaulerShip.Burn(ship, engine, closing, out used);
             var head = "Arrived: " + miss + (used.Length > 0 ? "; final approach used " + used : "") + "; " + HaulerShip.Mass(ship).ToString("0.00") + " t left";
+            // No free port to book: it waits behind the station instead.
+            if (!PortBooking.Try(route, ship, target))
+            {
+                PortBooking.Wait(route, ship, target, head);
+                return;
+            }
+            ComeIn(route, ship, target, head);
+        }
 
+        /// <summary>
+        /// Met the station with a port booked: lined up to come in on it when the player is there, docked on rails when
+        /// nobody's near either ship, otherwise parked beside it to dock when the player comes.
+        /// </summary>
+        internal static void ComeIn(HaulerRoute route, Vessel ship, Vessel target, string head)
+        {
             if (LineUp(route, ship, target, head)) return;
             // Nobody near either ship: docked on rails, on the saved records, as KSP would leave them docked.
             if (!ship.loaded && !target.loaded)
             {
                 var targetName = target.vesselName;
-                if (RailsDocking.Dock(ship, target, out var why, HaulerScenario.ClaimedPorts(route)) != null)
+                if (RailsDocking.Dock(ship, target, out var why, HaulerScenario.PortsNotFor(route, target), route.BookedPortId) != null)
                 {
                     HaulerScenario.Note(route, head + "; docked at " + targetName + " on rails.", false);
                     HaulerScenario.Docked(route);
@@ -237,8 +251,12 @@ namespace KspFlightPlanner.Haulers
         private static bool LineUp(HaulerRoute route, Vessel ship, Vessel target, string head)
         {
             if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot || !target.loaded || ship.loaded) return false;
-            var port = HaulerShip.PickStationPort(ship, target, HaulerScenario.ClaimedPorts(route));
+            // Its booked port if it's still free, else another free one that fits.
+            var shut = HaulerScenario.PortsNotFor(route, target);
+            var booked = HaulerShip.FindPort(target, route.BookedPortId);
+            var port = booked != null && HaulerShip.IsFree(booked) && !shut.Contains(route.BookedPortId) ? booked : HaulerShip.PickStationPort(ship, target, shut);
             if (port == null) return false;
+            route.BookedPortId = port.part.persistentId;
 
             var now = Planetarium.GetUniversalTime();
             var axis = (Vector3d)port.nodeTransform.forward;
@@ -294,7 +312,8 @@ namespace KspFlightPlanner.Haulers
             }
             var head = "Due at " + target.vesselName + " (you're there): lined up early" + (used.Length > 0 ? ", the match used " + used : "") + "; " +
                        HaulerShip.Mass(ship).ToString("0.00") + " t left";
-            if (!LineUp(route, ship, target, head)) Park(route, ship, target, head);
+            if (!PortBooking.Try(route, ship, target)) PortBooking.Wait(route, ship, target, head);
+            else if (!LineUp(route, ship, target, head)) Park(route, ship, target, head);
         }
 
         /// <summary>Coming in, time warp stops this long before the next checkpoint (game s).</summary>
@@ -327,7 +346,9 @@ namespace KspFlightPlanner.Haulers
             else if (CourseCheck.OffRails(ship) && !PhysicsFlyer.Flies(route) && route.Autopilot) why = "the autopilot can't fly it";
             if (why != null)
             {
-                Park(route, ship, target, "Coming in stopped (" + why + ")");
+                // Still without a port: it waits behind the station rather than parking beside it.
+                if (!PortBooking.Try(route, ship, target)) PortBooking.Wait(route, ship, target, "Coming in stopped (" + why + ")");
+                else Park(route, ship, target, "Coming in stopped (" + why + ")");
                 return;
             }
             // Time warp is fine while it coasts between checkpoints far out; it stops 20 s before the next one, and there's

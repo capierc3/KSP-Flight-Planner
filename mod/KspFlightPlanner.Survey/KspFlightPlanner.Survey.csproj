@@ -3,6 +3,8 @@
   <!--
     The planner's in-game add-on: a kRPC service that answers questions only the running game can, starting with
     "how much ore is here?". kRPC loads it from GameData like its own services, so it needs kRPC installed.
+    It also needs ModuleManager (a standalone mod, on CKAN): HaulerPorts.cfg adds the haulers' port and role settings
+    to every docking port and command part.
 
     It builds against KSP's own DLLs, which aren't in the repo, so it isn't in KspFlightPlanner.sln and CI doesn't build it.
     Build:            dotnet build mod/KspFlightPlanner.Survey -c Release
@@ -32,7 +34,8 @@
 
   <Target Name="InstallIntoKsp" AfterTargets="Build" Condition="'$(Install)' == 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallDir)" />
-    <Message Importance="high" Text="Installed $(TargetFileName) into $(InstallDir). Restart KSP to load it." />
+    <Copy SourceFiles="HaulerPorts.cfg" DestinationFolder="$(KspDir)\GameData\KspFlightPlanner" />
+    <Message Importance="high" Text="Installed $(TargetFileName) into $(InstallDir) and HaulerPorts.cfg (needs ModuleManager). Restart KSP to load it." />
   </Target>
 
 </Project>
