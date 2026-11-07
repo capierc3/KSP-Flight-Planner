@@ -68,6 +68,9 @@ namespace KspFlightPlanner.Haulers
                 });
             route.Burns.Sort((a, b) => a.Ut.CompareTo(b.Ut));
 
+            // The crew rules (none yet): checked before anything is undocked. A docked craft is asked about as its stack.
+            if (!HaulerRules.CanFly(route, ship, out var notAllowed)) throw new ArgumentException(vessel + " can't fly this route: " + notAllowed);
+
             var now = Planetarium.GetUniversalTime();
             if (route.Burns[0].Ut < now - 5) throw new ArgumentException("The first burn's time has passed: plan again.");
             if (meetUt < route.Burns[route.Burns.Count - 1].Ut) throw new ArgumentException("The meeting can't come before the last burn.");
@@ -105,12 +108,17 @@ namespace KspFlightPlanner.Haulers
                 route.ShipPortPartId = dockedPort.part.persistentId;
                 route.BackOffPortId = stationPort != null ? stationPort.part.persistentId : 0;
                 route.BackingOff = route.BackOffPortId != 0;
+                var station = stationPort != null ? stationPort.part.vessel : stack;
+                route.FromId = station.persistentId;
+                route.FromName = station.vesselName;
             }
 
             // Docked in a stack nobody's near: undocked on rails, 60 m ahead of the station on its orbit.
             if (railsStack != null)
             {
                 var stationName = railsStack.vesselName;
+                route.FromId = railsStack.persistentId; // the station keeps its id; the craft split off gets a new one
+                route.FromName = stationName;
                 ship = RailsDocking.Undock(railsStack, vessel, out var why);
                 if (ship == null) throw new ArgumentException("Couldn't undock " + vessel + " on rails: " + why);
                 meet = HaulerShip.Find(meet.persistentId) ?? meet;
@@ -125,12 +133,22 @@ namespace KspFlightPlanner.Haulers
                 route.Log.Add("Undocked from " + stationName + " on rails; engines lit, RCS on.");
             }
 
+            // Free-flying when it started: it left from the body it's round.
+            if (!docked) route.FromName = ship.mainBody.bodyName;
+            route.Pilots.AddRange(ship.GetVesselCrew().Where(c => c.trait == "Pilot").Select(c => c.name));
+
             // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
             route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(meet);
 
             // A ship planned again keeps what happened before on its log (found by name too: undocking gives a new id).
             var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (old != null) route.Log.AddRange(old.Log);
+            // Planned again on the way (off course): still the same trip, from where it first left.
+            if (old != null && old.State != RouteState.Docked && old.TargetId == route.TargetId && (old.FromId != 0 || old.FromName.Length > 0))
+            {
+                route.FromId = old.FromId;
+                route.FromName = old.FromName;
+            }
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + "." + ready);
             route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
@@ -150,6 +168,22 @@ namespace KspFlightPlanner.Haulers
         {
             var scenario = HaulerScenario.Instance;
             return scenario == null ? new List<string>() : scenario.Routes.Select(r => r.Summary()).ToList();
+        }
+
+        /// <summary>
+        /// The pilots' log, one line per pilot and trip, tab-separated: kerbal, from (station or body), to, times flown,
+        /// game time last flown.
+        /// </summary>
+        [KRPCProcedure]
+        public static IList<string> PilotFlights()
+        {
+            var list = new List<string>();
+            var scenario = HaulerScenario.Instance;
+            if (scenario == null) return list;
+            foreach (var kerbal in scenario.PilotLog.Kerbals)
+                foreach (var f in scenario.PilotLog.Flights(kerbal))
+                    list.Add(string.Join(Tab, new[] { kerbal, f.FromName, f.ToName, f.TimesFlown.ToString(CultureInfo.InvariantCulture), R(f.LastFlownUt) }));
+            return list;
         }
 
         /// <summary>What happened on a ship's route so far, one line per event.</summary>

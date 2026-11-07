@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the pilots' log; 11.13 The pilot's safety stop
 
 **Where to look for…**
 
@@ -2368,6 +2368,62 @@ Example: two shuttles of about 10 m at Kerb Station (about 30 m across): the fir
 
 - Code: `HaulerScenario.ClaimedPorts`, `HaulerShip.PickPorts`, `.PickStationPort`, `RailsDocking.Dock`, `PhysicsFlyer.GiveWayTo`, `PhysicsFlyer.Pilot.Approach`, `.Dock` (mod/KspFlightPlanner.Survey)
 - Source: §11.6, §11.7, §11.8
+
+### 11.12 Crew rules and the pilots' log
+
+No maths here, only counting, but the rules decide when the maths above runs at all.
+
+**The rules gate.** Two questions, asked in one place: may this ship fly this route, and does this station direct its traffic? Each answers yes or no with a reason. A route is refused at its start (before anything undocks) when the ship may not fly it, and the physics flyer leaves a ship alone near the player for the same reason, saying why once. For now both always answer yes; the crew rules (a pilot who has flown the trip, a probe flown from a crewed station, a pilot aboard a station for traffic control) go inside them later, without the flying code changing.
+
+**The pilots' log.** Kept in the save with the routes. For each pilot, one entry per trip they've made:
+
+```
+trip = (from, to)      from = the station it undocked from (by its game id), or the body it was round if it left free-flying
+                       to   = the station it docked at (by its game id)
+entry = trip, times flown, game time last flown
+```
+
+The pilots aboard (kerbals with the Pilot trait) are noted when a route starts. When it docks at its target, on rails or in physics, each gets one more flight on that trip, once per route. Stations are kept by id, so a renamed station keeps its pilots' flights (the names shown follow the rename). Directions count apart. A route planned again on the way (off course, §11.3) is still the same trip, from where it first left.
+
+Example: Jeb flies Kerb Shuttle mk2 from Mun Station to Kerb Station four times and back twice: his log has Mun Station → Kerb Station, flown 4 times, and Kerb Station → Mun Station, flown 2 times.
+
+- Code: `HaulerRules.CanFly`, `.HasTrafficControl`, `PilotLog.Credit`, `HaulerScenario.Docked`, `HaulerService.StartRoute`, `.PilotFlights` (mod/KspFlightPlanner.Survey)
+- Source: none (game rules)
+
+### 11.13 The pilot's safety stop
+
+The station traffic (§11.11) orders haulers that use the same station. Anything else near a hauler, such as the player's ship, debris, a hauler bound somewhere else or one whose autopilot gave up, is left to the pilot's own reaction. It runs while the hauler is coming in, docking or backing off, at any station, with or without traffic control.
+
+Each frame it looks at every loaded vessel except its station and the haulers the station traffic orders with it. Each one is treated as moving straight on at its speed now (fine over 20 s and a few hundred metres, where orbital curvature barely shows). With `r` the other's position and `v` its velocity, both relative to the hauler:
+
+```
+t*      = clamp(−(r·v) / |v|², 0, 20 s)        time of closest approach, within the next 20 s
+gap     = |r| − size_ship − size_other        now
+closest = |r + v·t*| − size_ship − size_other at its closest
+stop if min(gap, closest) < 30 m
+```
+
+Sizes are each vessel's furthest part from its origin (§11.6). Stopped, it:
+
+- cuts its engines and holds its attitude;
+- on RCS, matches the other's velocity, so it stays beside it;
+- if the other is coming closer (`r·v < 0`), it also backs away along the line between them at 0.5 m/s.
+
+Every 10 s it looks again, and goes on once nothing is inside 30 + 10 = 40 m (the extra 10 m stops it starting and stopping at the edge). After six looks (a minute) it says it's blocked, and keeps holding and looking. Waiting doesn't count towards docking's 10 minutes. It doesn't stop while coming in faster than 5 m/s: that's the braking burn, which RCS couldn't hold anyway, and the braking is stopping it.
+
+Example: a hauler (size 10 m) is docking. The player's ship (size 8 m) is 70 m away, drifting straight at it at 2 m/s:
+
+```
+t*      = −(70 × −2) / 2² = 35 s → 20 s
+gap     = 70 − 10 − 8 = 52 m
+closest = |70 − 2 × 20| − 18 = 30 − 18 = 12 m   < 30 m: stop
+r·v < 0 (coming closer): match its 2 m/s and back away at 0.5 m/s
+```
+
+The player's ship is now closing at 0.5 m/s instead of 2 m/s. The hauler goes on when it stops or passes, and the gap stays over 40 m for the next 20 s.
+
+- Code: `PhysicsFlyer.Pilot.SafetyStop`, `.Hazard`, `.InTrafficAt`, `.Translate` (mod/KspFlightPlanner.Survey)
+- Source: closest approach of two straight-line paths (standard kinematics); §11.11
 
 ## Sources
 

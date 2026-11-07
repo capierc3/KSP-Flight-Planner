@@ -36,6 +36,19 @@ namespace KspFlightPlanner.Haulers
         public string TargetName = "";
         public double MeetUt;
 
+        /// <summary>
+        /// Where the trip left from, for the pilots' log: the station it undocked from (vessel persistent id and name), or
+        /// 0 and the body it was round when it started free-flying.
+        /// </summary>
+        public uint FromId;
+        public string FromName = "";
+
+        /// <summary>The pilots aboard when it started (kerbal names): each gets one more flight on this trip when it docks.</summary>
+        public List<string> Pilots = new List<string>();
+
+        /// <summary>Its pilots have been given this trip on their log (once per route).</summary>
+        public bool Credited;
+
         /// <summary>Which way of making the trip the player picked ("Meets soonest", "Cheapest"…; empty when there was one): replans keep it when the fuel allows.</summary>
         public string Way = "";
         public RouteState State = RouteState.Flying;
@@ -53,6 +66,9 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>Why the planner couldn't plan it again yet (off course only), so the same reason isn't shown twice.</summary>
         internal string ReplanNote;
+
+        /// <summary>Why the crew rules last kept the autopilot off it (not saved), so it's said once.</summary>
+        internal string NotAllowedNote;
 
         /// <summary>The body it was round when found off course: leaving it is worth stopping time warp for.</summary>
         internal string OffCourseBody;
@@ -123,6 +139,10 @@ namespace KspFlightPlanner.Haulers
             node.AddValue("targetId", TargetId);
             node.AddValue("targetName", TargetName);
             node.AddValue("meetUt", MeetUt.ToString("R", CultureInfo.InvariantCulture));
+            node.AddValue("fromId", FromId);
+            node.AddValue("fromName", FromName);
+            foreach (var kerbal in Pilots) node.AddValue("pilot", kerbal);
+            node.AddValue("credited", Credited);
             node.AddValue("way", Way);
             node.AddValue("state", State.ToString());
             node.AddValue("disturbed", Disturbed);
@@ -151,11 +171,15 @@ namespace KspFlightPlanner.Haulers
                 TargetId = uint.Parse(node.GetValue("targetId"), CultureInfo.InvariantCulture),
                 TargetName = node.GetValue("targetName") ?? "",
                 MeetUt = D(node, "meetUt"),
+                FromId = uint.TryParse(node.GetValue("fromId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromId) ? fromId : 0,
+                FromName = node.GetValue("fromName") ?? "",
+                Credited = node.GetValue("credited") == "True",
                 Way = node.GetValue("way") ?? "",
                 State = (RouteState)Enum.Parse(typeof(RouteState), node.GetValue("state")),
                 Disturbed = node.GetValue("disturbed") == "True",
                 Autopilot = node.GetValue("autopilot") != "False",
             };
+            route.Pilots.AddRange(node.GetValues("pilot"));
             foreach (var n in node.GetNodes("BURN"))
                 route.Burns.Add(new HaulerBurn
                 {

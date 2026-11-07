@@ -73,8 +73,8 @@ namespace KspFlightPlanner.Haulers
             // Docked (the ship may have just merged into the station, its own vessel gone): done.
             if (route.State == RouteState.Arrived && route.DockingPortId != 0 && HaulerShip.PortDocked(route.DockingPortId))
             {
-                route.State = RouteState.Docked;
                 HaulerScenario.Note(route, "Docked at " + route.TargetName + "." + ShutDown(route.DockingPortId), true);
+                HaulerScenario.Docked(route);
             }
             // Backing off near the player: no time warp until it's clear (warp would pack it 30 m from the station, on a path
             // that can swing back through it).
@@ -102,6 +102,13 @@ namespace KspFlightPlanner.Haulers
             if (route.State == RouteState.Flying && route.Autopilot && ship != null && ship.loaded) StopWarpForBurn(route, ship);
 
             var wanted = route.Autopilot && active && CourseCheck.OffRails(ship);
+            // The crew rules (none yet): a ship that may not fly it is left alone, the reason on its log once.
+            if (wanted && !HaulerRules.CanFly(route, ship, out var notAllowed))
+            {
+                wanted = false;
+                if (route.NotAllowedNote != notAllowed) HaulerScenario.Note(route, "The autopilot can't take it: " + notAllowed, true);
+                route.NotAllowedNote = notAllowed;
+            }
             Pilots.TryGetValue(route.VesselId, out var pilot);
             if (pilot != null && (!wanted || pilot.Vessel != ship))
             {
@@ -364,6 +371,7 @@ namespace KspFlightPlanner.Haulers
                     _myPort = _theirPort = null;
                     return;
                 }
+                if (SafetyStop()) return;
                 if (_route.State == RouteState.Arrived)
                 {
                     Dock();
@@ -911,7 +919,139 @@ namespace KspFlightPlanner.Haulers
             // KSP's RCS input pushes the other way on all three axes: the tests flipped y (2026-11-05), then x and z (2026-11-06).
             private readonly SignCheck _translateSign = new SignCheck("RCS", new Vector3(-1, -1, -1));
             private Vector3d _lastRelVel;
+            private Vessel _lastFrame;
             private Vector3 _lastMove;
+
+            // The pilot's safety stop (docs/MATH.md §11.13): what it's stopped for, when it looks again (real time), how
+            // many looks so far, and whether it has said it's blocked.
+            private Vessel _stopFor;
+            private float _stopUntil;
+            private int _stopTries;
+            private bool _toldBlocked;
+
+            /// <summary>Something comes within this of the ship (m, between their sizes), now or in the next <see cref="LookAheadS"/>: it stops.</summary>
+            internal const double StopM = 30;
+
+            /// <summary>Stopped, it goes on once nothing is within <see cref="StopM"/> plus this (m), so it doesn't stop and start at the edge.</summary>
+            private const double ClearOfStopM = 10;
+
+            /// <summary>How far ahead it looks for something coming close (s), at both ships' speeds now.</summary>
+            private const double LookAheadS = 20;
+
+            /// <summary>Backing away from something coming closer (m/s, on top of matching its speed).</summary>
+            private const double BackAwayMs = 0.5;
+
+            /// <summary>Coming in faster than this to the station (m/s), it's still braking on its engines: no safety stop yet.</summary>
+            private const double BrakingFastMs = 5;
+
+            /// <summary>Stopped, it looks again this often (real s); after this many looks it says it's blocked, and keeps holding.</summary>
+            private const float StopWaitS = 10f;
+            private const int StopTriesBeforeBlocked = 6;
+
+            /// <summary>
+            /// The pilot's own reaction near a station, under any traffic control: coming in, docking or backing off, if
+            /// anything that isn't its station (or a hauler the station traffic already orders with it) comes within 30 m,
+            /// now or in the next 20 s, it stops: engines off, still beside it, backing away if it's coming closer. It looks
+            /// again every 10 s and goes on once it's clear; after a minute it says it's blocked, and keeps holding.
+            /// </summary>
+            private bool SafetyStop()
+            {
+                var leaving = _route.BackingOff && _route.State == RouteState.Flying;
+                if (!leaving && _route.State != RouteState.Approaching && _route.State != RouteState.Arrived)
+                {
+                    _stopFor = null;
+                    return false;
+                }
+                var station = leaving ? HaulerShip.VesselOfPart(_route.BackOffPortId) : HaulerShip.Find(_route.TargetId);
+                if (_stopFor != null && !_stopFor.loaded) _stopFor = null; // gone out of range, or destroyed
+                // Still braking in fast: RCS couldn't hold it beside anything, and the braking is stopping it anyway.
+                if (_stopFor == null && _route.State == RouteState.Approaching && station != null && (Vessel.obt_velocity - station.obt_velocity).magnitude > BrakingFastMs)
+                    return false;
+                if (_stopFor == null)
+                {
+                    var hazard = Hazard(station, StopM, out var gap);
+                    if (hazard == null) return false;
+                    _stopFor = hazard;
+                    _stopUntil = Time.time + StopWaitS;
+                    _stopTries = 1;
+                    _toldBlocked = false;
+                    HaulerScenario.Note(_route, "Safety stop: " + hazard.vesselName + " is " + gap.ToString("0") + " m away" +
+                                                (Closing(hazard) ? " and coming closer; backing away." : "; waiting for it to clear."), true);
+                }
+                else if (Time.time >= _stopUntil)
+                {
+                    var hazard = Hazard(station, StopM + ClearOfStopM, out _);
+                    if (hazard == null)
+                    {
+                        HaulerScenario.Note(_route, "Clear of " + _stopFor.vesselName + ": going on.", false);
+                        _stopFor = null;
+                        return false;
+                    }
+                    _stopFor = hazard;
+                    _stopUntil = Time.time + StopWaitS;
+                    if (++_stopTries > StopTriesBeforeBlocked && !_toldBlocked)
+                    {
+                        _toldBlocked = true;
+                        HaulerScenario.Note(_route, "Blocked by " + hazard.vesselName + ": holding till it moves.", true);
+                    }
+                }
+                // Hold: engines off, attitude held, still beside it; backing away while it comes closer.
+                var closing = Closing(_stopFor);
+                _aim = Vector3d.zero;
+                _throttle = 0;
+                _rcsBurn = false;
+                _translating = HasRcs(Vessel);
+                _wantVel = closing ? (Vessel.CoMD - _stopFor.CoMD).normalized * BackAwayMs : Vector3d.zero; // relative to _stopFor (see Translate)
+                if (_dockSince >= 0) _dockSince += Time.deltaTime; // waiting doesn't count towards giving up docking
+                var dist = Math.Max(0, (Vessel.CoMD - _stopFor.CoMD).magnitude - HaulerShip.Size(Vessel) - HaulerShip.Size(_stopFor));
+                Status = "safety stop: " + _stopFor.vesselName + " " + dist.ToString("0") + " m away" + (closing ? ", backing away" : ", waiting") +
+                         (_toldBlocked ? " (blocked)" : "") + (_translating ? "" : "; no RCS to hold still with");
+                return true;
+            }
+
+            /// <summary>It's coming closer (or the ship is closing on it).</summary>
+            private bool Closing(Vessel other) => Vector3d.Dot(other.CoMD - Vessel.CoMD, other.obt_velocity - Vessel.obt_velocity) < 0;
+
+            /// <summary>
+            /// The nearest thing that comes within <paramref name="withinM"/> of the ship (between their sizes), now or at
+            /// its closest in the next 20 s, moving straight on as both are now; null if none. Its station and haulers the
+            /// station traffic orders with this one (coming in to it, docking at it or leaving it) don't count.
+            /// </summary>
+            private Vessel Hazard(Vessel station, double withinM, out double gapNow)
+            {
+                Vessel worst = null;
+                gapNow = double.MaxValue;
+                var mySize = HaulerShip.Size(Vessel);
+                foreach (var v in FlightGlobals.VesselsLoaded)
+                {
+                    if (v == Vessel || v == station || v.LandedOrSplashed || v.vesselType == VesselType.Flag) continue;
+                    if (station != null && InTrafficAt(v, station)) continue;
+                    var r = v.CoMD - Vessel.CoMD;
+                    var rel = v.obt_velocity - Vessel.obt_velocity;
+                    var sizes = mySize + HaulerShip.Size(v);
+                    var t = rel.sqrMagnitude > 1e-6 ? Math.Max(0, Math.Min(LookAheadS, -Vector3d.Dot(r, rel) / rel.sqrMagnitude)) : 0;
+                    var gap = r.magnitude - sizes;
+                    var closest = (r + rel * t).magnitude - sizes;
+                    if (Math.Min(gap, closest) >= withinM || Math.Max(0, gap) >= gapNow) continue;
+                    worst = v;
+                    gapNow = Math.Max(0, gap);
+                }
+                return worst;
+            }
+
+            /// <summary>A hauler coming in to, docking at or leaving <paramref name="station"/>: the station traffic orders it with this one.</summary>
+            private static bool InTrafficAt(Vessel v, Vessel station)
+            {
+                var scenario = HaulerScenario.Instance;
+                if (scenario == null) return false;
+                foreach (var r in scenario.Routes)
+                {
+                    if (r.VesselId != v.persistentId) continue;
+                    if ((r.State == RouteState.Approaching || r.State == RouteState.Arrived) && r.TargetId == station.persistentId) return true;
+                    if (r.BackingOff && HaulerShip.VesselOfPart(r.BackOffPortId) == station) return true;
+                }
+                return false;
+            }
 
             /// <summary>
             /// Docks with RCS, as MechJeb's docking autopilot does: out round the station (keeping clear of both ships'
@@ -1047,10 +1187,13 @@ namespace KspFlightPlanner.Haulers
                 Vector3d dv;
                 if (_rcsBurn)
                     dv = _rcsDv; // a small burn on RCS: what's left of it (gravity makes the sign check useless here, so none)
-                else if (_translating && _station != null)
+                else if (_translating && (_stopFor ?? _station) != null)
                 {
-                    // Relative to the station, gravity cancels, so how the ship moves shows the axes' signs.
-                    var rel = Vessel.obt_velocity - _station.obt_velocity;
+                    // Relative to the station (or what it's stopped for), gravity cancels, so how the ship moves shows the axes' signs.
+                    var frame = _stopFor ?? _station;
+                    var rel = Vessel.obt_velocity - frame.obt_velocity;
+                    if (frame != _lastFrame) _lastRelVel = rel; // a new frame: no jump to learn from
+                    _lastFrame = frame;
                     _translateSign.Learn((Vector3)(Quaternion.Inverse(reference.rotation) * (Vector3)(rel - _lastRelVel)), _lastMove);
                     _lastRelVel = rel;
                     dv = _wantVel - rel;

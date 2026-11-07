@@ -40,8 +40,8 @@ namespace KspFlightPlanner.Haulers
                 // Docked: the ship has become part of the station (its own vessel is gone, its port is the station's).
                 if (HaulerShip.PortDocked(route.DockingPortId))
                 {
-                    route.State = RouteState.Docked;
                     HaulerScenario.Note(route, "Docked at " + route.TargetName + "." + PhysicsFlyer.ShutDown(route.DockingPortId), true);
+                    HaulerScenario.Docked(route);
                     return;
                 }
                 if (Time.time - route.DockingSince > DockWaitS)
@@ -192,8 +192,8 @@ namespace KspFlightPlanner.Haulers
                 var targetName = target.vesselName;
                 if (RailsDocking.Dock(ship, target, out var why, HaulerScenario.ClaimedPorts(route)) != null)
                 {
-                    route.State = RouteState.Docked;
                     HaulerScenario.Note(route, head + "; docked at " + targetName + " on rails.", false);
+                    HaulerScenario.Docked(route);
                     ScreenMessages.PostScreenMessage(route.VesselName + " has docked at " + targetName, 6f, ScreenMessageStyle.UPPER_CENTER);
                     return;
                 }

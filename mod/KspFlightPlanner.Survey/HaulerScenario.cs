@@ -22,6 +22,16 @@ namespace KspFlightPlanner.Haulers
 
         internal readonly List<HaulerRoute> Routes = new List<HaulerRoute>();
 
+        /// <summary>Which trips each pilot has flown (docs/MATH.md §11.12).</summary>
+        internal readonly PilotLog PilotLog = new PilotLog();
+
+        /// <summary>A route has docked at its target: done, and its pilots get the trip on their log.</summary>
+        internal static void Docked(HaulerRoute route)
+        {
+            route.State = RouteState.Docked;
+            Instance?.PilotLog.Credit(route, Planetarium.GetUniversalTime());
+        }
+
         /// <summary>
         /// Station ports other haulers have claimed (part persistent ids): the one each is coming in to or docking at, and
         /// the one each has just left while it backs off. A hauler picks a port no other has (docs/MATH.md §11.11).
@@ -84,11 +94,13 @@ namespace KspFlightPlanner.Haulers
         public override void OnSave(ConfigNode node)
         {
             foreach (var r in Routes) r.Save(node.AddNode("ROUTE"));
+            PilotLog.Save(node.AddNode("PILOTLOG"));
         }
 
         public override void OnLoad(ConfigNode node)
         {
             Routes.Clear();
+            PilotLog.Load(node.GetNode("PILOTLOG"));
             foreach (var n in node.GetNodes("ROUTE"))
             {
                 try { Routes.Add(HaulerRoute.Load(n)); }
