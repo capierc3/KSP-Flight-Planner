@@ -31,6 +31,7 @@ namespace KspFlightPlanner.Haulers
             public Vector3 Pos;
             public Quaternion Rot;
             public ConfigNode Dock; // its ModuleDockingNode MODULE, if it has one
+            public uint Pid;
             public string Name;
         }
 
@@ -48,6 +49,7 @@ namespace KspFlightPlanner.Haulers
                 Name = n.GetValue("name"),
                 Parent = int.Parse(n.GetValue("parent"), CultureInfo.InvariantCulture),
                 Uid = uint.Parse(n.GetValue("uid"), CultureInfo.InvariantCulture),
+                Pid = uint.TryParse(n.GetValue("persistentId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid) ? pid : 0,
                 Pos = ConfigNode.ParseVector3(n.GetValue("position")),
                 Rot = ConfigNode.ParseQuaternion(n.GetValue("rotation")),
                 Dock = n.GetNodes("MODULE").FirstOrDefault(m => m.GetValue("name") == "ModuleDockingNode"),
@@ -106,11 +108,13 @@ namespace KspFlightPlanner.Haulers
                 SetFree(parts[o]);
                 var craft = Build(record, parts, branch, parent, r, craftName, craftType, newIdentity: true);
                 AheadOnOrbit(craft, 60);
+                ReadyToFly(craft);
                 var stays = Enumerable.Range(0, parts.Count).Where(i => !branch.Contains(i)).ToList();
                 var stationRoot = int.Parse(record.GetValue("root"), CultureInfo.InvariantCulture);
                 var stationParent = stays.ToDictionary(i => i, i => parts[i].Parent);
                 var station = Build(record, parts, stays, stationParent, stationRoot, stack.vesselName, record.GetValue("type"), newIdentity: false);
 
+                if ((Check(craft) ?? Check(station)) is { } bad) { problem = "the split came out wrong (" + bad + "), so it was left docked."; return null; }
                 Replace(new[] { stack }, new[] { station, craft }, out var made);
                 return made.LastOrDefault();
             }
@@ -124,10 +128,10 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>
         /// Docks an unloaded ship to an unloaded station, on rails: a free port on the ship to a free port on the station that
-        /// it fits, the ship's port turned to face the station's, its parts hung off the station's port. Returns the merged
-        /// vessel; null, with <paramref name="problem"/>, when it can't.
+        /// it fits (not one in <paramref name="claimed"/>, another hauler's), the ship's port turned to face the station's,
+        /// its parts hung off the station's port. Returns the merged vessel; null, with <paramref name="problem"/>, when it can't.
         /// </summary>
-        internal static Vessel Dock(Vessel ship, Vessel station, out string problem)
+        internal static Vessel Dock(Vessel ship, Vessel station, out string problem, ICollection<uint> claimed = null)
         {
             problem = null;
             try
@@ -137,7 +141,7 @@ namespace KspFlightPlanner.Haulers
                 var sp = Parts(sRec);
                 var hp = Parts(hRec);
                 int s = -1, h = -1;
-                foreach (var i in Enumerable.Range(0, sp.Count).Where(i => IsFree(sp[i])))
+                foreach (var i in Enumerable.Range(0, sp.Count).Where(i => IsFree(sp[i]) && (claimed == null || !claimed.Contains(sp[i].Pid))))
                 {
                     h = Enumerable.Range(0, hp.Count).Where(j => IsFree(hp[j]) && Fits(sp[i].Name, hp[j].Name)).DefaultIfEmpty(-1).First();
                     if (h >= 0) { s = i; break; }
@@ -192,6 +196,7 @@ namespace KspFlightPlanner.Haulers
                 var merged = new ConfigNode("VESSEL");
                 sRec.CopyTo(merged);
                 foreach (var i in order) merged.AddNode(hp[i].Node);
+                if (Check(merged) is { } bad) { problem = "the merge came out wrong (" + bad + "), so it wasn't docked."; return null; }
                 Replace(new[] { station, ship }, new[] { merged }, out var made);
                 return made.FirstOrDefault();
             }
@@ -281,7 +286,72 @@ namespace KspFlightPlanner.Haulers
             return v;
         }
 
-        /// <summary>Re-numbers a part's attach-node links ("attN = top, 5", "srfN = srfAttach, 3"); -1 (none) stays.</summary>
+        /// <summary>
+        /// Just undocked on rails: the record's engines lit at zero throttle and its RCS thrusters and RCS switched on, as
+        /// <see cref="HaulerShip.ReadyToFly"/> does for a loaded ship. Thrust limiters are left as they are.
+        /// </summary>
+        private static void ReadyToFly(ConfigNode vessel)
+        {
+            foreach (var part in vessel.GetNodes("PART"))
+            foreach (var m in part.GetNodes("MODULE"))
+            {
+                var name = m.GetValue("name") ?? "";
+                if (name == "ModuleEngines" || name == "ModuleEnginesFX")
+                {
+                    m.SetValue("staged", "True", true);
+                    m.SetValue("EngineIgnited", "True", true);
+                    m.SetValue("engineShutdown", "False", true);
+                    m.SetValue("flameout", "False", true);
+                    m.SetValue("currentThrottle", "0", true);
+                }
+                else if (name == "ModuleRCS" || name == "ModuleRCSFX")
+                    m.SetValue("rcsEnabled", "True", true);
+            }
+            vessel.GetNode("CTRLSTATE")?.SetValue("mainThrottle", "0", true);
+            var groups = vessel.GetNode("ACTIONGROUPS");
+            if (groups != null && groups.GetValue("RCS") is { } rcs)
+            {
+                var comma = rcs.IndexOf(',');
+                groups.SetValue("RCS", "True" + (comma >= 0 ? rcs.Substring(comma) : ""));
+            }
+        }
+
+        /// <summary>
+        /// Is a vessel record one KSP can load? Each part after its parent, links by number to parts that exist, symmetry
+        /// partners of the same kind, docked ports' partners on board. Null when fine, else what's wrong. Checked before any
+        /// split or merge replaces the game's vessels, so a bad one never reaches the save.
+        /// </summary>
+        private static string Check(ConfigNode vessel)
+        {
+            var parts = vessel.GetNodes("PART");
+            var n = parts.Length;
+            var uids = new HashSet<string>(parts.Select(p => p.GetValue("uid")));
+            for (var i = 0; i < n; i++)
+            {
+                var p = parts[i];
+                var name = p.GetValue("name");
+                if (!int.TryParse(p.GetValue("parent"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent) || (i > 0 ? parent >= i || parent < 0 : parent != 0))
+                    return "part " + i + " " + name + " comes before its parent " + p.GetValue("parent");
+                foreach (var key in new[] { "attN", "srfN" })
+                foreach (var value in p.GetValues(key))
+                {
+                    var bits = value.Split(',');
+                    if (bits.Length >= 2 && int.TryParse(bits[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) && (idx < -1 || idx >= n))
+                        return "part " + i + " " + name + " is attached to part " + idx + " of " + n;
+                }
+                foreach (var value in p.GetValues("sym"))
+                    if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var s) || s < 0 || s >= n || parts[s].GetValue("name") != name)
+                        return "part " + i + " " + name + " has symmetry partner " + value + " that isn't one";
+                foreach (var m in p.GetNodes("MODULE"))
+                    if (m.GetValue("name") == "ModuleDockingNode" && (m.GetValue("state") ?? "").StartsWith("Docked", StringComparison.Ordinal)
+                        && !uids.Contains(m.GetValue("dockUId")))
+                        return "part " + i + " " + name + " is docked to a port that isn't aboard";
+            }
+            return null;
+        }
+
+        /// <summary>Re-numbers a part's links to other parts by number: attach nodes ("attN = top, 5", "srfN = srfAttach, 3";
+        /// -1, none, stays) and symmetry partners ("sym = 7").</summary>
         private static void Renumber(ConfigNode part, Func<int, int> map)
         {
             foreach (var key in new[] { "attN", "srfN" })
@@ -297,6 +367,13 @@ namespace KspFlightPlanner.Haulers
                     else part.AddValue(key, value);
                 }
             }
+            // Symmetry partners ("sym = 132"): part numbers too. A partner left in the other vessel is dropped.
+            var syms = part.GetValues("sym");
+            if (syms.Length == 0) return;
+            part.RemoveValues("sym");
+            foreach (var value in syms)
+                if (int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) && idx >= 0 && map(idx) is var to && to >= 0)
+                    part.AddValue("sym", to.ToString(CultureInfo.InvariantCulture));
         }
 
         // ---------------- ports ----------------

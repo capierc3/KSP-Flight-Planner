@@ -838,7 +838,7 @@ public sealed class FromHereViewModel : ObservableObject
     /// </summary>
     private string? FuelNote()
     {
-        if (ActiveReport() is not { ThrustKn: > 0 } report) return null;
+        if (ActiveReport() is not { FullThrustKn: > 0 } report) return null;
         var own = Burns.Where(b => !b.Burn.ByReleasedCraft).ToList(); // a satellite burns its own fuel
         var times = VesselAnalysis.BurnTimes(report, own.Select(b => b.Burn.DeltaV));
         for (var i = 0; i < own.Count; i++)
@@ -1191,6 +1191,11 @@ public sealed class FromHereViewModel : ObservableObject
                 ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
                 : ex.Message;
         }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // kRPC hands the add-on's refusals over as these (a plan that misses, no fuel, a ship not found).
+            Status = "Not started: " + AddOnReason(ex.Message);
+        }
         catch (Exception)
         {
             Status = "Lost the connection to KSP.";
@@ -1200,6 +1205,23 @@ public sealed class FromHereViewModel : ObservableObject
             _busy = false;
             RefreshLive();
         }
+    }
+
+    /// <summary>
+    /// The add-on's own words from a refusal kRPC passed on: it arrives wrapped as " (Parameter '…')" with the server's
+    /// stack trace inside, so the wrapping, the trace and the add-on's trailing ": not started." are taken off.
+    /// </summary>
+    internal static string AddOnReason(string message)
+    {
+        var text = message;
+        var trace = text.IndexOf("Server stack trace", StringComparison.Ordinal);
+        if (trace >= 0) text = text[..trace];
+        text = text.Trim();
+        const string wrap = "(Parameter '";
+        if (text.IndexOf(wrap, StringComparison.Ordinal) is var at and >= 0) text = text[(at + wrap.Length)..];
+        text = text.TrimEnd('\'', ')', ' ', '\r', '\n');
+        if (text.EndsWith(": not started.", StringComparison.Ordinal)) text = text[..^": not started.".Length] + ".";
+        return text.Length > 0 ? text : message.Trim();
     }
 
     /// <summary>Keeps the burns as a flight and opens it in the Flight pane (countdowns, drift, send all).</summary>

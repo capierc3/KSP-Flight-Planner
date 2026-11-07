@@ -62,7 +62,7 @@ namespace KspFlightPlanner.Haulers
             if (Time.time - route.BothLoadedSince < SettleS) return;
 
             route.DockTried = true;
-            if (!HaulerShip.PickPorts(ship, station, out var mine, out var theirs))
+            if (!HaulerShip.PickPorts(ship, station, out var mine, out var theirs, HaulerScenario.ClaimedPorts(route)))
             {
                 HaulerScenario.Note(route, "Couldn't dock: " + station.vesselName + " has no free port that fits " + ship.vesselName + "'s.", true);
                 return;
@@ -190,7 +190,7 @@ namespace KspFlightPlanner.Haulers
             if (!ship.loaded && !target.loaded)
             {
                 var targetName = target.vesselName;
-                if (RailsDocking.Dock(ship, target, out var why) != null)
+                if (RailsDocking.Dock(ship, target, out var why, HaulerScenario.ClaimedPorts(route)) != null)
                 {
                     route.State = RouteState.Docked;
                     HaulerScenario.Note(route, head + "; docked at " + targetName + " on rails.", false);
@@ -237,7 +237,7 @@ namespace KspFlightPlanner.Haulers
         private static bool LineUp(HaulerRoute route, Vessel ship, Vessel target, string head)
         {
             if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot || !target.loaded || ship.loaded) return false;
-            var port = HaulerShip.PickStationPort(ship, target);
+            var port = HaulerShip.PickStationPort(ship, target, HaulerScenario.ClaimedPorts(route));
             if (port == null) return false;
 
             var now = Planetarium.GetUniversalTime();
@@ -255,6 +255,7 @@ namespace KspFlightPlanner.Haulers
             route.ApproachNextCheckUt = double.NaN;
             route.ApproachPortId = port.part.persistentId;
             route.ApproachSince = Time.time;
+            route.QueueSince = Time.time;
             CourseCheck.StopWarp();
             HaulerScenario.Note(route, head + "; coming in to " + target.vesselName + "'s " + port.part.partInfo.title + " from " +
                                        ((StandoffM + LineUpM) / 1000).ToString("0.0") + " km out at " + ComeInMs.ToString("0") + " m/s.", false);

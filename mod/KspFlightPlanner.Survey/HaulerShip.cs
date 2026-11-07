@@ -306,7 +306,12 @@ namespace KspFlightPlanner.Haulers
             return copy;
         }
 
-        /// <summary>The patch of <paramref name="o"/>'s path the ship is on at <paramref name="toUt"/>, following SOI changes.</summary>
+        /// <summary>
+        /// The patch of <paramref name="o"/>'s path the ship is on at <paramref name="toUt"/>, following SOI changes. Each
+        /// patch gets its start and end set first, as KSP's own solver does (one period on, or none on an escape path):
+        /// KSP only counts an encounter between the two, and with the end left at 0 no moon was ever met (the Kerbin → Mun
+        /// trip of 2026-11-06 was refused as "ends up round Kerbin"; leaving a moon never looks at the end, so it worked).
+        /// </summary>
         private static Orbit Coast(Orbit o, double fromUt, double toUt)
         {
             var pars = new PatchedConics.SolverParameters();
@@ -314,6 +319,7 @@ namespace KspFlightPlanner.Haulers
             {
                 var next = new Orbit();
                 o.StartUT = fromUt;
+                o.EndUT = o.eccentricity < 1 ? fromUt + o.period : double.PositiveInfinity;
                 PatchedConics.CalculatePatch(o, next, fromUt, pars, null);
                 if (o.patchEndTransition != Orbit.PatchTransitionType.ENCOUNTER && o.patchEndTransition != Orbit.PatchTransitionType.ESCAPE) return o;
                 if (o.EndUT >= toUt || next.referenceBody == null) return o;
@@ -348,6 +354,34 @@ namespace KspFlightPlanner.Haulers
 
         // ---------------- Docking ----------------
 
+        /// <summary>
+        /// Just undocked for a trip: every engine on it lit (at zero throttle) and its RCS thrusters and RCS switched on,
+        /// so the autopilot, or a player who takes over mid-trip, finds it ready to fly. Docking shut them down. The
+        /// thrust limiters are left as they are. Returns what it did, for the log. docs/MATH.md §11.8.
+        /// </summary>
+        public static string ReadyToFly(Vessel v)
+        {
+            int engines = 0, thrusters = 0;
+            foreach (var part in v.parts)
+            {
+                foreach (var e in part.FindModulesImplementing<ModuleEngines>())
+                    if (!e.EngineIgnited)
+                    {
+                        e.Activate();
+                        engines++;
+                    }
+                foreach (var rcs in part.FindModulesImplementing<ModuleRCS>())
+                    if (!rcs.rcsEnabled)
+                    {
+                        rcs.rcsEnabled = true;
+                        thrusters++;
+                    }
+            }
+            if (v.ctrlState != null) v.ctrlState.mainThrottle = 0;
+            v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+            return engines + thrusters == 0 ? "" : " Lit " + engines + " engine" + (engines == 1 ? "" : "s") + " and switched on " + thrusters + " RCS block" + (thrusters == 1 ? "" : "s") + ".";
+        }
+
         /// <summary>A docking port free to dock: not docked, not shielded shut.</summary>
         private static bool IsFree(ModuleDockingNode n) =>
             n != null && n.nodeTransform != null && n.otherNode == null &&
@@ -358,9 +392,10 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>
         /// The pair of free ports to dock with: on the station, the free port nearest the ship that one of the ship's free
-        /// ports fits. Both ships must be loaded. False when there's no such pair.
+        /// ports fits, leaving out ports in <paramref name="claimed"/> (other haulers'). Both ships must be loaded. False
+        /// when there's no such pair.
         /// </summary>
-        public static bool PickPorts(Vessel ship, Vessel station, out ModuleDockingNode shipPort, out ModuleDockingNode stationPort)
+        public static bool PickPorts(Vessel ship, Vessel station, out ModuleDockingNode shipPort, out ModuleDockingNode stationPort, ICollection<uint> claimed = null)
         {
             shipPort = null;
             stationPort = null;
@@ -368,6 +403,7 @@ namespace KspFlightPlanner.Haulers
             var best = double.MaxValue;
             foreach (var theirs in station.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree))
             {
+                if (claimed != null && claimed.Contains(theirs.part.persistentId)) continue;
                 var match = mine.FirstOrDefault(m => Fits(m, theirs));
                 if (match == null) continue;
                 var d = (theirs.nodeTransform.position - ship.transform.position).sqrMagnitude;
@@ -379,9 +415,10 @@ namespace KspFlightPlanner.Haulers
         /// <summary>
         /// The station's free port to come in to, for a ship that may not be loaded (its ports read from the part
         /// designs): of the free ports one of the ship's fits, the one facing most towards where the ship is now, so it
-        /// arrives from its own side. Null when none fits. The station must be loaded.
+        /// arrives from its own side; ports in <paramref name="claimed"/> (other haulers') left out. Null when none fits.
+        /// The station must be loaded.
         /// </summary>
-        public static ModuleDockingNode PickStationPort(Vessel ship, Vessel station)
+        public static ModuleDockingNode PickStationPort(Vessel ship, Vessel station, ICollection<uint> claimed = null)
         {
             var mine = ship.loaded
                 ? ship.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree).ToList()
@@ -392,6 +429,7 @@ namespace KspFlightPlanner.Haulers
             var bestFacing = float.MinValue;
             foreach (var theirs in station.FindPartModulesImplementing<ModuleDockingNode>().Where(IsFree))
             {
+                if (claimed != null && claimed.Contains(theirs.part.persistentId)) continue;
                 if (!mine.Any(m => Fits(m, theirs))) continue;
                 var facing = Vector3.Dot(theirs.nodeTransform.forward, toShip);
                 if (facing > bestFacing) { bestFacing = facing; best = theirs; }

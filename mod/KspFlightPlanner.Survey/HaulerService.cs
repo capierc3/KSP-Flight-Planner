@@ -91,11 +91,13 @@ namespace KspFlightPlanner.Haulers
 
             // Docked: undock it now (it's loaded, the player is flying the stack); the plan was checked on the stack's orbit,
             // which is the ship's until it moves off.
+            var ready = "";
             if (dockedPort != null)
             {
                 var stationPort = dockedPort.otherNode;
                 dockedPort.Undock();
                 ship = dockedPort.part.vessel;
+                ready = HaulerShip.ReadyToFly(ship);
                 engine = HaulerShip.MainEngine(ship);
                 if (engine == null) throw new ArgumentException(vessel + " is undocked, but has no engine with fuel on board: not started.");
                 route.VesselId = ship.persistentId;
@@ -120,7 +122,7 @@ namespace KspFlightPlanner.Haulers
                                                 " with the margin: not started.");
                 route.VesselId = ship.persistentId;
                 route.VesselName = vessel;
-                route.Log.Add("Undocked from " + stationName + " on rails.");
+                route.Log.Add("Undocked from " + stationName + " on rails; engines lit, RCS on.");
             }
 
             // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
@@ -130,7 +132,7 @@ namespace KspFlightPlanner.Haulers
             var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (old != null) route.Log.AddRange(old.Log);
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
-            if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + ".");
+            if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + "." + ready);
             route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
                           route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned of " + have.ToString("0") + " m/s in the tanks, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
                           " t; KSP's prediction meets " + meet.vesselName + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));

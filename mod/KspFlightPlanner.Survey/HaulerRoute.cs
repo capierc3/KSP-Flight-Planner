@@ -76,6 +76,8 @@ namespace KspFlightPlanner.Haulers
         // comes in to (part id) and since when (real time).
         internal uint ApproachPortId;
         internal float ApproachSince = -1;
+        // When it started coming in (real time; not saved, not moved by warp): its place in the queue at the station.
+        internal float QueueSince;
 
         // Coming in (not saved, but kept while the pilot is remade after warp): the side of the station it holds at, the
         // checkpoint it's reached, and when the next one comes (game time), for stopping warp before it.

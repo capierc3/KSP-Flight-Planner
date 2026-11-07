@@ -337,6 +337,8 @@ public sealed class VesselAnalysisTests : IDisposable
         Assert.Equal(84.77, times[0]!.Value, 0.01);
         Assert.Equal(60.35, times[1]!.Value, 0.01);
         Assert.Null(times[2]); // only 500 m/s left
-        Assert.All(VesselAnalysis.BurnTimes(report with { ThrustKn = 0 }, [10]), t => Assert.Null(t));
+        Assert.All(VesselAnalysis.BurnTimes(report with { ThrustKn = 0, FullThrustKn = 0 }, [10]), t => Assert.Null(t));
+        // Timed at full thrust: limiters left low by the last burn don't stretch a planned one.
+        Assert.Equal(84.77, VesselAnalysis.BurnTimes(report with { ThrustKn = 2.5 }, [1_000])[0]!.Value, 0.01);
     }
 }

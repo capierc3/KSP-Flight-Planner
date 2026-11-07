@@ -22,6 +22,23 @@ namespace KspFlightPlanner.Haulers
 
         internal readonly List<HaulerRoute> Routes = new List<HaulerRoute>();
 
+        /// <summary>
+        /// Station ports other haulers have claimed (part persistent ids): the one each is coming in to or docking at, and
+        /// the one each has just left while it backs off. A hauler picks a port no other has (docs/MATH.md §11.11).
+        /// </summary>
+        internal static HashSet<uint> ClaimedPorts(HaulerRoute except)
+        {
+            var claimed = new HashSet<uint>();
+            if (Instance == null) return claimed;
+            foreach (var r in Instance.Routes)
+            {
+                if (r == except) continue;
+                if ((r.State == RouteState.Approaching || r.State == RouteState.Arrived) && r.ApproachPortId != 0) claimed.Add(r.ApproachPortId);
+                if (r.BackingOff && r.BackOffPortId != 0) claimed.Add(r.BackOffPortId);
+            }
+            return claimed;
+        }
+
         public override void OnAwake()
         {
             Instance = this;

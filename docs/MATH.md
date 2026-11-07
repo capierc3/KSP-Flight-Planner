@@ -17,7 +17,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
-- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic
 
 **Where to look for…**
 
@@ -1375,7 +1375,7 @@ TWR   = F / (m · g)
 
 **Propellant mix.** An engine burns its propellants in a fixed volume ratio — liquid-fuel engines use LiquidFuel 0.9 : Oxidizer 1.1. Each engine's mass flow is split across its propellants by `ratio × density`, giving units per second of each; the burn ends when the **first** propellant runs out, so leftover oxidizer (or fuel) doesn't count. Electric charge never limits a burn (solar panels recharge it), and jet engines are left out (no air in a vacuum).
 
-**Assumptions.** Every tank feeds every engine at once — no staging, no fuel lines — which matches most vessels already in orbit. The thrust limiter changes the burn time, not the Δv (unless engines with different Isp are mixed, where it changes the blend).
+**Assumptions.** Every tank feeds every engine at once — no staging, no fuel lines — which matches most vessels already in orbit. The thrust limiter changes the burn time, not the Δv (unless engines with different Isp are mixed, where it changes the blend). The Vessels pane shows the burn time both ways; a planned burn (From here) is timed at full thrust, since whoever flies it, the player or the hauler autopilot, sets the limiters for it (a hauler leaves them where its last small burn put them: 2.5 % on the Skipper showed a 23-minute transfer burn in the test of 2026-11-06, about 34 s at full thrust).
 
 Worked example — the relay "KerbLink Mk2 A" (14 parts: HECS probe core, RA-2 relay antenna, 2 × Oscar-B tanks, 3 × Ant engines at 6 % thrust, …):
 
@@ -2110,6 +2110,8 @@ speed = |v_craft(t_m) − v_target(t_m)|
 off course  when  gap > tolerance (1 km + 1 km per hour to the meeting, 5 km at most),  or  speed > 5 m/s,  or  it ends up round another body
 ```
 
+Each stretch of the path is given its start and its end before KSP works out where it goes (the end one period on, or none on an escape path), as KSP's own solver does: KSP only counts meeting a moon between the two. With the end left at 0, no moon was ever met: the first trip from Kerbin to a station round the Mun (2026-11-06) was refused as "ends up round Kerbin", though the plan meets Mun Station within about 3 km. Leaving a moon never looks at the end, so trips the other way worked.
+
 **A small miss is corrected, not replanned.** When the miss is under 100 km and nothing worse is wrong, the add-on first tries a *course correction*: a burn two minutes from now (or the next burn itself, when that's sooner than four minutes away), solved so that, flown as planned from there, the ship is at the target's position at the meeting time. Three unknowns (its prograde, normal and radial Δv) for the three components of the miss, by Newton's method:
 
 ```
@@ -2139,7 +2141,7 @@ gap      = √(6,157² + 2,494²) ≈ 6.6 km                                    
 
 so the check when it's back on rails calls it off course, well past the 1 km line.
 
-- Code: `CourseCheck.Check`, `.CheckIfResting`, `HaulerScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `HaulerShip.PredictMeeting` (mod/KspFlightPlanner.Survey); `HaulerReplan.Plan` (Core); `HaulerWatch` (App)
+- Code: `CourseCheck.Check`, `.CheckIfResting`, `HaulerScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `HaulerShip.PredictMeeting`, `.PathAt`, `.Coast` (mod/KspFlightPlanner.Survey); `HaulerReplan.Plan` (Core); `HaulerWatch` (App)
 - Source: §1.5, §2.8, §4, §4.6; KSP's `PatchedConics.CalculatePatch`; Clohessy–Wiltshire equations (Curtis 7.4)
 
 ### 11.4 The physics flyer: turning the ship
@@ -2186,6 +2188,8 @@ Because it aims at the goal orbit, not at a fixed direction, the turning of the 
 Example: the round 1 shuttle (18.17 t) with a Skipper (650 kN, Isp 320 s in vacuum), 252 m/s: vₑ = 320 × 9.80665 = 3,138.1 m/s, t = 18.17 × 3,138.1 / 650 × (1 − e^(−252 / 3,138.1)) = 87.72 × 0.07716 = **6.8 s**, so it lights 3.4 s before the planned time, with the limiter at 100% even if it was left at 2.5% (which would have made it a 270 s burn). A 5 m/s correction would take 0.14 s at 100%, so the limiter goes to 100 × 0.14 / 2 = **7%** and it takes 2 s. At about 38 m/s² (650 kN on 17 t), the throttle starts easing off with 38 m/s left; with 1 m/s left it's at 2.6%.
 
 Example (the capture of 2026-11-06): 840.5 m/s on 28.32 t with a Skipper: t = 28.32 × 3,138.1 / 650 × (1 − e^(−0.2678)) = **32.1 s**; half its length is 16.1 s, but the first half of its Δv takes 32.1 × (1 − e^(−0.1339)) / (1 − e^(−0.2678)) = **17.1 s**, so it lights a second earlier.
+
+**Time warp.** A hauler near the player stops any time warp 30 s before its burn starts (plus a frame's worth at the rate: rate × 0.1 s), and keeps it off until the burn is done: warp the player started to reach another ship hours away too, KSP's *Warp to* included (it's cancelled, or it raises the rate again). Warp would pack the ship and its burn would be made in one jump on rails (§11.1). The same goes for a hauler docking near the player (§11.7) and, as before, one backing off (§11.8).
 
 - Code: `PhysicsFlyer.BurnSeconds`, `.StartLead`, `.RcsDeltaV`, `.StopWarpForBurn`, `PhysicsFlyer.Pilot.StartBurn`, `.FollowBurn`, `.ThrustAxis` (mod/KspFlightPlanner.Survey)
 - Source: §1.8, §7.1, §11.1; steering on the remaining Δv to a goal orbit, as KSP's maneuver node (and MechJeb's node executor) do
@@ -2269,11 +2273,11 @@ entry  = p + a · max(clear, 30 m)
 - **Final approach**, when it's in front (along > 0), within max(0.5 m, along/10) of the axis and facing the port within 3°: v_want = −a · min(0.8, max(0.15, along / 20 s)) − lateral / 5 s, slowing to 0.15 m/s for the magnets.
 - **Otherwise to the entry point**, straight if that line keeps at least `clear` from the station's centre, or else 30° at a time round a sphere of radius `clear` about it: v_want towards the goal at min(2 m/s, √(2·½·a_RCS·d), d / 10 s).
 
-Facing the port leaves the ship free to roll about the port's axis, so it's rolled to put the sideways error along its X axis: one pair of thrusters fixes it, not two at an angle (the nearer way round, kept as it is under half a metre of error). RCS makes up the difference, relative to the station, in the ship's own axes (KSP's RCS reads X right, Z along the nose, Y the third, each the other way to the push: the tests flipped all three), aiming to close it in half a second and doing nothing under 2 cm/s, to save monopropellant; a_RCS is the thrusters' power over the mass, shared over six directions. Each axis checks its sign against how the ship really moves, as the turning does (§11.4). It's docked when its port is (it may become part of the station); after 10 minutes it gives up and is placed at the port instead. Docked, the hauler's own engines are shut down and its RCS blocks switched off, so nothing on it can fire by accident at the station.
+Facing the port leaves the ship free to roll about the port's axis, so it's rolled to put the sideways error along its X axis: one pair of thrusters fixes it, not two at an angle (the nearer way round). Under half a metre of error the roll is held: kept as a direction in space for the ship's X axis, not as an angle from its roll now. An angle kept that way stays ahead of the ship however far it rolls: in the test of 2026-11-06 the hauler rolled slowly, 8° off, 35 m out, and never started in, since the final approach waits for the ports to face each other within 3°. RCS makes up the difference, relative to the station, in the ship's own axes (KSP's RCS reads X right, Z along the nose, Y the third, each the other way to the push: the tests flipped all three), aiming to close it in half a second and doing nothing under 2 cm/s, to save monopropellant; a_RCS is the thrusters' power over the mass, shared over six directions. Each axis checks its sign against how the ship really moves, as the turning does (§11.4). It's docked when its port is (it may become part of the station); after 10 minutes it gives up and is placed at the port instead. Docked, the hauler's own engines are shut down and its RCS blocks switched off, so nothing on it can fire by accident at the station.
 
 Example: from the entry point 30 m out, it closes at 0.8 m/s until along / 20 s drops below that, at 16 m (17.5 s); then the speed falls with along, 16 m to 3 m in 20 × ln(16 / 3) = 33.5 s; then 0.15 m/s for the last 3 m to the magnets' reach (about 0.25 m), 18 s: about **69 s** from the entry point to the magnets.
 
-- Code: `PhysicsFlyer.Pilot.Dock`, `.Translate`, `.SegmentClear`, `.AroundStep`, `PhysicsFlyer.SignCheck`, `HaulerShip.PortFor` (mod/KspFlightPlanner.Survey)
+- Code: `PhysicsFlyer.Pilot.Dock`, `.DockingAttitude`, `.Translate`, `.SegmentClear`, `.AroundStep`, `PhysicsFlyer.SignCheck`, `HaulerShip.PortFor` (mod/KspFlightPlanner.Survey)
 - Source: MechJeb's docking autopilot (the route round the target, the corridor, speed caps), read for its ideas; §11.4
 
 ### 11.8 The physics flyer: leaving a station
@@ -2291,7 +2295,9 @@ The plan was made from the station's orbit, and backing off moves the hauler off
 
 Example: the shuttle, about 10 m long, backs off to max(30, 10 + 20) = **30 m**: 1 m/s until 25 m (5 s × 1 m/s from the end), then slowing (the gap left halves every 3.5 s) to the 0.2 m/s floor at 29 m, and 0.2 m/s for the last metre: 25 + 5 × ln 5 + 5 = **38 s** in all.
 
-- Code: `HaulerService.StartRoute`, `HaulerShip.FindDockedCraftPort`, `.VesselOfPart`, `PhysicsFlyer.Pilot.BackOff` (mod/KspFlightPlanner.Survey); `FromHereViewModel.FlyInBackgroundAsync` (App)
+Undocked, on rails or loaded, the hauler is made ready to fly: every engine lit at zero throttle, its RCS thrusters and RCS switched on (docking shut them down, §11.7). The thrust limiters are left as they are. A player who switches to it mid-trip finds it ready to take over.
+
+- Code: `HaulerService.StartRoute`, `HaulerShip.FindDockedCraftPort`, `.VesselOfPart`, `.ReadyToFly`, `RailsDocking.ReadyToFly`, `PhysicsFlyer.Pilot.BackOff` (mod/KspFlightPlanner.Survey); `FromHereViewModel.FlyInBackgroundAsync` (App)
 - Source: §11.3, §11.7
 
 ### 11.9 Fuel transfer and RCS balance
@@ -2313,7 +2319,7 @@ The limiters are only changed when that makes it better. The autopilot balances 
 
 ### 11.10 Docking and undocking on rails
 
-With nobody near (the tracking station, or flying something else), a hauler docks and undocks on the saved records, as KSP would leave them, so the station shows it docked whenever you visit. The parts are written in tree order (each after its parent), as KSP loads them. A backup save ("persistent-before-rails-dock") before each one can be switched on for debugging (`RailsDocking.KeepBackups`); it is off, as each is a full save.
+With nobody near (the tracking station, or flying something else), a hauler docks and undocks on the saved records, as KSP would leave them, so the station shows it docked whenever you visit. The parts are written in tree order (each after its parent), as KSP loads them. Every link a part makes by part number is renumbered with it: parent, attach nodes (`attN`, `srfN`) and symmetry partners (`sym`). Before the game's vessels are replaced, each new record is checked (`RailsDocking.Check`): parents first, links in range, symmetry partners of the same part, docked ports' partners aboard; a record that fails is never swapped in, and the hauler stays docked (or parks). A backup save ("persistent-before-rails-dock") before each one can be switched on for debugging (`RailsDocking.KeepBackups`); it is off, as each is a full save.
 
 Each part's record holds its parent part and its position p and rotation q relative to the ship's root part. Two docked ships are one record: the docking port of the one that docked hangs off the other's port as its parent ("Docked (docker)" and "Docked (dockee)", each naming the other port's part), the rest of it hangs below its port, and each port remembers its own ship's name, type and root part.
 
@@ -2339,6 +2345,29 @@ Example (Protogen's Kerb Shuttle mk2 at Mun Station): the shuttle's port is at (
 
 - Code: `RailsDocking.Undock`, `.Dock`, `.FindDockedIn`, `.Reroot`, `.Build`, `.PortPose`, `.Replace` (mod/KspFlightPlanner.Survey); `HaulerService.StartRoute`, `RailsFlyer.Arrive`; From here's ship picker outside flight (App)
 - Source: KSP's save format (VESSEL › PART: parent, position, rotation, attN; ModuleDockingNode: state, dockUId, DOCKEDVESSEL)
+
+### 11.11 Station traffic
+
+Several haulers can use one station. Two rules keep them apart.
+
+**Ports are claimed.** A station port is claimed by the hauler coming in to it or docking at it (from when it's picked to when it's docked), and by the hauler that has just left it while it backs off. Every pick of a port, on rails or in physics, leaves out ports other haulers have claimed, and picks from the rest as before (§11.6, §11.7, §11.10). A hauler parked to dock later keeps its claim.
+
+**One at a time near the station, in physics.** Each hauler has its own autopilot, and none of them steers round another hauler, so they take turns. A hauler gives way to:
+
+1. one backing out of one of the station's ports (it has a burn to make, so it always goes first);
+2. one docking at the station;
+3. one that started coming in to the station before it did (first come, first served; the ship's id breaks a tie).
+
+Giving way while coming in, its hold point moves 150 m further out (§11.6) and it waits there, still, until the way is clear. Giving way at the start of docking, it holds still where it is. Once moving to the port, it only gives way to one leaving: it holds still till that one is clear, and the wait doesn't count towards the 10 minutes after which docking gives up.
+
+```
+hold_waiting = max(50 m, size_station + size_ship + 15 m) + 150 m
+```
+
+Example: two shuttles of about 10 m at Kerb Station (about 30 m across): the first holds max(50, 30 + 10 + 15) = 55 m out and docks, going round the station at most 30 + 10 + 10 = 50 m from its centre; the second waits 55 + 150 = **205 m** out, clear of that, then comes in to its own hold point.
+
+- Code: `HaulerScenario.ClaimedPorts`, `HaulerShip.PickPorts`, `.PickStationPort`, `RailsDocking.Dock`, `PhysicsFlyer.GiveWayTo`, `PhysicsFlyer.Pilot.Approach`, `.Dock` (mod/KspFlightPlanner.Survey)
+- Source: §11.6, §11.7, §11.8
 
 ## Sources
 

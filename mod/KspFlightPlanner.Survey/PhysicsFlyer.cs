@@ -29,6 +29,34 @@ namespace KspFlightPlanner.Haulers
         /// <summary>The physics flyer is flying this route's ship and hasn't given up on it.</summary>
         internal static bool Flies(HaulerRoute route) => Pilots.TryGetValue(route.VesselId, out var p) && !p.GaveUp;
 
+        /// <summary>A hauler giving way to another waits this much further out than its hold point (m).</summary>
+        internal const double QueueM = 150;
+
+        /// <summary>
+        /// Station traffic, in physics (docs/MATH.md §11.11): the hauler <paramref name="me"/> gives way to at this station,
+        /// as "name is doing what"; null when the way is clear. One backing out of its ports always has the way; then one
+        /// docking at it; then one that started coming in to it first (first come, first served). With
+        /// <paramref name="leavingOnly"/> (it's docking already), only one leaving.
+        /// </summary>
+        internal static string GiveWayTo(HaulerRoute me, Vessel station, bool leavingOnly = false)
+        {
+            if (HaulerScenario.Instance == null || station == null) return null;
+            foreach (var r in HaulerScenario.Instance.Routes)
+            {
+                if (r == me) continue;
+                var ship = HaulerShip.Find(r.VesselId);
+                if (ship == null || !ship.loaded) continue;
+                if (r.BackingOff && HaulerShip.VesselOfPart(r.BackOffPortId) == station) return r.VesselName + " is leaving";
+                if (leavingOnly || r.TargetId != station.persistentId) continue;
+                if (!Pilots.TryGetValue(r.VesselId, out var p) || p.GaveUp) continue;
+                if (r.State == RouteState.Arrived && p.Docking) return r.VesselName + " is docking";
+                if ((r.State == RouteState.Approaching || r.State == RouteState.Arrived) &&
+                    (r.QueueSince < me.QueueSince || r.QueueSince == me.QueueSince && r.VesselId < me.VesselId))
+                    return r.VesselName + " is coming in first";
+            }
+            return null;
+        }
+
         /// <summary>A hauler's physics comes on this far from the ship being flown (m), not KSP's 200 m: see HaulerShip.RaisePhysicsRange.</summary>
         internal const float PhysicsRangeM = 2200;
 
@@ -62,6 +90,13 @@ namespace KspFlightPlanner.Haulers
                 if (route.State == RouteState.Flying) CourseCheck.Check(route, ship, Planetarium.GetUniversalTime(), "After backing off", expected: true);
             }
             var docking = route.State == RouteState.Arrived && ship != null && ship.loaded && HasRcs(ship);
+            // Docking near the player: no time warp till it's docked (warp would freeze it mid-move, and it drifts).
+            if (docking && route.Autopilot && route.DockingPortId != 0 && !(Pilots.TryGetValue(route.VesselId, out var dp) && dp.GaveUp) &&
+                TimeWarp.fetch != null && TimeWarp.CurrentRateIndex > 0 && TimeWarp.WarpMode == TimeWarp.Modes.HIGH)
+            {
+                CourseCheck.StopWarp();
+                ScreenMessages.PostScreenMessage(route.VesselName + " is docking: no time warp till it's docked", 3f, ScreenMessageStyle.UPPER_CENTER);
+            }
             var active = route.State == RouteState.Flying || route.State == RouteState.Approaching || docking;
             if (active && ship != null) HaulerShip.RaisePhysicsRange(ship, PhysicsRangeM);
             if (route.State == RouteState.Flying && route.Autopilot && ship != null && ship.loaded) StopWarpForBurn(route, ship);
@@ -85,7 +120,9 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>
         /// A hauler loaded near the player but packed by time warp would have its burn made in one jump; stopping warp a
-        /// little before the burn starts unpacks it, so the autopilot can turn it and fly the burn for real.
+        /// little before the burn starts unpacks it, so the autopilot can turn it and fly the burn for real. Any warp: one
+        /// the player started to reach another ship hours away too, KSP's "Warp to" included (it's cancelled, or it raises
+        /// the rate again), and from then until the burn is done, not only until its node.
         /// </summary>
         private static void StopWarpForBurn(HaulerRoute route, Vessel ship)
         {
@@ -95,9 +132,13 @@ namespace KspFlightPlanner.Haulers
             var now = Planetarium.GetUniversalTime();
             var start = burn.Ut - StartLead(ship, burn.DeltaV);
             // A frame at this rate covers about rate × 0.1 s of game time: stop early enough not to jump past.
-            if (now < start - TurnLeadS - TimeWarp.CurrentRate * 0.1 || now > burn.Ut) return;
-            TimeWarp.SetRate(0, true);
-            HaulerScenario.Note(route, "Time warp stopped: burn " + (route.Burns.IndexOf(burn) + 1) + " starts in " + Clock(start - now) + ".", true);
+            if (now < start - TurnLeadS - TimeWarp.CurrentRate * 0.1) return;
+            // Packed by the warp its pilot is let go, so that isn't asked; one that gave up has it made on rails.
+            if (now > burn.Ut + 600 || Pilots.TryGetValue(route.VesselId, out var p) && p.GaveUp) return;
+            CourseCheck.StopWarp();
+            var when = start > now ? "starts in " + Clock(start - now) : "is under way";
+            HaulerScenario.Note(route, "Time warp stopped: burn " + (route.Burns.IndexOf(burn) + 1) + " " + when + ".", true);
+            ScreenMessages.PostScreenMessage(route.VesselName + ": time warp stopped, burn " + (route.Burns.IndexOf(burn) + 1) + " " + when, 4f, ScreenMessageStyle.UPPER_CENTER);
         }
 
         /// <summary>
@@ -253,6 +294,9 @@ namespace KspFlightPlanner.Haulers
             private float _throttle;
             internal string Status = "";
             internal bool GaveUp;
+
+            /// <summary>Docking has started (it's moving to the port, not waiting its turn).</summary>
+            internal bool Docking => _dockSince >= 0;
 
             // The burn being flown: the orbit it should leave the ship on, and how it's going.
             private HaulerBurn _burn, _checkedFor, _leavesFor;
@@ -577,14 +621,16 @@ namespace KspFlightPlanner.Haulers
                     GiveUp(_route.TargetName + " is gone");
                     return;
                 }
-                if (_route.ApproachPortId == 0 && station.loaded && HaulerShip.PickStationPort(Vessel, station) is ModuleDockingNode picked)
+                if (_route.ApproachPortId == 0 && station.loaded && HaulerShip.PickStationPort(Vessel, station, HaulerScenario.ClaimedPorts(_route)) is ModuleDockingNode picked)
                     _route.ApproachPortId = picked.part.persistentId;
 
                 // It comes in to a hold point near the station on the side it arrives from (both ships' sizes plus 15 m out,
                 // 50 m at least), and stops there; docking then takes it round to the port on RCS.
                 var centre = station.GetWorldPos3D();
                 if (_route.ApproachHoldDir == Vector3d.zero) _route.ApproachHoldDir = (Vessel.CoMD - centre).normalized;
-                var holdM = Math.Max(HoldM, HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 15);
+                // Another hauler busy at the station first: it waits further out, its turn to come.
+                var way = GiveWayTo(_route, station);
+                var holdM = Math.Max(HoldM, HaulerShip.Size(station) + HaulerShip.Size(Vessel) + 15) + (way != null ? QueueM : 0);
                 var hold = centre + _route.ApproachHoldDir * holdM;
                 var r = Vessel.CoMD - hold;
                 var d = r.magnitude;
@@ -613,6 +659,14 @@ namespace KspFlightPlanner.Haulers
                         SetLimiters(100f);
                         _approachLimit = 100f;
                     }
+                    return;
+                }
+                if (d < ArrivedM && speed < StillMs && way != null)
+                {
+                    _throttle = 0;
+                    _aim = Vector3d.zero;
+                    _translating = false;
+                    Status = "waiting " + (Vessel.CoMD - centre).magnitude.ToString("0") + " m out: " + way;
                     return;
                 }
                 if (d < ArrivedM && speed < StillMs)
@@ -879,6 +933,16 @@ namespace KspFlightPlanner.Haulers
                     GiveUp("no free port on " + station.vesselName + " that one of its ports fits");
                     return;
                 }
+                // Station traffic: wait its turn before starting; once moving, hold still while one leaves.
+                var way = GiveWayTo(_route, station, leavingOnly: _dockSince >= 0);
+                if (way != null)
+                {
+                    _translating = true;
+                    _wantVel = Vector3d.zero;
+                    if (_dockSince >= 0) _dockSince += Time.deltaTime; // waiting doesn't count towards giving up
+                    Status = "docking: holding still, " + way;
+                    return;
+                }
                 if (_dockSince < 0)
                 {
                     _dockSince = Time.time;
@@ -943,11 +1007,14 @@ namespace KspFlightPlanner.Haulers
             /// <summary>The station port it came in to, if still free and one of its ports fits; otherwise the nearest pair.</summary>
             private bool PickDockingPorts(Vessel station)
             {
+                var claimed = HaulerScenario.ClaimedPorts(_route);
                 var theirs = HaulerShip.FindPort(station, _route.ApproachPortId);
-                var mine = theirs != null ? HaulerShip.PortFor(Vessel, theirs) : null;
-                if (mine == null && !HaulerShip.PickPorts(Vessel, station, out mine, out theirs)) return false;
+                var mine = theirs != null && !claimed.Contains(theirs.part.persistentId) ? HaulerShip.PortFor(Vessel, theirs) : null;
+                if (mine == null && !HaulerShip.PickPorts(Vessel, station, out mine, out theirs, claimed)) return false;
                 _myPort = mine;
                 _theirPort = theirs;
+                _route.ApproachPortId = theirs.part.persistentId; // claimed, so no other hauler heads for it
+                _wantRight = Vector3.zero;
                 return true;
             }
 
@@ -1041,7 +1108,8 @@ namespace KspFlightPlanner.Haulers
                 _route.ApproachHoldDir = Vector3d.zero;
                 _route.ApproachNextCheckUt = double.NaN;
                 _route.ApproachSince = Time.time;
-                _route.ApproachPortId = target != null && target.loaded && HaulerShip.PickStationPort(Vessel, target) is ModuleDockingNode port ? port.part.persistentId : 0;
+                _route.QueueSince = Time.time;
+                _route.ApproachPortId = target != null && target.loaded && HaulerShip.PickStationPort(Vessel, target, HaulerScenario.ClaimedPorts(_route)) is ModuleDockingNode port ? port.part.persistentId : 0;
                 SetLimiters(100f);
                 HaulerScenario.Note(_route, "Braking in to " + _route.TargetName + " instead of the match burn, " +
                                             (target != null ? ((Vessel.CoMD - target.GetWorldPos3D()).magnitude / 1000).ToString("0.0") + " km out at " +
@@ -1228,25 +1296,29 @@ namespace KspFlightPlanner.Haulers
             /// <summary>
             /// Docking: the ship's port faces the station's, and it's rolled about the port's axis so the sideways error lies
             /// along its X axis (one pair of RCS thrusters fixes it, not two at an angle); the nearer of the two ways round.
-            /// The roll is kept as it is while the error is under half a metre, where its direction means little.
+            /// The roll is held while the error is under half a metre, where its direction means little: kept as a direction
+            /// in space, the ship's X axis, not as an angle from its roll now (an angle kept that way stays ahead of the ship
+            /// however far it rolls: the test of 2026-11-06 spun slowly 8° off, 35 m out, and never went in).
             /// </summary>
             private Quaternion DockingAttitude(Transform reference)
             {
                 var axis = (Vector3)_theirPort.nodeTransform.forward;
                 var facing = Quaternion.FromToRotation(_myPort.nodeTransform.forward, -axis) * reference.rotation;
+                var right = Vector3.ProjectOnPlane(facing * Vector3.right, axis);
                 var lateral = Vector3.ProjectOnPlane((Vector3)_lateral, axis);
                 if (lateral.magnitude > 0.5f)
                 {
-                    var right = Vector3.ProjectOnPlane(facing * Vector3.right, axis);
-                    var angle = Vector3.SignedAngle(right, lateral, axis);
-                    if (angle > 90) angle -= 180;
-                    else if (angle < -90) angle += 180;
-                    _roll = angle;
+                    // Along or against the error, whichever is nearer.
+                    _wantRight = Vector3.Dot(lateral, right) >= 0 ? lateral.normalized : -lateral.normalized;
                 }
-                return Quaternion.AngleAxis(_roll, axis) * facing;
+                else if (_wantRight == Vector3.zero)
+                    _wantRight = right.normalized; // close in from the start: the roll it has
+                var hold = Vector3.ProjectOnPlane(_wantRight, axis);
+                if (hold.sqrMagnitude < 1e-6f) return facing;
+                return Quaternion.AngleAxis(Vector3.SignedAngle(right, hold, axis), axis) * facing;
             }
 
-            private float _roll;
+            private Vector3 _wantRight; // world direction the ship's X axis is rolled to while docking
             private bool _rcsBalanced;
             private Vector3d _lateral;
 
