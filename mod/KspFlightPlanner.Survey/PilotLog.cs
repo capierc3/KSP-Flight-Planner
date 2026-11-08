@@ -15,8 +15,9 @@ namespace KspFlightPlanner.Haulers
         public int TimesFlown;
         public double LastFlownUt;
 
-        internal bool Same(uint fromId, string fromName, uint toId) =>
-            ToId == toId && (fromId != 0 ? FromId == fromId : FromId == 0 && FromName == fromName);
+        /// <summary>The same trip: from the same station (or body), to the same craft, or (toId 0: an orbit round a body) to the same place by name.</summary>
+        internal bool Same(uint fromId, string fromName, uint toId, string toName) =>
+            ToId == toId && (toId != 0 || ToName == toName) && (fromId != 0 ? FromId == fromId : FromId == 0 && FromName == fromName);
     }
 
     /// <summary>
@@ -34,8 +35,8 @@ namespace KspFlightPlanner.Haulers
             _byKerbal.TryGetValue(kerbal, out var list) ? list : (IReadOnlyList<PilotFlight>)new PilotFlight[0];
 
         /// <summary>How often this kerbal has flown this trip (0 if never).</summary>
-        internal int TimesFlown(string kerbal, uint fromId, string fromName, uint toId) =>
-            Flights(kerbal).FirstOrDefault(f => f.Same(fromId, fromName, toId))?.TimesFlown ?? 0;
+        internal int TimesFlown(string kerbal, uint fromId, string fromName, uint toId, string toName = "") =>
+            Flights(kerbal).FirstOrDefault(f => f.Same(fromId, fromName, toId, toName))?.TimesFlown ?? 0;
 
         /// <summary>Gives each pilot of the route one more flight on its trip. Once per route.</summary>
         internal void Credit(HaulerRoute route, double now)
@@ -45,9 +46,9 @@ namespace KspFlightPlanner.Haulers
             foreach (var kerbal in route.Pilots)
             {
                 if (!_byKerbal.TryGetValue(kerbal, out var list)) _byKerbal[kerbal] = list = new List<PilotFlight>();
-                var flight = list.FirstOrDefault(f => f.Same(route.FromId, route.FromName, route.TargetId));
+                var flight = list.FirstOrDefault(f => f.Same(route.FromId, route.FromName, route.TargetId, route.TargetName));
                 if (flight == null)
-                    list.Add(flight = new PilotFlight { FromId = route.FromId, FromName = route.FromName, ToId = route.TargetId });
+                    list.Add(flight = new PilotFlight { FromId = route.FromId, FromName = route.FromName, ToId = route.TargetId, ToName = route.TargetName });
                 flight.FromName = route.FromName; // names follow renames
                 flight.ToName = route.TargetName;
                 flight.TimesFlown++;
@@ -55,7 +56,7 @@ namespace KspFlightPlanner.Haulers
             }
             if (route.Pilots.Count > 0)
                 HaulerScenario.Note(route, string.Join(", ", route.Pilots) + ": " + route.FromName + " → " + route.TargetName + " flown " +
-                                           string.Join(", ", route.Pilots.Select(k => TimesFlown(k, route.FromId, route.FromName, route.TargetId) + "×")) + ".", false);
+                                           string.Join(", ", route.Pilots.Select(k => TimesFlown(k, route.FromId, route.FromName, route.TargetId, route.TargetName) + "×")) + ".", false);
         }
 
         internal void Save(ConfigNode node)

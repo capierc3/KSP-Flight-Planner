@@ -21,9 +21,28 @@ namespace KspFlightPlanner.Haulers
         /// beside the target. Ships are named exactly as in the game. Replaces any route the ship already had.
         /// </summary>
         [KRPCProcedure]
-        public static string StartRoute(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way)
+        public static string StartRoute(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way) =>
+            Start(vessel, target, burns, titles, meetUt, way, null, null);
+
+        /// <summary>
+        /// Starts <paramref name="vessel"/> on a trip that ends in an orbit round <paramref name="body"/> rather than at a
+        /// craft: no meeting, no port, no docking; once the last burn (the capture) is made, it's there. <paramref name="burns"/>
+        /// and <paramref name="titles"/> as for <see cref="StartRoute"/>. <paramref name="orbit"/> is the planned orbit after the
+        /// last burn as seven numbers, KSP's own elements: semi-major axis (m), eccentricity, inclination, LAN and argument of
+        /// periapsis (degrees), mean anomaly at epoch (radians), epoch (s). docs/MATH.md §11.16.
+        /// </summary>
+        [KRPCProcedure]
+        public static string StartOrbitRoute(string vessel, string body, IList<double> burns, IList<string> titles, IList<double> orbit, string way) =>
+            Start(vessel, null, burns, titles, double.NaN, way, body, orbit);
+
+        /// <summary>
+        /// The two kinds of trip: to meet <paramref name="target"/> at <paramref name="meetUt"/>, or (target null) to the
+        /// orbit <paramref name="goal"/> round <paramref name="goalBody"/>, reached at the last burn.
+        /// </summary>
+        private static string Start(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way, string goalBody, IList<double> goal)
         {
             var scenario = RequireScenario();
+            var toOrbit = target == null;
             // A ship on its own, or one docked in another vessel (a shuttle at its station), found by its own name; that
             // one is undocked once the plan has been checked, and backs off before its first burn.
             Vessel ship;
@@ -39,9 +58,9 @@ namespace KspFlightPlanner.Haulers
             {
                 ship = stack ?? railsStack;
             }
-            var meet = HaulerShip.FindByName(target);
-            if (ship == meet && dockedPort == null) throw new ArgumentException("A ship can't fly to meet itself.");
-            if (stack == meet) throw new ArgumentException(vessel + " is docked at " + target + " already.");
+            var meet = toOrbit ? null : HaulerShip.FindByName(target);
+            if (!toOrbit && ship == meet && dockedPort == null) throw new ArgumentException("A ship can't fly to meet itself.");
+            if (!toOrbit && stack == meet) throw new ArgumentException(vessel + " is docked at " + target + " already.");
             if (!HaulerShip.InSpace(ship)) throw new ArgumentException(vessel + " isn't in space (" + ship.situation + ").");
             if (burns.Count == 0 || burns.Count % 4 != 0) throw new ArgumentException("Burns come as four numbers each: time, prograde, normal, radial.");
             var docked = dockedPort != null || railsStack != null;
@@ -52,8 +71,8 @@ namespace KspFlightPlanner.Haulers
             {
                 VesselId = ship.persistentId,
                 VesselName = ship.vesselName,
-                TargetId = meet.persistentId,
-                TargetName = meet.vesselName,
+                TargetId = toOrbit ? 0 : meet.persistentId,
+                TargetName = toOrbit ? goalBody + " orbit" : meet.vesselName,
                 MeetUt = meetUt,
                 Way = way ?? "",
             };
@@ -68,6 +87,35 @@ namespace KspFlightPlanner.Haulers
                 });
             route.Burns.Sort((a, b) => a.Ut.CompareTo(b.Ut));
 
+            // A trip to an orbit: the planned orbit stands in for the target, reached at the last burn (§11.16).
+            Orbit to;
+            if (toOrbit)
+            {
+                if (goal == null || goal.Count != 7)
+                    throw new ArgumentException("The orbit comes as seven numbers: semi-major axis, eccentricity, inclination, LAN, argument of periapsis, mean anomaly at epoch, epoch.");
+                route.GoalBody = goalBody ?? "";
+                route.GoalSma = goal[0];
+                route.GoalEcc = goal[1];
+                route.GoalInc = goal[2];
+                route.GoalLan = goal[3];
+                route.GoalArgPe = goal[4];
+                route.GoalMeanAnomaly = goal[5];
+                route.GoalEpoch = goal[6];
+                route.MeetUt = meetUt = route.Burns[route.Burns.Count - 1].Ut;
+                if (!(route.GoalEcc < 1) || !(route.GoalSma > 0))
+                    throw new ArgumentException("The planned orbit round " + goalBody + " isn't closed (it escapes): background trips end in a closed orbit.");
+                to = route.GoalOrbit();
+                if (to == null) throw new ArgumentException("There's no body called " + goalBody + " in this game.");
+                // On rails nothing slows a ship in the air (KSP removes it instead), so the trip can't end in it or below the ground.
+                var body = to.referenceBody;
+                var lowest = body.atmosphere ? body.atmosphereDepth : 0;
+                if (to.PeA < lowest)
+                    throw new ArgumentException("The planned orbit's periapsis (" + (to.PeA / 1000).ToString("0.0") + " km) is " +
+                                                (body.atmosphere ? "in " + body.bodyName + "'s air" : "below the ground") +
+                                                ": a background trip can't aerobrake or land. Plan a higher orbit.");
+            }
+            else to = meet.orbitDriver.orbit;
+
             // The crew rules (none yet): checked before anything is undocked. A docked craft is asked about as its stack.
             if (!HaulerRules.CanFly(route, ship, out var notAllowed)) throw new ArgumentException(vessel + " can't fly this route: " + notAllowed);
 
@@ -75,13 +123,14 @@ namespace KspFlightPlanner.Haulers
             if (route.Burns[0].Ut < now - 5) throw new ArgumentException("The first burn's time has passed: plan again.");
             if (meetUt < route.Burns[route.Burns.Count - 1].Ut) throw new ArgumentException("The meeting can't come before the last burn.");
 
-            // Flown as planned in KSP's own prediction, does it meet the target? A plan that already misses isn't started.
-            var meeting = HaulerShip.PredictMeeting(ship, meet, route.Burns, now, meetUt);
+            // Flown as planned in KSP's own prediction, does it meet the target (or reach its orbit)? A plan that already
+            // misses isn't started.
+            var meeting = HaulerShip.PredictMeeting(ship, to, route.Burns, now, meetUt);
             // A miss of a few km over days of flying (the planner's maths and KSP's drift apart across a change of sphere of
             // influence) is what the course corrections on the way are for: started, and corrected at the first check
             // (after backing off, after undocking on rails, or next frame). Only a plan that misses badly isn't started.
             if (meeting.Problem != null || meeting.GapM > StartMissM)
-                throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it meet " + meet.vesselName + " " + meeting + " off") +
+                throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it " + (toOrbit ? "reach the planned " + goalBody + " orbit " : "meet " + meet.vesselName + " ") + meeting + " off") +
                                             ": not started.");
             var correctOnTheWay = meeting.GapM > CourseCheck.Tolerance(meetUt - now) || meeting.SpeedMs > CourseCheck.OffCourseMs;
 
@@ -104,7 +153,7 @@ namespace KspFlightPlanner.Haulers
             // A short trip (meeting within the hour) books its port before it undocks, and stays docked without one: the
             // station it's going to will look much the same when it gets there (docs/MATH.md §11.14). A long trip books on
             // the way in.
-            if (docked && meetUt - now <= PortBooking.BookLeadS)
+            if (!toOrbit && docked && meetUt - now <= PortBooking.BookLeadS)
             {
                 var ports = dockedPort != null ? new List<string> { dockedPort.part.partInfo.name } : new List<string> { RailsDocking.CraftPortPart(railsStack, vessel) };
                 if (ports[0] == null || !PortBooking.Try(route, ship, meet, ports))
@@ -141,7 +190,7 @@ namespace KspFlightPlanner.Haulers
                 route.FromName = stationName;
                 ship = RailsDocking.Undock(railsStack, vessel, out var why);
                 if (ship == null) throw new ArgumentException("Couldn't undock " + vessel + " on rails: " + why);
-                meet = HaulerShip.Find(meet.persistentId) ?? meet;
+                if (meet != null) meet = HaulerShip.Find(meet.persistentId) ?? meet;
                 engine = HaulerShip.MainEngine(ship);
                 have = HaulerShip.DeltaVLeft(ship, out _);
                 if (engine == null) throw new ArgumentException(vessel + " is undocked, but has no engine with fuel on board: not started.");
@@ -150,7 +199,15 @@ namespace KspFlightPlanner.Haulers
                                                 " with the margin: not started.");
                 route.VesselId = ship.persistentId;
                 route.VesselName = vessel;
-                route.Log.Add("Undocked from " + stationName + " on rails; engines lit, RCS on.");
+                // Put 60 m ahead on the station's orbit, it is where the station would be a moment later. Flown at the
+                // planned times, every burn would come a little further round the body than planned, turning the whole
+                // path a hair; over a days-long trip that missed by km (6.5 km Mun → Kerbin, 87 km Minmus → Mun, 2026-11-07)
+                // and called it off course. Its burns come that moment sooner instead, so it flies the planned path
+                // itself (docs/MATH.md §11.10).
+                var lead = RailsDocking.UndockLeadS(ship.orbitDriver.orbit);
+                foreach (var b in route.Burns) b.Ut -= lead;
+                route.Log.Add("Undocked from " + stationName + " on rails; engines lit, RCS on; burns brought " + lead.ToString("0.00") + " s forward for the " +
+                              RailsDocking.UndockAheadM.ToString("0") + " m it's ahead.");
             }
 
             // Free-flying when it started: it left from the body it's round.
@@ -164,27 +221,28 @@ namespace KspFlightPlanner.Haulers
             var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (old != null) route.Log.AddRange(old.Log);
             // Planned again on the way (off course): still the same trip, from where it first left.
-            if (old != null && old.State != RouteState.Docked && old.TargetId == route.TargetId && (old.FromId != 0 || old.FromName.Length > 0))
+            var sameTrip = old != null && !old.Finished && old.TargetId == route.TargetId && old.GoalBody == route.GoalBody;
+            if (sameTrip && (old.FromId != 0 || old.FromName.Length > 0))
             {
                 route.FromId = old.FromId;
                 route.FromName = old.FromName;
             }
             // Planned again to the same station: it keeps the port it booked.
-            if (old != null && old.State != RouteState.Docked && old.TargetId == route.TargetId && route.BookedPortId == 0) route.BookedPortId = old.BookedPortId;
+            if (sameTrip && !toOrbit && route.BookedPortId == 0) route.BookedPortId = old.BookedPortId;
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
             if (dockedPort != null) route.Log.Add("Undocked from " + stack.vesselName + "." + ready);
             route.Log.Add((old != null && old.State == RouteState.OffCourse ? "Planned again: " : "Started: ") + route.Burns.Count + " burns, " +
                           route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned of " + have.ToString("0") + " m/s in the tanks, with " + engine + "; " + HaulerShip.Mass(ship).ToString("0.00") +
-                          " t; KSP's prediction meets " + meet.vesselName + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));
+                          " t; KSP's prediction " + CourseCheck.Meets(route) + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));
             scenario.Routes.Add(route);
-            // Undocked on rails 60 m ahead of where the plan started: checked now (a course correction, or a plan from here).
+            // Undocked on rails 60 m ahead of where the plan started (its burns brought forward to match): checked now.
             if (railsStack != null) CourseCheck.Check(route, ship, now, "After undocking on rails", expected: true);
             // Free-flying and already off by more than the course check allows: corrected now (docked ones are checked
             // once they've backed off).
             else if (correctOnTheWay && !docked) route.CheckSoon = ship.mainBody.bodyName;
-            if (correctOnTheWay) route.Log.Add("KSP's prediction has it meet " + meet.vesselName + " " + meeting + " off: a course correction puts it right on the way.");
+            if (correctOnTheWay) route.Log.Add("KSP's prediction " + CourseCheck.Meets(route) + " " + meeting + " off: a course correction puts it right on the way.");
             ScreenMessages.PostScreenMessage(ship.vesselName + (old != null && old.State == RouteState.OffCourse ? " was planned again and is" : " is") +
-                                             " flying to " + meet.vesselName + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
+                                             " flying to " + (toOrbit ? "an orbit round " + goalBody : meet.vesselName) + " on its own", 6f, ScreenMessageStyle.UPPER_CENTER);
             return route.Summary();
         }
 
@@ -290,7 +348,7 @@ namespace KspFlightPlanner.Haulers
         public static int ClearFinished()
         {
             var scenario = HaulerScenario.Instance;
-            return scenario == null ? 0 : scenario.Routes.RemoveAll(r => r.State == RouteState.Docked || r.State == RouteState.Stopped);
+            return scenario == null ? 0 : scenario.Routes.RemoveAll(r => r.Finished || r.State == RouteState.Stopped);
         }
 
         private static HaulerRoute FindRoute(string vessel)

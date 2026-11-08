@@ -111,9 +111,11 @@ public sealed class HaulerWatch
                 return (trip, wait);
             });
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
-            await FailAsync(r, ex.Message);
+            // Any planning failure goes back to the game, not just bad input: a ship on a path into a moon threw something
+            // else, and the game only said the planner hadn't answered (the test of 2026-11-08).
+            await FailAsync(r, ex is ArgumentException ? ex.Message : $"the planner couldn't plan it: {ex.Message}");
             return;
         }
         if (planned.Trip is not { } t)

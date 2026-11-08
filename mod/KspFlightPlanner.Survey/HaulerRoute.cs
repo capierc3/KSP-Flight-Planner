@@ -21,9 +21,10 @@ namespace KspFlightPlanner.Haulers
     /// Flying the burns; Arrived = parked beside the target, docking as soon as both are loaded; Docked; Stopped;
     /// OffCourse = a check found it would miss: paused, no more burns, until the planner sends a new plan;
     /// Approaching = met the target with the player there: lined up on a free port's axis, the physics flyer brings it in;
-    /// Waiting = met the target with no free port: parked 3 km behind it on its orbit till one frees up (PortBooking).
+    /// Waiting = met the target with no free port: parked 3 km behind it on its orbit till one frees up (PortBooking);
+    /// InOrbit = a trip to an orbit (no target craft) has made its last burn: done, like Docked.
     /// </summary>
-    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching, Waiting }
+    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching, Waiting, InOrbit }
 
     /// <summary>
     /// A ship flying a planned trip without anyone at the controls: at each burn's time its orbit is changed as that burn
@@ -36,6 +37,26 @@ namespace KspFlightPlanner.Haulers
         public uint TargetId;
         public string TargetName = "";
         public double MeetUt;
+
+        /// <summary>
+        /// A trip to an orbit round a body instead of to a craft (TargetId 0): the planned orbit after the last burn, in KSP's
+        /// own elements (degrees, mean anomaly in radians, its epoch). It stands in for the target: the checks and course
+        /// corrections aim the ship at where this orbit puts it at <see cref="MeetUt"/> (the last burn's time), and the last
+        /// burn is the "match" onto it. docs/MATH.md §11.16.
+        /// </summary>
+        public string GoalBody = "";
+        public double GoalSma, GoalEcc, GoalInc, GoalLan, GoalArgPe, GoalMeanAnomaly, GoalEpoch;
+
+        /// <summary>The trip ends in an orbit (no meeting, no port, no docking).</summary>
+        public bool EndsInOrbit => GoalBody.Length > 0;
+
+        /// <summary>The planned orbit as a KSP orbit (null when it isn't an orbit trip, or the body isn't in this game).</summary>
+        public Orbit GoalOrbit()
+        {
+            if (!EndsInOrbit) return null;
+            var body = FlightGlobals.Bodies?.FirstOrDefault(b => b.bodyName == GoalBody);
+            return body == null ? null : new Orbit(GoalInc, GoalEcc, GoalSma, GoalLan, GoalArgPe, GoalMeanAnomaly, GoalEpoch, body);
+        }
 
         /// <summary>
         /// Where the trip left from, for the pilots' log: the station it undocked from (vessel persistent id and name), or
@@ -77,6 +98,10 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>The physics flyer may fly it when it's loaded near the player (the panel's switch; off once the player takes the controls).</summary>
         public bool Autopilot = true;
+
+        /// <summary>Not saved: parked and unwatched, when it next tries docking on rails (real s), and why the last try failed.</summary>
+        public float AwayDockTry;
+        public string AwayDockNote;
 
         /// <summary>Why the planner couldn't plan it again yet (off course only), so the same reason isn't shown twice.</summary>
         internal string ReplanNote;
@@ -131,18 +156,24 @@ namespace KspFlightPlanner.Haulers
             }
         }
 
+        /// <summary>Finished: docked at its target, or in its orbit.</summary>
+        public bool Finished => State == RouteState.Docked || State == RouteState.InOrbit;
+
         public string Summary()
         {
             var done = Burns.Count(b => b.Done);
             var head = VesselName + " → " + TargetName + ": ";
             switch (State)
             {
-                case RouteState.Arrived: return head + "parked beside it, docks when you're nearby";
+                case RouteState.Arrived:
+                    // Loaded, it's docking now; else it docks on its own once someone's there (nothing for the player to do).
+                    return head + (HaulerShip.Find(VesselId) is { loaded: true } ? "docking" : "parked beside it; docks on rails while you're away from both");
                 case RouteState.Approaching: return head + "coming in to its port";
                 case RouteState.Waiting:
                     return head + "waiting 3 km behind it for a free port, since " + KSPUtil.dateTimeFormatter.PrintDateCompact(WaitSince, true, true) +
                            (ToldLongWait ? " (over a day: free a port there)" : "");
                 case RouteState.Docked: return head + "docked";
+                case RouteState.InOrbit: return head + "arrived in orbit";
                 case RouteState.OffCourse: return head + "off course, waiting to be planned again" + (ReplanNote != null ? " (" + ReplanNote + ")" : "");
                 case RouteState.Stopped: return head + "stopped (" + (Log.Count > 0 ? Log[Log.Count - 1] : "") + ")";
                 default: return head + done + " of " + Burns.Count + " burns done, next " + KSPUtil.dateTimeFormatter.PrintDateCompact(NextUt, true, true);
@@ -156,6 +187,18 @@ namespace KspFlightPlanner.Haulers
             node.AddValue("targetId", TargetId);
             node.AddValue("targetName", TargetName);
             node.AddValue("meetUt", MeetUt.ToString("R", CultureInfo.InvariantCulture));
+            if (EndsInOrbit)
+            {
+                var goal = node.AddNode("GOAL");
+                goal.AddValue("body", GoalBody);
+                goal.AddValue("sma", GoalSma.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("ecc", GoalEcc.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("inc", GoalInc.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("lan", GoalLan.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("argPe", GoalArgPe.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("mEp", GoalMeanAnomaly.ToString("R", CultureInfo.InvariantCulture));
+                goal.AddValue("epoch", GoalEpoch.ToString("R", CultureInfo.InvariantCulture));
+            }
             node.AddValue("fromId", FromId);
             node.AddValue("fromName", FromName);
             foreach (var kerbal in Pilots) node.AddValue("pilot", kerbal);
@@ -205,6 +248,18 @@ namespace KspFlightPlanner.Haulers
                 Autopilot = node.GetValue("autopilot") != "False",
             };
             route.Pilots.AddRange(node.GetValues("pilot"));
+            var goal = node.GetNode("GOAL");
+            if (goal != null)
+            {
+                route.GoalBody = goal.GetValue("body") ?? "";
+                route.GoalSma = D(goal, "sma");
+                route.GoalEcc = D(goal, "ecc");
+                route.GoalInc = D(goal, "inc");
+                route.GoalLan = D(goal, "lan");
+                route.GoalArgPe = D(goal, "argPe");
+                route.GoalMeanAnomaly = D(goal, "mEp");
+                route.GoalEpoch = D(goal, "epoch");
+            }
             foreach (var n in node.GetNodes("BURN"))
                 route.Burns.Add(new HaulerBurn
                 {

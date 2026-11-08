@@ -32,6 +32,13 @@ namespace KspFlightPlanner.Haulers
             Instance?.PilotLog.Credit(route, Planetarium.GetUniversalTime());
         }
 
+        /// <summary>A trip to an orbit has made its last burn: done, and its pilots get the trip on their log.</summary>
+        internal static void InOrbit(HaulerRoute route)
+        {
+            route.State = RouteState.InOrbit;
+            Instance?.PilotLog.Credit(route, Planetarium.GetUniversalTime());
+        }
+
         /// <summary>
         /// Station ports other haulers have claimed (part persistent ids): the one each has booked (§11.14), the one each is
         /// coming in to or docking at, and the one each has just left while it backs off. A hauler picks a port no other
@@ -46,7 +53,7 @@ namespace KspFlightPlanner.Haulers
                 if (r == except) continue;
                 if ((r.State == RouteState.Approaching || r.State == RouteState.Arrived) && r.ApproachPortId != 0) claimed.Add(r.ApproachPortId);
                 if (r.BackingOff && r.BackOffPortId != 0) claimed.Add(r.BackOffPortId);
-                if (r.BookedPortId != 0 && r.State != RouteState.Docked && r.State != RouteState.Stopped) claimed.Add(r.BookedPortId);
+                if (r.BookedPortId != 0 && !r.Finished && r.State != RouteState.Stopped) claimed.Add(r.BookedPortId);
             }
             return claimed;
         }
@@ -98,7 +105,7 @@ namespace KspFlightPlanner.Haulers
             if (v == null) return;
             foreach (var route in Routes)
             {
-                if (route.State != RouteState.Flying || route.Disturbed || (v.persistentId != route.VesselId && v.persistentId != route.TargetId)) continue;
+                if (route.State != RouteState.Flying || route.Disturbed || (v.persistentId != route.VesselId && (route.TargetId == 0 || v.persistentId != route.TargetId))) continue;
                 route.Disturbed = true;
                 Note(route, v.vesselName + " is off rails: the plan is checked again once it's back on them.", false);
             }
@@ -157,6 +164,8 @@ namespace KspFlightPlanner.Haulers
                 // The jump-to-the-port stand-in docks it when the physics flyer can't (no RCS, or it gave up); with the
                 // autopilot switched off, the player docks it.
                 if (route.State == RouteState.Arrived && HighLogic.LoadedSceneIsFlight && route.Autopilot && !PhysicsFlyer.Flies(route)) RailsFlyer.Dock(route);
+                // Parked with nobody near it or the station (any scene): docked on rails.
+                if (route.State == RouteState.Arrived) RailsFlyer.DockWhileAway(route);
                 if (route.State == RouteState.OffCourse) CourseCheck.WatchOffCourse(route);
             }
         }

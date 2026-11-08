@@ -76,7 +76,7 @@ This fits into round 3: after you press **Fly it in the background** you're stil
 
 - [ ] Right after starting the trip: the shuttle turns by itself to face burn 1 and holds still. Open the **Haulers** panel: "Autopilot: facing burn 1 (…) in …: 0.4° off" or so. Note how long the turn took and whether it wobbled or overshot.
 - [ ] Watch for a few seconds: the error stays near 0°, no slow spin or drift.
-- [ ] Touch any control (WASD, QE, IJKL, throttle): "Autopilot off: you took the controls", and the panel's switch is off. This is how you take over; now do round 3's nudge.
+- [ ] Switch the panel's Autopilot off: "Autopilot off: fly it yourself". This is how you take over (touching the controls no longer does); now do round 3's nudge.
 - [ ] Turn the switch back on in the panel: it takes the shuttle again and turns back to burn 1. Turn it off again before you nudge.
 - [ ] After round 3's off-course replan, the panel shows the new burn 1, and the autopilot (back on once you've left the shuttle and it's on rails) faces it the next time you're near.
 - [ ] Optional: fly Kerb Station with the shuttle parked less than 200 m away and its trip still to go. The shuttle should turn by itself while you watch from the station.

@@ -142,7 +142,7 @@ namespace KspFlightPlanner.Haulers
                 SetFree(parts[h]);
                 SetFree(parts[o]);
                 var craft = Build(record, parts, branch, parent, r, craftName, craftType, newIdentity: true);
-                AheadOnOrbit(craft, 60);
+                AheadOnOrbit(craft, UndockAheadM);
                 ReadyToFly(craft);
                 var stays = Enumerable.Range(0, parts.Count).Where(i => !branch.Contains(i)).ToList();
                 var stationRoot = int.Parse(record.GetValue("root"), CultureInfo.InvariantCulture);
@@ -459,6 +459,16 @@ namespace KspFlightPlanner.Haulers
         }
 
         // ---------------- the game ----------------
+
+        /// <summary>How far ahead of the station (m) a craft undocked on rails is put, on the station's own orbit.</summary>
+        internal const double UndockAheadM = 60;
+
+        /// <summary>
+        /// How much sooner (s) a craft put <see cref="UndockAheadM"/> ahead on this orbit reaches each point than the
+        /// station would: the mean anomaly it was moved on by (n · 60 m / v), over the mean motion n. 0 when it wasn't moved.
+        /// </summary>
+        internal static double UndockLeadS(Orbit o) =>
+            o == null || o.semiMajorAxis <= 0 ? 0 : UndockAheadM / Math.Sqrt(o.referenceBody.gravParameter / o.semiMajorAxis);
 
         /// <summary>Puts the record's orbit this far ahead along it (same orbit, mean anomaly moved on).</summary>
         private static void AheadOnOrbit(ConfigNode vessel, double metres)

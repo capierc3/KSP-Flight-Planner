@@ -27,7 +27,7 @@ namespace KspFlightPlanner.Haulers
 
         /// <summary>It's time to book (an hour or less to the meeting) and it hasn't yet; throttled to every 5 s.</summary>
         internal static bool Due(HaulerRoute route, double now) =>
-            route.BookedPortId == 0 && now >= route.MeetUt - BookLeadS && Time.time >= route.NextBookTry;
+            !route.EndsInOrbit && route.BookedPortId == 0 && now >= route.MeetUt - BookLeadS && Time.time >= route.NextBookTry;
 
         /// <summary>
         /// Books a free port on <paramref name="station"/> that one of the ship's free ports fits (or, given

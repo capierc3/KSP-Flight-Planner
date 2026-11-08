@@ -124,7 +124,8 @@ public sealed class FromHereViewModel : ObservableObject
         SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && !Picking && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
         FlyCommand = new RelayCommand(Fly, () => !_busy && Burns.Count > 0);
         BackgroundCommand = new RelayCommand(() => _ = FlyInBackgroundAsync(),
-            () => !_busy && (_sync.Link.InFlight || _sync.Link.IsConnected && _pickedShip is not null) && _plannedRendezvous is not null
+            () => !_busy && (_sync.Link.InFlight || _sync.Link.IsConnected && _pickedShip is not null)
+                  && (_plannedRendezvous is not null || _plannedTo is not null && _trip?.Option is not null)
                   && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
     }
 
@@ -1190,22 +1191,41 @@ public sealed class FromHereViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Lets the game fly the meeting on its own: the add-on changes the craft's orbit at each burn's time and burns its
-    /// fuel, wherever the player is (another craft, the tracking station), then parks it beside the target at the meeting.
+    /// Lets the game fly the trip on its own: the add-on changes the craft's orbit at each burn's time and burns its fuel,
+    /// wherever the player is (another craft, the tracking station). A meeting ends parked beside the target (then docked);
+    /// a Go to a body ends in the planned orbit there once the capture burn is made.
     /// </summary>
     private async Task FlyInBackgroundAsync()
     {
         // The craft picked under "Fly as" when it's docked in the stack being flown (the add-on undocks it first), else the vessel itself.
-        if (_plannedRendezvous is not { } plan || ShipName() is not { } vessel) return;
-        var leg = plan.Legs[^1];
+        if (ShipName() is not { } vessel) return;
+        var trip = _plannedRendezvous is null && _plannedTo is not null ? _trip?.Option : null;
+        if (_plannedRendezvous is null && trip is null) return;
+        OrbitalElements? end = null;
+        if (trip is not null && (end = trip.FinalOrbit) is null)
+        {
+            Status = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
+            return;
+        }
         var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
         try
         {
-            var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
-            Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
-                     $"{_calendar.FormatDate(leg.ArrivalUt)}.";
+            if (trip is not null && end is not null)
+            {
+                var to = trip.Legs[^1].Hop.To;
+                var summary = await _sync.Link.StartBackgroundOrbitTripAsync(vessel, to.Name, burns, end, SelectedTrip?.Label ?? "");
+                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
+                         $"after the last burn, {_calendar.FormatDate(burns.Max(b => b.Ut))}.";
+            }
+            else if (_plannedRendezvous is { } plan)
+            {
+                var leg = plan.Legs[^1];
+                var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
+                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
+                         $"{_calendar.FormatDate(leg.ArrivalUt)}.";
+            }
         }
         catch (KRPC.Client.RPCException ex)
         {

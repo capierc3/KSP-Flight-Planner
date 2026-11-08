@@ -22,24 +22,37 @@ namespace KspFlightPlanner.Haulers
         /// <param name="expected">The ship was moved on purpose (backing off a station): planning it again is routine, so it's said as that, not as a fault.</param>
         internal static bool Check(HaulerRoute route, Vessel ship, double fromUt, string when, bool expected = false)
         {
-            var target = HaulerShip.Find(route.TargetId);
-            if (target == null)
+            // A trip to an orbit with its last burn made: there (how close is said when it arrives). Its place along the
+            // orbit is no longer worth correcting, only its shape was the point.
+            if (route.EndsInOrbit && route.Burns.All(b => b.Done)) return true;
+            var to = GoalOf(route);
+            if (to == null)
             {
-                HaulerScenario.Stop(route, route.TargetName + " is gone.");
+                HaulerScenario.Stop(route, (route.EndsInOrbit ? route.GoalBody + " isn't in this game." : route.TargetName + " is gone."));
                 return false;
             }
-            var meeting = HaulerShip.PredictMeeting(ship, target, route.Burns.Where(b => !b.Done), fromUt, route.MeetUt);
+            var meeting = HaulerShip.PredictMeeting(ship, to, route.Burns.Where(b => !b.Done), fromUt, route.MeetUt);
             if (meeting.Problem == null && meeting.GapM <= Tolerance(route.MeetUt - fromUt) && meeting.SpeedMs <= OffCourseMs)
             {
-                HaulerScenario.Note(route, when + ": on course, meets " + route.TargetName + " within " + meeting + ".", false);
+                HaulerScenario.Note(route, when + ": on course, " + Meets(route) + " within " + meeting + ".", false);
                 return true;
             }
             // A small miss: a course correction puts it back on the plan, keeping its schedule, rather than a whole new plan.
-            if (meeting.Problem == null && meeting.GapM < CorrectUnderM && Correct(route, ship, target, fromUt, when + ": would meet " + meeting + " off"))
+            if (meeting.Problem == null && meeting.GapM < CorrectUnderM && Correct(route, ship, to, fromUt, when + ": would " + (route.EndsInOrbit ? "reach its orbit " : "meet ") + meeting + " off"))
                 return true;
-            GoOffCourse(route, ship, when + ": " + (meeting.Problem ?? "would meet " + route.TargetName + " " + meeting + " off"), expected);
+            GoOffCourse(route, ship, when + ": " + (meeting.Problem ?? "would " + Meets(route) + " " + meeting + " off"), expected);
             return false;
         }
+
+        /// <summary>
+        /// What the route aims at, as an orbit: the target craft's, or for a trip to an orbit the planned orbit itself
+        /// (docs/MATH.md §11.16). Null when the craft is gone or the body isn't in the game.
+        /// </summary>
+        internal static Orbit GoalOf(HaulerRoute route) =>
+            route.EndsInOrbit ? route.GoalOrbit() : HaulerShip.Find(route.TargetId)?.orbitDriver.orbit;
+
+        /// <summary>"meets Mun Station", or "reaches the planned Mun orbit", for the log.</summary>
+        internal static string Meets(HaulerRoute route) => route.EndsInOrbit ? "reaches the planned " + route.GoalBody + " orbit" : "meets " + route.TargetName;
 
         /// <summary>
         /// How far off the meeting may be predicted before it counts as off course (m): 1 km within an hour of it, a km more
@@ -68,7 +81,7 @@ namespace KspFlightPlanner.Haulers
         /// the speed difference it really arrives with. Nothing is planned: the burns and meeting time stay as they were.
         /// False (and nothing changed) when it doesn't converge, needs more than 60 m/s, or the fuel isn't there.
         /// </summary>
-        private static bool Correct(HaulerRoute route, Vessel ship, Vessel target, double now, string why, bool intoNextBurn = false)
+        private static bool Correct(HaulerRoute route, Vessel ship, Orbit to, double now, string why, bool intoNextBurn = false)
         {
             var left = route.Burns.Where(b => !b.Done).OrderBy(b => b.Ut).ToList();
             var match = left.Count > 0 && left[left.Count - 1].Ut >= route.MeetUt - 1 ? left[left.Count - 1] : null;
@@ -80,7 +93,6 @@ namespace KspFlightPlanner.Haulers
             if (fix.Ut >= route.MeetUt - 60) return false;
             var start = new Vector3d(fix.Prograde, fix.Normal, fix.Radial);
             var burns = insert ? middle.Concat(new[] { fix }).ToList() : middle;
-            var to = target.orbitDriver.orbit;
 
             Vector3d? Miss(Vector3d dv)
             {
@@ -124,7 +136,7 @@ namespace KspFlightPlanner.Haulers
             if (insert && (x - start).magnitude < MinCorrectionMs)
             {
                 Miss(start);
-                if (next != null && Correct(route, ship, target, now, why, intoNextBurn: true)) return true;
+                if (next != null && Correct(route, ship, to, now, why, intoNextBurn: true)) return true;
                 HaulerScenario.Note(route, why + "; a correction would be under " + MinCorrectionMs.ToString("0.0") + " m/s, and no burn left to fold it into: on course.", false);
                 return true;
             }
@@ -185,8 +197,10 @@ namespace KspFlightPlanner.Haulers
         internal static void CheckIfResting(HaulerRoute route, double now)
         {
             var ship = HaulerShip.Find(route.VesselId);
-            var target = HaulerShip.Find(route.TargetId);
-            if (ship == null || target == null || OffRails(ship) || OffRails(target)) return;
+            var target = route.EndsInOrbit ? null : HaulerShip.Find(route.TargetId);
+            if (ship == null || !route.EndsInOrbit && target == null || OffRails(ship) || OffRails(target)) return;
+            // Packed mid-burn: the rest of the burn is made on rails, with no check first.
+            if (PhysicsFlyer.HandBackCutBurn(route)) return;
             route.Disturbed = false;
             try { Check(route, ship, Math.Min(now, route.NextUt), "Back on rails"); }
             catch (Exception e)
@@ -199,6 +213,13 @@ namespace KspFlightPlanner.Haulers
         /// <summary>Pauses the route (no more burns, no parking) and stops time warp, so the planner can plan it again in time.</summary>
         private static void GoOffCourse(HaulerRoute route, Vessel ship, string why, bool expected = false)
         {
+            // A trip to an orbit isn't planned again by the planner (yet): it stops where it is, to be planned from there.
+            if (route.EndsInOrbit)
+            {
+                StopWarp();
+                HaulerScenario.Stop(route, "off course (" + why + "): plan the trip again from where it is (From here › Go to) and send it again.");
+                return;
+            }
             route.State = RouteState.OffCourse;
             route.ReplanNote = null;
             route.OffCourseSince = Time.realtimeSinceStartup;

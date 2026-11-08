@@ -1,6 +1,7 @@
 using KRPC.Client;
 using KRPC.Client.Services.SpaceCenter;
 using KspFlightPlanner.Core;
+using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.App.Services;
 
@@ -20,6 +21,23 @@ public sealed partial class KspLink
             var numbers = burns.OrderBy(b => b.Ut).SelectMany(b => new[] { b.Ut, b.Burn.Prograde, b.Burn.Normal, b.Burn.Radial }).ToList();
             var titles = burns.OrderBy(b => b.Ut).Select(b => b.Title).ToList();
             return Haulers<string>(c, "StartRoute", vessel, target, (IList<double>)numbers, (IList<string>)titles, meetUt, way ?? "");
+        });
+
+    /// <summary>
+    /// Hands <paramref name="vessel"/> the burns of a trip that ends in <paramref name="orbit"/> round <paramref name="body"/>
+    /// (no craft to meet): once the last burn is made, it's there. Throws as <see cref="StartBackgroundTripAsync"/> does.
+    /// </summary>
+    public Task<string> StartBackgroundOrbitTripAsync(string vessel, string body, IReadOnlyList<(double Ut, NodeBurn Burn, string Title)> burns, OrbitalElements orbit, string way = "") =>
+        CallAsync(c =>
+        {
+            var numbers = burns.OrderBy(b => b.Ut).SelectMany(b => new[] { b.Ut, b.Burn.Prograde, b.Burn.Normal, b.Burn.Radial }).ToList();
+            var titles = burns.OrderBy(b => b.Ut).Select(b => b.Title).ToList();
+            var elements = new List<double>
+            {
+                orbit.SemiMajorAxisM, orbit.Eccentricity, orbit.InclinationDeg, orbit.LongitudeOfAscendingNodeDeg, orbit.ArgumentOfPeriapsisDeg,
+                orbit.MeanAnomalyAtEpochRad, orbit.EpochS,
+            };
+            return Haulers<string>(c, "StartOrbitRoute", vessel, body, (IList<double>)numbers, (IList<string>)titles, (IList<double>)elements, way ?? "");
         });
 
     /// <summary>One line per background trip in the loaded save.</summary>

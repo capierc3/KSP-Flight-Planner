@@ -136,10 +136,13 @@ namespace KspFlightPlanner.Haulers
         /// prediction the map view draws, so moving into and out of moons' spheres of influence is followed as KSP will fly
         /// it. Nothing is planned here: the burns are applied exactly as given, as <see cref="HaulerScenario"/> will.
         /// </summary>
-        public static Meeting PredictMeeting(Vessel ship, Vessel target, IEnumerable<HaulerBurn> burns, double fromUt, double meetUt)
+        public static Meeting PredictMeeting(Vessel ship, Vessel target, IEnumerable<HaulerBurn> burns, double fromUt, double meetUt) =>
+            PredictMeeting(ship, target.orbitDriver.orbit, burns, fromUt, meetUt);
+
+        /// <summary>The same, against an orbit rather than a craft: a trip to an orbit aims at where its planned orbit puts it.</summary>
+        public static Meeting PredictMeeting(Vessel ship, Orbit to, IEnumerable<HaulerBurn> burns, double fromUt, double meetUt)
         {
             var o = PathAt(ship, burns, fromUt, meetUt);
-            var to = target.orbitDriver.orbit;
             if (o.referenceBody != to.referenceBody)
                 return new Meeting { Problem = "ends up round " + o.referenceBody.bodyName + ", not " + to.referenceBody.bodyName };
             return new Meeting

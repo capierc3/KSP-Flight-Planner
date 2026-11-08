@@ -264,7 +264,7 @@ namespace KspFlightPlanner.Haulers
             var number = burn != null ? route.Burns.IndexOf(burn) + 1 : 0;
             GUILayout.Label(burn != null
                 ? "Next: burn " + number + " of " + route.Burns.Count + ", " + (burn.Title.Length > 0 ? burn.Title : "burn") + ", " + burn.DeltaV.ToString("0") + " m/s"
-                : "Next: meets " + route.TargetName);
+                : route.EndsInOrbit ? "Next: arrives in orbit" : "Next: meets " + route.TargetName);
             GUILayout.Label(Date(ut) + "  (" + (ut > now ? "in " + Span(ut - now) : "due now") + ")");
 
             var ship = HaulerShip.Find(route.VesselId);

@@ -104,6 +104,7 @@ namespace KspFlightPlanner.Haulers
                     route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(HaulerShip.Find(route.TargetId));
                 }
                 if (burn != null) DoBurn(route, ship, burn);
+                else if (route.EndsInOrbit) ArriveInOrbit(route, ship);
                 else Arrive(route, ship);
             }
             catch (Exception e)
@@ -146,6 +147,27 @@ namespace KspFlightPlanner.Haulers
                 6f, ScreenMessageStyle.UPPER_CENTER);
             if (got < planned - 0.5) HaulerScenario.Stop(route, "Out of fuel at burn " + number + ": got " + got.ToString("0") + " of " + planned.ToString("0") + " m/s.");
         }
+
+        /// <summary>
+        /// A trip to an orbit, its last burn made: done. No meeting, no port, no docking. How its orbit came out against the
+        /// plan goes on the log (docs/MATH.md §11.16). Called by the physics flyer too, when it made the last burn itself.
+        /// </summary>
+        internal static void ArriveInOrbit(HaulerRoute route, Vessel ship)
+        {
+            var o = ship.orbitDriver.orbit;
+            var goal = route.GoalOrbit();
+            string how;
+            if (goal == null || o.referenceBody != goal.referenceBody)
+                how = "round " + o.referenceBody.bodyName + (goal != null ? ", not " + goal.referenceBody.bodyName + " (the plan drifted)" : "");
+            else
+                how = "periapsis " + Km(o.PeA) + " (planned " + Km(goal.PeA) + "), apoapsis " + (o.eccentricity < 1 ? Km(o.ApA) : "none: escaping") + " (planned " + Km(goal.ApA) +
+                      "), inclination " + o.inclination.ToString("0.0") + "° (planned " + goal.inclination.ToString("0.0") + "°) round " + o.referenceBody.bodyName;
+            HaulerScenario.InOrbit(route);
+            HaulerScenario.Note(route, "Arrived in orbit: " + how + "; " + HaulerShip.Mass(ship).ToString("0.00") + " t left.", false);
+            ScreenMessages.PostScreenMessage(route.VesselName + " has arrived in orbit round " + o.referenceBody.bodyName, 8f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        private static string Km(double m) => (m / 1000).ToString("#,0.0") + " km";
 
         /// <summary>
         /// The meeting: how near the ship really came (the test's measure of how well KSP followed the plan), then parked
@@ -216,6 +238,34 @@ namespace KspFlightPlanner.Haulers
             Park(route, ship, target, head);
         }
 
+        /// <summary>Parked beside the station and nobody near either (the tracking station, or flying elsewhere): it tries to dock on rails this often (real s).</summary>
+        private const float AwayDockRetryS = 30f;
+
+        /// <summary>
+        /// Every frame for a parked route (Arrived): with neither it nor the station loaded, it docks on rails, on the saved
+        /// records, as it would have arriving unwatched, rather than waiting for the player to come and watch (left 30 m
+        /// from its port for the tracking station, it sat parked, the test of 2026-11-08). Loaded, the physics flyer or the
+        /// stand-in docks it as before.
+        /// </summary>
+        internal static void DockWhileAway(HaulerRoute route)
+        {
+            var ship = HaulerShip.Find(route.VesselId);
+            var station = HaulerShip.Find(route.TargetId);
+            if (ship == null || station == null || ship.loaded || station.loaded || Time.time < route.AwayDockTry) return;
+            route.AwayDockTry = Time.time + AwayDockRetryS;
+            var stationName = station.vesselName;
+            if (RailsDocking.Dock(ship, station, out var why, HaulerScenario.PortsNotFor(route, station), route.BookedPortId) == null)
+            {
+                if (route.AwayDockNote != why) HaulerScenario.Note(route, "Couldn't dock on rails while you're away (" + why + "): it stays parked.", false);
+                route.AwayDockNote = why;
+                return;
+            }
+            route.DockingSince = -1;
+            HaulerScenario.Note(route, "Docked at " + stationName + " on rails while you were away.", false);
+            HaulerScenario.Docked(route);
+            ScreenMessages.PostScreenMessage(route.VesselName + " has docked at " + stationName, 6f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
         /// <summary>
         /// Parks the ship on the target's own orbit, a few seconds behind it, so the gap holds until the player comes to
         /// dock: under 200 m, where KSP turns physics on for a ship near the one being flown, so docking can start; 100 m
@@ -229,7 +279,7 @@ namespace KspFlightPlanner.Haulers
             HaulerShip.FollowOrbit(ship, to, behind / speed);
             route.State = RouteState.Arrived;
             HaulerScenario.Note(route, head + "; parked " + behind.ToString("0") + " m behind " + route.TargetName + ".", false);
-            ScreenMessages.PostScreenMessage(route.VesselName + " has arrived at " + route.TargetName + ": it docks when you're nearby", 8f, ScreenMessageStyle.UPPER_CENTER);
+            ScreenMessages.PostScreenMessage(route.VesselName + " has arrived at " + route.TargetName + ": it docks on its own (on rails once you're away from both)", 8f, ScreenMessageStyle.UPPER_CENTER);
         }
 
         /// <summary>How far out from the port the ship is lined up (m): just outside the 2.25 km at which KSP draws ships.</summary>
@@ -295,7 +345,7 @@ namespace KspFlightPlanner.Haulers
         /// </summary>
         internal static void WatchArrival(HaulerRoute route, double now)
         {
-            if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot) return;
+            if (!HighLogic.LoadedSceneIsFlight || !route.Autopilot || route.EndsInOrbit) return;
             var left = route.Burns.Where(b => !b.Done).ToList();
             if (left.Count > 1 || left.Count == 1 && left[0].Ut < route.MeetUt - 1) return;
             var ship = HaulerShip.Find(route.VesselId);
@@ -347,7 +397,9 @@ namespace KspFlightPlanner.Haulers
             if (why != null)
             {
                 // Still without a port: it waits behind the station rather than parking beside it.
+                // With nobody near either, it docks on rails (ComeIn), as it would arriving unwatched; else it parks.
                 if (!PortBooking.Try(route, ship, target)) PortBooking.Wait(route, ship, target, "Coming in stopped (" + why + ")");
+                else if (!ship.loaded && !target.loaded) ComeIn(route, ship, target, "Coming in stopped (" + why + ")");
                 else Park(route, ship, target, "Coming in stopped (" + why + ")");
                 return;
             }

@@ -49,6 +49,15 @@ public sealed record TripOption(string Label, IReadOnlyList<TripLeg> Legs)
 
     public SoiArrival Arrival => Legs[^1].Plan.Arrival;
 
+    /// <summary>
+    /// The orbit round the destination the trip leaves the craft on: the arrival path with the capture burn applied, in
+    /// the save's own elements (what a background trip to an orbit aims for, docs/MATH.md §11.16). Null when there's no
+    /// capture burn (the air does the braking), so there's no orbit to aim for yet.
+    /// </summary>
+    public OrbitalElements? FinalOrbit => Legs[^1].Plan.Capture is { } capture
+        ? Rendezvous.OrbitAfter(capture.Ut, capture.Burn, Arrival.Path, Legs[^1].Hop.To.Mu)
+        : null;
+
     public IReadOnlyList<string> Warnings => Legs.SelectMany(l => l.Plan.Warnings).Distinct().ToList();
 
     public bool IsCorrection => Legs[0].Plan.IsCorrection;

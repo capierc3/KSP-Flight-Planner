@@ -8,6 +8,7 @@ How the planner reads KSP's save files and the live game (kRPC): which save is b
 - 2. Which vessel a logged flight is now
 - 3. Docking and undocking
 - 4. Telling docked craft apart
+- 5. Keeping a linked location on its vessel
 
 ## 1. Which save the game is playing
 
@@ -90,9 +91,26 @@ A docked stack is one vessel in KSP, so the save lists *Kerb Station* with the s
 
 **Craft or station part.** A piece is its own craft when its type is Ship, Lander, Rover or Plane **and** it has a command part (`ModuleCommand`: a pod or probe core) **and** an engine. Everything else (Probe, Relay, Station, Base, Debris, or no command part or engine) is part of the stack. The type decides because a module or fuel tank brought up on its own probe core and engine looks just like a craft otherwise. The player can say otherwise on the piece's page (Vessels: **Counts as**); the say is kept by the piece's name, per save, so it holds when the same shuttle docks again.
 
-A piece takes the stack's orbit and situation (live while connected, Math guide §8.2), with only its own parts: its Δv is what it has once it undocks. Its id is the stack's id and its root part's uid (`<pid>#<uid>`). A linked location whose vessel has gone (it docked, or undocked as a new vessel) follows the one craft that has its name. A plan made for a docked piece keeps following it after it undocks: KSP keeps the piece's root part as the new vessel's root, so the piece id finds the saved vessel whose root part has that uid (or, docked somewhere else, the piece with that uid). Before KSP saves again, the undocked craft is the live vessel of that name not yet in the save. Fly mode counts it as the flight's own craft when sending burns.
+A piece takes the stack's orbit and situation (live while connected, Math guide §8.2), with only its own parts: its Δv is what it has once it undocks. Its id is the stack's id and its root part's uid (`<pid>#<uid>`). A linked location whose vessel has gone (it docked, or undocked as a new vessel) is relinked to the vessel it became (§5). A plan made for a docked piece keeps following it after it undocks: KSP keeps the piece's root part as the new vessel's root, so the piece id finds the saved vessel whose root part has that uid (or, docked somewhere else, the piece with that uid). Before KSP saves again, the undocked craft is the live vessel of that name not yet in the save. Fly mode counts it as the flight's own craft when sending burns.
 
 Worked example, the Protogen save as read on 2026-10-27: *Kerb Station* (Station) has four docked pieces. *Kerb Shuttle mk1* (Ship: pod, probe core, RK-7 engine, 42 parts) and *Homeward Bound 2* (Ship, 36 parts) are craft. *Kerb Station - Electrical* (Probe, no command part left and no engine, 34 parts) and *Kerbin Station - Fuel Tank* (Probe with a probe core and a Skipper, 61 parts) are station parts: the tank flew itself up, but it's a Probe. *Mun Station* has *Grand Lander* (Lander) docked, a craft.
 
 - Code: `DockedCraft.Pieces`, `DockedPiece.IsCraftByDefault`, `WithDockedCraft`, `FindVessel` (`Core/Ksp/DockedCraft.cs`); `SavedPart.ParentIndex`/`DockingPorts` (`KspSave.cs`); `SaveSync.Craft`/`FlyAsId`/`SetDockedChoice`; `SettingsRepository.LoadDockedChoices`; tested in `DockedCraftTests`
 - Source: KSP's save format (`PART` `uid`/`parent`, `VESSEL` `root`, `ModuleDockingNode` `state`/`dockUId`/`DOCKEDVESSEL`), read from a 1.12.5 save
+
+## 5. Keeping a linked location on its vessel
+
+A location imported from the save (Locations › Import from save) is *linked*: it keeps the vessel's save id (`pid`, or a docked piece's `<pid>#<uid>`, §4) and follows its orbit. Docking and undocking change that id. KSP gives the piece that comes off a new `pid` (§3), and so does the add-on's rails undock (`RailsDocking.Undock` writes a new `pid` and `persistentId`). Without a rule, the link would go missing and the "N new vessels to import" prompt would offer the same ship again after every undock.
+
+**The rule.** Each time the save is read (or the live game moves it on), a linked location whose id is still in the save keeps it. One whose id has gone is moved to, in this order:
+
+1. **Its root part, by a piece id.** A piece id names the piece's root part: the saved vessel whose root part has that uid (it undocked), or the piece rooted at it in another stack (it docked somewhere else).
+2. **Its root part, by the last reading.** For a whole vessel, the previous reading of the save says which part was its root. The vessel whose root part has that uid, or the docked piece rooted at it, is the one it became. KSP keeps part uids through docking and undocking, and so does the rails undock.
+3. **Its name and type.** The one craft (§4: vessels plus docked pieces that count as craft) with the vessel's name and type, as the last reading had them, that no other linked location follows and that wasn't in the last reading. With no last reading (the planner was closed when it happened), the location's own name, any type.
+
+Only a clear match counts. Two candidates for one location, or two lost locations pointing at the same vessel, leave them unlinked ("no longer in the save" in the status bar). The location's name, description and pictures stay the user's; only the id and orbit change. A relinked vessel that has landed keeps the last orbit but follows the new id. A vessel followed this way is linked, so it isn't counted as new.
+
+Worked example (a hauler trip in the Protogen Hauler Test save): *Kerb Shuttle* is linked while docked at *Kerb Station*, as `station#301` (301 is its pod's uid). The add-on undocks it on rails as a new vessel with `pid` `9f1c…`, root part 301. Rule 1 finds it: the vessel whose root part is 301. The location now holds `9f1c…`, and the import prompt stays quiet. Two trips later the user has renamed the location *Hauler One*, and the shuttle is undocked in physics, which (say) gave its parts new uids. Rule 2 finds nothing. Rule 3 looks for the name and type from the last reading, *Kerb Shuttle* (Ship), not *Hauler One*: one new unlinked Ship of that name, so it relinks. If a twin *Kerb Shuttle* is docked nearby, that one is linked to its own location, so it isn't a candidate. Two unlinked *Kerb Shuttle*s appearing at once would leave it unlinked.
+
+- Code: `VesselRelink.Follow` (`Core/Ksp/VesselRelink.cs`), run by `SaveSync.RefreshLinkedLocations` with the previous reading; `DockedCraft.FindVessel`; tested in `VesselRelinkTests`
+- Source: KSP's save format (`VESSEL` `pid`/`root`, `PART` `uid`), and the add-on's `RailsDocking.Undock`

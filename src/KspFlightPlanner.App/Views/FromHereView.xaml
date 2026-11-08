@@ -125,7 +125,7 @@
                     <Button Content="Keep as a flight" Command="{Binding FlyCommand}" Padding="12,2" Margin="6,0,0,0"
                             ToolTip="Save these burns as a flight and open it in the Flight pane, to follow countdowns and drift" />
                     <Button Content="Fly it in the background" Command="{Binding BackgroundCommand}" Padding="12,2" Margin="6,0,0,0"
-                            ToolTip="Test: the game flies this meeting on its own (the planner's add-on moves the craft at each burn and burns its fuel), so you can fly something else or watch from the tracking station" />
+                            ToolTip="The game flies this on its own (the planner's add-on moves the craft at each burn and burns its fuel), so you can fly something else or watch from the tracking station: a meeting ends docked at the target, a Go to ends in the planned orbit" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>
