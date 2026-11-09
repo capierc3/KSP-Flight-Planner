@@ -15,7 +15,7 @@ public sealed record ArrivalMeetPlan(IReadOnlyList<FlightBurn> Burns, Rendezvous
 /// it costs a plane change and a phasing burn as well. Instead the capture at periapsis puts the craft straight into
 /// the target's plane on a round orbit, and when the meeting from there starts with its phasing burn at that moment
 /// (it usually does: no plane change is left), the two are one burn. Used by From here (Go to a craft, Rendezvous) and
-/// by background trips planned again (<see cref="HaulerReplan"/>).
+/// by background trips planned again (<see cref="RouteReplan"/>).
 /// </summary>
 public static class ArrivalMeet
 {

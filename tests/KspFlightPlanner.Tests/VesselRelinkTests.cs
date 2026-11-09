@@ -76,16 +76,16 @@ public sealed class VesselRelinkTests
         // Undocked in physics with its parts given new uids here, so only the name and type tie it.
         var before = Save(Station(), Shuttle("s1"));
         var now = Save(Station(), Shuttle("s2", rootUid: "777"));
-        Assert.Equal("s2", Follow(now, before, Linked(1, "Hauler One", "s1"))[1]);
+        Assert.Equal("s2", Follow(now, before, Linked(1, "Shuttle One", "s1"))[1]);
         // With no earlier reading there's only the location's own name to go by.
-        Assert.False(Follow(now, null, Linked(1, "Hauler One", "s1")).ContainsKey(1));
+        Assert.False(Follow(now, null, Linked(1, "Shuttle One", "s1")).ContainsKey(1));
         Assert.Equal("s2", Follow(now, null, Linked(1, "Kerb Shuttle", "s1"))[1]);
     }
 
     [Fact]
     public void A_twin_already_linked_elsewhere_isnt_taken_for_the_lost_one()
     {
-        // Two haulers of the same name; one still has its id, the other came back as s3.
+        // Two craft of the same name; one still has its id, the other came back as s3.
         var now = Save(Shuttle("s1", rootUid: "500"), Shuttle("s3", rootUid: "777"));
         var follows = Follow(now, null, Linked(1, "Kerb Shuttle", "s1"), Linked(2, "Kerb Shuttle", "s2"));
         Assert.Equal("s1", follows[1]);

@@ -12,17 +12,17 @@ Easiest way: open `docs/checklist.html` in Edge or Chrome and pick this file. Ti
 
 Mun Station and Min Station have a pilot aboard, so they have **traffic control**. Kerb Station has only scientists, so it has **none**. All tanks are full.
 
-The route log (planner, or the in-game haulers panel) says what each ship did. Physics flying only happens near the ship you're flying, so to watch an arrival or a departure, be at that station.
+The route log (planner, or the in-game route craft panel) says what each ship did. Physics flying only happens near the ship you're flying, so to watch an arrival or a departure, be at that station.
 
 ---
 
 ## 0. Setup
 
-- [x] KSP restarted (the new add-on and `HaulerPorts.cfg` load at start; ModuleManager rebuilds its cache, so it's slower once)
+- [x] KSP restarted (the new add-on and `TrafficPorts.cfg` load at start; ModuleManager rebuilds its cache, so it's slower once)
 - [x] Planner started from PowerShell with error capture (for the import crash):
-      `Start-Process "D:\Brick Road Software\KSP Flight Planner\.claude\worktrees\haulers\publish\haulers\KspFlightPlanner.exe" -RedirectStandardError "$env:USERPROFILE\planner-err.txt"`
+      `Start-Process "D:\Brick Road Software\KSP Flight Planner\.claude\worktrees\route craft\publish\route craft\KspFlightPlanner.exe" -RedirectStandardError "$env:USERPROFILE\planner-err.txt"`
 - [x] "Protogen Hauler Test" loaded, kRPC server started, planner connected
-- [x] Right-click a docking port: it has a **Haulers** setting (Any hauler). Right-click a command pod or probe core: it has **Hauler role** (Crew & supplies)
+- [x] Right-click a docking port: it has a **Route craft** setting (Any route craft). Right-click a command pod or probe core: it has **Route craft role** (Crew & supplies)
 - [x] Quicksave made (the quicksave in the folder is the old Protogen one: don't quickload before this)
 
 Notes:
@@ -76,17 +76,17 @@ Notes:
 
 ## 5. Kerb Station full: the third ship waits, then two leave together
 
-Before the third shuttle gets within an hour of Kerb Station, close ports so it finds none: set the fuel-tank port to **Tankers only**, and others to **No haulers**, so that once A and the second ship have docked no free port is open to shuttles. Be at Kerb Station.
+Before the third shuttle gets within an hour of Kerb Station, close ports so it finds none: set the fuel-tank port to **Tankers only**, and others to **No route craft**, so that once A and the second ship have docked no free port is open to shuttles. Be at Kerb Station.
 
 - [ ] The second ship docks at a port still open
-- [ ] It never picks a port set to Tankers only or No haulers
-- [ ] The third ship's log: no free port open to crew & supplies haulers; it parks 3 km behind Kerb Station
+- [ ] It never picks a port set to Tankers only or No route craft
+- [ ] The third ship's log: no free port open to crew & supplies route craft; it parks 3 km behind Kerb Station
 - [ ] The planner's trip list: "waiting 3 km behind it for a free port, since …"
 - [ ] It doesn't come into view at 3 km (it stays on rails)
 - [ ] Send the two docked ships off at the same time: they leave with no queue, kept apart by their safety stops
 - [ ] Once a leaver has finished backing out, the waiting ship books its port within a few seconds and is lined up 2.4 km out, coming in
 - [ ] It docks, with the other two still nearby, and nothing collides
-- [ ] Set the closed ports back to Any hauler afterwards (or leave the tank port on Tankers only)
+- [ ] Set the closed ports back to Any route craft afterwards (or leave the tank port on Tankers only)
 
 Notes:
 

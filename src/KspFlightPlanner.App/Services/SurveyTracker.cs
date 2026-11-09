@@ -93,7 +93,7 @@ public sealed class SurveyTracker
         {
             if (!_link.IsConnected) return FetchProblem = "Connect to KSP first (KSP › Connect to KSP).";
             if (await _link.SurveyAddOnVersionAsync() is null)
-                return FetchProblem = "The planner's add-on isn't in KSP: install mod/KspFlightPlanner.Survey into GameData and restart the game.";
+                return FetchProblem = "The planner's add-on isn't in KSP: install mod/KspFlightPlanner.AddOns into GameData and restart the game.";
             var map = await _link.FetchSurveyMapAsync(bodyName);
             _repository.SaveMap(map);
             lock (_gate) _maps[bodyName] = map;

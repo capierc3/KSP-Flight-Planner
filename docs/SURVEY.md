@@ -2,7 +2,7 @@
 
 A station with an engineer aboard surveys the body it orbits, the way a company's crew would: every pass over the ground fills in more of the map, and finds arrive as reports at the game time the station flew over them. It only ever shows what the game itself would show for what you've done: rough words, then the rounded estimate the narrow-band scanner gives, then true values once you've landed and analysed a biome.
 
-The ore map comes from the game through the planner's kRPC add-on (`mod/KspFlightPlanner.Survey`, "PlannerSurvey"). Everything else (crew, parts, orbits, what's been surveyed) comes from the save, so coverage is worked out from orbits and the game clock, including time warped through or spent flying something else.
+The ore map comes from the game through the planner's kRPC add-on (`mod/KspFlightPlanner.AddOns`, "PlannerSurvey"). Everything else (crew, parts, orbits, what's been surveyed) comes from the save, so coverage is worked out from orbits and the game clock, including time warped through or spent flying something else.
 
 ## What the game does (KSP 1.12, read from its code)
 

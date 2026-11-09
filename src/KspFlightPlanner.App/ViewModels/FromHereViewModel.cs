@@ -1229,7 +1229,7 @@ public sealed class FromHereViewModel : ObservableObject
         }
         catch (KRPC.Client.RPCException ex)
         {
-            Status = ex.Message.Contains("PlannerHaulers", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
+            Status = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
                 ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
                 : ex.Message;
         }

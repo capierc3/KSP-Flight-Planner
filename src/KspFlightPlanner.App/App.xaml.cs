@@ -38,7 +38,7 @@ public partial class App : Application
             var missions = new MissionRepository(database);
             var survey = new SurveyTracker(sync, new SurveyRepository(database), link, events);
             // Background trips the game finds off course are planned again from where the ship is (kept alive by the link's event).
-            _ = new HaulerWatch(sync, link);
+            _ = new RouteWatch(sync, link);
             var mission = new MissionBuilderViewModel(maps, locations, events, designs, bodies, missions, settings, sync, bakes, flights);
             var engineering = new EngineeringViewModel(designs, sync, availability, mission);
             var flight = new FlightViewModel(flights, sync, events, rotation, missions);
