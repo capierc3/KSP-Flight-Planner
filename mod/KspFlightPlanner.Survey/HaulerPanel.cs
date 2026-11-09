@@ -24,12 +24,6 @@ namespace KspFlightPlanner.Haulers
         private Vector2 _scroll;
         private bool _resizing;
 
-        // The Fuel section: which docked craft, which way, the Δv to keep when unloading, and whether it's running.
-        private int _craft;
-        private bool _unload;
-        private string _keepText = "300";
-        private bool _moving;
-        private string _fuelNote;
         private string _rcsNote;
 
         private void Start()
@@ -57,58 +51,8 @@ namespace KspFlightPlanner.Haulers
         {
             if (!_open) return;
             GUI.skin = null; // Unity's own look, as kRPC, EVE and Firefly's windows use (KSP's old green skin looked out of place)
-            // Resizing from the corner grip: the window follows the mouse until the button comes up.
-            if (_resizing)
-            {
-                var e = Event.current;
-                if (e.type == EventType.MouseUp) _resizing = false;
-                else if (e.type == EventType.MouseDrag)
-                {
-                    _window.width = Mathf.Clamp(e.mousePosition.x - _window.x + 8, 320, Screen.width - _window.x);
-                    _window.height = Mathf.Clamp(e.mousePosition.y - _window.y + 8, 200, Screen.height - _window.y);
-                    e.Use();
-                }
-            }
+            PanelWindow.FollowResize(ref _window, ref _resizing);
             _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, "Haulers", GUILayout.Width(_window.width), GUILayout.Height(_window.height));
-        }
-
-        /// <summary>The Fuel section's transfer runs here, a little every frame, until it's done or stopped.</summary>
-        private void Update()
-        {
-            if (!_moving) return;
-            if (!HighLogic.LoadedSceneIsFlight || !(FlightGlobals.ActiveVessel is Vessel stack))
-            {
-                _moving = false;
-                return;
-            }
-            var crafts = FuelTransfer.DockedCrafts(stack);
-            if (_craft >= crafts.Count)
-            {
-                _moving = false;
-                _fuelNote = "The craft isn't docked any more.";
-                return;
-            }
-            var craft = HaulerShip.DockedCraftParts(crafts[_craft].Value);
-            var station = FuelTransfer.Others(stack, craft);
-            if (_unload && double.TryParse(_keepText, out var keep) && HaulerShip.DeltaVLeft(craft, out _) <= keep)
-            {
-                _moving = false;
-                _fuelNote = "Stopped: " + crafts[_craft].Key + " keeps " + keep.ToString("0") + " m/s.";
-                return;
-            }
-            double moved = 0;
-            foreach (var res in FuelTransfer.Resources)
-            {
-                // At this rate a craft's tanks fill or empty in about 30 s.
-                FuelTransfer.Totals(craft, res, out _, out var room);
-                var units = Math.Max(1, room / 30) * Time.deltaTime;
-                moved += _unload ? FuelTransfer.Move(craft, station, res, units) : FuelTransfer.Move(station, craft, res, units);
-            }
-            if (moved <= 1e-6)
-            {
-                _moving = false;
-                _fuelNote = _unload ? "Done: " + crafts[_craft].Key + " is empty or the station is full." : "Done: " + crafts[_craft].Key + " is full or the station is empty.";
-            }
         }
 
         private void DrawWindow(int id)
@@ -159,80 +103,10 @@ namespace KspFlightPlanner.Haulers
                 }
                 GUILayout.EndScrollView();
             }
-            if (HighLogic.LoadedSceneIsFlight && FlightGlobals.ActiveVessel is Vessel active)
-            {
-                DrawFuel(active);
-                DrawRcs(active);
-            }
+            if (HighLogic.LoadedSceneIsFlight && FlightGlobals.ActiveVessel is Vessel active) DrawRcs(active);
             if (GUILayout.Button("Close")) _button?.SetFalse();
-            // The resize grip, bottom right.
-            var grip = new Rect(_window.width - 20, _window.height - 20, 18, 18);
-            GUI.Label(grip, "◢");
-            if (Event.current.type == EventType.MouseDown && grip.Contains(Event.current.mousePosition))
-            {
-                _resizing = true;
-                Event.current.Use();
-            }
+            PanelWindow.Grip(_window, ref _resizing);
             GUI.DragWindow();
-        }
-
-        /// <summary>
-        /// Fuel: for a craft docked in the stack you're flying, its tanks and the station's, its Δv, and a transfer either
-        /// way, started and stopped by hand; unloading stops by itself when the craft is down to the Δv you said to keep
-        /// (enough to deorbit, say).
-        /// </summary>
-        private void DrawFuel(Vessel stack)
-        {
-            var crafts = FuelTransfer.DockedCrafts(stack);
-            if (crafts.Count == 0) return;
-            GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("Fuel: " + stack.vesselName);
-            if (_craft >= crafts.Count) _craft = 0;
-            if (crafts.Count > 1 && !_moving)
-            {
-                GUILayout.BeginHorizontal();
-                for (var i = 0; i < crafts.Count; i++)
-                    if (GUILayout.Toggle(_craft == i, crafts[i].Key, GUI.skin.button)) _craft = i;
-                GUILayout.EndHorizontal();
-            }
-            var name = crafts[_craft].Key;
-            var craft = HaulerShip.DockedCraftParts(crafts[_craft].Value);
-            var station = FuelTransfer.Others(stack, craft);
-            foreach (var res in FuelTransfer.Resources)
-            {
-                FuelTransfer.Totals(craft, res, out var a, out var am);
-                FuelTransfer.Totals(station, res, out var b, out var bm);
-                if (am <= 0 && bm <= 0) continue;
-                GUILayout.Label(res + ":  " + name + " " + a.ToString("N0") + " / " + am.ToString("N0") + "    station " + b.ToString("N0") + " / " + bm.ToString("N0"));
-            }
-            GUILayout.Label(name + " Δv: " + HaulerShip.DeltaVLeft(craft, out _).ToString("N0") + " m/s");
-            if (!_moving)
-            {
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Toggle(!_unload, "Fill " + name, GUI.skin.button)) _unload = false;
-                if (GUILayout.Toggle(_unload, "Unload to the station", GUI.skin.button)) _unload = true;
-                GUILayout.EndHorizontal();
-                if (_unload)
-                {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label("Keep at least", GUILayout.ExpandWidth(false));
-                    _keepText = GUILayout.TextField(_keepText, GUILayout.Width(60));
-                    GUILayout.Label("m/s in " + name, GUILayout.ExpandWidth(false));
-                    GUILayout.EndHorizontal();
-                }
-                if (GUILayout.Button("Start"))
-                {
-                    _moving = true;
-                    _fuelNote = null;
-                }
-            }
-            else if (GUILayout.Button("Stop"))
-            {
-                _moving = false;
-                _fuelNote = "Stopped.";
-            }
-            if (_fuelNote != null) GUILayout.Label(_fuelNote);
-            GUILayout.EndVertical();
         }
 
         /// <summary>Balance RCS: thrust limiters on the ship's RCS blocks so a push moves it without turning it.</summary>

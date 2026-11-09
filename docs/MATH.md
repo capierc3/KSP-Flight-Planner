@@ -2306,7 +2306,11 @@ Undocked, on rails or loaded, the hauler is made ready to fly: every engine lit 
 
 ### 11.9 Fuel transfer and RCS balance
 
-**Fuel.** The Haulers panel moves liquid fuel, oxidizer and monopropellant between a craft docked in the stack being flown and the rest of the stack (the station), either way, started and stopped by hand. The craft's parts are the branch of the part tree hanging off its docking port, as for the fuel check (§11.2). Each frame it moves up to the craft's room for that resource / 30 s × the frame's time, so a craft's tanks fill or empty in about 30 s, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room; nothing is made or lost. Unloading stops by itself when the craft's Δv (§11.2) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit).
+**Fuel.** The Station fuel window (its own toolbar button, apart from the Haulers window) moves liquid fuel, oxidizer and monopropellant between one craft docked in the stack being flown and the station's tanks, either way, started and stopped by hand. The stack is first split back into the vessels that docked to make it, as the planner does (§8.1, `DockedCraft.Pieces`): the part tree is cut at every docked pair of ports, and each piece takes its name and type from its port's record of the vessel it came with (the root's piece takes the stack's name). Each piece is a **station part** or a **craft**: a craft by default when it's a ship, lander, rover or plane with a command part and an engine (the planner's rule, so both show the same split), otherwise a station part. The player can tick or untick any piece; the mark is kept in the save by vessel name. The station's tanks are the parts of every station part. Other craft docked there are never touched, so filling one shuttle doesn't drain the lander or the other shuttles beside it.
+
+Each frame it moves up to the craft's room for that resource / 30 s × the frame's time, so a craft's tanks fill or empty in about 30 s, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room; nothing is made or lost. Unloading stops by itself when the craft's Δv (§11.2) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit).
+
+Example: Kerb Station (station) with Kerbin Station - Fuel Tank (probe), Kerb Station - Electrical (probe), Homeward Bound 4 and three Kerb Shuttle mk2s (ships with engines). The station's tanks are the station core, the fuel tank and the electrical module; filling Kerb Shuttle mk2 C takes fuel from those three only, in proportion to what each holds.
 
 **RCS balance.** One thrust limiter s_m ∈ [0.05, 1] per RCS block, chosen so a push in each of the six directions turns the ship as little as it can. For each block m and push d, F_md and τ_md are the force and torque (about the centre of mass) of its thrusters that fire for that push (a thruster fires when its thrust is within about 73° of the push; each push and its opposite are both counted, so which way a thruster's axis points doesn't matter):
 
@@ -2318,7 +2322,7 @@ imbalance  = max_d |Σ_m s_m τ_md| / (|Σ_m s_m F_md| · size)        0 is perf
 
 The limiters are only changed when that makes it better. The autopilot balances a hauler's RCS the first time it needs RCS on a trip, and the panel has a button for the ship being flown. A block has one limiter for all six directions, so it's a best fit, and it shifts as fuel drains (the centre of mass moves).
 
-- Code: `FuelTransfer.DockedCrafts`, `.Move`, `RcsBalance.Balance`, `HaulerPanel.DrawFuel`, `.DrawRcs` (mod/KspFlightPlanner.Survey)
+- Code: `FuelTransfer.Pieces`, `.StationParts`, `.Move`, `StackPiece.IsStation`, `StationFuelPanel`, `RcsBalance.Balance`, `HaulerPanel.DrawRcs` (mod/KspFlightPlanner.Survey)
 - Source: §11.2; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
 
 ### 11.10 Docking and undocking on rails

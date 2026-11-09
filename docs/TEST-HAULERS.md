@@ -149,9 +149,9 @@ New: From here has a **Target** list (for Go to, Rendezvous and Match planes) of
 
 ## Round 9: refuel, then a smoother trip (2026-11-06 fixes)
 
-The save's shuttle is **not** refuelled: the first step is the new Fuel section.
+The save's shuttle is **not** refuelled: the first step is the Station fuel window.
 
-- [ ] Fly Mun Station. Open the **Haulers** panel: a **Fuel** box for Kerb Shuttle mk2 shows its tanks, the station's, and its Δv. Choose **Fill Kerb Shuttle mk2**, then **Start**: the shuttle's numbers rise and the station's fall, over about 30 s, until it's full (or the station runs out). **Stop** works part way.
+- [ ] Fly Mun Station. Open the **Station fuel** window (its own toolbar button, a green drop): Kerb Shuttle mk2 shows its tanks, the station's, and its Δv. Choose **Fill Kerb Shuttle mk2**, then **Start**: the shuttle's numbers rise and the station's fall, over about 30 s, until it's full (or the station runs out). **Stop** works part way.
 - [ ] Try **Unload to the station** with "Keep at least 300 m/s": it stops by itself at about 300 m/s left. Then fill it again.
 - [ ] **Balance RCS** on the stack: it reports the turning per push before and after (or "already balanced").
 - [ ] Drag the panel's bottom-right corner: it resizes, and the trip list grows with it.

@@ -54,6 +54,7 @@ Haulers are ships that fly planned trips on their own: the planner plans a trip,
 - [ ] Go to orbit for a hauler: a trip that ends in an orbit, not at a station (MATH §11.16)
 - [ ] The safety stop with a kerbal on EVA
 - [ ] Two haulers meeting at Kerb Station (uncontrolled), one coming in while the other leaves, with the sideways step-aside
+- [ ] Station fuel window: its own toolbar button, and fuel moves only to and from the vessels ticked as station tanks (other docked craft are left alone)
 
 ## Known rough edges
 
@@ -96,7 +97,8 @@ These sit on top of working flight. Nothing below is started unless it's ticked.
 | `PhysicsFlyer.cs` | The physics flyer: attitude, burns, coming in, docking, leaving, traffic, safety stop |
 | `PortBooking.cs`, `HaulerPortModules.cs`, `HaulerPorts.cfg` | Port booking and waiting, port settings and roles (ModuleManager patch) |
 | `HaulerRules.cs`, `PilotLog.cs` | Crew-rule gates and the pilots' log |
-| `HaulerShip.cs`, `FuelTransfer.cs`, `RcsBalance.cs`, `HaulerPanel.cs` | Ship helpers, refuelling, RCS balance, the in-game Haulers panel |
+| `HaulerShip.cs`, `RcsBalance.cs`, `HaulerPanel.cs` | Ship helpers, RCS balance, the in-game Haulers panel |
+| `FuelTransfer.cs`, `StationFuelPanel.cs` | Splitting a stack into station tanks and craft, moving fuel, the in-game Station fuel window |
 | `src/KspFlightPlanner.App/Services/HaulerWatch.cs` | The planner answering re-plan requests |
 | `src/KspFlightPlanner.Core/Ksp/VesselRelink.cs` | Following a vessel across docking and undocking |
 

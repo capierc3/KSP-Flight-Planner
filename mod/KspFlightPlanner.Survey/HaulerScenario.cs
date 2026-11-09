@@ -25,6 +25,12 @@ namespace KspFlightPlanner.Haulers
         /// <summary>Which trips each pilot has flown (docs/MATH.md §11.12).</summary>
         internal readonly PilotLog PilotLog = new PilotLog();
 
+        /// <summary>
+        /// The player's marks on docked vessels, by name: true for a station part (its fuel is the station's), false for
+        /// a craft of its own. Vessels without a mark follow the rule (docs/MATH.md §11.9).
+        /// </summary>
+        internal readonly Dictionary<string, bool> StationMarks = new Dictionary<string, bool>();
+
         /// <summary>A route has docked at its target: done, and its pilots get the trip on their log.</summary>
         internal static void Docked(HaulerRoute route)
         {
@@ -115,12 +121,21 @@ namespace KspFlightPlanner.Haulers
         {
             foreach (var r in Routes) r.Save(node.AddNode("ROUTE"));
             PilotLog.Save(node.AddNode("PILOTLOG"));
+            foreach (var mark in StationMarks)
+            {
+                var n = node.AddNode("STATIONMARK");
+                n.AddValue("vessel", mark.Key);
+                n.AddValue("station", mark.Value);
+            }
         }
 
         public override void OnLoad(ConfigNode node)
         {
             Routes.Clear();
             PilotLog.Load(node.GetNode("PILOTLOG"));
+            StationMarks.Clear();
+            foreach (var n in node.GetNodes("STATIONMARK"))
+                if (n.GetValue("vessel") is string name && bool.TryParse(n.GetValue("station"), out var station)) StationMarks[name] = station;
             foreach (var n in node.GetNodes("ROUTE"))
             {
                 try { Routes.Add(HaulerRoute.Load(n)); }
