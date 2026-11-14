@@ -89,6 +89,9 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>The next launch window to each planet, counting down on the game clock.</summary>
     public required TransferWindowsViewModel Windows { get; init; }
 
+    /// <summary>Stations with an engineer surveying the ore of the body they orbit.</summary>
+    public required SurveyViewModel Survey { get; init; }
+
     /// <summary>What each pass through a planet's air does to an orbit.</summary>
     public required AerobrakingViewModel Aerobraking { get; init; }
 

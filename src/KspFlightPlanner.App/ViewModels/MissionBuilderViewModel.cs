@@ -1204,7 +1204,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
             var landingBody = LegTools.FindLanding(segment.Legs) >= 0 ? _bodies.GetValueOrDefault(segment.Legs[^1].To.BodyName) : null;
             var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies, name => _surfaceBakes?.Get(name)) : null;
-            stop.SetLanding(landingBody?.Name, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save));
+            stop.SetLanding(landingBody?.Name, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save, SurveySpots?.Invoke(landingBody.Name)));
 
             var legs = rendezvous is not null ? LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest)
                 : transfer is not null ? LegTools.ApplyTransfer(segment.Legs, transfer)
@@ -1321,6 +1321,9 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     /// <summary>What the flight log has on a rocket of this name (set by the app), or null when it hasn't flown.</summary>
     public Func<string, string?> FlightHistory { get; set; } = _ => null;
+
+    /// <summary>The ore survey's best spots on a body (by name), offered as landing spots.</summary>
+    public Func<string, IReadOnlyList<LandingTarget>>? SurveySpots { get; set; }
 
     /// <summary>How the picked design has flown so far, from the flight log; null if it hasn't.</summary>
     public string? FlownText => SelectedDesign?.Report?.Name is { } name ? FlightHistory(name) : null;

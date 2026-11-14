@@ -10,6 +10,7 @@ public sealed class HopsTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"kspfp-test-{Guid.NewGuid():N}.db");
     private readonly CelestialBody _kerbin, _mun, _minmus;
+    private readonly IReadOnlyList<CelestialBody> _bodies;
 
     public HopsTests(ITestOutputHelper output)
     {
@@ -18,6 +19,7 @@ public sealed class HopsTests : IDisposable
         db.Initialize();
         var repo = new BodyRepository(db);
         var bodies = repo.GetBodies(repo.GetSystems()[0].Id);
+        _bodies = bodies;
         _kerbin = bodies.Single(b => b.Name == "Kerbin");
         _mun = bodies.Single(b => b.Name == "Mun");
         _minmus = bodies.Single(b => b.Name == "Minmus");
@@ -309,5 +311,28 @@ public sealed class HopsTests : IDisposable
         }
         _output.WriteLine($"worst {worst:0} m/s");
         Assert.True(worst < 300);
+    }
+
+    [Fact]
+    public void A_transfer_to_minmus_waits_rather_than_run_into_the_mun()
+    {
+        var craft = Circular(80_000);
+        // The first start (stepping through the Mun's orbit) whose soonest transfer, planned blind to the Mun, enters its sphere first.
+        CelestialBody? Hit(HopPlan p)
+        {
+            var t = p.Transfer!;
+            var path = Rendezvous.OrbitAfter(t.Ut, t.Burn, craft, _kerbin.Mu);
+            return Hops.Blocker(_kerbin, [_mun], path, t.Ut, p.Arrival.CrossingUt);
+        }
+        var munPeriod = Kepler.OrbitalPeriod(_mun.Orbit!, _kerbin.Mu);
+        var blockedAt = Enumerable.Range(0, 48).Select(i => 1_000_120 + i * munPeriod / 48)
+            .First(ut => Hit(Hops.Down(_kerbin, _minmus, craft, ut, 20_000, soonest: true)) is not null);
+
+        var plan = Hops.Down(_kerbin, _minmus, craft, blockedAt, 20_000, soonest: true, bodies: _bodies);
+        Show(plan);
+        Assert.Null(Hit(plan));
+        Assert.Equal(20_000, plan.Arrival.PeriapsisAltitudeM, 50.0);
+        Assert.Contains(plan.Warnings, w => w.StartsWith("Waits") && w.Contains("Mun"));
+        Assert.True(plan.Transfer!.Ut < blockedAt + munPeriod);
     }
 }

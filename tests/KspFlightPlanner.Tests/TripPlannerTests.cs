@@ -47,6 +47,30 @@ public sealed class TripPlannerTests : IDisposable
     }
 
     [Fact]
+    public void A_trips_final_orbit_is_the_round_orbit_asked_for()
+    {
+        var now = 1_000_000.0;
+        var mun = Body("Mun");
+        var trip = TripPlanner.Options(Body("Kerbin"), mun, Circular("Kerbin", 80_000), now + 120, 100_000, _bodies)[0];
+        var end = trip.FinalOrbit;
+        Assert.NotNull(end);
+        // Round, at the asked height (the capture is at periapsis), and stated at the capture's time.
+        Assert.Equal(mun.EquatorialRadiusM + 100_000, Kepler.PeriapsisRadius(end), 500.0);
+        Assert.True(end.Eccentricity < 0.01, $"eccentricity {end.Eccentricity}");
+        Assert.Equal(trip.Burns[^1].Ut, end.EpochS, 3);
+    }
+
+    [Fact]
+    public void A_trip_that_aerobrakes_has_no_final_orbit()
+    {
+        var now = 1_000_000.0;
+        // Down into Kerbin's air from the Mun: no capture burn, so nothing to aim a background trip at.
+        var trip = TripPlanner.Options(Body("Mun"), Body("Kerbin"), Circular("Mun", 30_000), now + 120, 40_000, _bodies)[0];
+        Assert.Null(trip.Legs[^1].Plan.Capture);
+        Assert.Null(trip.FinalOrbit);
+    }
+
+    [Fact]
     public void A_trips_dv_splits_into_leaving_on_the_way_and_capturing()
     {
         var now = 1_000_000.0;

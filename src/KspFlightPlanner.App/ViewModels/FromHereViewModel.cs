@@ -28,6 +28,21 @@ public sealed class DestinationOption(CelestialBody? body) : ObservableObject
     public override string ToString() => Name;
 }
 
+/// <summary>A craft in the game that can be made KSP's target from the planner (as clicking it in map view does).</summary>
+public sealed record TargetCraftOption(string Name, ulong KrpcId, string Text)
+{
+    public override string ToString() => Text;
+}
+
+/// <summary>
+/// A craft in the save to plan for: on its own, or docked in a stack. In flight, the first choice is the craft being
+/// flown (<paramref name="Vessel"/> null); any other is planned for from its live orbit, wherever it is.
+/// </summary>
+public sealed record ShipOption(string Id, string Text, SavedVessel? Vessel)
+{
+    public override string ToString() => Text;
+}
+
 /// <summary>
 /// One way of making a trip (<see cref="Option"/>) or a landing (<see cref="Landing"/>), as a row to pick: what it's best
 /// at, and when, how long and its Δv.
@@ -112,8 +127,12 @@ public sealed class FromHereViewModel : ObservableObject
         };
 
         PlanCommand = new RelayCommand(Plan, () => !_busy && Here() is not null);
-        SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
+        SendCommand = new RelayCommand(() => _ = SendAsync(), () => !_busy && _sync.Link.InFlight && !Picking && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
         FlyCommand = new RelayCommand(Fly, () => !_busy && Burns.Count > 0);
+        BackgroundCommand = new RelayCommand(() => _ = FlyInBackgroundAsync(),
+            () => !_busy && (_sync.Link.InFlight || _sync.Link.IsConnected && _pickedShip is not null)
+                  && (_plannedRendezvous is not null || _plannedTo is not null && _trip?.Option is not null)
+                  && Burns.Any(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft));
     }
 
     public IReadOnlyList<QuickActionOption> Actions { get; } =
@@ -143,6 +162,9 @@ public sealed class FromHereViewModel : ObservableObject
     public RelayCommand SendCommand { get; }
     public RelayCommand FlyCommand { get; }
 
+    /// <summary>Hands a meeting's burns to the planner's add-on, which flies the craft there on its own (test: background trips).</summary>
+    public RelayCommand BackgroundCommand { get; }
+
     public QuickActionOption SelectedAction
     {
         get => _action;
@@ -151,7 +173,7 @@ public sealed class FromHereViewModel : ObservableObject
             if (value is null || !SetProperty(ref _action, value)) return;
             _altitudeText = DefaultAltitude();
             _inclinationText = value.Action == QuickAction.SetInclination ? "90" : "";
-            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
+            foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsTargetCraft), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
                          nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint), nameof(IsAerobrake) })
                 OnPropertyChanged(name);
             NotifyGoToInputs();
@@ -193,7 +215,82 @@ public sealed class FromHereViewModel : ObservableObject
     }
 
     /// <summary>Go to is set to KSP's target, and that's a craft: a rendezvous, which needs no height.</summary>
-    private bool GoingToCraft => _destination is { IsTarget: true } && _sync.Link.Game?.Target is not null;
+    private bool GoingToCraft => _destination is { IsTarget: true } && CurrentTarget() is not null;
+
+    // ---------------- The ship and target picked from the save: outside flight, or another ship while flying ----------------
+
+    private SavedVessel? _pickedShip, _pickedTarget;
+
+    /// <summary>
+    /// Planning for a ship picked from the save rather than the craft being flown: always outside flight (the tracking
+    /// station), and in flight once another ship is picked (one at another station, say). In flight the save carries the
+    /// game's live orbits, so it plans from where that ship is now.
+    /// </summary>
+    private bool Picking => !_sync.Link.InFlight || _pickedShip is not null;
+
+    /// <summary>The picked ship as the save has it now (in flight, with its live orbit), not as it was when picked.</summary>
+    private SavedVessel? PickedShip => _pickedShip is { } p ? _sync.FindVessel(p.Id) ?? p : null;
+
+    /// <summary>The picked target as the save has it now.</summary>
+    private SavedVessel? PickedTarget => _pickedTarget is { } p ? _sync.FindVessel(p.Id) ?? p : null;
+
+    /// <summary>Connected to KSP: the ship to plan for can be picked from the save (in flight, the craft being flown is the first choice).</summary>
+    public bool NeedsShipPick => _sync.Link.IsConnected;
+
+    /// <summary>Every craft in space in the save, docked ones included (they're undocked when their trip starts).</summary>
+    public IReadOnlyList<ShipOption> ShipChoices { get; private set; } = [];
+
+    /// <summary>In flight, the choice that plans for the craft being flown.</summary>
+    private const string FlyingId = "";
+
+    public ShipOption? SelectedShip
+    {
+        get => _pickedShip is { } p ? ShipChoices.FirstOrDefault(o => o.Id == p.Id) : ShipChoices.FirstOrDefault(o => o.Id == FlyingId);
+        set
+        {
+            if (value?.Vessel == _pickedShip) return;
+            _pickedShip = value?.Vessel;
+            if (_sync.Link.InFlight && _pickedShip is null) _pickedTarget = null; // back to KSP's own target
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CraftText));
+            OnPropertyChanged(nameof(HasFlyAs));
+            Clear();
+            Status = null;
+            RefreshTargetCrafts();
+            RefreshDestinations();
+        }
+    }
+
+    private void RefreshShipChoices()
+    {
+        OnPropertyChanged(nameof(NeedsShipPick));
+        if (!NeedsShipPick) return;
+        var craft = _sync.Craft;
+        var names = craft.Where(v => v.DockedInId is null).ToDictionary(v => v.Id, v => v.Name);
+        var list = craft.Where(InSpace)
+            .OrderBy(v => v.Orbit!.BodyName, StringComparer.Ordinal).ThenBy(v => v.Name, StringComparer.CurrentCulture)
+            .Select(v => new ShipOption(v.Id, v.DockedInId is { } stack && names.TryGetValue(stack, out var at)
+                ? $"{v.Name} (docked at {at}, round {v.Orbit!.BodyName})" : $"{v.Name} (round {v.Orbit!.BodyName})", v))
+            .ToList();
+        if (_sync.Link.InFlight) list.Insert(0, new ShipOption(FlyingId, "The craft you're flying", null));
+        if (list.Select(o => o.Id).SequenceEqual(ShipChoices.Select(o => o.Id))) return;
+        ShipChoices = list;
+        if (_pickedShip is { } picked) _pickedShip = list.FirstOrDefault(o => o.Id == picked.Id)?.Vessel;
+        OnPropertyChanged(nameof(ShipChoices));
+        OnPropertyChanged(nameof(SelectedShip));
+    }
+
+    private static bool InSpace(SavedVessel v) =>
+        v.Orbit is { IsClosed: true, BodyName: not null } && v.Type is not ("Debris" or "Flag" or "SpaceObject" or "EVA") && v.Situation is not ("LANDED" or "SPLASHED" or "PRELAUNCH");
+
+    /// <summary>The craft being planned for, by name: the one flown in KSP (or picked under Plan for), else the one picked outside flight.</summary>
+    private string? ShipName() => !Picking ? _sync.ActiveCraft?.Name ?? _sync.Link.Game?.Active?.Name : _pickedShip?.Name;
+
+    /// <summary>The craft target: KSP's in flight; the one picked from the list outside flight.</summary>
+    private (string Name, SavedOrbit? Orbit, FlightCraft? Craft)? CurrentTarget() =>
+        !Picking
+            ? _sync.Link.Game?.Target is { } t ? (t.Name, t.Orbit, _sync.TargetCraft) : null
+            : PickedTarget is { } p ? (p.Name, p.Orbit, new FlightCraft(p.Name, p.Id)) : null;
 
     public string AltitudeLabel => _action.Action switch
     {
@@ -205,6 +302,82 @@ public sealed class FromHereViewModel : ObservableObject
     };
 
     public bool NeedsDestination => _action.Action == QuickAction.GoTo;
+
+    /// <summary>The actions that use KSP's target get a list to set it from, while there are craft to pick.</summary>
+    public bool NeedsTargetCraft => _action.Action is QuickAction.GoTo or QuickAction.Rendezvous or QuickAction.MatchPlanes && TargetCrafts.Count > 0;
+
+    /// <summary>Every other craft in space, the ones round the same body first: picking one sets it as KSP's target.</summary>
+    public IReadOnlyList<TargetCraftOption> TargetCrafts { get; private set; } = [];
+
+    /// <summary>The craft targeted in KSP now, if it's in the list; picking another sets KSP's target to it (and Go to's "To" to KSP's target).</summary>
+    public TargetCraftOption? SelectedTargetCraft
+    {
+        get => !Picking
+            ? _sync.Link.Game?.Vessels?.FirstOrDefault(v => v.IsTarget) is { } t ? TargetCrafts.FirstOrDefault(o => o.KrpcId == t.KrpcId) : null
+            : _pickedTarget is { } p ? TargetCrafts.FirstOrDefault(o => o.Name == p.Name) : null;
+        set
+        {
+            if (value is null || value == SelectedTargetCraft) return;
+            if (!Picking)
+            {
+                _ = SetTargetAsync(value);
+                return;
+            }
+            // Planning for a picked ship there's no KSP target to set: the pick is the planner's own.
+            _pickedTarget = _sync.Craft.FirstOrDefault(v => v.Name == value.Name && v.DockedInId is null) ?? _sync.Craft.FirstOrDefault(v => v.Name == value.Name);
+            RefreshDestinations();
+            if (_action.Action == QuickAction.GoTo) SelectedDestination = _target;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CraftText));
+        }
+    }
+
+    private async Task SetTargetAsync(TargetCraftOption craft)
+    {
+        try
+        {
+            await _sync.Link.SetTargetVesselAsync(craft.KrpcId);
+            RefreshDestinations();
+            if (_action.Action == QuickAction.GoTo) SelectedDestination = _target;
+            Status = null;
+        }
+        catch (Exception ex) when (ex is KRPC.Client.RPCException or ArgumentException or InvalidOperationException)
+        {
+            Status = $"Couldn't set {craft.Name} as the target: {ex.Message}";
+        }
+        OnPropertyChanged(nameof(SelectedTargetCraft));
+    }
+
+    /// <summary>
+    /// Keeps the target list in step with the game: craft in space other than the one being flown (no debris, flags or
+    /// asteroids), those round the same body first, then by name.
+    /// </summary>
+    private void RefreshTargetCrafts()
+    {
+        var vessels = !Picking ? _sync.Link.Game?.Vessels : null;
+        var here = !Picking ? _sync.Link.Game?.Active?.Orbit?.BodyName : PickedShip?.Orbit?.BodyName;
+        List<TargetCraftOption> list;
+        if (!Picking)
+            list = vessels is null ? []
+                : vessels.Where(v => !v.IsActive && v.Orbit is { BodyName: not null } && v.Type is not ("Debris" or "Flag" or "SpaceObject" or "EVA")
+                                     && v.Situation is "ORBITING" or "ESCAPING" or "SUB_ORBITAL")
+                    .OrderBy(v => v.Orbit!.BodyName == here ? 0 : 1).ThenBy(v => v.Name, StringComparer.CurrentCulture)
+                    .Select(v => new TargetCraftOption(v.Name, v.KrpcId, $"{v.Name} (round {v.Orbit!.BodyName})"))
+                    .ToList();
+        else
+            // From the save: vessels on their own (not the ship picked, nor the stack it's docked in).
+            list = _sync.Craft.Where(v => v.DockedInId is null && InSpace(v) && v.Id != _pickedShip?.Id && v.Id != _pickedShip?.DockedInId)
+                .OrderBy(v => v.Orbit!.BodyName == here ? 0 : 1).ThenBy(v => v.Name, StringComparer.CurrentCulture)
+                .Select(v => new TargetCraftOption(v.Name, 0, $"{v.Name} (round {v.Orbit!.BodyName})"))
+                .ToList();
+        if (!list.SequenceEqual(TargetCrafts))
+        {
+            TargetCrafts = list;
+            OnPropertyChanged(nameof(TargetCrafts));
+            OnPropertyChanged(nameof(NeedsTargetCraft));
+        }
+        OnPropertyChanged(nameof(SelectedTargetCraft));
+    }
 
     /// <summary>Change the inclination needs one; Go to a body can take one for the orbit there (left empty, however it arrives).</summary>
     public bool NeedsInclination => _action.Action == QuickAction.SetInclination || _action.Action == QuickAction.GoTo && !GoingToCraft;
@@ -245,6 +418,9 @@ public sealed class FromHereViewModel : ObservableObject
 
     /// <summary>Spots on the body the craft is around: wiki landmarks, then the save's flags, landed craft and KerbNet waypoints.</summary>
     public IReadOnlyList<LandingTarget> Spots { get; private set; } = [];
+
+    /// <summary>The ore survey's best spots on a body (by name), added to <see cref="Spots"/>.</summary>
+    public Func<string, IReadOnlyList<LandingTarget>>? SurveySpots { get; set; }
 
     public LandingTarget? SelectedSpot
     {
@@ -377,7 +553,7 @@ public sealed class FromHereViewModel : ObservableObject
         }
     }
 
-    public bool HasFlyAs => FlyAsChoices.Count > 1;
+    public bool HasFlyAs => FlyAsChoices.Count > 1 && _pickedShip is null;
 
     private void RefreshFlyAs()
     {
@@ -400,7 +576,13 @@ public sealed class FromHereViewModel : ObservableObject
         {
             var link = _sync.Link;
             if (!link.IsConnected) return "Not connected to KSP. Use KSP › Connect to KSP, then fly a craft.";
-            if (!link.InFlight) return "In KSP, but not flying a craft. Switch to one to plan from where it is.";
+            if (Picking)
+            {
+                if (PickedShip is not { } ship) return "Not flying a craft in KSP: pick the ship to plan for below (docked ones are undocked when their trip starts).";
+                if (Here() is not (var b, var o)) return $"{ship.Name} isn't in a closed orbit, so there's nothing to plan from.";
+                var picked = CurrentTarget()?.Name;
+                return $"{ship.Name} ({(link.InFlight ? "not the craft you're flying" : "from the save")}) · {FlightViewModel.OrbitText(o, b)} around {b.Name}" + (picked is null ? " · no target picked" : $" · target {picked}");
+            }
             if (link.Game?.Active is not { } active) return "Waiting for the game…";
             var name = _sync.ActiveCraft?.Name ?? active.Name;
             if (name != active.Name) name += $", docked at {active.Name}";
@@ -423,7 +605,8 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The craft being flown: the body it orbits and its orbit now. Null outside flight or off a closed orbit.</summary>
     private (CelestialBody Body, OrbitalElements Orbit)? Here()
     {
-        if (!_sync.Link.InFlight || _sync.Link.Game?.Active?.Orbit is not { IsPath: true } orbit) return null;
+        var orbit = !Picking ? _sync.Link.Game?.Active?.Orbit : PickedShip?.Orbit;
+        if (orbit is not { IsPath: true }) return null;
         return orbit.BodyName is { } name && _sync.StockBodies().GetValueOrDefault(name) is { } body ? (body, orbit.ToElements()) : null;
     }
 
@@ -776,7 +959,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (key == _spotsFor) return;
         var bodyChanged = key.Item1 != _spotsFor.Body;
         _spotsFor = key;
-        Spots = body is null ? [] : Landing.Targets(body, _sync.Save);
+        Spots = body is null ? [] : Landing.Targets(body, _sync.Save, SurveySpots?.Invoke(body.Name));
         OnPropertyChanged(nameof(Spots));
         var keep = !bodyChanged && _spot is { } current ? Spots.FirstOrDefault(s => s.Name == current.Name && s.Source == current.Source) : null;
         var pick = Spots.FirstOrDefault(s => s.Name == target && s.Source is "Flag" or "Landed craft")
@@ -794,7 +977,8 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The craft being flown as the save last recorded it (its parts, fuel and engines), if it's in the save.</summary>
     private VesselReport? ActiveReport()
     {
-        if (_sync.ActiveCraft?.SaveVesselId is not { } id || _sync.FindVessel(id) is not { } vessel) return null;
+        var shipId = !Picking ? _sync.ActiveCraft?.SaveVesselId : _pickedShip?.Id;
+        if (shipId is not { } id || _sync.FindVessel(id) is not { } vessel) return null;
         try { return VesselAnalysis.Analyze(vessel, _sync.Parts.Catalog); }
         catch (Exception) { return null; }
     }
@@ -805,13 +989,13 @@ public sealed class FromHereViewModel : ObservableObject
     /// </summary>
     private string? FuelNote()
     {
-        if (ActiveReport() is not { ThrustKn: > 0 } report) return null;
+        if (ActiveReport() is not { FullThrustKn: > 0 } report) return null;
         var own = Burns.Where(b => !b.Burn.ByReleasedCraft).ToList(); // a satellite burns its own fuel
         var times = VesselAnalysis.BurnTimes(report, own.Select(b => b.Burn.DeltaV));
         for (var i = 0; i < own.Count; i++)
             own[i].BurnTime = times[i] is { } t ? "burn " + Units.BurnTime(t) : "not enough fuel";
         var need = own.Sum(b => b.Burn.DeltaV);
-        var name = _sync.ActiveCraft!.Name;
+        var name = ShipName() ?? "The craft";
         return need > report.DeltaVVacuum
             ? $"{name} has {Format.Speed0(report.DeltaVVacuum)} left (as the save last recorded it): {Format.Speed0(need - report.DeltaVVacuum)} short."
             : null;
@@ -821,17 +1005,26 @@ public sealed class FromHereViewModel : ObservableObject
     private List<FlightBurn>? PlanRendezvous(CelestialBody body, OrbitalElements orbit, double after)
     {
         if (TargetOrbit(body, craftOnly: true) is not (var targetName, var targetElements, var craft)) return null;
-        var plan = Rendezvous.Plan(new RendezvousRequest(body, [new RendezvousTarget(targetName, targetElements)], after, 0,
-            new RendezvousTarget(_sync.Link.Game!.Active!.Name, orbit)));
+        var target = new RendezvousTarget(targetName, targetElements);
+        var chaser = ShipName() ?? "You";
+        // Still on its way in (a stretched orbit back from a moon, or escaping): captured into the target's plane straight
+        // onto the phasing orbit first, not an intercept with all its Δv in the match at the target (docs/MATH.md §4.7).
+        if (ArrivalMeet.Needed(orbit, targetElements))
+        {
+            var arrival = ArrivalMeet.Plan(body, orbit, chaser, target, after - LeadS, LeadS);
+            (_plannedRendezvous, _plannedTarget) = (arrival.Meet, craft);
+            return [.. arrival.Burns];
+        }
+        var plan = Rendezvous.Plan(new RendezvousRequest(body, [target], after, 0, new RendezvousTarget(chaser, orbit)));
         (_plannedRendezvous, _plannedTarget) = (plan, craft);
         return FlightViewModel.RendezvousBurns(plan);
     }
 
     /// <summary>The craft targeted in KSP when it's in orbit around another body than <paramref name="body"/>; null otherwise.</summary>
     private (RendezvousTarget Target, CelestialBody There, FlightCraft? Craft)? TargetElsewhere(CelestialBody body) =>
-        _sync.Link.Game?.Target is { Orbit: { IsClosed: true, BodyName: { } name } o } vessel && name != body.Name
+        CurrentTarget() is { Orbit: { IsClosed: true, BodyName: { } name } o } vessel && name != body.Name
         && _sync.StockBodies().GetValueOrDefault(name) is { } there
-            ? (new RendezvousTarget(vessel.Name, o.ToElements()), there, _sync.TargetCraft)
+            ? (new RendezvousTarget(vessel.Name, o.ToElements()), there, vessel.Craft)
             : null;
 
     /// <summary>
@@ -847,7 +1040,7 @@ public sealed class FromHereViewModel : ObservableObject
         try
         {
             var bodies = _sync.StockBodies().Values.ToList();
-            var chaser = _sync.ActiveCraft?.Name ?? "You";
+            var chaser = ShipName() ?? "You";
             var trips = await Task.Run(() => Rendezvous.TripsToTarget(new TripStart(body, bodies), new RendezvousTarget(chaser, orbit), there, target, after));
             (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
             (_plannedRendezvousBody, _plannedTarget, _meetFar) = (there, craft, (target, chaser));
@@ -909,14 +1102,14 @@ public sealed class FromHereViewModel : ObservableObject
     private (string Name, OrbitalElements Orbit, FlightCraft? Craft)? TargetOrbit(CelestialBody body, bool craftOnly = false)
     {
         var game = _sync.Link.Game;
-        if (game?.Target is { } vessel)
+        if (CurrentTarget() is { } vessel)
         {
             if (vessel.Orbit is not { IsClosed: true } o || o.BodyName != body.Name)
             {
                 Status = $"{vessel.Name} isn't in orbit around {body.Name}.";
                 return null;
             }
-            return (vessel.Name, o.ToElements(), _sync.TargetCraft);
+            return (vessel.Name, o.ToElements(), vessel.Craft);
         }
         if (!craftOnly && game?.TargetBody is { } name && _sync.StockBodies().GetValueOrDefault(name) is { Orbit: { } moonOrbit } moon)
         {
@@ -924,7 +1117,7 @@ public sealed class FromHereViewModel : ObservableObject
             Status = $"{moon.Name} doesn't orbit {body.Name}.";
             return null;
         }
-        Status = craftOnly ? "Target a craft in KSP first." : "Target a craft, or a moon of " + body.Name + ", in KSP first.";
+        Status = Picking ? "Pick the target craft." : craftOnly ? "Target a craft in KSP first." : "Target a craft, or a moon of " + body.Name + ", in KSP first.";
         return null;
     }
 
@@ -1006,7 +1199,9 @@ public sealed class FromHereViewModel : ObservableObject
 
     private void RefreshLive()
     {
+        RefreshShipChoices();
         RefreshFlyAs();
+        RefreshTargetCrafts();
         OnPropertyChanged(nameof(CraftText));
         RefreshDestinations();
         RefreshSpots();
@@ -1034,12 +1229,13 @@ public sealed class FromHereViewModel : ObservableObject
     private void RefreshDestinations()
     {
         var game = _sync.Link.Game;
-        var targetKey = game?.Target?.Name is { } craftName ? "craft:" + craftName : game?.TargetBody;
+        var current = CurrentTarget();
+        var targetKey = current?.Name is { } craftName ? "craft:" + craftName : !Picking ? game?.TargetBody : null;
         var targetChanged = targetKey != _targetKey;
         if (targetChanged)
         {
             _targetKey = targetKey;
-            _target.Name = game?.Target is { } t ? $"KSP's target: {t.Name} (rendezvous)"
+            _target.Name = current is { } t ? (!Picking ? $"KSP's target: {t.Name} (rendezvous)" : $"The target: {t.Name} (rendezvous)")
                 : game?.TargetBody is { } b ? $"KSP's target: {b}"
                 : "KSP's target (none set)";
             OnPropertyChanged(nameof(NeedsInclination));
@@ -1123,12 +1319,88 @@ public sealed class FromHereViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Lets the game fly the trip on its own: the add-on changes the craft's orbit at each burn's time and burns its fuel,
+    /// wherever the player is (another craft, the tracking station). A meeting ends parked beside the target (then docked);
+    /// a Go to a body ends in the planned orbit there once the capture burn is made.
+    /// </summary>
+    private async Task FlyInBackgroundAsync()
+    {
+        // The craft picked under "Fly as" when it's docked in the stack being flown (the add-on undocks it first), else the vessel itself.
+        if (ShipName() is not { } vessel) return;
+        var trip = _plannedRendezvous is null && _plannedTo is not null ? _trip?.Option : null;
+        if (_plannedRendezvous is null && trip is null) return;
+        OrbitalElements? end = null;
+        if (trip is not null && (end = trip.FinalOrbit) is null)
+        {
+            Status = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
+            return;
+        }
+        var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            if (trip is not null && end is not null)
+            {
+                var to = trip.Legs[^1].Hop.To;
+                var summary = await _sync.Link.StartBackgroundOrbitTripAsync(vessel, to.Name, burns, end, SelectedTrip?.Label ?? "");
+                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
+                         $"after the last burn, {_calendar.FormatDate(burns.Max(b => b.Ut))}.";
+            }
+            else if (_plannedRendezvous is { } plan)
+            {
+                var leg = plan.Legs[^1];
+                var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
+                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
+                         $"{_calendar.FormatDate(leg.ArrivalUt)}.";
+            }
+        }
+        catch (KRPC.Client.RPCException ex)
+        {
+            Status = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
+                ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
+                : ex.Message;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // kRPC hands the add-on's refusals over as these (a plan that misses, no fuel, a ship not found).
+            Status = "Not started: " + AddOnReason(ex.Message);
+        }
+        catch (Exception)
+        {
+            Status = "Lost the connection to KSP.";
+        }
+        finally
+        {
+            _busy = false;
+            RefreshLive();
+        }
+    }
+
+    /// <summary>
+    /// The add-on's own words from a refusal kRPC passed on: it arrives wrapped as " (Parameter '…')" with the server's
+    /// stack trace inside, so the wrapping, the trace and the add-on's trailing ": not started." are taken off.
+    /// </summary>
+    internal static string AddOnReason(string message)
+    {
+        var text = message;
+        var trace = text.IndexOf("Server stack trace", StringComparison.Ordinal);
+        if (trace >= 0) text = text[..trace];
+        text = text.Trim();
+        const string wrap = "(Parameter '";
+        if (text.IndexOf(wrap, StringComparison.Ordinal) is var at and >= 0) text = text[(at + wrap.Length)..];
+        text = text.TrimEnd('\'', ')', ' ', '\r', '\n');
+        if (text.EndsWith(": not started.", StringComparison.Ordinal)) text = text[..^": not started.".Length] + ".";
+        return text.Length > 0 ? text : message.Trim();
+    }
+
     /// <summary>Keeps the burns as a flight and opens it in the Flight pane (countdowns, drift, send all).</summary>
     private void Fly()
     {
         if (_plannedBody is not { } body || _plannedFrom is not { } from) return;
         var burns = Burns.Select(b => b.Burn).ToList();
-        var craft = _sync.ActiveCraft;
+        var craft = Picking && _pickedShip is { } picked ? new FlightCraft(picked.Name, picked.Id) : _sync.ActiveCraft;
         var flight = _plannedLanding is { } landing
             ? new Flight { Name = $"Land at {landing.Target.Name}", Kind = FlightKind.Landing, Landing = landing, LandSooner = _plannedSooner }
             : _plannedRendezvous is { } plan

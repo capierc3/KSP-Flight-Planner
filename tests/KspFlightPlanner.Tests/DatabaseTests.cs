@@ -222,6 +222,50 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Survey_data_round_trips_per_save_and_survives_a_rebuild()
+    {
+        _db.ActiveSave = "Protogen";
+        var survey = new SurveyRepository(_db);
+        var cells = Core.Ksp.SurfaceBake.GridRows(10) * Core.Ksp.SurfaceBake.GridColumns(10);
+        var map = new Core.Ksp.SurveyMap("Minmus", 10, 60_000, 40_400, 12.5,
+            Enumerable.Range(0, cells).Select(i => i / 1000f).ToArray(), Enumerable.Repeat(0.07f, cells).ToArray(),
+            Enumerable.Range(0, cells).Select(i => (short)(i % 3 - 1)).ToArray(), ["Lowlands", "Greater Flats"], new DateTime(2026, 11, 4, 0, 0, 0, DateTimeKind.Utc));
+        survey.SaveMap(map);
+        var coverage = new Core.Ksp.SurveyCoverage(10);
+        coverage.Estimate[5] = 1234;
+        survey.SaveCoverage("Minmus", coverage);
+        var reading = new Core.Ksp.SurveyReading(1000, "Minmus", new OrbitalElements(90_000, 0, 85, 1, 2, 3, 900), ["Bill Kerman"], true, true, true);
+        survey.SaveReading("abc", "Min Station", reading);
+        Assert.True(survey.AddReport(1500, "Minmus", "Lowlands", Core.Ksp.SurveyLevel.Estimate, "≈ 4%"));
+        Assert.False(survey.AddReport(1600, "Minmus", "Lowlands", Core.Ksp.SurveyLevel.Estimate, "again"));
+
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
+            cmd.ExecuteNonQuery();
+        }
+        TestDb.Release(_path);
+        _db.Initialize();
+
+        var loaded = survey.GetMap("Minmus")!;
+        Assert.Equal(map.Abundance, loaded.Abundance);
+        Assert.Equal(map.Biomes, loaded.Biomes);
+        Assert.Equal(map.BiomeNames, loaded.BiomeNames);
+        Assert.Equal((12.5, map.FetchedUtc), (loaded.InitialRotationDeg, loaded.FetchedUtc));
+        Assert.Equal(1234, survey.GetCoverage("Minmus", 10).Estimate[5]);
+        Assert.True(float.IsNaN(survey.GetCoverage("Minmus", 10).Rough[5]));
+        var back = survey.GetReading("abc")!;
+        Assert.Equal((reading.Ut, reading.Orbit, reading.HasNarrowBand), (back.Ut, back.Orbit, back.HasNarrowBand));
+        Assert.Equal(reading.Engineers, back.Engineers);
+        Assert.Equal("≈ 4%", Assert.Single(survey.Reports()).Text);
+
+        _db.ActiveSave = "Other";
+        Assert.Null(survey.GetMap("Minmus"));
+        Assert.Empty(survey.Reports());
+    }
+
+    [Fact]
     public void Missions_save_over_and_list_most_recently_saved_first()
     {
         var repo = new MissionRepository(_db);
