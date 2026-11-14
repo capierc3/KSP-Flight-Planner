@@ -136,6 +136,30 @@ public sealed class LandingTests : IDisposable
     }
 
     [Fact]
+    public void Targets_put_craft_first_and_leave_out_debris_and_loose_science_parts()
+    {
+        static string Landed(string id, string name, string type) => string.Join("\n",
+            "VESSEL", "{", $"pid = {id}", $"name = {name}", $"type = {type}", "sit = LANDED", "lat = 1", "lon = 2", "alt = 300",
+            "ORBIT", "{", "REF = 2", "}", "}");
+        var save = KspSaveReader.Parse(string.Join("\n",
+            "GAME", "{", "Title = Test", "FLIGHTSTATE", "{", "UT = 100",
+            Landed("a", "Panel", "DeployedSciencePart"),
+            Landed("b", "Science Station", "DeployedScienceController"),
+            Landed("c", "Base Flag", "Flag"),
+            Landed("d", "Base Debris", "Debris"),
+            Landed("e", "Mun Base", "Base"),
+            "}",
+            "SCENARIO", "{", "name = ScenarioCustomWaypoints",
+            "WAYPOINT", "{", "name = LZ", "celestialName = Mun", "latitude = 8.5", "longitude = 79.25", "}",
+            "}", "}"));
+
+        var targets = Landing.Targets(_bodies["Mun"], save, [new LandingTarget("Ore", "Ore survey", 3, 4)]);
+
+        Assert.Equal(["Science Station", "Mun Base", "Base Flag", "LZ", "Ore"], targets.Take(5).Select(t => t.Name));
+        Assert.All(targets.Skip(5), t => Assert.Equal("Landmark", t.Source));
+    }
+
+    [Fact]
     public void Surface_distance_matches_the_haversine_example()
     {
         // §1.9: Armstrong memorial → Kerbol arch on the Mun.

@@ -60,8 +60,8 @@
             <StackPanel Margin="0,8,0,0" Visibility="{Binding NeedsSpot, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <TextBlock Text="Spot" VerticalAlignment="Center" Width="100" />
-                    <ComboBox ItemsSource="{Binding Spots}" SelectedItem="{Binding SelectedSpot}" MinWidth="180" HorizontalAlignment="Left"
-                              ToolTip="Landmarks from the KSP wiki, then flags, landed craft and KerbNet waypoints from your save. A landed craft or flag targeted in KSP is picked for you." />
+                    <ComboBox ItemsSource="{Binding Spots}" SelectedItem="{Binding SelectedSpot}" MinWidth="180" HorizontalAlignment="Left" MaxDropDownHeight="600"
+                              ToolTip="Landed craft, flags and KerbNet waypoints from your save, then the ore survey's spots and landmarks from the KSP wiki. A landed craft or flag targeted in KSP is picked for you." />
                 </DockPanel>
                 <DockPanel Margin="0,6,0,0">
                     <TextBlock Text="Latitude, longitude" VerticalAlignment="Center" Width="100" TextWrapping="Wrap" />

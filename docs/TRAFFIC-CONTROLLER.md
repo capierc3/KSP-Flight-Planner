@@ -188,6 +188,7 @@ Built 2026-11-10, not tried in game. The **Station** window manages one station:
 - **Docked craft:** each with its crew, whether it's quiet (engines, RCS and wheels off), and its route's state. A held departure can be cancelled; the craft stays docked.
 - **Traffic, next 24 hours:** craft arriving (and their port), waiting 3 km behind for a port, or coming in now; departures held here (for clearance or your approval); and burns in this SOI, which its controllers upload. A burn of a craft only passing through is marked so. A burn gets a warning when no controller covers the SOI, or when more burns as urgent or more overlap its slot than the SOI's controllers have slots.
 - **Crew:** everyone aboard, part by part (a docked ship's crew marked so), with trait and duty. Buttons put each on or off duty, and **Move…** lists the parts with a free seat to move them to (see [KERBIN-RESOURCES.md](KERBIN-RESOURCES.md#moving-crew)). A pilot in the station's own parts without controls (a hitchhiker can) gets a hint to move to a cupola or pod, and the section says when no pilot in a part with controls could be the station's controller.
+- **Power** and **Heat:** whether the whole stack's batteries last the night where it is, the Sun now (next sunset or sunrise), the charge flow measured from the batteries, and whether its radiators keep up with its drills and ISRU. See [POWER-AND-HEAT.md](POWER-AND-HEAT.md).
 - **Supplies:** the station's own tanks, each resource with how full it is.
 
 The window reads the station once a second, loaded or not. Changes made at the space centre (a crew move, a port setting) are saved to the save file straight away.
@@ -215,6 +216,7 @@ Built 2026-11-09, not tried in game. A docked craft is made **quiet** so nothing
 | `../KerbinResources/` | Kerbin Resources: flight log, personnel, crew window (code map in [KERBIN-RESOURCES.md](KERBIN-RESOURCES.md)) |
 | `DockedQuiet.cs` | Docked craft made quiet, and woken on undocking |
 | `StationView.cs`, `StationWindow.cs` | The Station window: reading a station loaded or not, the window in flight, and taking over the Administration building |
+| `../PowerHeat/` | Power and heat: reading the parts (`PowerReader`), day and night (`Sunlight`), the sums (`PowerBudget`), splitting an editor station into modules (`ModuleSplit`), the shared drawing (`PowerView`), and the editor's Power & Heat window ([POWER-AND-HEAT.md](POWER-AND-HEAT.md)) |
 | `Ships.cs`, `RcsBalance.cs`, `TrafficPanel.cs`, `../PanelWindow.cs` | Ship helpers, RCS balance, the in-game Traffic Controller panel, shared window resizing |
 | `Refueler/FuelTransfer.cs`, `RefuelerPanel.cs`, `RefuelerScenario.cs` | Splitting a stack into station tanks and craft, moving fuel, the in-game Refueler window |
 | `src/KspFlightPlanner.App/Services/RouteWatch.cs` | The planner answering re-plan requests |

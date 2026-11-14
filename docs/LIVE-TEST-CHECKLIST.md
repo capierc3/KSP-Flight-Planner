@@ -261,7 +261,7 @@ From a round 30 km orbit around the Mun, inclined about 15°. See docs/MATH.md �
 rotation at UT 0 (θ₀): from the surface bake if there is one, else asked from the game. If the spot comes out on the other
 side of the Mun, or mirrored east/west, the longitude convention is wrong: note where you came down.
 
-- [ ] **Land at a spot** → the Spot list has the Mun's landmarks, then flags, landed craft and waypoints from the save. A flag
+- [ ] **Land at a spot** → the Spot list has landed craft, flags and waypoints from the save (no debris or loose science parts), then the Mun's landmarks. A flag
       targeted in KSP is picked for you
 - [ ] Pick a landmark (or plant a flag first and target it) → **Plan it** → **Deorbit for …**, **Swing the track over …**
       (a few m/s normal, sometimes none), **Brake to land at …** (~600 m/s for TWR 2). The deorbit is ~17 m/s

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using KspFlightPlanner.KerbinResources;
+using KspFlightPlanner.PowerHeat;
 
 namespace KspFlightPlanner.Traffic
 {
@@ -46,6 +47,12 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>The main craft's resources: name → (amount, capacity).</summary>
         public readonly SortedDictionary<string, double[]> Supplies = new SortedDictionary<string, double[]>();
+
+        /// <summary>The whole stack's power and heat parts (docked craft share one electrical system), or null if they couldn't be read.</summary>
+        public PowerParts Power;
+
+        /// <summary>Loaded craft in flight: the craft itself, for the Sun now and the measured flow.</summary>
+        public Vessel Live;
 
         /// <summary>The crafts of the stack, the station's own first.</summary>
         internal IEnumerable<string> Crafts => Parts.Select(p => p.Craft).Distinct().OrderBy(c => c == MainCraft ? 0 : 1);
@@ -125,8 +132,20 @@ namespace KspFlightPlanner.Traffic
                 if (part.Craft == view.MainCraft)
                     foreach (var r in p.Resources) view.Add(r.resourceName, r.amount, r.maxAmount);
             }
+            view.Power = Safe(() => PowerReader.Of(v.parts, true));
+            view.Live = v;
             view.Finish();
             return view;
+        }
+
+        private static PowerParts Safe(Func<PowerParts> read)
+        {
+            try { return read(); }
+            catch (Exception e)
+            {
+                UnityEngine.Debug.LogWarning("[KspFlightPlanner] Station window power: " + e);
+                return null;
+            }
         }
 
         internal static StationView Of(ProtoVessel pv)
@@ -172,6 +191,7 @@ namespace KspFlightPlanner.Traffic
                 if (part.Craft == view.MainCraft)
                     foreach (var r in pp.resources) view.Add(r.resourceName, r.amount, r.maxAmount);
             }
+            view.Power = Safe(() => PowerReader.Of(pv));
             view.Finish();
             return view;
         }

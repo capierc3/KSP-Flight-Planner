@@ -19,6 +19,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
 - **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the flight log; 11.13 The pilot's safety stop; 11.14 Booking a port, and waiting for one; 11.15 Which route craft may use a port
 - **12. Calendar dates and ages** — 12.1 Dates; 12.2 Birthdays and ages
+- **13. Power and heat in game** — 13.1 Night on the surface, and the next sunset; 13.2 Night in orbit; 13.3 Charge through the night; 13.4 Core heat and radiators
 
 **Where to look for…**
 
@@ -36,6 +37,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - A relay network / constellation: §5.1, §5.2
 - Why a mission's legs show a given Δv: §6.1, §6.2
 - Whether your rocket is good enough: §7.3, §7.4
+- Whether a base or station has the power for its nights, and the radiators for its drills: §7.8, §13
 - A vessel imported from your save, or the live game: §8.1, §8.2
 - Flying a whole mission, each step from where the last one left you: §8.5
 - Where the ore is, and how fast a station maps it: §10.1, §10.2
@@ -432,7 +434,7 @@ Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to t
 
 Fly mode times the deorbit burn from the craft's real orbit (step 3): see §2.9. Still to come: a drag model for bodies with air.
 
-- Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
+- Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landed craft, flags, waypoints, survey spots, landmarks), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
 - Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
 
 ### 2.7 Launching into an inclined orbit
@@ -2665,6 +2667,92 @@ Example: Jeb is first seen at the founding (ut 0) and is given 92.4 years. His b
 
 - Code: `Personnel.NewRecord`, `Calendar.YearsBetween` (mod/KspFlightPlanner.AddOns/KerbinResources)
 - Source: none (game rules)
+
+## 13. Power and heat in game
+
+The sums behind the Power & Heat window in the VAB/SPH and the Station window's Power and Heat sections ([POWER-AND-HEAT.md](POWER-AND-HEAT.md) has what counts and how the windows work). They are the same power budget as §7.8, worked out in game from the live parts, plus core heat.
+
+### 13.1 Night on the surface, and the next sunset
+
+KSP keeps each body's solar day (its turn measured against the Sun) as `solarDayLength`. That is the synodic period of §7.8, S = P · Y / (Y − P), where P is the body's rotation and Y the year of the planet it belongs to. In the editor the base is taken at the equator, where night is S / 2.
+
+For a landed craft the window uses where it really is. From the craft's latitude φ and the Sun's declination δ (both measured against the body's spin axis), the Sun's height e over the horizon follows the hour angle H, which turns once per solar day:
+
+```
+sin e  = sin φ · sin δ + cos φ · cos δ · cos H          (H = 0 at noon, negative in the morning)
+sunset at  H = +H₀,  sunrise at  H = −H₀,   cos H₀ = −tan φ · tan δ
+night  = S · (2π − 2H₀) / 2π
+next change = (H₀ − H) · S / 2π  by day,   ((−H₀ − H) mod 2π) · S / 2π  by night
+```
+
+If |tan φ · tan δ| ≥ 1, the Sun never sets (or never rises) there. The spin axis is taken from the body's angular velocity, because KSP moves the ground at ω × r, so east is ω̂ × up.
+
+Worked example (Minmus):
+
+1. Minmus turns in P = 40,400 s, and Kerbin's year is Y = 9,203,545 s. S = 40,400 × 9,203,545 / 9,163,145 = **40,578 s**, so night at the equator is **20,289 s** (5 h 38 min)
+2. At the equator (φ = 0), H₀ = 90° for any δ. At noon the Sun sets in 40,578 / 4 = **10,145 s**
+3. At φ = 60° with the Sun 5° off Minmus's equator (it orbits at 6°): cos H₀ = −tan 60° · tan 5° = −0.1515, so H₀ = 98.72°. On the summer side, night is 40,578 × (360 − 197.43) / 360 = **18,324 s**
+
+Terrain (a crater wall) and the planet eclipsing its moon aren't counted.
+
+- Code: `Sunlight.Landed`, `.Turning`, `.SurfaceNight` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: the hour-angle equation for the Sun's altitude ([Wikipedia: Solar zenith angle](https://en.wikipedia.org/wiki/Solar_zenith_angle), [Sunrise equation](https://en.wikipedia.org/wiki/Sunrise_equation)); §7.8
+
+### 13.2 Night in orbit
+
+In the editor and for unloaded craft, the night is the longest one at that altitude, as in §7.8: the Sun in the orbit's plane, so the craft crosses the full shadow, a cylinder as wide as the body: t_night = T · asin(R / a) / π.
+
+For a loaded craft the window steps along its real orbit, 720 steps a period, and finds where it next enters and leaves the shadow. A point p (from the body's centre) is in shadow when p · ŝ < 0 and |p − (p · ŝ) ŝ| < R, where ŝ points to the Sun. The Sun's direction is held for that orbit.
+
+Worked example: a 30 km orbit round Minmus (R = 60,000 m, μ = 1.7658 × 10⁹ m³/s²): a = 90,000 m, T = 2π √(90,000³ / 1.7658 × 10⁹) = 4,037 s, and t_night = 4,037 × asin(60 / 90) / π = **938 s**.
+
+- Code: `Sunlight.OrbitNight`, `.Orbiting` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: §7.8; cylindrical shadow model
+
+### 13.3 Charge through the night
+
+The parts' rates come from their own modules: solar panels' `chargeRate` × `efficiencyMult`, scaled by the panel's own `powerCurve` at the distance from the Sun (inverse square if it has none). Then generators (RTGs), fuel cells (converters whose output is charge), and the loads: probe cores, lights, the lab's `powerRequirement`, drills and ISRU converters (charge in their recipe), and radiators. A loaded craft also measures the real flow from its batteries: the change in stored charge over the last 10 s of game time (not while they're full or empty).
+
+```
+day surplus = solar + generators − loads                       (fuel cells off: they burn fuel)
+night drain = max(0, loads − generators − fuel cells)          (fuel cells cover only what's missing)
+night need  = night drain · t_night
+lasts       = batteries / night drain
+refill      = night need / day surplus                          (must fit in the day)
+```
+
+Worked example: a Minmus base with three Gigantor panels (24.4 EC/s each, 73.2 in all; Minmus is at Kerbin's distance, so 100% of their rating), a Convert-O-Tron 250 making Lf+Ox (30 EC/s), a Drill-O-Matic (15 EC/s), four small Thermal Control Systems (0.025 EC/s each) and one Z-4K battery (4,000 EC). Night is 20,289 s (§13.1).
+
+1. Everything on: loads = 30 + 15 + 0.1 = 45.1 EC/s. The day has 73.2 − 45.1 = **28.1 EC/s** spare
+2. At night the batteries give 45.1 EC/s and the night takes 45.1 × 20,289 = **915,037 EC**: they run out in 4,000 / 45.1 = **89 s**
+3. ISRU and drill switched off at night: the radiators' 0.1 EC/s takes **2,029 EC**, which fits. The day wins it back in 2,029 / 73.1 = **28 s**
+
+- Code: `PowerReader.Of`, `PowerBudget.Of`, `.DistanceScale`, `PowerMeter.Sample` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: KSP 1.12 part modules (`ModuleDeployableSolarPanel`, `ModuleGenerator`, `BaseConverter`, `ModuleScienceConverter`, `ModuleCommand`, `ModuleLight`, `ModuleActiveRadiator`); §7.8
+
+### 13.4 Core heat and radiators
+
+Drills and ISRU converters heat a core (`ModuleCoreHeat`). Radiators pull heat out of it only once it reaches its goal temperature, so the question is whether they can take all of it at the goal. KSP's heat figures are energy per 1/50 s, so dividing by 50 gives kW, the numbers its part info shows. Read from the game's code:
+
+```
+a core's need = Σ over running converters of TemperatureModifier(goal) / 50 · radiatorCoolingFactor
+it draws at most MaxCoolant
+a radiator gives maxEnergyTransfer / 50                          (only cooling, and extended if it folds)
+enough when Σ radiators ≥ Σ min(need, MaxCoolant)
+```
+
+Every running converter adds its own heat to the core (`ResolveConverterEnergy`), so an ISRU making two things at once makes twice the heat. KSP's part info shows only one converter's worth.
+
+Radiators pool their cooling for every core (shared out in proportion to MaxCoolant). The exception is the flat radiator panels (`parentCoolingOnly`), which only cool the part they're mounted on and that part's other children. Short of cooling, the core climbs past its goal. Converters slow down along their `ThermalEfficiency` curve (the ISRU is at 10% by 1,250 K) and stop at the shutdown temperature. Engineers aboard cut the heat a little; that isn't counted.
+
+Worked example (the base in §13.3):
+
+1. Convert-O-Tron 250: TemperatureModifier(1,000 K) = 10,000, so 10,000 / 50 × 1 = **200 kW** for one recipe, and MaxCoolant is 200. All four recipes at once would make 800 kW, more than it can shed, so it overheats whatever the radiators
+2. Drill-O-Matic: TemperatureModifier(500 K) = 5,000, so **100 kW**, and MaxCoolant is 100
+3. A small Thermal Control System: 2,500 / 50 = **50 kW**. Four give 200 kW of the 300 needed: **short 100 kW**. Six small ones, or a medium (12,500 / 50 = 250 kW) and a small, keep both cores at their goal
+
+- Code: `PowerReader` (heat), `PowerBudget.Heat` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: KSP 1.12 `ModuleCoreHeat.MoveCoreEnergyToRadiators`, `.GetInfo`, `ModuleActiveRadiator.GetInfo` (read from Assembly-CSharp); stock part configs (ISRU, RadialDrill, foldingRadSmall/Med)
 
 ## Sources
 

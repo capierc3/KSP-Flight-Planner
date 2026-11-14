@@ -195,26 +195,32 @@ public static class Landing
     }
 
     /// <summary>
-    /// Spots to land at on <paramref name="body"/>: its wiki landmarks, then from the save its flags, landed craft and
-    /// custom (KerbNet) waypoints, then <paramref name="more"/> (the ore survey's best spots).
+    /// Spots to land at on <paramref name="body"/>, the ones you most likely want first: from the save its landed craft
+    /// (bases, probes, rovers), flags and custom (KerbNet) waypoints, then <paramref name="more"/> (the ore survey's best
+    /// spots), then the body's wiki landmarks. Debris and the loose parts of a deployed science station are left out
+    /// (the station's control unit stays in): they'd crowd the list.
     /// </summary>
     public static IReadOnlyList<LandingTarget> Targets(CelestialBody body, KspSave? save, IEnumerable<LandingTarget>? more = null)
     {
-        var list = body.Landmarks
-            .Select(m => new LandingTarget(m.Name, "Landmark", m.LatitudeDeg, m.LongitudeDeg))
-            .ToList();
-        if (save is null) return [.. list, .. more ?? []];
-        foreach (var v in save.Vessels)
+        var craft = new List<LandingTarget>();
+        var flags = new List<LandingTarget>();
+        var waypoints = new List<LandingTarget>();
+        if (save is not null)
         {
-            if (v.Situation is not ("LANDED" or "SPLASHED") || v.Orbit?.BodyName != body.Name
-                || !double.IsFinite(v.LatitudeDeg) || !double.IsFinite(v.LongitudeDeg)) continue;
-            list.Add(new LandingTarget(v.Name, v.Type == "Flag" ? "Flag" : "Landed craft", v.LatitudeDeg, v.LongitudeDeg,
-                double.IsFinite(v.AltitudeM) ? v.AltitudeM : null));
+            foreach (var v in save.Vessels)
+            {
+                if (v.Situation is not ("LANDED" or "SPLASHED") || v.Orbit?.BodyName != body.Name
+                    || v.Type is "Debris" or "DeployedSciencePart"
+                    || !double.IsFinite(v.LatitudeDeg) || !double.IsFinite(v.LongitudeDeg)) continue;
+                var isFlag = v.Type == "Flag";
+                (isFlag ? flags : craft).Add(new LandingTarget(v.Name, isFlag ? "Flag" : "Landed craft", v.LatitudeDeg, v.LongitudeDeg,
+                    double.IsFinite(v.AltitudeM) ? v.AltitudeM : null));
+            }
+            waypoints.AddRange(save.Waypoints.Where(w => w.BodyName == body.Name)
+                .Select(w => new LandingTarget(w.Name, "KerbNet waypoint", w.LatitudeDeg, w.LongitudeDeg)));
         }
-        list.AddRange(save.Waypoints.Where(w => w.BodyName == body.Name)
-            .Select(w => new LandingTarget(w.Name, "KerbNet waypoint", w.LatitudeDeg, w.LongitudeDeg)));
-        list.AddRange(more ?? []);
-        return list;
+        var landmarks = body.Landmarks.Select(m => new LandingTarget(m.Name, "Landmark", m.LatitudeDeg, m.LongitudeDeg));
+        return [.. craft, .. flags, .. waypoints, .. more ?? [], .. landmarks];
     }
 
     /// <summary>Distance along the surface between two spots (haversine, §1.9).</summary>

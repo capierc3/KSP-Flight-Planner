@@ -6,6 +6,7 @@
       Traffic/             Traffic Controller: flies routes and directs station traffic (kRPC "PlannerTraffic")
       Refueler/            moves fuel between a docked craft and the station's tanks
       KerbinResources/     Kerbin Resources: every kerbal's flights, the player's and the routes' (kRPC "PlannerCrew")
+      PowerHeat/           power through the night and core heat: the editor's Power & Heat window, the Station window's sections
       (Dispatch, an idea)  will run routes by itself: loops, triggers, crew rotation
     kRPC loads it from GameData like its own services, so it needs kRPC installed.
     It also needs ModuleManager (a standalone mod, on CKAN): Traffic/TrafficPorts.cfg adds Traffic Controller's port and

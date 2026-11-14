@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using KSP.UI.Screens;
 using KspFlightPlanner.KerbinResources;
+using KspFlightPlanner.PowerHeat;
 using UnityEngine;
 using CrewLog = KspFlightPlanner.KerbinResources.FlightLog;
 
@@ -37,6 +38,10 @@ namespace KspFlightPlanner.Traffic
         private string _moving;
         private string _note = "";
         private readonly Dictionary<string, bool> _shut = new Dictionary<string, bool>();
+        private PowerBudget _budget;
+        private LivePower _livePower;
+        private string _where = "";
+        private bool _showPowerParts;
 
         private bool AtKsc => HighLogic.LoadedScene == GameScenes.SPACECENTER;
 
@@ -127,7 +132,7 @@ namespace KspFlightPlanner.Traffic
             if (Time.realtimeSinceStartup >= _nextLook) Look();
             GUI.skin = null;
             PanelWindow.FollowResize(ref _window, ref _resizing);
-            _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, AtKsc ? "Administration: Stations" : "Station",
+            _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, AtKsc ? "Administration: Stations" : "Station", PanelWindow.Dark(),
                 GUILayout.Width(_window.width), GUILayout.Height(_window.height));
         }
 
@@ -143,11 +148,59 @@ namespace KspFlightPlanner.Traffic
                     if (_picked == 0) _picked = StationView.All().Select(p => p.Key).FirstOrDefault();
                     _view = _picked != 0 ? StationView.Find(_picked) : null;
                 }
+                ReadPower();
             }
             catch (Exception e)
             {
                 _view = null;
                 Debug.LogWarning("[KspFlightPlanner] Station window: " + e);
+            }
+        }
+
+        /// <summary>
+        /// The station's power through its night and its core heat, where it is now: a loaded craft's own Sun and measured
+        /// flow, an unloaded one's longest night for its orbit or the surface (docs/POWER-AND-HEAT.md).
+        /// </summary>
+        private void ReadPower()
+        {
+            _budget = null;
+            _livePower = null;
+            var v = _view;
+            if (v?.Power == null) return;
+            try
+            {
+                var body = FlightGlobals.Bodies?.FirstOrDefault(b => b.bodyName == v.Body);
+                if (body == null) return;
+                double night, day, distance = Sunlight.SunDistance(body);
+                var live = v.Live != null && v.Live.loaded ? v.Live : null;
+                if (live != null)
+                {
+                    _livePower = new LivePower
+                    {
+                        Sun = live.LandedOrSplashed ? Sunlight.Landed(live) : Sunlight.Orbiting(live),
+                        Measured = PowerMeter.Sample(live.persistentId, Planetarium.GetUniversalTime(), v.Power.Stored, v.Power.Capacity),
+                    };
+                    if (Sunlight.Sun != null) distance = (Sunlight.Sun.position - live.GetWorldPos3D()).magnitude;
+                }
+                if (v.Landed)
+                {
+                    var here = _livePower?.Sun;
+                    night = here != null ? here.NightLength : Sunlight.SurfaceNight(body);
+                    day = Math.Max(0, body.solarDayLength - night);
+                    _where = "on " + body.bodyName + (here != null ? " here" : " (at the equator)");
+                }
+                else
+                {
+                    night = Sunlight.OrbitNight(body, (v.ApA + v.PeA) / 2, out var period);
+                    day = Math.Max(0, period - night);
+                    _where = "at its longest, round " + body.bodyName;
+                }
+                _budget = PowerBudget.Of(v.Power, distance, night, day);
+            }
+            catch (Exception e)
+            {
+                _budget = null;
+                Debug.LogWarning("[KspFlightPlanner] Station window power: " + e);
             }
         }
 
@@ -201,6 +254,10 @@ namespace KspFlightPlanner.Traffic
             if (v.Crafts.Count() > 1 && Section("Docked craft", v)) DrawDocked(v);
             if (Section("Traffic, next 24 h", v)) DrawTraffic(v, now);
             if (Section("Crew", v)) DrawCrew(v, now);
+            if (_budget != null && Section("Power", v))
+                PowerView.DrawPower(_budget, v.Power, _where, _livePower, i => i.On, null, ref _showPowerParts);
+            if (_budget != null && (v.Power.Cores.Count > 0 || v.Power.Radiators.Count > 0) && Section("Heat", v))
+                PowerView.DrawHeat(_budget, v.Power, null, r => r.On, null);
             if (v.Supplies.Count > 0 && Section("Supplies", v)) DrawSupplies(v);
             GUILayout.EndScrollView();
             if (_note.Length > 0) GUILayout.Label(_note, Wrap());
