@@ -111,7 +111,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
         _settingsRepository.SaveDockedChoice(vesselName, isCraft);
         _dockedChoices = _settingsRepository.LoadDockedChoices();
         OnPropertyChanged(nameof(Save));
-        if (Save is { } save) UpdateStatus(RefreshLinkedLocations(save));
+        if (Save is { } save) UpdateStatus(RefreshLinkedLocations(save, before: null));
     }
 
     /// <summary>
@@ -388,7 +388,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
             if (!changed) return;
             Save = merge.Save;
         }
-        UpdateStatus(RefreshLinkedLocations(Save!));
+        UpdateStatus(RefreshLinkedLocations(Save!, previous));
     }
 
     private static bool VesselsChanged(KspSave before, KspSave after) =>
@@ -405,22 +405,24 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
                 _ => false,
             });
 
-    /// <summary>Moves every location linked to this save onto its vessel's current orbit. Returns how many changed.</summary>
-    private int RefreshLinkedLocations(KspSave save)
+    /// <summary>
+    /// Moves every location linked to this save onto its vessel's current orbit, relinking ones whose vessel came back
+    /// under a new id after docking or undocking (<see cref="VesselRelink"/>; <paramref name="before"/> is the previous
+    /// reading). Returns how many changed.
+    /// </summary>
+    private int RefreshLinkedLocations(KspSave save, KspSave? before)
     {
         var bodies = StockBodies();
         var craft = save.WithDockedCraft(DockedChoice).ToList();
-        var byId = craft.Where(v => v.Id.Length > 0).GroupBy(v => v.Id).ToDictionary(g => g.Key, g => g.First());
+        var linked = _locations.GetAll().Where(l => l.IsLinked && l.KspSave == SaveName).ToList();
+        var follows = VesselRelink.Follow(linked, save, craft, ReferenceEquals(before, save) ? null : before);
         var updated = 0;
-        foreach (var location in _locations.GetAll().Where(l => l.IsLinked && l.KspSave == SaveName))
+        foreach (var location in linked)
         {
-            // A craft that docked (or undocked) has another id now, but keeps its name: follow it by that, when only one has it.
-            if (!byId.TryGetValue(location.KspVesselId!, out var vessel)
-                && craft.Where(v => v.Name == location.Name).Take(2).ToList() is [var renamed] && !byId.ContainsKey(location.KspVesselId!))
-                vessel = renamed;
-            if (vessel is null) continue;
-            if (SaveImport.Convert(vessel, SaveName!, bodies).Location is not { } current) continue; // e.g. it landed: keep the last orbit
-            var refreshed = SaveImport.Refresh(location, current) with { KspVesselId = vessel.Id };
+            if (!follows.TryGetValue(location.Id, out var vessel)) continue;
+            var relinked = location.KspVesselId == vessel.Id ? location : location with { KspVesselId = vessel.Id };
+            // Landed (say): keep the last orbit, but still follow the new id.
+            var refreshed = SaveImport.Convert(vessel, SaveName!, bodies).Location is { } current ? SaveImport.Refresh(relinked, current) : relinked;
             if (refreshed == location) continue;
             _locations.Update(refreshed);
             updated++;
@@ -433,8 +435,7 @@ public sealed partial class SaveSync : ObservableObject, IDisposable
     {
         if (Save is null) return;
         var linked = _locations.GetAll().Where(l => l.IsLinked && l.KspSave == SaveName).ToList();
-        var ids = Craft.Select(v => v.Id).ToHashSet();
-        var missing = linked.Count(l => !ids.Contains(l.KspVesselId!));
+        var missing = linked.Count(l => Save.FindVessel(l.KspVesselId!) is null);
         var linkedIds = linked.Select(l => l.KspVesselId).ToHashSet();
         NewVessels = Candidates().Count(c => c.CanImport && SaveImport.IsUsuallyWanted(c.Vessel) && !linkedIds.Contains(c.Vessel.Id));
 

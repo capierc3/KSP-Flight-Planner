@@ -177,8 +177,8 @@
                                                 Command="{Binding DataContext.RemoveLandingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
                                         <StackPanel>
                                             <TextBlock Text="Landing spot" FontWeight="SemiBold" FontSize="12" />
-                                            <ComboBox ItemsSource="{Binding LandingTargets}" SelectedItem="{Binding SelectedTarget}" Margin="0,4,8,0" FontSize="12"
-                                                      ToolTip="Landmarks from the KSP wiki, then flags, landed craft and KerbNet waypoints from your save. Type a position below for any other spot." />
+                                            <ComboBox ItemsSource="{Binding LandingTargets}" SelectedItem="{Binding SelectedTarget}" Margin="0,4,8,0" FontSize="12" MaxDropDownHeight="600"
+                                                      ToolTip="Landed craft, flags and KerbNet waypoints from your save, then the ore survey's spots and landmarks from the KSP wiki. Type a position below for any other spot." />
                                             <Grid Margin="0,4,8,0">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />

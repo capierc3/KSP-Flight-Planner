@@ -11,11 +11,15 @@ Each section has the formulas, a worked example, the code that implements them a
 - **1. Foundations** — 1.1 Constants and body data; 1.2 Circular orbits: speed and period; 1.3 Vis-viva: speed anywhere on an orbit; 1.4 Where things are at a given time: Kepler's equation; 1.5 Orbital elements from position and velocity; 1.6 Sphere of influence; 1.7 Atmosphere; 1.8 Maneuver-node axes; 1.9 Surface positions: latitude, longitude and distance
 - **2. Changing your orbit around one body** — 2.1 Hohmann transfer: changing circular orbit altitude; 2.2 Elliptical orbits; 2.3 Plane changes; 2.4 Synchronous (stationary) orbit; 2.5 Deorbiting; 2.6 Landing at a chosen spot; 2.7 Launching into an inclined orbit; 2.8 Quick burns from where you are; 2.9 Landing at a spot from where you are; 2.10 Changing the inclination from where you are
 - **3. Going to another planet** — 3.1 Escaping a body and arriving at another (hyperbolic burns); 3.2 Interplanetary Hohmann: phase angle, timing, v∞; 3.3 Ejection angle: where in your parking orbit to burn; 3.4 Real launch windows: Lambert's problem and porkchop plots; 3.5 Orbits around the Sun (Kerbol); 3.6 Transfers to custom locations; 3.7 Between a planet and its moons: transfer, course correction and capture; 3.8 Trips anywhere: routes, launch windows and options; 3.9 Arriving in a chosen inclination (a polar orbit at the Mun); 3.10 The next window to every planet
-- **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body
+- **4. Meeting a craft in orbit (rendezvous)** — 4.1 How a rendezvous is planned; 4.2 Matching planes; 4.3 Phase angle, waiting, and phasing orbits; 4.4 The intercept: Lambert's problem again; 4.5 When and where to launch; 4.6 Starting from a craft around another body; 4.7 Meeting from an orbit still on its way in
 - **5. Deploying a satellite constellation** — 5.1 Resonant orbits for satellite constellations; 5.2 Burn times and node values
 - **6. Budgeting a mission** — 6.1 The Δv map and mission budgets; 6.2 Leg tools: replacing map values with a planned leg; 6.3 Transfer legs: a chosen launch window; 6.4 Deploy steps: a constellation released at a stop; 6.5 Rendezvous legs: meeting a placed craft
 - **7. Your rocket: Δv and TWR** — 7.1 A vessel's remaining Δv (rocket equation); 7.2 A saved design's stage-by-stage Δv; 7.3 Does a design have enough Δv for the mission?; 7.4 TWR at every landing and lift-off; 7.5 A design taken apart: mass, cost and what each stage drops; 7.6 Which engine for a stage? (engine chart); 7.7 Antenna range and signal (CommNet planner); 7.8 Power through the longest night (power budget); 7.9 Δv as fuel: what each phase burns, and refuelling a craft
 - **8. Working with your save and the live game** — 8.1 Importing vessels from a KSP save; 8.2 Following the live game (kRPC); 8.3 Flying a plan: how far off it you are; 8.4 Re-planning a rendezvous; 8.5 The flight log: Δv a flight used; 8.6 The flight report: ascent losses, burns and touchdowns; 8.7 Filling a warp from the orbit; 8.8 The flight map; 8.9 Comparing a rocket's flights; 8.10 Ascent coach: what the climb did; 8.11 Ascent coach: the best climb for this rocket; 8.12 Flying a whole mission
+- **10. Surveying for ore** — 10.1 Ore abundance, and what the scanners show; 10.2 What a pass maps
+- **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the flight log; 11.13 The pilot's safety stop; 11.14 Booking a port, and waiting for one; 11.15 Which route craft may use a port
+- **12. Calendar dates and ages** — 12.1 Dates; 12.2 Birthdays and ages
+- **13. Power and heat in game** — 13.1 Night on the surface, and the next sunset; 13.2 Night in orbit; 13.3 Charge through the night; 13.4 Core heat and radiators
 
 **Where to look for…**
 
@@ -33,8 +37,10 @@ Each section has the formulas, a worked example, the code that implements them a
 - A relay network / constellation: §5.1, §5.2
 - Why a mission's legs show a given Δv: §6.1, §6.2
 - Whether your rocket is good enough: §7.3, §7.4
+- Whether a base or station has the power for its nights, and the radiators for its drills: §7.8, §13
 - A vessel imported from your save, or the live game: §8.1, §8.2
 - Flying a whole mission, each step from where the last one left you: §8.5
+- Where the ore is, and how fast a station maps it: §10.1, §10.2
 
 ## 1. Foundations
 
@@ -428,7 +434,7 @@ Worked example — the Mun, from a 30 km circular orbit inclined 15°, down to t
 
 Fly mode times the deorbit burn from the craft's real orbit (step 3): see §2.9. Still to come: a drag model for bodies with air.
 
-- Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landmarks, flags, landed craft, waypoints), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
+- Code: `Landing.Plan` (steps 1–5, plus the approach with `Landing.ApproachPeak`), `Landing.Targets` (landed craft, flags, waypoints, survey spots, landmarks), `LegTools.ApplyLanding` (replaces the map value); tested in `LandingTests` (this worked example is `Mun_landing_matches_the_worked_example`)
 - Source: argument of latitude and ground tracks: Curtis chapter 4 (orbits in three dimensions); Hohmann and vis-viva: §2.1, §1.3; braking with gravity loss: the constant-altitude braking approximation
 
 ### 2.7 Launching into an inclined orbit
@@ -781,11 +787,15 @@ Worked example — a tilted orbit round Minmus (R = 60 km, μ = 1.7658×10⁹): 
 3. Aimed in 3D, the burn is **208.0 m/s** (prograde 113.7, normal 173.3, radial 17.0). The craft leaves Minmus's sphere 2.6 hours later and reaches 150 km over Kerbin **58.6 hours** (9.8 Kerbin days) after the burn, where the capture is **−874.7 m/s**.
 4. Across tilts of 30–150° and every node, the burn is 157–287 m/s. The worst is a polar orbit side-on to Minmus's path.
 
+**Other moons in the way.** Going out to Minmus (47,000 km) crosses the Mun's orbit (12,000 km). If the Mun's sphere is where the path crosses, KSP switches to the Mun there and the rest of the path is wrong. So every path is also checked against the planet's other moons, with the same crossing search as step 2, from the burn up to where it enters the destination's sphere. A moon is only checked when the path's height range, r_p to r_a, overlaps its orbit's, widened by its r_SOI. A path that enters another moon's sphere first counts as no arrival, and a first-guess transfer that does is skipped: the soonest window after it is looked for in steps of 1/48 of that moon's orbit (about 3.2 hours for the Mun), and the pane says how long that waits and why. The way back down (Minmus → Kerbin) and hops across get the same check, from leaving the origin's sphere to the arrival. Planning without the list of bodies (Plan mode's arrival-tilt estimate) skips it.
+
+Worked example — Kerbin → Minmus, the Mun's sphere is 2,430 km across at 12,000 km, so it covers about 2·asin(2,430/12,000) ≈ 23° of the crossing circle. The Mun moves round that in 23/360 of its 6.4-day (Kerbin-day) orbit, about 0.4 days. The transfer reaches the Mun's distance well before Minmus, so when the soonest transfer is blocked, a clear one leaves within half a day or so.
+
 Moon to moon (Mun → Minmus) and planet to planet are hops *across*: §3.8.
 
 **Already on the way, and missing.** A path that crosses the moon's orbit and passes within five of its spheres (or a tenth of its distance), without entering, also counts as on the way: a correction is planned rather than a new transfer. The correction is tried now, a quarter of the way to the meeting and halfway (a plane fix is cheaper later), and the cheapest wins.
 
-- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`, `Hops.ComesDown`, `Hops.EscapeVelocities`, `Hops.FallingVInfinity`, `Aim.Solve`, `Aim.Polish`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
+- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`, `Hops.ComesDown`, `Hops.Blocker`, `Hops.EscapeVelocities`, `Hops.FallingVInfinity`, `Aim.Solve`, `Aim.Polish`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
 - Source: Curtis 8.9–8.10 (patched conics and the sphere of influence); Curtis 5.3 (Lambert's problem); vis-viva (§1.3)
 
 ### 3.8 Trips anywhere: routes, launch windows and options
@@ -1100,6 +1110,24 @@ For Mun Station the capture is at 45 − 3 = **42 km**. The trip is an 843.7 m/s
 - Code: `Rendezvous.TripsToTarget`, `Rendezvous.MeetAfterCapture`, `TripToTarget.CapturesIntoPhasing`, `Rendezvous.MeetingAltitudeM`, `RendezvousRequest.From`, `RendezvousPlan.TripOptions`; `RendezvousViewModel.BuildRequest` (with the map's way as a fallback: `LegTools.FindApproach`, `LegTools.TripTimeS`); `FromHereViewModel.PlanMeetFarAsync`; `FlightViewModel.ReplanAsync` (`Flight.TripFromBody`); tested in `TripToTargetTests` and `LegToolsTests`
 - Source: the trip planner (§3.7–3.9), the rendezvous planner (§4.1–4.4)
 
+### 4.7 Meeting from an orbit still on its way in
+
+A craft on a stretched orbit round the target's body (back from a moon, apoapsis more than 1.5 × the target's) or on an escape path through it (in from another planet) isn't met straight from that orbit: the cheapest meeting from there is an intercept with almost all its Δv in the match at the target, hundreds of m/s, which can't be flown safely. Nor is it captured to a round orbit first and met from there: that leaves a plane change and a phasing burn to do separately. Instead the capture at periapsis puts it straight into the target's plane:
+
+```
+r, v  = the craft at periapsis (the quick burn's choice of time, §2.8: never in the air or below the ground)
+n     = (r_t × v_t) / |r_t × v_t|                   the target's orbit normal
+v'    = √(μ / |r|) · (n × r) / |n × r|              horizontal, round-orbit speed, along the target's direction of travel
+capture Δv = v' − v                                 in the node axes there
+```
+
+The meeting is then planned from that round orbit (§4.1) starting at the capture. With the planes already matched, it usually starts with its phasing burn right there; at the same point and moment the two burns share their node axes, so their Δv adds into one: "Capture onto the phasing orbit". From here uses this for Go to a craft from such an orbit (so you get these as nodes), and background trips use it when they're planned again.
+
+Example (`RouteReplanTests`): back from the Mun, periapsis 95 km, apoapsis 11,400 km, 3° tilted against Kerb Station's 1°. Captured round in its own plane and met from there: **1,021 m/s** in four burns (the capture, then match planes and phase, transfer, match). Captured into the station's plane straight onto the phasing orbit: 779 + 64 + 9 = **852 m/s** in three.
+
+- Code: `ArrivalMeet.Plan`, `.Needed` (Core); `FromHereViewModel.PlanRendezvous` (App); `RouteReplan.Plan`
+- Source: §2.3 (a plane change costs least done with another burn at the same point), §2.8, §4.1, §4.6
+
 ## 5. Deploying a satellite constellation
 
 Dropping several satellites evenly around one orbit from a single carrier.
@@ -1354,7 +1382,7 @@ TWR   = F / (m · g)
 
 **Propellant mix.** An engine burns its propellants in a fixed volume ratio — liquid-fuel engines use LiquidFuel 0.9 : Oxidizer 1.1. Each engine's mass flow is split across its propellants by `ratio × density`, giving units per second of each; the burn ends when the **first** propellant runs out, so leftover oxidizer (or fuel) doesn't count. Electric charge never limits a burn (solar panels recharge it), and jet engines are left out (no air in a vacuum).
 
-**Assumptions.** Every tank feeds every engine at once — no staging, no fuel lines — which matches most vessels already in orbit. The thrust limiter changes the burn time, not the Δv (unless engines with different Isp are mixed, where it changes the blend).
+**Assumptions.** Every tank feeds every engine at once — no staging, no fuel lines — which matches most vessels already in orbit. The thrust limiter changes the burn time, not the Δv (unless engines with different Isp are mixed, where it changes the blend). The Vessels pane shows the burn time both ways; a planned burn (From here) is timed at full thrust, since whoever flies it, the player or the craft autopilot, sets the limiters for it (a route craft leaves them where its last small burn put them: 2.5 % on the Skipper showed a 23-minute transfer burn in the test of 2026-11-06, about 34 s at full thrust).
 
 Worked example — the relay "KerbLink Mk2 A" (14 parts: HECS probe core, RA-2 relay antenna, 2 × Oscar-B tanks, 3 × Ant engines at 6 % thrust, …):
 
@@ -1946,6 +1974,785 @@ The cascade in the tests: launch planned to 80 km, flown to 75 km. Once the craf
 
 - Code: `MissionFlights.Steps`, `MissionFlights.Plan`, `MissionFlights.Current`, `TripPlanner.Plan`, `FlightViewModel.ReplanMissionAsync`/`AdvanceMission`; tested in `MissionFlightsTests`
 - Source: the step planners' own (§2.1, §2.3, §2.9, §3.8, §4.1, §5.2)
+
+## 10. Surveying for ore
+
+The ore survey's rules (what needs an engineer, the three report levels, the orbital survey's button) are in docs/SURVEY.md. This section is the maths: where the ore is, and what a pass maps.
+
+### 10.1 Ore abundance, and what the scanners show
+
+KSP generates ore from the save's seed. The planner's kRPC add-on asks the game itself (`ResourceMap.GetAbundance`), so the numbers are the game's, not a copy of its generator. Read from KSP 1.12's code:
+
+```
+true abundance  A(φ, λ, h)  = what a drill at (φ, λ) mines: asked at its own height h, lock check off
+before analysis A_est(biome) = B(biome) / 1.5     B = the biome's base value (no local variation), the same everywhere in it
+```
+
+A biome counts as analysed once a Surface Scanning Module has run *Perform biome analysis* landed in it (the save's `BIOME_LOCK_DATA`). Until then the narrow-band scanner, KerbNet and the ore overlay all show A_est. Height only matters for resources set up to fade with altitude; Minmus ore doesn't.
+
+Worked example — Min Station over Minmus, Greater Flats not yet analysed, 29.3 km up (in game, 2026-11-04):
+- KerbNet showed **7.03%** at 23°59′ S 23°08′ E (and the same at another spot, in another biome, with the same base).
+- The add-on gave **10.51%** there, at ground height and at 29.3 km alike.
+- 7.03% × 1.5 = **10.55%**: the base. The 10.51% is the base plus the spot's own small variation.
+
+- Code: `mod/KspFlightPlanner.AddOns/Surveys/SurveyService.cs` (`Abundance`, `AbundanceGrid`, `EstimateGrid`), `KspLink.FetchSurveyMapAsync`, `SurveyMap`
+- Source: KSP 1.12 `ResourceMap.GetAbundance`, `ModuleResourceScanner`, `ModuleResourceHarvester`, `KerbNetModeResource` (decompiled)
+
+### 10.2 What a pass maps
+
+The station's ground track comes from its orbit (§1.4) and the body's rotation (§2.9's θ₀ and ω = 2π / T_rot):
+
+```
+r(t)  = the station's position at time t (Kepler, §1.4)
+φ(t)  = asin(r_z / |r|)
+λ(t)  = atan2(r_y, r_x) − θ₀ − ω·t                  wrapped to −180°…180°
+```
+
+A grid point (φ_g, λ_g) is mapped at the first t its great-circle distance from (φ(t), λ(t)) is within ρ = 5° (KerbNet's narrowest view):
+
+```
+cos d = sin φ · sin φ_g + cos φ · cos φ_g · cos(λ − λ_g)  ≥ cos ρ
+```
+
+The track is followed in steps of half a grid degree over the ground (Δt = 0.5° / (v_p / r_p + ω), the fastest the track moves, at periapsis). Each row only checks the longitudes inside the strip, |λ − λ_g| ≤ acos((cos ρ − sin φ sin φ_g) / (cos φ cos φ_g)), or the whole row when the strip takes in a pole. The narrow-band only maps while |r| − R ≤ 500 km. The walk stops early once every point is mapped, or after 20 turns of the body (and 20 orbits) with nothing new, when the pattern only repeats.
+
+Between two readings of a station the time is credited only when both show an engineer and the same body; a level needs its scanner in both (and, for rough, the body's orbital survey done). If the orbit changed between them, the first orbit flies the first half of the time and the second the rest.
+
+A biome reports at a level once half its points are mapped at that level; the report's time is when the point that made it half was mapped.
+
+What turns the ground under the orbit is the body's own spin (T_rot is measured against the stars). The orbit's plane stays fixed against the stars too, so the body's trip around its planet doesn't move the track.
+
+Worked example — Minmus (μ = 1.7658 × 10⁹ m³/s², R = 60 km, T_rot = 40,400 s ≈ 1.9 Kerbin days), polar orbits, time to map all of it (simulated with `SurveyCoverage.Follow`, Kerbin days of 6 h):
+- **50 km circular**: a = 110 km, T = 2π√(a³/μ) = 2π × 868.2 = **5,455 s**. Each orbit the track lands 360° × 5,455 / 40,400 = **48.6°** further west: 90% in 4.7 days, all of it in **8.3 days** (`A_polar_orbit_maps_everything_within_a_few_weeks`).
+- **30 km circular**, the bad case: T = 2π × 642.5 = **4,037 s**, **36.0°** a pass. Ten orbits are 40,370 s, within 30 s of one Minmus day, so the tracks nearly repeat and the last gaps close slowly: 90% in 46 days, all in **92 days**.
+- **28.8 × 30.0 km** (Min Station, 2026-11-04): T = 3,998 s, 35.6° a pass, just far enough from ten orbits a day: all of it in **8.4 days**.
+
+- Code: `SurveyCoverage.Follow`, `.Credit`, `.Mark`; `SurveyReports.Build`; `SurveyTracker`. Tested in `SurveyTests`
+- Source: §1.4, §2.9; great-circle distance: §1.9
+
+## 11. Background trips
+
+A craft can fly a planned meeting on its own (From here › **Fly it in the background**): the planner's add-on in KSP changes the craft's orbit at each burn's time and burns its fuel, while the player flies something else or watches from the tracking station. The planner plans; the add-on only follows the plan, inside the game every frame.
+
+### 11.1 Flying a burn without flying the craft
+
+At a burn's time t_b the add-on reads the craft's position and velocity on its current orbit at t_b (in KSP's orbit frame, z to the body's north pole), adds the burn along the node axes of §1.8 and gives the craft the orbit through that point:
+
+```
+r, v       = the craft's orbit at t_b
+prograde   = v / |v|
+normal     = (r × v) / |r × v|
+radial     = prograde × normal                         (outward)
+v'         = v + Δv_pro · prograde + Δv_nrm · normal + Δv_rad · radial
+new orbit  = the orbit through (r, v') around the same body, pinned to t_b (§1.5)
+```
+
+Pinning the new orbit to t_b, not to the moment it's applied, is what makes time warp harmless. At 100,000× one frame is about half an hour of game time, so the burn is usually applied after t_b, but KSP places the craft where the new orbit has it *now*: exactly where it would be had it burnt on time. Overdue burns are applied in order. Between burns KSP carries the craft along its orbit itself, through every change of sphere of influence.
+
+Example: a burn planned for UT 4,240,000 that time warp first reaches at UT 4,241,800 is applied 1,800 s late; the craft's new orbit still starts from its position at 4,240,000, so it appears 1,800 s along the new orbit, not the old one.
+
+At the meeting time t_m the craft is put on the target's own orbit, a safe distance d behind it: the same elements, with only the mean anomaly moved back by the time the target takes to cover d.
+
+```
+d   = clamp(2·(size_target + size_craft) + 50 m, 100 m, 180 m)    size = furthest part from the ship's origin
+Δt  = d / |v_target(t_m)|
+M₀' = M₀ − n·Δt                                                    n = the target's mean motion; every other element copied
+```
+
+Same size, shape and tilt mean the same period, so the gap holds for as long as both are on rails. (The first test instead gave the craft the target's velocity at a point d behind it: a slightly different orbit, whose gap swung by up to about 2·a·Δe ≈ 220 m every orbit and drifted about 47 m a Kerbin day.) The 180 m cap keeps the craft inside the 200 m at which KSP turns physics on for a ship near the one being flown, which docking needs.
+
+The navball still shows a little target speed on the same orbit, about |v|·d / a: the two velocities point in slightly different directions while the distance stays the same.
+
+First the add-on records how close the craft really came, |r_craft(t_m) − r_target(t_m)|, and the speed still to match, |v_craft(t_m) − v_target(t_m)|: the test's measure of how well KSP followed the plan. That speed is paid for in fuel (§11.2) as the final approach.
+
+Example: Kerb Station (a = 700,611 m, |v| = 2,245 m/s, T = 1,960.7 s, so n = 0.0032046 rad/s) and d = 109 m: Δt = 0.0486 s, M₀ moves back 0.000156 rad (0.0089°); the navball shows 2,245 × 109 / 700,611 = **0.35 m/s** while the gap stays 109 m. In the first test (2026-11-04) the craft came within **0 km at 0 m/s** of the planned meeting after a Mun-to-Kerbin trip of 5 burns: KSP flew the planner's patched conics as planned.
+
+**Docking.** Once the player is near (both ships loaded, physics on, no time warp, for 2 s) the add-on picks the target's free port nearest the craft that one of the craft's free ports fits (same port size), turns the craft so its port faces that port (forward against forward, up along up), and moves it so the two port faces are half the ports' magnet reach apart (acquire range, about 0.5 m, so 0.25 m), at the target's velocity and with no spin. The ports' own magnets pull it in. If the craft's port hasn't docked within 10 s it's left there, to dock by hand. This is how Routine Mission Manager places its arrivals.
+
+- Code: `RailsFlyer.DoBurn`, `.Arrive`, `.Dock`, `Ships.Axes`, `.SetOrbit`, `.FollowOrbit`, `.PickPorts`, `.PlaceForDocking` (mod/KspFlightPlanner.AddOns)
+- Source: §1.5, §1.8; setting a ship's orbit by copying elements into its own orbit object follows HyperEdit; applying Δv at a time through `Orbit.UpdateFromStateVectors` follows Background Thrust (Phantomical, MIT); placing a ship at a port follows Routine Mission Manager (BSD-2)
+
+### 11.2 The fuel a background burn uses
+
+The add-on burns with one engine kind: of the craft's engines that have fuel on board (air-breathers left out), the kind with the most thrust in all, at its vacuum Isp. The rocket equation turned round (§7.1) gives the propellant mass; the engine's propellant ratio (in units, as its config gives it) times each resource's density splits it:
+
+```
+m_fuel  = m₀ · (1 − e^(−Δv / (Isp · g₀)))                  g₀ = 9.80665 m/s²
+units_i = m_fuel · ratio_i / Σ_j (ratio_j · density_j)
+```
+
+Each propellant is taken from every unlocked tank holding it, in proportion to what each holds. When a propellant runs short, every propellant is cut by the same share s = have_i / units_i (the smallest), and the craft gets only `Isp·g₀·ln(m₀ / (m₀ − s·m_fuel))`; the route then stops there.
+
+Example: 20 t craft, a Terrier (Isp 345 s vacuum, LiquidFuel 0.9 : Oxidizer 1.1, both 0.005 t/unit), 300 m/s: Isp·g₀ = 3,383.3 m/s, m_fuel = 20 × (1 − e^(−0.08867)) = **1.697 t**; Σ ratio·density = 0.9 × 0.005 + 1.1 × 0.005 = 0.01 t, so **152.7 LiquidFuel** and **186.7 Oxidizer**. With only 100 LiquidFuel on board: s = 100 / 152.7 = 0.655, 1.111 t burnt, **193 m/s** of the 300.
+
+**Enough fuel to get there.** A trip isn't started (and an off-course trip isn't planned again) unless the ship can make its whole Δv with a margin for real burns' losses and the braking in. The Δv in the tanks is as many full sets of the engine's propellants, in its ratio, as the scarcest one allows, burnt off the whole mass; for a route craft still docked, only its own parts count (the branch of the part tree hanging off its docking port).
+
+```
+sets   = min_i (units_i / ratio_i)
+m_fuel = sets · Σ_i ratio_i · density_i
+Δv_left = Isp · g₀ · ln(m₀ / (m₀ − m_fuel))
+start only if  Δv_left ≥ 1.05 · Σ Δv_burns + 30 m/s
+```
+
+Example: the shuttle as it sits docked in Protogen (18.17 t, 518.6 LiquidFuel, 633.8 Oxidizer, a Skipper at 320 s): sets = min(518.6 / 0.9, 633.8 / 1.1) = 576.2, m_fuel = 576.2 × 2 × 0.005 = 5.762 t, Δv_left = 3,138.1 × ln(18.17 / 12.41) = **1,197 m/s**. The trip of 2026-11-06 came to about 1,300 m/s after its replans, so 1.05 × 1,300 + 30 = 1,395 m/s: it would have been refused, not run dry at its fourth burn.
+
+- Code: `Ships.MainEngine`, `.Burn`, `.Mass`, `.DeltaVLeft`, `.DockedCraftParts`, `TrafficService.StartRoute` (mod/KspFlightPlanner.AddOns)
+- Source: §7.1; engine and resource values from the game's own part configs
+
+### 11.3 Staying on course, and planning again
+
+The burns are flown open-loop: each is added to whatever orbit the craft is on at its time. On rails nothing else moves the craft, and the burns are applied exactly as the check below assumes, so a craft left alone stays on the plan. Only physics can move it: when it or its target is loaded and off rails (the player flying it or something within about 2 km), a thrust, RCS, an undocking or a bump goes unnoticed by the next burn, which then sends it somewhere else. So the add-on checks the rest of the plan:
+
+- once when the trip starts (a plan that already misses isn't started), and
+- after the craft or its target has been off rails: KSP's "gone off rails" event marks the trip *disturbed*, and it's checked once both are back on rails (or unloaded: the player left, or time warp packed them), or just before the next burn if the player is still there;
+- right after every burn the physics flyer flies, and as soon as backing off a station ends (or is cut short by warp or the player leaving), while there's the most time to put it right.
+
+A trip that's never disturbed is never checked again.
+
+A check doesn't plan anything. It takes the craft's real orbit now, applies the burns still to come exactly as §11.1 will (all of them, at their times), carries it between them with KSP's own patched conics (the prediction the map view draws, through every change of sphere of influence), and compares it with the target at the meeting time:
+
+```
+gap   = |r_craft(t_m) − r_target(t_m)|
+speed = |v_craft(t_m) − v_target(t_m)|
+off course  when  gap > tolerance (1 km + 1 km per hour to the meeting, 5 km at most),  or  speed > 5 m/s,  or  it ends up round another body
+```
+
+Each stretch of the path is given its start and its end before KSP works out where it goes (the end one period on, or none on an escape path), as KSP's own solver does: KSP only counts meeting a moon between the two. With the end left at 0, no moon was ever met: the first trip from Kerbin to a station round the Mun (2026-11-06) was refused as "ends up round Kerbin", though the plan meets Mun Station within about 3 km. Leaving a moon never looks at the end, so trips the other way worked.
+
+**A small miss is corrected, not replanned.** When the miss is under 100 km and nothing worse is wrong, the add-on first tries a *course correction*: a burn two minutes from now (or the next burn itself, when that's sooner than four minutes away), solved so that, flown as planned from there, the ship is at the target's position at the meeting time. Three unknowns (its prograde, normal and radial Δv) for the three components of the miss, by Newton's method:
+
+```
+g(Δv)  = r_ship(t_meet) − r_target(t_meet)            through KSP's own prediction, all burns applied
+J      = [∂g/∂Δv_pro  ∂g/∂Δv_nrm  ∂g/∂Δv_rad]          each by nudging that one by 0.1 m/s
+Δv    ← Δv − J⁻¹ · g(Δv)                              until |g| < 100 m (at most 10 steps, each at most 60 m/s)
+```
+
+Then the match at the meeting is set to the speed difference it really arrives with, in that moment's node axes. The burns and the meeting time stay as planned, so a trip keeps its schedule. It gives up (and the trip is replanned) when it doesn't converge, the correction would be over 60 m/s, or the fuel isn't there with the margin of §11.2. Nothing is planned in the add-on: it only tunes a burn against the prediction it already checks with. The prediction starts from the ship's position and velocity at the check's time (an orbit rebuilt from them), not a copy of its orbital elements, and is rebuilt once more a minute along before it coasts on (unless a burn comes first). On an escape path the trip is very sensitive: a burn stops with under 0.05 m/s left, and on the way out of the Mun those last few hundredths of a m/s are about 25 km at Kerbin, so the check rightly saw a 25 km miss after every escape burn, and the solver rightly found it needed only about 0.04 m/s. Added as a burn of its own, a correction that small stops before it starts (it's already under 0.05 m/s), so it was never flown and was added again and again (2026-11-06). Now a correction under 0.2 m/s is folded into the next planned burn instead (big enough to fly exactly), and only left alone when there's no burn left to fold it into; and the plan is checked again the moment a route craft moves into another body's sphere of influence, from where there's nothing left to predict across.
+
+How far off counts as off course grows with the time to the meeting: 1 km within an hour of it, a kilometre more for each hour further, 5 km at most. Predicting hours ahead through KSP's orbits isn't steady to better than about a kilometre (the same moment came out 29 m and 1,092 m apart, 2026-11-06), and braking in puts the last of it right.
+
+Off course, the trip pauses: no more burns, no parking, and time warp stops, KSP's own Warp to included (it would otherwise carry on to its goal while the planner plans, and a new plan's first burn two minutes out doesn't survive 100,000× warp). Warp stays off until the plan arrives, for up to 30 s, unless the trip is waiting for something warp brings (leaving a moon's pull); past 30 s the game says the planner isn't answering. The planner (while it's connected) asks the add-on every 3 s for paused trips, plans each again from where the craft really is with the same planning as From here › Go to… a craft (§4.6 when the craft is round another body, the rendezvous of §4 when it's round the target's), and sends the new plan, which replaces the old one and is checked like any other. A replan keeps the way of making the trip the player picked ("Meets soonest", "Balanced", "Cheapest"; matched by its last word, so "Meets soonest" finds "Balanced · meets soonest" too) when the ship's fuel covers it with the margin of §11.2; else it takes the cheapest that does, and the game says why ("Meets soonest needs 1,395 m/s with the margin and the shuttle has 1,197: took Cheapest"). When no way fits, it isn't replanned, and the game says how much it's short. Two cases come only from a craft caught mid-trip:
+
+- **On a path out of another body** (leaving the Mun): nothing can be planned until it's out. The add-on stops time warp again when it reaches the next body, and the planner plans it then.
+- **On a path out of the target's body** (coming in from another planet), **or on a stretched orbit round it** (apoapsis more than 1.5 × the target's, as on the way back from a moon): it's captured at periapsis straight into the target's plane and onto the meeting's phasing orbit, in one burn (§4.7). Planned straight from a stretched orbit, the cheapest meeting is an intercept that puts almost all the Δv into the match at the target: in the test of 2026-11-05, 17 + 120 + **845 m/s**, the last at the station, which a real burn can't fly safely (§11.6).
+
+When it can't plan one (a periapsis in the air, say), the game says why, once, and the planner tries again 30 s later.
+
+Example (the scale of a nudge): a craft beside Kerb Station's orbit (n = 0.0032046 rad/s) nudged 2 m/s prograde 1,000 s before the meeting drifts, by the Clohessy–Wiltshire equations,
+
+```
+along  y = (4/n)·Δv·sin(nt) − 3·Δv·t = 1,248.2 × 2 × (−0.06297) − 3 × 2 × 1,000 = −6,157 m
+radial x = (2/n)·Δv·(1 − cos(nt))     = 624.1 × 2 × 1.99802                       =  2,494 m
+gap      = √(6,157² + 2,494²) ≈ 6.6 km                                    (nt = 3.2046 rad)
+```
+
+so the check when it's back on rails calls it off course, well past the 1 km line.
+
+- Code: `CourseCheck.Check`, `.CheckIfResting`, `TrafficScenario.OnVesselGoOffRails`, `RailsFlyer.Step`, `Ships.PredictMeeting`, `.PathAt`, `.Coast` (mod/KspFlightPlanner.AddOns); `RouteReplan.Plan` (Core); `RouteWatch` (App)
+- Source: §1.5, §2.8, §4, §4.6; KSP's `PatchedConics.CalculatePatch`; Clohessy–Wiltshire equations (Curtis 7.4)
+
+**Starting a trip.** A plan is checked in KSP's own prediction before it starts. Only a meeting predicted more than 50 km off, or not at all, is refused. A smaller miss is started and corrected at its first check: after backing off, after undocking on rails, or the next frame for a ship already free. Over days of flying across a change of sphere of influence, the planner's maths and KSP's drift a few km apart (Kerbin to the Mun came out 8.6 km off at 15.9 m/s, test of 2026-11-07), and that's what the corrections are for. Code: `TrafficService.StartRoute` (`StartMissM`).
+
+### 11.4 The physics flyer: turning the ship
+
+When a route craft is loaded with physics running near the player, the add-on flies it by writing its controls every physics tick, like an autopilot (only the toolbar's Traffic Controller panel switches it off: touching the controls doesn't, since what the last ship left on them read as the player's hands and turned it off on switching to it). It holds the ship still (damping any turn) until the next burn is 10 minutes away, then turns it so its engines face the burn, along the node axes of §1.8 *at the burn's time*: a direction fixed in space, so the ship turns once and holds (facing the axes as they are now made it follow them round the orbit). Then it flies the burn (§11.5). RCS is on only while the autopilot is moving the ship sideways: a ship's RCS rarely pushes through its centre of mass, so holding a heading on RCS nudges it off course over a long wait. When the autopilot lets go of a ship, it puts the player's RCS switch back and turns SAS on, so the ship holds still instead of tumbling.
+
+The turn is worked out on each of the ship's three control axes (pitch, roll, yaw) separately. The error is the rotation from where the ship points to where it should, as an angle e on each axis (rad). The ship can change its turn rate by at most α = τ / I on that axis, from the torque τ its reaction wheels, RCS and gimbals can make (the smaller of the two directions) and its moment of inertia I. It wants the turn rate that still lets it stop in time, with a margin, but no faster than 0.5 rad/s, and gently at the end:
+
+```
+ω_want = sign(e) · min( √(2 · 0.6·α · |e|),  |e| / 1.5 s,  0.5 rad/s )
+u      = clamp( (ω_want − ω) / (0.25 s · α),  −1, 1 )         the control input on that axis
+```
+
+ω is the ship's turn rate on that axis now. KSP turns the ship against its input (torque = −u · τ on each axis), so the control written is −u. In case that convention is ever the other way, each axis checks itself: when a strong input keeps turning the ship the opposite way (15 ticks more often than not), its sign is flipped and logged. Once an axis has agreed 15 ticks more often than not, it's settled for good, so pushes the controls didn't make (docking magnets, a bump) can't flip it.
+
+Example: a 13 t shuttle with I = 20 t·m² on pitch and 5 kN·m of reaction wheel torque, so α = 0.25 rad/s², turning 90° (1.571 rad). It speeds up to the 0.5 rad/s cap in 2 s (0.5 rad), and braking at 0.6α = 0.15 rad/s² takes 0.5² / (2 × 0.15) = 0.833 rad, so it coasts the 0.238 rad between for 0.48 s and brakes for 3.33 s: about **5.8 s**, then a short settle. 10° out it wants min(√(2 × 0.15 × 0.1745), 0.1745 / 1.5) = **0.116 rad/s**.
+
+- Code: `PhysicsFlyer.Attitude.Drive`, `.Learn`, `.AvailableTorque`, `PhysicsFlyer.Pilot` (mod/KspFlightPlanner.AddOns); `TrafficPanel`
+- Source: §1.8; a rate profile that can always stop in time (bang-bang with a margin), per axis, as kRPC's and MechJeb's autopilots do; KSP's `ITorqueProvider`
+
+### 11.5 The physics flyer: flying a burn
+
+A real burn takes time, so it's centred on the planned time t_b: half its Δv before, half after. The ship gets lighter as it burns, so the first half of the Δv takes a little longer than the second, and it starts that much earlier than half its length. A burn under 1 m/s is made on RCS instead (bigger ones on the main engine: RCS's Isp is low and its tanks small; a 4.2 m/s correction on RCS took about 12 of the shuttle's 150 units in the test of 2026-11-06), when the monopropellant can give at least four times it (rocket equation with the thrusters' vacuum Isp, about 240 s): no turning, pushed straight along the Δv still to go, with RCS's finer control. The autopilot sets the engines' thrust limiters itself for each burn, and leaves them where it last set them (the player's setting from before the trip is rarely the one wanted after it): 100%, so a limiter left low for docking doesn't stretch a burn out, or lower for a burn so small it would be over in under 2 s. The length at full throttle comes from the rocket equation (§7.1) with the lit engines' full thrust F (limiters at 100%) and their thrust-weighted vacuum Isp, or the main engine kind's if none is lit yet:
+
+```
+vₑ = Isp · g₀
+t₁₀₀  = m₀ · vₑ / F · (1 − e^(−Δv / vₑ))         at 100%
+t     = max(t₁₀₀, 2 s)                           limiter = 100% · min(1, t₁₀₀ / 2 s), at least 1%
+t_½   = t · (1 − e^(−Δv / 2vₑ)) / (1 − e^(−Δv / vₑ))     the time for the first half of the Δv
+start at t_b − t_½
+```
+
+At the start the add-on works out the orbit the burn should leave the ship on, exactly as the rails flyer would make it (§11.1: the ship's position and velocity on its orbit at t_b, plus the planned Δv along the node axes), lights the main engines if none is lit, and from then on steers on the Δv still to go, as KSP's own maneuver node does:
+
+```
+Δv_left = v_goal(t_b) − v_ship(t_b)              both orbits' velocities at t_b (the ship's orbit as it is now)
+throttle = 0                                      while the engines point more than 5° off Δv_left
+throttle = clamp(|Δv_left| / a_max, 0.02, 1)      otherwise: a_max = F / m now, so it eases off over the last second's worth
+done when |Δv_left| < 0.05 m/s, or it starts growing again once under 1 m/s (the last bit overshot)
+```
+
+Because it aims at the goal orbit, not at a fixed direction, the turning of the Δv over a long burn is followed as it goes. It stops early, and says why, when the engines have had no thrust for 3 s (out of fuel), or the ship leaves the sphere of influence mid-burn. Whatever's left is the course check's: before each real burn when the player has stayed near the ship (it never went back on rails), or once it's back on rails (§11.3). Time warp is stopped 30 s before the burn starts (plus a frame's worth at the current rate) when the craft is loaded near the player, so it unpacks and the autopilot can turn it first; physics warp is stopped during the burn.
+
+Example: the round 1 shuttle (18.17 t) with a Skipper (650 kN, Isp 320 s in vacuum), 252 m/s: vₑ = 320 × 9.80665 = 3,138.1 m/s, t = 18.17 × 3,138.1 / 650 × (1 − e^(−252 / 3,138.1)) = 87.72 × 0.07716 = **6.8 s**, so it lights 3.4 s before the planned time, with the limiter at 100% even if it was left at 2.5% (which would have made it a 270 s burn). A 5 m/s correction would take 0.14 s at 100%, so the limiter goes to 100 × 0.14 / 2 = **7%** and it takes 2 s. At about 38 m/s² (650 kN on 17 t), the throttle starts easing off with 38 m/s left; with 1 m/s left it's at 2.6%.
+
+Example (the capture of 2026-11-06): 840.5 m/s on 28.32 t with a Skipper: t = 28.32 × 3,138.1 / 650 × (1 − e^(−0.2678)) = **32.1 s**; half its length is 16.1 s, but the first half of its Δv takes 32.1 × (1 − e^(−0.1339)) / (1 − e^(−0.2678)) = **17.1 s**, so it lights a second earlier.
+
+**Cut short.** If physics goes off mid-burn (the player leaves for the tracking station, or switches far away), what's left, `Δv_left`, becomes the burn again, split into prograde, normal and radial on the orbit the ship has now at t_b, and the rails flyer makes it straight away, as it makes any burn (§11.1). There's no course check first: it would find the half-made burn off course. Dropping the rest instead left a shuttle 8 s into a 252 m/s burn leaving the Mun on a path into it, paused off course, and it crashed (the test of 2026-11-08). Example: 252.2 m/s to go at the start, cut at 8 s with 23 m/s left (say) along the prograde: the burn becomes 23 m/s prograde at t_b, made on rails, using that burn's fuel from the tanks.
+
+**Time warp.** A route craft near the player stops any time warp 30 s before its burn starts (plus a frame's worth at the rate: rate × 0.1 s), and keeps it off until the burn is done: warp the player started to reach another ship hours away too, KSP's *Warp to* included (it's cancelled, or it raises the rate again). Warp would pack the ship and its burn would be made in one jump on rails (§11.1). The same goes for a route craft docking near the player (§11.7) and, as before, one backing off (§11.8).
+
+- Code: `PhysicsFlyer.BurnSeconds`, `.StartLead`, `.RcsDeltaV`, `.StopWarpForBurn`, `PhysicsFlyer.Pilot.StartBurn`, `.FollowBurn`, `.HandBackBurn`, `.ThrustAxis`, `CourseCheck.CheckIfResting` (mod/KspFlightPlanner.AddOns)
+- Source: §1.8, §7.1, §11.1; steering on the remaining Δv to a goal orbit, as KSP's maneuver node (and MechJeb's node executor) do
+
+### 11.6 The physics flyer: coming in to the station
+
+When the player is at the station (it's loaded) with the autopilot on, the craft isn't parked at the meeting (§11.1). It's lined up as soon as all that's left is the match at the meeting and it's within 10 minutes of the meeting or 30 km of the station, while it's still far out of sight; waiting for the meeting time could let it come into KSP's range on its intercept with no room to stop. The match's fuel is paid as the rails flyer would. The add-on picks a free port on the station that one of the craft's ports fits (the one facing most towards the craft), and puts the craft on that port's axis, out of sight:
+
+```
+spot   = port position + axis · 150 m                      where it will stop
+start  = port position + axis · (150 m + 2,400 m)          just outside the 2,250 m at which KSP draws ships
+r      = r_station(now) + (start − station position)        only the 2.4 km offset goes through the world/orbit swap
+v      = v_station(now) − axis · 20 m/s                     coming straight in
+```
+
+Then time warp stops (on rails it would sail through the station), and the craft's physics range is raised: KSP turns physics on for a ship near the one being flown only within 200 m in orbit, so the craft's own pack/unpack distances are set to 2,350 m / 2,200 m, inside its load distances. It comes into view at 2.25 km, physics comes on at 2.2 km, and the autopilot brings it in. The speed it wants falls off towards the spot so it can always stop there:
+
+```
+d      = |r_ship − spot|,   v = v_ship − v_station
+b      = min(½ · F/m, 2.5 m/s²)                           the braking it plans on
+v_want = −(r_ship − spot)/d · min(20 m/s, √(2·b·(d − 2 m)), d / 10 s)
+Δv     = v_want − v                                        fire along Δv when it's over 0.6 m/s (until under 0.2),
+                                                           pointed within 8°, throttle = clamp(|Δv| / (F/m), 0.02, 1)
+```
+
+While it's only coasting it faces back along its drift, ready to brake, so the flip happens before the braking burn. Within 20 m of the spot and under 0.3 m/s it has arrived, and docking takes over (for now, the placement of §11.1). If the player leaves before then, it never reaches physics range within 5 minutes, or the autopilot can't fly it, it's parked as in §11.1 instead.
+
+**Braking in from an intercept.** The match at the meeting is never flown as a burn by the physics flyer: centred on the meeting time, half of it would come after the craft reached the station's position, at full speed. (That is how the test of 2026-11-05 ended: an 845 m/s match flown for real, then cut off mid-burn, put the shuttle through the station.) Instead, with the craft loaded (the player riding along), it switches to coming in when
+
+```
+t ≥ t_meet − |v_rel| / (½ · F/m) − 60 s,   or it's within 20 km
+```
+
+and brakes along the same profile, now allowed to be fast far out: v_want = min(√(2·b·(d − 2 m)), max(20 m/s, d / 30 s), d / 10 s), with b = ½·F/m while it's faster than 20 m/s (2.5 m/s² as before once it's slow).
+
+**Flown as a pilot flies an intercept.** It comes in to a *hold point* near the station on the side it arrives from (max(50 m, both ships' sizes + 15 m) out), and stops there; docking (§11.7) then takes it round to the port on RCS.
+
+*Far out*, it watches the closest approach to the hold point the way KSP's map marks it: from both orbits as they are, the distance between the ship and the hold point sampled 240 times over the next hour or so, then a golden-section search round the nearest, twice a second. Two ships on nearby orbits don't close in straight lines (their relative path curves over minutes), so anything worked out from the straight drift goes wrong far out: in the test of 2026-11-06 the transfer burn left it on course for 67 m, and straight-line steering turned that into a 3.9 km pass. At checkpoints by the time to closest approach it corrects once if the miss is over the allowance, then coasts:
+
+```
+time to closest approach:  over 10 min   10 min   5 min   2 min
+allowed miss:               800 m        800 m    200 m   100 m      (and a check as soon as coming in starts)
+correction: Δv solved so the ship is at the hold point at the closest-approach time (at least 90 s away):
+            g(Δv) = r_ship(t_ca; v + Δv) − (r_station(t_ca) + offset),   Newton on the three components, slopes by 0.05 m/s nudges
+```
+
+A correction is flown as a burn: towards the orbit it should leave the ship on, a fixed Δv in space, the same Δv still to go as §11.5. (Flown as a velocity relative to the station instead, it kept RCS on: the relative velocity of two nearby orbits changes by itself as they curve, so it chased it, and pushed the closest approach back out, 680 m corrected to 340 m two minutes later, 2026-11-06.) Under 1 m/s it's made on RCS, with no turning; anything bigger on the main engine. Between checkpoints time warp is allowed; it stops 20 s before the next one, and the Traffic Controller panel has **Warp to next check**.
+
+*Close in* (under a minute to the closest approach, within 1 km, or when it's time to brake: within 1.5 × its stopping distance at half thrust, plus 200 m), straight-line steering is accurate, and it flies the last of it as a pilot does: along the line it wants to close at about d / 30 s (the half-minute time to go), never faster than it can stop (√(2·b·d)) and never faster than it already is, braking only when it's closing more than a fifth (or 1 m/s) too fast. Far too slow, under half of `cruise = min(want, max(1, d / 60 s))`, it speeds up to `cruise` (it used to wait to be nearly stopped, under 0.2 m/s, before pushing, so a ship at 0.25 m/s crawled: 728 m would take 49 minutes, and over that long the orbit bends the straight line, by about 3n²·d ≈ 0.02 m/s² sideways at 728 m round Kerbin, so each correction left it further off, the test of 2026-11-08; at 728 m, cruise = min(24, 12.1) = 12.1 m/s, about a minute plus braking). Sideways it keeps the pass within a tenth of the distance (5 m at least). No time warp close in.
+
+The profile is a limit to slow down to, never a speed to reach: v_want is also capped at max(v_closing, 20 m/s), the speed it's already closing at. (In the test of 2026-11-06 it began braking in at 48 m/s from 15.7 km, sped up to the d / 30 s limit, over 375 m/s, and then braked it all off again.) Under 60 m/s the thrust limiters go down so full throttle is a gentle 3 m/s², finer than a few percent of a big engine: on the shuttle's 21 t with a Skipper, 100 × 3 / (650 / 21) = **9.7%**. The last of it, under 2 m/s and within 300 m, is on RCS. Until the station is loaded (riding in, it loads at 2.25 km), the spot is 300 m short of the station on the craft's side; then the spot off a free port facing it.
+
+**The collision guard.** Coming in, the closest pass to the station's centre on the present drift is worked out every frame:
+
+```
+r = r_ship − r_station,  v = v_ship − v_station
+t_ca = −(r · v) / |v|²,   pass = |r + v · t_ca|
+guard  when  t_ca > 0,  pass < size_station + size_ship + 20 m,  and  t_ca < |v| / (0.8 · F/m) + 5 s
+```
+
+Then, whatever else it was doing, it burns flat out back along its drift and away from the station's centre (aim = −v̂ + pasŝ), and says so on screen.
+
+Example: the crash's 845 m/s with a Skipper on 16 t (F/m ≈ 40 m/s²): braking starts 845 / 20 + 60 = **102 s** before the meeting, about 86 km out; the speed it wants is d / 30 s, 667 m/s at 20 km, 200 m/s at 6 km, 20 m/s from 600 m, then d / 10 s. Following d / 30 s needs v / 30 s of braking, 22 m/s² at its fastest: about half the Skipper's push.
+
+Example: the shuttle with a Skipper (about 38 m/s² at full throttle, so b = 2.5 m/s²). It coasts in at 20 m/s until d / 10 s drops below 20 m/s, at d = 200 m, which is 350 m from the port: there it starts braking at 20 / 10 = 2 m/s², easing off as it slows (the speed it wants halves every 10 × ln 2 = 6.9 s), and it covers the 200 m down to 20 m in 10 × ln(200 / 20) = **23 s**. At 38 m/s², 2 m/s² is a throttle of about 5%.
+
+- Code: `RailsFlyer.LineUp`, `.WatchArrival`, `.WatchApproach`, `.Park`, `Ships.PickStationPort`, `.RaisePhysicsRange`, `PhysicsFlyer.Pilot.Approach`, `.TimeToBrake`, `.StartApproach`, `.AvoidStation` (mod/KspFlightPlanner.AddOns); `RouteReplan.Stretched` (Core)
+- Source: §11.1, §11.5; KSP's vessel ranges (`VesselRanges`: load 2,250 m, unpack 200 m in orbit by default); a speed profile that can always stop in time, as MechJeb's docking autopilot uses
+
+### 11.7 The physics flyer: docking
+
+Once the craft has stopped off the port (§11.6), or is parked beside the station (§11.1) and the player comes near, a route craft with RCS docks itself; one without is placed at the port (§11.1). The ship's port faces the station's port throughout (the shortest turn, roll left as it is), and RCS moves it, as MechJeb's docking autopilot does: round the station to a point straight out from the port, then in along the port's axis.
+
+```
+a      = the station port's axis (out of the port),  p = its position,  q = the ship's port's position
+along  = (q − p) · a              lateral = (q − p) − a · along
+clear  = size_station + size_ship + 10 m          (size = furthest part from the ship's origin)
+entry  = p + a · max(clear, 30 m)
+```
+
+- **Final approach**, when it's in front (along > 0), within max(0.5 m, along/10) of the axis and facing the port within 3°: v_want = −a · min(0.8, max(0.15, along / 20 s)) − lateral / 5 s, slowing to 0.15 m/s for the magnets.
+- **Otherwise to the entry point**, straight if that line keeps at least `clear` from the station's centre, or else 30° at a time round a sphere of radius `clear` about it: v_want towards the goal at min(2 m/s, √(2·½·a_RCS·d), d / 10 s).
+
+Facing the port leaves the ship free to roll about the port's axis, so it's rolled to put the sideways error along its X axis: one pair of thrusters fixes it, not two at an angle (the nearer way round). Under half a metre of error the roll is held: kept as a direction in space for the ship's X axis, not as an angle from its roll now. An angle kept that way stays ahead of the ship however far it rolls: in the test of 2026-11-06 the craft rolled slowly, 8° off, 35 m out, and never started in, since the final approach waits for the ports to face each other within 3°. RCS makes up the difference, relative to the station, in the ship's own axes (KSP's RCS reads X right, Z along the nose, Y the third, each the other way to the push: the tests flipped all three), aiming to close it in half a second and doing nothing under 2 cm/s, to save monopropellant; a_RCS is the thrusters' power over the mass, shared over six directions. Each axis checks its sign against how the ship really moves, as the turning does (§11.4). It's docked when its port is (it may become part of the station); after 10 minutes it gives up and is placed at the port instead. Docked, the craft's own engines are shut down and its RCS blocks switched off, so nothing on it can fire by accident at the station.
+
+Example: from the entry point 30 m out, it closes at 0.8 m/s until along / 20 s drops below that, at 16 m (17.5 s); then the speed falls with along, 16 m to 3 m in 20 × ln(16 / 3) = 33.5 s; then 0.15 m/s for the last 3 m to the magnets' reach (about 0.25 m), 18 s: about **69 s** from the entry point to the magnets.
+
+- Code: `PhysicsFlyer.Pilot.Dock`, `.DockingAttitude`, `.Translate`, `.SegmentClear`, `.AroundStep`, `PhysicsFlyer.SignCheck`, `Ships.PortFor` (mod/KspFlightPlanner.AddOns)
+- Source: MechJeb's docking autopilot (the route round the target, the corridor, speed caps), read for its ideas; §11.4
+
+### 11.8 The physics flyer: leaving a station
+
+A trip can start with the craft docked (From here › Fly as the docked craft, then Fly it in the background). The add-on finds it by its own name, as KSP keeps it on its docking port, checks the plan (§11.3) on the docked stack's orbit, which is the craft's until it moves off, and only then undocks it. Then, with physics on, it backs straight out along the station port's axis on RCS, holding still:
+
+```
+clear  = max(30 m, size_ship + 20 m)
+v_want = axis · min(1 m/s, max(0.2 m/s, (clear − distance) / 5 s))        relative to the station, as in §11.7
+```
+
+until it's `clear` from the port. It doesn't stop there (stopping dead under 0.03 m/s on RCS hung on for minutes in the test of 2026-11-08): it goes straight into the push below, changing its backing-off velocity for the push to within 0.1 m/s. Left 30 m away and nearly still, its path on rails would swing round the station's every orbit and can pass back through it (a 30 m offset outward drifts about 6π × 30 = 565 m along the orbit each orbit). So it pushes backwards along the orbit, 0.5 m/s at a time: a slightly lower, faster orbit that drifts steadily ahead and away (by Clohessy–Wiltshire, about 3 · 0.5 · t m along the orbit: **4.2 km** by a burn 47 minutes later). Then it checks its path, left alone until the first burn, against the station's, 400 points, counting only the part after it has first got 200 m away (the part where it could swing back; counted from the start, a ship 30–70 m away always looked too close, and it pushed four times, 2 m/s, in the test of 2026-11-06): if they come within 100 m, it pushes again (four pushes at most). The pushes are on RCS while the monopropellant covers four times the push (0.5 m/s on the 30 t shuttle is 30,000 × (1 − e^(−0.5 / 2,354)) ≈ 6 kg, about **1.6 units**), so there's no turning near the station; otherwise on the main engine, at 0.5 m/s², once it's 100 m out. Time warp is held while it backs off near the player. Only then does it turn for its first burn. Without RCS it drifts clear on the undocking push. A burn that's due (within 30 s of its start) ends the backing off once it's 15 m out, and 5 minutes is the most it waits. Going on rails ends it too (nothing to bump into there).
+
+The plan was made from the station's orbit, and backing off moves the craft off it, so the plan is checked (§11.3) the moment backing off ends. Even 30 m and a few cm/s can grow past the 1 km line by a burn hours away (a 30 m offset outward from the planet drifts about 6π × 30 = 565 m along the orbit every orbit, by the Clohessy–Wiltshire equations of §11.3). When it does, the planner plans the trip again from where the craft really is, minutes before the first burn rather than at it, and the game says so as routine ("… is clear: the planner plans its trip again from here"), not as off course.
+
+Example: the shuttle, about 10 m long, backs off to max(30, 10 + 20) = **30 m**: 1 m/s until 25 m (5 s × 1 m/s from the end), then slowing (the gap left halves every 3.5 s) to the 0.2 m/s floor at 29 m, and 0.2 m/s for the last metre: 25 + 5 × ln 5 + 5 = **38 s** in all.
+
+Undocked, on rails or loaded, the craft is made ready to fly: every engine lit at zero throttle, its RCS thrusters and RCS switched on (docking shut them down, §11.7). The thrust limiters are left as they are. A player who switches to it mid-trip finds it ready to take over.
+
+- Code: `TrafficService.StartRoute`, `Ships.FindDockedCraftPort`, `.VesselOfPart`, `.ReadyToFly`, `RailsDocking.ReadyToFly`, `PhysicsFlyer.Pilot.BackOff` (mod/KspFlightPlanner.AddOns); `FromHereViewModel.FlyInBackgroundAsync` (App)
+- Source: §11.3, §11.7
+
+### 11.9 Fuel transfer and RCS balance
+
+**Fuel.** The Refueler window (its own toolbar button, apart from the Traffic Controller window) moves liquid fuel, oxidizer and monopropellant between one craft docked in the stack being flown and the station's tanks, either way, started and stopped by hand. The stack is first split back into the vessels that docked to make it, as the planner does (§8.1, `DockedCraft.Pieces`): the part tree is cut at every docked pair of ports, and each piece takes its name and type from its port's record of the vessel it came with (the root's piece takes the stack's name). Each piece is a **station part** or a **craft**: a craft by default when it's a ship, lander, rover or plane with a command part and an engine (the planner's rule, so both show the same split), otherwise a station part. The player can tick or untick any piece; the mark is kept in the save by vessel name. The station's tanks are the parts of every station part. Other craft docked there are never touched, so filling one shuttle doesn't drain the lander or the other shuttles beside it.
+
+Fuel is pumped, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room. Nothing is made or lost. The flow is a pump's, set by the docking port the craft is joined by, and it runs by game time, so it carries on through time warp. In zero g the propellant doesn't settle, so real spacecraft move it slowly through bladders or pressurant gas; a station pump through a standard port is taken as 5 kg/s. For comparison, an aerial-refuelling boom moves about 45 kg/s, and ISS refuelling from Progress about 0.05–0.1 kg/s.
+
+| Port (node type) | Flow *q* (setting) |
+|---|---|
+| Junior (size0) | 1 kg/s |
+| Standard (size1, and any port of unknown size) | 5 kg/s |
+| Senior (size2 and bigger) | 20 kg/s |
+
+Each frame, with Δt the game time since the last frame. For each fuel *i*, *M_i* is what can still move: the smaller of what one side holds and the other has room for. *ρ_i* is its density (t/unit).
+
+```
+M      = Σ M_i·ρ_i                    t still to move
+budget = q · Δt / 1000                t this frame
+move_i = M_i · min(1, budget / M)     units: shared by what's left of each fuel, so they all finish together
+time   = M · 1000 / q                 s, shown in the window as the time left
+```
+
+Example: filling an empty Kerb Shuttle mk2 (1,634 LF, 1,998 Ox, 150 Mono; ρ = 0.005, 0.005, 0.004 t/unit) from a station with plenty. M = 8.17 + 9.99 + 0.60 = 18.76 t. Through a standard port that's 18,760 / 5 = 3,752 s, about 1 hour 3 minutes. Through a Junior port it's 5 h 13 min, and through a Senior port 15 min 38 s. At 100× time warp the standard-port hour passes in under 40 real seconds. Every frame moves the same share of each fuel (LF 8.17 / 18.76 = 43.6 % of the mass), so all three run out together.
+
+On 2026-11-09 Kerb Station (406 parts, no rigid joints) broke apart during a fill at the old rate, a craft's tanks in 30 s. Stock KSP's own part-menu transfer is faster still: each receiving tank gains 1/20 of its capacity a second (`UIPartActionResourceTransfer.UpdateItem`), so the rate alone probably wasn't the cause. The pump is slower for realism, not as the fix.
+
+The station's SAS is switched off while fuel is pumped and back on after (docs/TRAFFIC-CONTROLLER.md "Docked craft"). Unloading stops by itself when the craft's Δv (§11.2) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit). In time warp an unloading step is at most a minute's pumping, so it can't run far past that figure.
+
+Example: Kerb Station (station) with Kerbin Station - Fuel Tank (probe), Kerb Station - Electrical (probe), Homeward Bound 4 and three Kerb Shuttle mk2s (ships with engines). The station's tanks are the station core, the fuel tank and the electrical module; filling Kerb Shuttle mk2 C takes fuel from those three only, in proportion to what each holds.
+
+**RCS balance.** One thrust limiter s_m ∈ [0.05, 1] per RCS block, chosen so a push in each of the six directions turns the ship as little as it can. For each block m and push d, F_md and τ_md are the force and torque (about the centre of mass) of its thrusters that fire for that push (a thruster fires when its thrust is within about 73° of the push; each push and its opposite are both counted, so which way a thruster's axis points doesn't matter):
+
+```
+minimise   Σ_d | Σ_m s_m · τ_md |²   (+ a small pull of each s_m towards 1, to keep thrust)
+by projected gradient descent (2,000 steps), then scaled so the largest s_m is 1
+imbalance  = max_d |Σ_m s_m τ_md| / (|Σ_m s_m F_md| · size)        0 is perfect
+```
+
+The limiters are only changed when that makes it better. The autopilot balances a route craft's RCS the first time it needs RCS on a trip, and the panel has a button for the ship being flown. A block has one limiter for all six directions, so it's a best fit, and it shifts as fuel drains (the centre of mass moves).
+
+- Code: `FuelTransfer.Pieces`, `.StationParts`, `.Move`, `StackPiece.IsStation`, `FuelTransfer.PumpKgS`, `.Movable`, `.Pump`, `RefuelerPanel.Update`, `RefuelerSettings`, `RcsBalance.Balance`, `TrafficPanel.DrawRcs` (mod/KspFlightPlanner.AddOns)
+- Source: §11.2; pump rates: KC-135 boom transfer rate (USAF fact sheet), ISS Progress refuelling (NASA); stock rate read from KSP 1.12 Assembly-CSharp; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
+
+### 11.10 Docking and undocking on rails
+
+With nobody near (the tracking station, or flying something else), a route craft docks and undocks on the saved records, as KSP would leave them, so the station shows it docked whenever you visit. The parts are written in tree order (each after its parent), as KSP loads them. Every link a part makes by part number is renumbered with it: parent, attach nodes (`attN`, `srfN`) and symmetry partners (`sym`). Before the game's vessels are replaced, each new record is checked (`RailsDocking.Check`): parents first, links in range, symmetry partners of the same part, docked ports' partners aboard; a record that fails is never swapped in, and the craft stays docked (or parks). A backup save ("persistent-before-rails-dock") before each one can be switched on for debugging (`RailsDocking.KeepBackups`); it is off, as each is a full save.
+
+Each part's record holds its parent part and its position p and rotation q relative to the ship's root part. Two docked ships are one record: the docking port of the one that docked hangs off the other's port as its parent ("Docked (docker)" and "Docked (dockee)", each naming the other port's part), the rest of it hangs below its port, and each port remembers its own ship's name, type and root part.
+
+**Undocking** cuts the craft's branch (its port and everything below it) into a record of its own, turned so its own root part r is the root again (the parent links on the way up from r reversed), with every part re-expressed from r, and both ports set free:
+
+```
+p_i' = q_r⁻¹ · (p_i − p_r),    q_i' = q_r⁻¹ · q_i
+```
+
+It's put on the station's orbit 60 m ahead (the mean anomaly moved on by n · 60 m / v), checked at once (§11.3), and flies its trip from there.
+
+The plan was made from the station's position, and on the same orbit 60 m ahead is simply where the station will be Δt later. So every burn is brought forward by that much, and the craft flies the planned path itself:
+
+```
+Δt = 60 m / v,    v = √(μ / a)          (the mean anomaly moved on, n · 60 / v, over n)
+burn UTs  →  UT − Δt
+```
+
+Flown at the planned times instead, each burn came Δt further round the body than planned. Inside the body's pull that turns the whole escape path by θ ≈ 60 m / r, so it leaves with its velocity off by v∞ · θ, a fraction of a m/s, and days of coasting stretch that to kilometres. The check right after undocking saw it and called the ship off course, and the planner planned it again from where it was (and came out with nearly the same burns: 1,200 → 1,199 m/s). It was not a settling problem: KSP gives a loaded record its whole orbit at once (`ProtoVessel.Load` → `OrbitSnapshot.Load` → `Orbit.Init`), so checking a frame later would have said the same. With the burns brought forward, the path is the plan's, Δt early. What's left is the meeting's own Δt (the craft is about V · Δt along its path at the meeting time, a few hundred m in low orbit), well inside the 1 km tolerance, and braking in takes it up.
+
+Example (Protogen's Kerb Shuttle mk2 C leaving Mun Station, 2026-11-07): low Mun orbit at v ≈ 550 m/s gives Δt ≈ 0.11 s and θ ≈ 60 / 250,000 ≈ 2.4 × 10⁻⁴ rad. Leaving the Mun at a few hundred m/s, that's about 0.1 m/s off, which after the coast to Kerbin met Kerb Station 6,483 m off at 23.4 m/s. Leaving Minmus (v ≈ 170 m/s, Δt ≈ 0.35 s, θ ≈ 8 × 10⁻⁴) for Mun Station, a longer trip through two spheres of influence, it was 86.8 km off.
+
+**Docking** picks a free port on the station and a free one on the ship that fits it (same size, from the part designs), and moves every part of the ship into the station's frame so the ports are face to face. From each port's part design comes where its face is on the part (l, λ); in each ship's frame the face is at P = p + q·l facing R = q·λ. The ship's port is turned to face the station's (forward against forward, up along up) and moved onto it:
+
+```
+R_h' = LookRotation(−R_s·forward, R_s·up)
+turn = R_h' · R_h⁻¹,     shift = P_s − turn · P_h
+p_i' = shift + turn · p_i,    q_i' = turn · q_i            for every part of the ship
+```
+
+The ship's tree is re-rooted at its port, which then hangs off the station's port; both ports are marked docked to each other, and the ship's engines and RCS blocks are switched off. Then the two old vessels are taken out of the game (not destroyed the usual way, which would count their crew as lost) and the new ones loaded as KSP loads a save's vessels.
+
+Example (Protogen's Kerb Shuttle mk2 at Mun Station): the shuttle's port is at (−1.503, −9.097, 0.000) and the station's at (−0.938, −9.097, 0.000) in the station's frame, 0.566 m apart along x, the two halves of a Clamp-O-Tron pair: the shuttle's port hangs off the station's, and undocking puts the shuttle's command pod back at the root of its own record.
+
+**Docking once you've left.** A route craft parked beside its station (§11.1), or part way in with the physics flyer (§11.6, §11.7) when the player leaves, isn't left waiting for the player to come back and watch: once neither it nor the station is loaded (the tracking station, or flying somewhere else), it's docked on rails as above, trying every 30 s if it can't (no free port it fits, say). Coming in when the player leaves, it docks on rails straight away rather than parking. Left 30 m from its port for the tracking station, a shuttle used to sit parked till the player came back (the test of 2026-11-08). Loaded, the physics flyer (or the stand-in, §11.7) docks it as before.
+
+- Code: `RailsDocking.Undock`, `.UndockLeadS`, `.Dock`, `.FindDockedIn`, `.Reroot`, `.Build`, `.PortPose`, `.Replace` (mod/KspFlightPlanner.AddOns); `TrafficService.StartRoute`, `RailsFlyer.Arrive`, `.DockWhileAway`, `.WatchApproach`; From here's ship picker outside flight (App)
+- Source: KSP's save format (VESSEL › PART: parent, position, rotation, attN; ModuleDockingNode: state, dockUId, DOCKEDVESSEL)
+
+### 11.11 Station traffic
+
+Several route craft can use one station. Ports are claimed everywhere. In physics, a station with traffic control also gives clearance into its keep-out zone and has lanes; one without leaves its route craft to their pilots.
+
+**Ports are claimed.** A station port is claimed by the craft coming in to it or docking at it (from when it's picked to when it's docked), and by the craft that has just left it while it backs off. Every pick of a port, on rails or in physics, leaves out ports other route craft have claimed, and picks from the rest as before (§11.6, §11.7, §11.10). A route craft parked to dock later keeps its claim. This holds at every station, with or without traffic control.
+
+**Traffic control.** A station directs its traffic when a pilot is aboard (any kerbal with the Pilot trait, including one in a ship docked to it, §11.12).
+
+**The keep-out zone.** Round a controlled station:
+
+```
+zone = max(200 m, size_station + size_ship + 50 m)
+```
+
+Only one route craft at a time moves inside it. A route craft needs clearance to come in, and gives way to:
+
+1. one leaving the station (backing out of a port, then climbing out the departure lane): it has a burn to make, so it always goes first;
+2. one docking at the station;
+3. one that started coming in to the station before it did (first come, first served; the ship's id breaks a tie).
+
+**The lanes.** Up is away from the body the station orbits:
+
+```
+up = (station − body centre) / |station − body centre|
+```
+
+- **Arrivals wait below the station.** Not cleared, a route craft waits in the arrival lane at the zone's edge, `−up × zone` from the station. Each one queued behind it waits a further 60 m down:
+  ```
+  wait = −up × (zone + 60 m × place)          place = route craft coming in that started before it
+  ```
+  Cleared, its hold point moves in along the same line to `−up × max(50 m, size_station + size_ship + 15 m)`, the hold point of §11.6, and docking takes it round to its port (§11.7). The lane follows the station round its orbit. If the straight way to its waiting or hold point passes the station (arriving from above, say), it's steered round, 30° at a time, at the zone's edge, so it stays outside the zone until it's cleared (the same go-round as §11.7, wider).
+- **Departures leave above it.** A route craft leaving backs straight out of its port as before (§11.8). It then climbs on RCS to the top of the lane: the zone's edge on its own side of the station, raised to at least 45° above the station's horizon if it's lower (`exit = zone × normalize(level·cos 45° + up·sin 45°)`, keeping its compass direction; just `zone × its own direction` if it's already higher). Aiming for the point straight above the station instead made it cross over and come back to line up (test of 2026-11-07). It goes round the station if the straight way is blocked (§11.7's go-round), at up to 1 m/s. At the top it doesn't stop: it keeps its climbing speed and adds §11.8's separation push, 0.5 m/s backwards along the orbit. Climbing alone isn't enough: a purely upward velocity puts it on an orbit that crosses the station's again one orbit later (in the station's frame the ship goes up, back, down and forward again to where it started). The push makes it drift steadily away. Then, as in §11.8, its path is checked to stay 100 m clear of the station until its first burn, with another push if not, and its plan is checked and made again from where it is. Reaching the top is for good: an earlier version stopped there and went back to climbing whenever it overshot by 10 m, round and round, burning half a shuttle's monopropellant (test of 2026-11-07). Without RCS it leaves as in §11.8.
+
+The two lanes are on opposite sides, so a route craft can come down to its waiting point while another climbs out. Only the last few hundred metres, inside the zone, are one at a time.
+
+Once docking has started, a route craft only gives way to one leaving: it holds still till that one is clear, and the wait doesn't count towards the 10 minutes after which docking gives up.
+
+**Without traffic control.** No clearance, lanes or queue. Each route craft comes in to a hold point on the side it arrives from (§11.6) and docks at a free port. Other route craft count as obstacles for its safety stop (§11.13). The craft says so once: "No traffic control at X (no pilot aboard X)".
+
+Example: two shuttles of about 10 m at Mun Station (about 30 m across, a pilot aboard). The first is cleared, holds max(50, 30 + 10 + 15) = 55 m below the station, and docks. The zone is max(200, 30 + 10 + 50) = 200 m, so the second waits **200 m** below, and a third 260 m below. Meanwhile a shuttle undocking from the top of the station backs out 30 m, then climbs to 200 m above. It is 400 m from the waiting shuttle.
+
+- Code: `TrafficScenario.ClaimedPorts`, `Ships.PickPorts`, `.PickStationPort`, `RailsDocking.Dock`, `CrewRules.HasTrafficControl`, `PhysicsFlyer.GiveWayTo`, `.ZoneRadius`, `.Up`, `.QueuePlace`, `PhysicsFlyer.Pilot.Approach`, `.BackOff`, `.Dock` (mod/KspFlightPlanner.AddOns)
+- Source: §11.6, §11.7, §11.8; real stations use the same idea: approach from below (R-bar), keep-out sphere, departures away from approaches
+
+### 11.12 Crew rules and the flight log
+
+No maths here, only counting, but the rules decide when the maths above runs at all.
+
+**The rules gate.** Two questions, asked in one place: may this ship fly this route, and does this station direct its traffic? Each answers yes or no with a reason. A route is refused at its start (before anything undocks) when the ship may not fly it, and the physics flyer leaves a ship alone near the player for the same reason, saying why once. A station has traffic control when a pilot is aboard (§11.11). May-fly is asked once, when the route starts, with the craft's own crew. A crewed craft needs a pilot aboard who is cleared for the trip, in that direction, counted from the flight log below. The counting rules are in [TRAFFIC-CONTROLLER.md](TRAFFIC-CONTROLLER.md#route-qualification). The controller rules for probe craft go into the physics flyer's take-over question later.
+
+**The flight log (Kerbin Resources).** Every crewed flight in the save, in the order they arrived, each with who was aboard:
+
+```
+flight = departed, arrived (game times), from, to, craft, autopilot or by hand, crew (name and trait of each)
+place  = a craft by its game id (a station), or a named place: "Kerbin (launch)", "Mun orbit",
+         or the body a route left free-flying from
+```
+
+How often a kerbal has made a trip is counted from the list: the flights with them aboard, from the same place to the same place. Directions count apart. Places that are craft are matched by id, so a renamed station still counts as the same place. Keeping each flight, not just a count, lets later rules see the order things happened in, such as who was aboard with whom on a training flight.
+
+Two ways onto the log:
+
+- **Route craft** (Traffic Controller). The kerbals aboard are noted when the route starts. When it docks at its target (on rails or in physics), or makes its last burn into its orbit, the trip is logged once, as autopilot. A route planned again on the way (off course, §11.3) is still the same trip, from where and when it first left.
+- **Flights the player flies.** A crewed craft undocking, or launching, opens a trip. Docking somewhere else closes it, and the flight is logged with the crew aboard at that moment. Docking back where it left (moving ports, a called-off approach) closes it without logging. At an undocking or a docking, KSP sees two craft. The lighter one is taken as the one travelling and the heavier as the place: a shuttle leaves a station, never the other way round. So a shuttle grabbing a small tank on the way doesn't end its trip, because the tank is the lighter one. A craft flying a route is left to Traffic Controller. A big crewed ship undocking from a smaller uncrewed depot is the one case this gets wrong (it thinks the depot left).
+
+Example: Jeb and Bill fly Kerb Shuttle mk2 by hand from Mun Station (180 t) to Kerb Station. At undocking the shuttle (22 t) is the lighter half, so its trip opens from Mun Station. It docks at Kerb Station (150 t): logged, Mun Station → Kerb Station, flown by hand, Jeb (Pilot) and Bill (Engineer). Jeb has flown it 4 times before as a route, so he's now at 5. Kerb Station → Mun Station is still 0 for him.
+
+- Code: `CrewRules.CanFly`, `.HasTrafficControl`, `TrafficScenario.Credit`, `.FliesRoute`, `TrafficService.StartRoute`, `KerbinResources.FlightLog`, `KerbinResourcesScenario.OnUndocking`, `.OnCouple`, `.OnLaunch`, `KerbinResourcesService.Flights` (mod/KspFlightPlanner.AddOns)
+- Source: none (game rules)
+
+### 11.13 The pilot's safety stop
+
+The station traffic (§11.11) orders route craft that use the same station. Anything else near a route craft, such as the player's ship, debris, a route craft bound somewhere else or one whose autopilot gave up, is left to the pilot's own reaction. It runs while the craft is coming in, docking or backing off, at any station, with or without traffic control.
+
+Each frame it looks at every loaded vessel except its station and, at a station with traffic control, the route craft the traffic orders with it. Without traffic control, other route craft count too. Route craft stopped for each other would wait for ever (three leaving at once can stop in a circle: A for B, B for C, C for A), so every route craft uses one order, and a route craft goes on past any stopped route craft below it, whatever that one stopped for, while it holds or backs away. The order: one leaving a station first (it frees a port); then the one whose next burn comes first; then the lower ship id. The top one always goes, so there's no circle. Example: A, B and C all leave Kerb Station, with first burns in 23 min, 14 min 18 s and 14 min 13 s. C goes first, then B, then A. Each one is treated as moving straight on at its speed now (fine over 20 s and a few hundred metres, where orbital curvature barely shows). With `r` the other's position and `v` its velocity, both relative to the craft:
+
+```
+t*      = clamp(−(r·v) / |v|², 0, 20 s)        time of closest approach, within the next 20 s
+gap     = |r| − size_ship − size_other        now
+closest = |r + v·t*| − size_ship − size_other at its closest
+stop if min(gap, closest) < 30 m
+```
+
+Sizes are each vessel's furthest part from its origin (§11.6). Stopped, it:
+
+- cuts its engines and holds its attitude;
+- on RCS, holds still against its station (matching the other's velocity instead, it followed the other away, 5 m behind it for good, in the test of 2026-11-08: a route craft pushing clear dragged the two stopped behind it along);
+- if the other is coming closer (`r·v < 0`), it also backs away at 0.5 m/s, sideways out of the other's path: the part of `−r` across `v` (`−r + v̂ (r·v̂)`), or any way across `v` when it's coming head on (within 1 m). Backing straight away along the line kept it in the other's way (the test of 2026-11-08).
+
+Every 10 s it looks again, and goes on once nothing is inside 30 + 10 = 40 m (the extra 10 m stops it starting and stopping at the edge). After six looks (a minute) it says it's blocked, and keeps holding and looking. Waiting doesn't count towards docking's 10 minutes. It doesn't stop while coming in faster than 5 m/s: that's the braking burn, which RCS couldn't hold anyway, and the braking is stopping it.
+
+Example: a route craft (size 10 m) is docking. The player's ship (size 8 m) is 70 m away, drifting straight at it at 2 m/s:
+
+```
+t*      = −(70 × −2) / 2² = 35 s → 20 s
+gap     = 70 − 10 − 8 = 52 m
+closest = |70 − 2 × 20| − 18 = 30 − 18 = 12 m   < 30 m: stop
+r·v < 0 (coming closer): match its 2 m/s and back away at 0.5 m/s
+```
+
+The player's ship is now closing at 0.5 m/s instead of 2 m/s. The craft goes on when it stops or passes, and the gap stays over 40 m for the next 20 s.
+
+- Code: `PhysicsFlyer.Pilot.SafetyStop`, `.Hazard`, `.InTrafficAt`, `.GivesWayToMe`, `.Outranks`, `.Translate` (mod/KspFlightPlanner.AddOns)
+- Source: closest approach of two straight-line paths (standard kinematics); §11.11
+
+### 11.14 Booking a port, and waiting for one
+
+A route craft books a port at the station it's going to, so it never arrives at a station with no port free for it. How far ahead a station's ports can be known is the catch: on a trip of a few minutes it's much as it will be, but on a 10-day trip from Minmus, or months from Duna, it means nothing. So the booking is made by time to arrival, not at departure:
+
+```
+book when   t_meet − now ≤ 1 hour
+```
+
+- **Short trips** (the meeting within the hour when the route starts, from a station). The port is booked before the craft undocks. With none free, the route isn't started: the craft stays docked, and the planner shows "No free port at X for when it gets there".
+- **Long trips.** The craft leaves on time. An hour before the meeting it books a port, and with none free it looks again every 5 s.
+
+A booked port is free, fits one of the craft's free ports (same size), and isn't claimed by another route craft. It counts as a claim from then on (§11.11), until the craft docks or its route stops. A route planned again on the way (§11.3) keeps its booking. If the booked port is taken anyway (the player docks something there), the craft books another.
+
+At the station, the booked port is the one it lines up on (§11.6), docks at on rails (§11.10), or docks at in physics (§11.7).
+
+**No free port when it arrives.** On rails, the craft parks on the station's own orbit, 3 km behind it:
+
+```
+behind_s = 3000 m / v_station           its mean anomaly set back by n × behind_s (n = mean motion)
+```
+
+The same orbit means it holds its place without fuel. At 3 km it's outside physics range (2.2 km here, §11.5), so it stays on rails even when the player is at the station. Every 5 s it looks for a free port. When one frees up, it comes in as it would have on arriving: lined up on the port if the player is at the station, docked on rails if nobody's near either ship, otherwise parked beside the station. In physics (the player riding along), it waits at the keep-out zone's edge instead (§11.11), and if the player leaves, it goes to the 3 km point.
+
+**A day's wait.** After a day of game time (6 hours on Kerbin's clock) it says so once, in the game. The planner's trip list shows "waiting 3 km behind it for a free port, since …", with "over a day: free a port there" after that. It keeps waiting.
+
+Example: Mun Station orbits at about 540 m/s. A route craft arriving with all three free ports booked by others waits 3000 / 540 = **5.6 s** behind it on its orbit, 3 km back. When one of the others docks somewhere else and its booking clears, the waiting route craft books that port within 5 s and comes in.
+
+- Code: `PortBooking.Due`, `.Try`, `.Wait`, `.WatchWaiting`, `TrafficScenario.ClaimedPorts`, `RailsFlyer.Arrive`, `.ComeIn`, `.LineUp`, `.WatchArrival`, `.WatchApproach`, `RailsDocking.FreePorts`, `.CraftPortPart`, `.Dock`, `TrafficService.StartRoute`, `PhysicsFlyer.Pilot.Approach` (mod/KspFlightPlanner.AddOns)
+- Source: §11.6, §11.10, §11.11; `Ships.FollowOrbit` for the place on the orbit (§11.1)
+
+### 11.15 Which route craft may use a port
+
+Some ports aren't for every route craft: the port on the end of a station's fuel tank is for tankers, not for a shuttle full of kerbals. Each docking port has a setting and each route craft has a role, both right-click settings in the game (in flight and in the editor). The add-on's ModuleManager patch, `TrafficPorts.cfg`, adds them to every docking port and every command pod and probe core, so it needs ModuleManager installed.
+
+| Port setting ("Route craft") | Open to |
+|---|---|
+| Any route craft (default) | every route craft |
+| Crew & supplies only | crew & supplies route craft |
+| Tankers only | tankers |
+| No route craft | none (dock there by hand) |
+
+A route craft's role ("Traffic role") is Crew & supplies (default) or Tanker. A ship is a tanker if any of its command parts says so. A docked craft's role comes from its own parts, not its station's. The role is read when the route starts and kept with the route.
+
+Wherever a port is picked (booking §11.14, lining up §11.6, docking in physics §11.7, on rails §11.10, the stand-in), the ports not open to the craft's role are left out, along with those other route craft have claimed (§11.11). A station with no free port open to its role is like one with no free port: a short trip stays docked ("No free port open to tankers at X"), and a long one waits 3 km behind it (§11.14). Both settings are saved with the part, so they survive docking, undocking and saves, and they're read from the save when a station isn't loaded.
+
+Example: Kerb Station has free ports 14 and 20, and port 20 is on the end of its fuel tank, set to Tankers only. A crew shuttle books port 14. A second shuttle, with 14 booked, finds no port open to it and waits behind the station. A tanker arriving at the same time books port 20.
+
+- Code: `ModuleTrafficPort`, `ModuleTrafficRole`, `PortAccess.Allows`, `.NotOpenTo`, `.RoleOf`, `TrafficScenario.PortsNotFor`, `RailsDocking.CraftRole`, `TrafficService.StartRoute`; patch `TrafficPorts.cfg` (mod/KspFlightPlanner.AddOns)
+- Source: §11.11, §11.14
+
+### 11.16 Trips that end in an orbit
+
+From here › Go to… a body (§3.8) can be flown in the background too. There's no craft to meet, so the planned orbit itself stands in for the target. The planner works out the orbit the trip leaves the craft on: the last leg's arrival path with the capture burn applied (`OrbitAfter`, §2). It sends that orbit as KSP's own seven elements (the save's ORBIT values, the same ones the add-on sends back for replans). The add-on rebuilds it as a KSP orbit round that body. The "meeting" is then the moment of the last burn, *t_c*, and the target's position is where that orbit puts the craft then:
+
+```
+gap   = |r_craft(t_c) − r_goal(t_c)|          the craft's path with every burn applied, the capture included
+speed = |v_craft(t_c) − v_goal(t_c)|
+```
+
+Everything else is §11.3 unchanged: the check when it starts (refused over 50 km), after being disturbed and after each physics burn, and course corrections aimed at r_goal(t_c). The capture burn plays the part of the match at the meeting, so a correction re-solves it as the speed difference onto the planned orbit. On rails the capture is applied like any other burn. The physics flyer flies it as a real burn, centred on its time, not as braking in to a target (§11.6). Once the last burn is made, the trip is finished ("arrived in orbit"): no meeting, no port booking, no docking. The log says how the orbit came out against the plan (periapsis, apoapsis, inclination), and the pilots get the trip on their log as "from → Mun orbit".
+
+After the last burn, only the orbit's shape matters, not where along it the craft is, so the gap isn't checked again. Small errors move the place along the orbit much faster than they change the shape. Off course with burns still to come, the trip stops where it is, with time warp stopped. The planner doesn't replan orbit trips yet: plan it again from From here and send it again.
+
+Undocking at the start, the fuel margin of §11.2 and KSP's own prediction all apply as for a meeting. Two more checks before it starts:
+
+- the planned orbit is closed (eccentricity under 1);
+- its periapsis is above the air (or above the ground on an airless body). On rails nothing slows a ship in the air, and KSP removes a packed ship that goes too low. So a way of going that lets the air do the capture (no capture burn) isn't offered for the background at all.
+
+Example: Kerbin 80 km → a 100 km orbit round the Mun (radius 200 km, μ = 6.5138398 × 10¹⁰ m³/s²). The goal orbit is round at r = 300 km, v = √(μ/r) = √(217,128) = 466.0 m/s, period 2π√(r³/μ) = 2π × 643.8 = 4,045 s. Suppose the capture comes out 0.1 m/s fast. The shape barely changes: Δa = 2a·Δv/v = 2 × 300,000 × 0.1 / 466 = 129 m. But by Clohessy–Wiltshire (§11.3) the place along the orbit drifts 3·Δv·t = 3 × 0.1 × 4,045 ≈ 1.2 km behind in one orbit. A position check would call that off course after one orbit, though the orbit is what was asked for. That's why there's no check after the last burn.
+
+- Code: `TrafficService.StartOrbitRoute`, `.Start`, `Route.GoalOrbit`, `.EndsInOrbit`, `CourseCheck.GoalOf`, `.Check`, `RailsFlyer.ArriveInOrbit`, `PhysicsFlyer.Pilot.Plan`, `TrafficScenario.InOrbit` (mod/KspFlightPlanner.AddOns); `TripOption.FinalOrbit` (Core); `KspLink.StartBackgroundOrbitTripAsync`, `FromHereViewModel.FlyInBackgroundAsync` (App)
+- Source: §2 (`OrbitAfter`), §3.8, §11.3; Clohessy–Wiltshire equations (Curtis 7.4)
+
+### 11.17 Controller rules: critical burns and controller time
+
+The rules themselves are in docs/TRAFFIC-CONTROLLER.md ("Controllers"). Two pieces of maths sit under them.
+
+**Is a burn critical?** A burn is critical (priority 1) when skipping it would lose the craft. The add-on compares two orbits at the burn's time *t_b*: the one the craft coasts on without the burn, and the one it would be on after it (velocity + Δv along prograde, normal and radial, as in §11.1). Either test below makes the burn critical:
+
+```
+escapes(o) = e ≥ 1  or  r_ap > r_SOI                          leaves the body's sphere of influence
+low(o)     = r_pe < R + h_atm,  and the periapsis is still ahead   (on an escape path, not already passed)
+
+critical   = (escapes(coast) and not escapes(after))  or  (low(coast) and not low(after))
+```
+
+A burn the planner titled as a capture is always critical.
+
+Example (Mun: R = 200 km, r_SOI = 2,429.6 km). A probe arrives on a hyperbola with e = 1.15 and periapsis 30 km. The capture leaves it on 30 × 500 km, which is closed with an apoapsis well inside the SOI. Coasting escapes and the orbit after the burn doesn't, so the capture is critical. A transfer burn out of a 100 km circular orbit is the other way round: coasting stays closed, so skipping it loses nothing. It isn't critical.
+
+**A rails burn's time.** The rails flyer makes a burn instantly (§11.1), but the controller's log counts the time it would have taken at full thrust. The burn is already made, so the craft's mass now, *m₁*, is the mass after it. From the rocket equation m₀ = m₁·e^(Δv/vₑ), and the time is the propellant burnt over the flow rate F/vₑ:
+
+```
+t = (m₀ − m₁)·vₑ / F = m₁·vₑ/F · (e^(Δv/vₑ) − 1)        vₑ = Isp·g₀
+```
+
+Example: one Terrier (60 kN, Isp 345 s) on a probe left at 2.0 t after a 300 m/s burn. vₑ = 345 × 9.80665 = 3,383 m/s, Δv/vₑ = 0.0887, e^0.0887 − 1 = 0.0927. t = 2.0 × 3,383 / 60 × 0.0927 = 10.5 s. The physics flyer logs the real time from the start of the burn to its end.
+
+**Each burn's SOI on the planned path.** For departure approval and the load forecast, each burn still to come is placed in the SOI it happens in. The path is followed with KSP's patched conics, the earlier burns applied as the rails flyer applies them (`Ships.PathAt`). The burn's body is the one that path is round at the burn's time. Whether it's critical is worked out on that same path.
+
+**Slots.** A controller's capacity *C* comes from how much they've handled, *n* (burns, hand-offs and clearances on their log):
+
+```
+C = 2 if n < 10,   4 if 10 ≤ n < 20,   8 if n ≥ 20          (all six numbers are settings)
+```
+
+A burn of length *T* at time *t_b* holds a slot over
+
+```
+[ t_b − T/2 ,  t_b + T/2 + 60 s ]         T: the burn at full thrust (§11.5), at least 2 s
+```
+
+A controller's load over a span is the number of their uploaded burns whose slots overlap it, plus the craft they're handling in their station's zone when the span starts within 5 minutes. A burn may be uploaded to a controller whose load over its slot is under *C*. With none free, it takes the slot of the least urgent overlapping burn with a higher priority number (ties: the later one), which loses its upload. A zone clearance needs a controller with no craft in the zone and a load under *C* over the next 5 minutes.
+
+Example: Fermy has handled 3 things, so *C* = 2. Two probes' burns are uploaded to Fermy: a phasing burn (priority 5) over 10:00:00–10:02:30 and a correction (priority 3) over 10:01:00–10:02:20. A capture (priority 1) of 40 s at 10:01:30 needs 10:01:10–10:02:50. That overlaps both, so the load is 2 = *C*. The phasing burn has the highest number, so it gives up its slot, and the capture is uploaded.
+
+**Departure approval's forecast.** For each burn of the new trip, round body *B*, with slot [*a*, *b*]:
+
+```
+supply = Σ C over the Traffic Controllers on duty covering B now
+demand = burns of other trips round B, not yet made, with priority number ≤ this one's, whose slots overlap [a, b]
+uncovered  if  no controller covers B,  or  demand ≥ supply
+```
+
+Planned burns count whether they've been uploaded yet or not. Who will be on duty later, and CommNet links, can't be known ahead, so they aren't part of it.
+
+- Code: `CrewRules.IsCritical`, `.Escapes`, `.Low`, `.PlanControl`, `.Upload`, `.AfterBurn`, `.HandOff`, `.Linked`, `.Capacity`, `.Load`, `.PeakLoad`, `.Uncovered`, `.Occupies` (Traffic/Controllers.cs); `Ships.FullThrustSeconds`, `.PathAt`; `RailsFlyer.DoBurn`; `PhysicsFlyer.Pilot.EndBurn` (mod/KspFlightPlanner.AddOns)
+- Source: §11.1; Tsiolkovsky rocket equation (Curtis 11.2)
+
+## 12. Calendar dates and ages
+
+The day counting behind Kerbin Resources' dates and ages ([KERBIN-RESOURCES.md](KERBIN-RESOURCES.md) has the calendar's names and where they come from).
+
+### 12.1 Dates
+
+KSP counts game time in seconds from its Year 1, Day 1. On Kerbin time a day is 6 h (21,600 s) and a year is 426 days (9,201,600 s). The calendar's twelve months of 35 and 36 days add up to 6 × 35 + 6 × 36 = 426, exactly KSP's year, and six weekdays make 71 weeks a year.
+
+Game time 0 is the founding date set in the save's settings (3 Diznam 2263 by default). Every year has the same 426 days, so a date is a single count of days since year 0, day 1:
+
+```
+founding day   N₀ = year·426 + (days in the months before its month) + day − 1
+day number     N  = N₀ + ⌊ut / 21,600⌋
+year           = ⌊N / 426⌋                    (floored, so times before the founding work too)
+day of year    = N − 426·year, then months taken off one by one for the month and day
+weekday        = (founding weekday + ⌊ut / 21,600⌋) mod 6
+```
+
+Example: the founding day is N₀ = 2263 × 426 + (35+36+35+36+35+36+35+36+35) + 3 − 1 = 964,038 + 319 + 2 = 964,359. A hundred days later (ut = 2,160,000 s), N = 964,459: year ⌊964,459 / 426⌋ = 2263, day of year 421 (0-based). The first eleven months hold 390 days, leaving 31: **32 Docenam 2263**. The weekday is (Akant + 100) mod 6 = 4: **Esant**.
+
+On Earth time (24 h days, 365-day years) the months don't fit. Dates are then years and days (365 a year), counted from the same founding year.
+
+- Code: `Calendar.DayNumber`, `.Date`, `.Print` (mod/KspFlightPlanner.AddOns/KerbinResources)
+- Source: day and year lengths from KSP's date formatter
+
+### 12.2 Birthdays and ages
+
+A birthday is made up once: an age picked evenly from the settings' range, plus a random part of a year, counted back from the moment the kerbal is first seen, and rounded down to the start of a day. Age is whole years between the two day numbers. Every year has the same days, so the age ticks over on the birthday.
+
+```
+birth = ⌊(now − (age + random 0…1) · 9,201,600) / 21,600⌋ · 21,600
+age   = ⌊(N(now) − N(birth)) / 426⌋
+```
+
+Example: Jeb is first seen at the founding (ut 0) and is given 92.4 years. His birth is ⌊−92.4 × 426⌋ = ⌊−39,362.4⌋ = −39,363 days, so N = 964,359 − 39,363 = 924,996: year ⌊924,996 / 426⌋ = 2171, day of year 150. That is 8 days past the first four months (142 days): **9 Cinqnam 2171**, a (Akant − 39,363) mod 6 = 3: **Dovant**. On founding day he's ⌊39,363 / 426⌋ = **92**.
+
+- Code: `Personnel.NewRecord`, `Calendar.YearsBetween` (mod/KspFlightPlanner.AddOns/KerbinResources)
+- Source: none (game rules)
+
+## 13. Power and heat in game
+
+The sums behind the Power & Heat window in the VAB/SPH and the Station window's Power and Heat sections ([POWER-AND-HEAT.md](POWER-AND-HEAT.md) has what counts and how the windows work). They are the same power budget as §7.8, worked out in game from the live parts, plus core heat.
+
+### 13.1 Night on the surface, and the next sunset
+
+KSP keeps each body's solar day (its turn measured against the Sun) as `solarDayLength`. That is the synodic period of §7.8, S = P · Y / (Y − P), where P is the body's rotation and Y the year of the planet it belongs to. In the editor the base is taken at the equator, where night is S / 2.
+
+For a landed craft the window uses where it really is. From the craft's latitude φ and the Sun's declination δ (both measured against the body's spin axis), the Sun's height e over the horizon follows the hour angle H, which turns once per solar day:
+
+```
+sin e  = sin φ · sin δ + cos φ · cos δ · cos H          (H = 0 at noon, negative in the morning)
+sunset at  H = +H₀,  sunrise at  H = −H₀,   cos H₀ = −tan φ · tan δ
+night  = S · (2π − 2H₀) / 2π
+next change = (H₀ − H) · S / 2π  by day,   ((−H₀ − H) mod 2π) · S / 2π  by night
+```
+
+If |tan φ · tan δ| ≥ 1, the Sun never sets (or never rises) there. The spin axis is taken from the body's angular velocity, because KSP moves the ground at ω × r, so east is ω̂ × up.
+
+Worked example (Minmus):
+
+1. Minmus turns in P = 40,400 s, and Kerbin's year is Y = 9,203,545 s. S = 40,400 × 9,203,545 / 9,163,145 = **40,578 s**, so night at the equator is **20,289 s** (5 h 38 min)
+2. At the equator (φ = 0), H₀ = 90° for any δ. At noon the Sun sets in 40,578 / 4 = **10,145 s**
+3. At φ = 60° with the Sun 5° off Minmus's equator (it orbits at 6°): cos H₀ = −tan 60° · tan 5° = −0.1515, so H₀ = 98.72°. On the summer side, night is 40,578 × (360 − 197.43) / 360 = **18,324 s**
+
+Terrain (a crater wall) and the planet eclipsing its moon aren't counted.
+
+- Code: `Sunlight.Landed`, `.Turning`, `.SurfaceNight` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: the hour-angle equation for the Sun's altitude ([Wikipedia: Solar zenith angle](https://en.wikipedia.org/wiki/Solar_zenith_angle), [Sunrise equation](https://en.wikipedia.org/wiki/Sunrise_equation)); §7.8
+
+### 13.2 Night in orbit
+
+In the editor and for unloaded craft, the night is the longest one at that altitude, as in §7.8: the Sun in the orbit's plane, so the craft crosses the full shadow, a cylinder as wide as the body: t_night = T · asin(R / a) / π.
+
+For a loaded craft the window steps along its real orbit, 720 steps a period, and finds where it next enters and leaves the shadow. A point p (from the body's centre) is in shadow when p · ŝ < 0 and |p − (p · ŝ) ŝ| < R, where ŝ points to the Sun. The Sun's direction is held for that orbit.
+
+Worked example: a 30 km orbit round Minmus (R = 60,000 m, μ = 1.7658 × 10⁹ m³/s²): a = 90,000 m, T = 2π √(90,000³ / 1.7658 × 10⁹) = 4,037 s, and t_night = 4,037 × asin(60 / 90) / π = **938 s**.
+
+- Code: `Sunlight.OrbitNight`, `.Orbiting` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: §7.8; cylindrical shadow model
+
+### 13.3 Charge through the night
+
+The parts' rates come from their own modules: solar panels' `chargeRate` × `efficiencyMult`, scaled by the panel's own `powerCurve` at the distance from the Sun (inverse square if it has none). Then generators (RTGs), fuel cells (converters whose output is charge), and the loads: probe cores, lights, the lab's `powerRequirement`, drills and ISRU converters (charge in their recipe), and radiators. A loaded craft also measures the real flow from its batteries: the change in stored charge over the last 10 s of game time (not while they're full or empty).
+
+```
+day surplus = solar + generators − loads                       (fuel cells off: they burn fuel)
+night drain = max(0, loads − generators − fuel cells)          (fuel cells cover only what's missing)
+night need  = night drain · t_night
+lasts       = batteries / night drain
+refill      = night need / day surplus                          (must fit in the day)
+```
+
+Worked example: a Minmus base with three Gigantor panels (24.4 EC/s each, 73.2 in all; Minmus is at Kerbin's distance, so 100% of their rating), a Convert-O-Tron 250 making Lf+Ox (30 EC/s), a Drill-O-Matic (15 EC/s), four small Thermal Control Systems (0.025 EC/s each) and one Z-4K battery (4,000 EC). Night is 20,289 s (§13.1).
+
+1. Everything on: loads = 30 + 15 + 0.1 = 45.1 EC/s. The day has 73.2 − 45.1 = **28.1 EC/s** spare
+2. At night the batteries give 45.1 EC/s and the night takes 45.1 × 20,289 = **915,037 EC**: they run out in 4,000 / 45.1 = **89 s**
+3. ISRU and drill switched off at night: the radiators' 0.1 EC/s takes **2,029 EC**, which fits. The day wins it back in 2,029 / 73.1 = **28 s**
+
+- Code: `PowerReader.Of`, `PowerBudget.Of`, `.DistanceScale`, `PowerMeter.Sample` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: KSP 1.12 part modules (`ModuleDeployableSolarPanel`, `ModuleGenerator`, `BaseConverter`, `ModuleScienceConverter`, `ModuleCommand`, `ModuleLight`, `ModuleActiveRadiator`); §7.8
+
+### 13.4 Core heat and radiators
+
+Drills and ISRU converters heat a core (`ModuleCoreHeat`). Radiators pull heat out of it only once it reaches its goal temperature, so the question is whether they can take all of it at the goal. KSP's heat figures are energy per 1/50 s, so dividing by 50 gives kW, the numbers its part info shows. Read from the game's code:
+
+```
+a core's need = Σ over running converters of TemperatureModifier(goal) / 50 · radiatorCoolingFactor
+it draws at most MaxCoolant
+a radiator gives maxEnergyTransfer / 50                          (only cooling, and extended if it folds)
+enough when Σ radiators ≥ Σ min(need, MaxCoolant)
+```
+
+Every running converter adds its own heat to the core (`ResolveConverterEnergy`), so an ISRU making two things at once makes twice the heat. KSP's part info shows only one converter's worth.
+
+Radiators pool their cooling for every core (shared out in proportion to MaxCoolant). The exception is the flat radiator panels (`parentCoolingOnly`), which only cool the part they're mounted on and that part's other children. Short of cooling, the core climbs past its goal. Converters slow down along their `ThermalEfficiency` curve (the ISRU is at 10% by 1,250 K) and stop at the shutdown temperature. Engineers aboard cut the heat a little; that isn't counted.
+
+Worked example (the base in §13.3):
+
+1. Convert-O-Tron 250: TemperatureModifier(1,000 K) = 10,000, so 10,000 / 50 × 1 = **200 kW** for one recipe, and MaxCoolant is 200. All four recipes at once would make 800 kW, more than it can shed, so it overheats whatever the radiators
+2. Drill-O-Matic: TemperatureModifier(500 K) = 5,000, so **100 kW**, and MaxCoolant is 100
+3. A small Thermal Control System: 2,500 / 50 = **50 kW**. Four give 200 kW of the 300 needed: **short 100 kW**. Six small ones, or a medium (12,500 / 50 = 250 kW) and a small, keep both cores at their goal
+
+- Code: `PowerReader` (heat), `PowerBudget.Heat` (mod/KspFlightPlanner.AddOns/PowerHeat)
+- Source: KSP 1.12 `ModuleCoreHeat.MoveCoreEnergyToRadiators`, `.GetInfo`, `ModuleActiveRadiator.GetInfo` (read from Assembly-CSharp); stock part configs (ISRU, RadialDrill, foldingRadSmall/Med)
 
 ## Sources
 

@@ -289,11 +289,11 @@ public static class TransferFlights
             if (now > flight.TransferDepartureUt + LateFraction * flight.TransferFlightTimeS)
                 throw new ArgumentException($"This window left {origin.Name} {GameCalendar.Kerbin.FormatDuration(now - flight.TransferDepartureUt)} ago: " +
                                             $"pick another on the Transfer Planner, or use Go to {destination.Name} in the From here pane.");
-            plan = Hops.Across(origin, destination, parent, orbit, earliest, height, flight.TransferDepartureUt, flight.TransferFlightTimeS);
+            plan = Hops.Across(origin, destination, parent, orbit, earliest, height, flight.TransferDepartureUt, flight.TransferFlightTimeS, bodies: bodies);
         }
         else if (around.Id == parent.Id)
         {
-            plan = Hops.Down(parent, destination, orbit, earliest, height);
+            plan = Hops.Down(parent, destination, orbit, earliest, height, bodies: bodies);
         }
         else if (around.Id == destination.Id)
         {

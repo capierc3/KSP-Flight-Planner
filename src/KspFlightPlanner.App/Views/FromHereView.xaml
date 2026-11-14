@@ -1,4 +1,4 @@
-<UserControl x:Class="KspFlightPlanner.App.Views.FromHereView"
+﻿<UserControl x:Class="KspFlightPlanner.App.Views.FromHereView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
@@ -12,6 +12,13 @@
                 <TextBlock Text="{Binding CraftText}" TextWrapping="Wrap" />
             </Border>
 
+            <!-- The ship to plan for: picked from the save outside flight; in flight the craft being flown, or any other ship. -->
+            <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsShipPick, Converter={StaticResource BoolToVisibility}}"
+                       ToolTip="The ship to plan for. In flight, the craft you're flying, or any other ship (one at another station): it's planned from where it is now. A craft docked in a station is undocked when its trip starts.">
+                <TextBlock Text="Ship" VerticalAlignment="Center" Width="100" />
+                <ComboBox ItemsSource="{Binding ShipChoices}" SelectedItem="{Binding SelectedShip}" MinWidth="220" HorizontalAlignment="Left" />
+            </DockPanel>
+
             <!-- A docked stack: plan for the whole stack or one craft docked in it (a shuttle at a station). -->
             <DockPanel Margin="0,8,0,0" Visibility="{Binding HasFlyAs, Converter={StaticResource BoolToVisibility}}"
                        ToolTip="You're flying a docked stack. Pick the craft to plan for: its own fuel and engines are used, and it leaves as soon as it undocks.">
@@ -21,6 +28,11 @@
 
             <TextBlock Text="I want to" Style="{StaticResource SectionHeader}" Margin="0,12,0,4" />
             <ComboBox ItemsSource="{Binding Actions}" SelectedItem="{Binding SelectedAction}" />
+            <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsTargetCraft, Converter={StaticResource BoolToVisibility}}"
+                       ToolTip="Sets KSP's target, as clicking the craft in map view does. Go to then goes to it (pick &quot;KSP's target&quot; under To).">
+                <TextBlock Text="Target" VerticalAlignment="Center" Width="100" />
+                <ComboBox ItemsSource="{Binding TargetCrafts}" SelectedItem="{Binding SelectedTargetCraft}" MinWidth="180" HorizontalAlignment="Left" />
+            </DockPanel>
             <DockPanel Margin="0,8,0,0" Visibility="{Binding NeedsDestination, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="To" VerticalAlignment="Center" Width="100" />
                 <ComboBox ItemsSource="{Binding Destinations}" SelectedItem="{Binding SelectedDestination}" DisplayMemberPath="Name" MinWidth="120" HorizontalAlignment="Left" />
@@ -48,8 +60,8 @@
             <StackPanel Margin="0,8,0,0" Visibility="{Binding NeedsSpot, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <TextBlock Text="Spot" VerticalAlignment="Center" Width="100" />
-                    <ComboBox ItemsSource="{Binding Spots}" SelectedItem="{Binding SelectedSpot}" MinWidth="180" HorizontalAlignment="Left"
-                              ToolTip="Landmarks from the KSP wiki, then flags, landed craft and KerbNet waypoints from your save. A landed craft or flag targeted in KSP is picked for you." />
+                    <ComboBox ItemsSource="{Binding Spots}" SelectedItem="{Binding SelectedSpot}" MinWidth="180" HorizontalAlignment="Left" MaxDropDownHeight="600"
+                              ToolTip="Landed craft, flags and KerbNet waypoints from your save, then the ore survey's spots and landmarks from the KSP wiki. A landed craft or flag targeted in KSP is picked for you." />
                 </DockPanel>
                 <DockPanel Margin="0,6,0,0">
                     <TextBlock Text="Latitude, longitude" VerticalAlignment="Center" Width="100" TextWrapping="Wrap" />
@@ -112,6 +124,8 @@
                             ToolTip="Add these as maneuver nodes on the craft you're flying (its own nodes stay)" />
                     <Button Content="Keep as a flight" Command="{Binding FlyCommand}" Padding="12,2" Margin="6,0,0,0"
                             ToolTip="Save these burns as a flight and open it in the Flight pane, to follow countdowns and drift" />
+                    <Button Content="Fly it in the background" Command="{Binding BackgroundCommand}" Padding="12,2" Margin="6,0,0,0"
+                            ToolTip="The game flies this on its own (the planner's add-on moves the craft at each burn and burns its fuel), so you can fly something else or watch from the tracking station: a meeting ends docked at the target, a Go to ends in the planned orbit" />
                 </StackPanel>
             </StackPanel>
         </StackPanel>

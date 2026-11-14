@@ -155,7 +155,9 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         set { if (SetProperty(ref _isPlaced, value)) { OnPropertyChanged(nameof(IsPlanned)); Changed(); } }
     }
 
-    public bool IsPlanned { get => !IsPlaced; set => IsPlaced = !value; }
+    // Only a tick acts: a radio button being unticked writes false, and acting on that too could swing the pair back
+    // and forth for ever (the stack overflow importing vessels, 2026-11-07).
+    public bool IsPlanned { get => !IsPlaced; set { if (value) IsPlaced = false; } }
 
     /// <summary>Enter the position as a phase angle from Kerbin instead of orbital elements.</summary>
     public bool UsePhaseAngle
@@ -164,7 +166,7 @@ public sealed class CustomLocationEditorViewModel : ObservableObject
         set { if (SetProperty(ref _usePhaseAngle, value)) { OnPropertyChanged(nameof(UseElements)); Changed(); } }
     }
 
-    public bool UseElements { get => !UsePhaseAngle; set => UsePhaseAngle = !value; }
+    public bool UseElements { get => !UsePhaseAngle; set { if (value) UsePhaseAngle = false; } }
 
     public string Lan { get => _lan; set { if (SetProperty(ref _lan, value)) Changed(); } }
     public string ArgumentOfPeriapsis { get => _argPe; set { if (SetProperty(ref _argPe, value)) Changed(); } }

@@ -259,18 +259,21 @@ public static class Hops
     /// <param name="inclinationDeg">Arrive inclined this much to the moon's equator (90° polar): a burn on the way tilts
     /// the path (<see cref="TiltOnTheWay"/>), or the course correction does. Null arrives however the transfer does.</param>
     /// <param name="aim">Instead of <paramref name="inclinationDeg"/>: arrive in a target's orbital plane (or at an inclination).</param>
+    /// <param name="bodies">The planner's bodies: the transfer keeps clear of the parent's other moons (no passing through
+    /// the Mun on the way to Minmus). Null ignores them.</param>
     public static HopPlan Down(CelestialBody parent, CelestialBody moon, OrbitalElements craft, double earliestUt, double periapsisAltitudeM,
-        bool soonest = false, double? inclinationDeg = null, ArrivalAim? aim = null)
+        bool soonest = false, double? inclinationDeg = null, ArrivalAim? aim = null, IReadOnlyCollection<CelestialBody>? bodies = null)
     {
         var goal = aim ?? ArrivalAim.Inclined(inclinationDeg);
         if (moon.Orbit is not { } moonOrbit || moon.ParentId != parent.Id) throw new ArgumentException($"{moon.Name} doesn't orbit {parent.Name}.");
         var mu = parent.Mu;
         var moonPeriod = Kepler.OrbitalPeriod(moonOrbit, mu);
         var note = InsideNote(moon);
+        var inTheWay = InTheWay(bodies, parent, moon);
 
         // Already heading there (into its sphere, or near it on a path that crosses its orbit): fix the path from here, or
         // leave it if it's good.
-        var meetUt = FollowDown(parent, moon, craft, earliestUt)?.PeriapsisUt ?? NearMiss(craft, moonOrbit, moon.SoiRadiusM, mu, earliestUt, moonPeriod);
+        var meetUt = FollowDown(parent, moon, craft, earliestUt, inTheWay)?.PeriapsisUt ?? NearMiss(craft, moonOrbit, moon.SoiRadiusM, mu, earliestUt, moonPeriod);
         if (meetUt is { } meet)
         {
             // Now, or a quarter or half of the way there (a plane fix is cheaper later), whichever costs least.
@@ -279,8 +282,8 @@ public static class Hops
                 try
                 {
                     return (Ut: ut, Result: goal is { } g
-                        ? CorrectTilted(parent, moon, craft, ut, meet, periapsisAltitudeM, g)
-                        : Correct(parent, moon, craft, ut, meet, periapsisAltitudeM));
+                        ? CorrectTilted(parent, moon, craft, ut, meet, periapsisAltitudeM, g, inTheWay)
+                        : Correct(parent, moon, craft, ut, meet, periapsisAltitudeM, inTheWay));
                 }
                 catch (ArgumentException) { return (Ut: ut, Result: ((NodeBurn?, SoiArrival)?)null); }
             }).Where(c => c.Result is not null).ToList();
@@ -301,35 +304,54 @@ public static class Hops
         var hohmannS = Math.PI * Math.Sqrt(halfway * halfway * halfway / mu);
         var window = Math.Min(synodic, moonPeriod) * 1.05;
 
-        // The cheapest intercept (transfer plus arrival speed) leaving in the window starting at each time.
-        (Maneuver Transfer, double Cost)? Window(double start)
+        // The cheapest intercept (transfer plus arrival speed) leaving in the window starting at each time, and which other
+        // moon (if any) that transfer runs into on the way.
+        (Maneuver Transfer, double Cost, CelestialBody? Blocked)? Window(double start)
         {
             try
             {
                 var best = Rendezvous.CheapestIntercept(craft, moonOrbit, mu, start, start + window, 0.6 * hohmannS, 1.4 * hohmannS, Rendezvous.LowestPassRadiusM(parent));
                 var (transfer, match) = Rendezvous.Intercept(parent, craft, moonOrbit, best.DepartureUt, best.FlightTimeS);
-                return (transfer, transfer.DeltaV + match.DeltaV);
+                var path = Rendezvous.OrbitAfter(transfer, craft, mu);
+                var blocked = Blocker(parent, inTheWay, path, transfer.Ut, best.DepartureUt + best.FlightTimeS);
+                return (transfer, transfer.DeltaV + match.DeltaV, blocked);
             }
             catch (ArgumentException) { return null; }
         }
 
         var first = Window(earliestUt);
-        var chosen = first;
+        var chosen = first is { Blocked: null } ? first : null;
+        var notes = new List<string>();
+        if (first is { Blocked: { } blocker })
+        {
+            // Another moon is in the way: the soonest window after it has moved on (it comes round in a fraction of its orbit).
+            var step = inTheWay.Min(o => Kepler.OrbitalPeriod(o.Orbit!, mu)) / 48;
+            chosen = Enumerable.Range(1, 48).AsParallel().AsOrdered().Select(i => Window(earliestUt + i * step))
+                .FirstOrDefault(w => w is { Blocked: null });
+            if (chosen is { } c)
+                notes.Add($"Waits {GameCalendar.Kerbin.FormatDuration(c.Transfer.Ut - earliestUt)}: leaving at the first chance would run into {blocker.Name} on the way.");
+        }
+        var firstClear = chosen;
         if (!soonest && Rendezvous.RelativeInclinationDeg(craft, moonOrbit, mu) > TiltedDeg)
         {
             var starts = Enumerable.Range(1, WaitWindows).Select(i => earliestUt + i * moonPeriod / 2 / WaitWindows);
-            var later = starts.AsParallel().Select(Window).Where(w => w is not null).OrderBy(w => w!.Value.Cost).FirstOrDefault();
+            var later = starts.AsParallel().Select(Window).Where(w => w is { Blocked: null }).OrderBy(w => w!.Value.Cost).FirstOrDefault();
             if (later is { } l && (chosen is null || l.Cost < chosen.Value.Cost - 1)) chosen = later;
         }
-        if (chosen is not { } pick) throw new ArgumentException($"No transfer to {moon.Name} found from this orbit.");
-        var waits = first is { } f0 && pick.Transfer.Ut > f0.Transfer.Ut + window;
-        var notes = waits
-            ? new List<string> { $"Waits {GameCalendar.Kerbin.FormatDuration(pick.Transfer.Ut - earliestUt)} for {moon.Name} to come near your orbit's plane: " +
-                                 $"leaving at the first chance costs about {first!.Value.Transfer.DeltaV - pick.Transfer.DeltaV:0} m/s more." }
-            : [];
+        if (chosen is not { } pick)
+            throw new ArgumentException(first is { Blocked: { } b }
+                ? $"Every transfer to {moon.Name} found from this orbit runs into {b.Name} on the way."
+                : $"No transfer to {moon.Name} found from this orbit.");
+        var waits = firstClear is { } f0 && pick.Transfer.Ut > f0.Transfer.Ut + window;
+        if (waits)
+        {
+            notes.Clear();
+            notes.Add($"Waits {GameCalendar.Kerbin.FormatDuration(pick.Transfer.Ut - earliestUt)} for {moon.Name} to come near your orbit's plane: " +
+                      $"leaving at the first chance costs about {firstClear!.Value.Transfer.DeltaV - pick.Transfer.DeltaV:0} m/s more.");
+        }
 
         var departureUt = pick.Transfer.Ut;
-        var aimAt = new Aim(craft, mu, departureUt, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from));
+        var aimAt = new Aim(craft, mu, departureUt, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from, inTheWay));
         var dv = aimAt.Tune(ToVector(aimAt.At, pick.Transfer.Burn), aimAt.At.Velocity.Normalized)
                  ?? throw new ArgumentException($"Couldn't find a burn that passes {moon.Name} at {Km(periapsisAltitudeM)}: try another height, or plan again from a rounder orbit.");
         var transferBurn = new FlightBurn($"Transfer to {moon.Name}", departureUt, NodeBurn.From(aimAt.At, dv));
@@ -338,7 +360,7 @@ public static class Hops
         {
             var after = Kepler.ElementsFrom(new StateVector(aimAt.At.Position, aimAt.At.Velocity + dv), mu, departureUt);
             var (aimBurn, arrival) = TiltOnTheWay(after, mu, departureUt, plan.Arrival.CrossingUt, moon, periapsisAltitudeM, tilt,
-                                         (p, from) => FollowDown(parent, moon, p, from))
+                                         (p, from) => FollowDown(parent, moon, p, from, inTheWay))
                                      ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {moon.Name} {tilt.Short}.");
             plan = Finish([transferBurn, aimBurn], arrival, moon, note);
         }
@@ -361,8 +383,43 @@ public static class Hops
         return gap < Math.Max(5 * soi, 0.1 * moonOrbit.SemiMajorAxisM) ? ut : null;
     }
 
-    private static SoiArrival? FollowDown(CelestialBody parent, CelestialBody moon, OrbitalElements path, double from) =>
-        EnterSoi(parent, moon, path, from, from + Horizon(path, parent.Mu, Kepler.OrbitalPeriod(moon.Orbit!, parent.Mu)));
+    /// <summary>
+    /// Where <paramref name="path"/> enters <paramref name="moon"/>'s sphere, or null if it doesn't, or if it enters one of
+    /// <paramref name="inTheWay"/>'s first (KSP would switch to that body there, and the rest of the path is wrong).
+    /// </summary>
+    private static SoiArrival? FollowDown(CelestialBody parent, CelestialBody moon, OrbitalElements path, double from, IReadOnlyList<CelestialBody> inTheWay) =>
+        EnterSoi(parent, moon, path, from, from + Horizon(path, parent.Mu, Kepler.OrbitalPeriod(moon.Orbit!, parent.Mu))) is { } arrival
+        && Blocker(parent, inTheWay, path, from, arrival.CrossingUt) is null
+            ? arrival
+            : null;
+
+    /// <summary>
+    /// The other bodies round <paramref name="parent"/> a path there could run into: every one with an orbit and a sphere,
+    /// except those listed in <paramref name="except"/> (the hop's own ends). Empty without <paramref name="bodies"/>.
+    /// </summary>
+    private static IReadOnlyList<CelestialBody> InTheWay(IReadOnlyCollection<CelestialBody>? bodies, CelestialBody parent, params CelestialBody[] except) =>
+        bodies is null
+            ? []
+            : bodies.Where(b => b.ParentId == parent.Id && b.Orbit is not null && b.SoiRadiusM > 0 && double.IsFinite(b.SoiRadiusM)
+                                && except.All(e => e.Id != b.Id && e.Name != b.Name)).ToList();
+
+    /// <summary>
+    /// The first of <paramref name="others"/> whose sphere <paramref name="path"/> (around <paramref name="parent"/>) enters
+    /// between the two times, or null if it enters none. Bodies whose orbits the path's height never comes near are skipped.
+    /// </summary>
+    public static CelestialBody? Blocker(CelestialBody parent, IReadOnlyList<CelestialBody> others, OrbitalElements path, double fromUt, double untilUt)
+    {
+        if (others.Count == 0 || !(untilUt > fromUt)) return null;
+        var pe = Kepler.PeriapsisRadius(path);
+        var ap = path.Eccentricity < 1 ? path.SemiMajorAxisM * (1 + path.Eccentricity) : double.PositiveInfinity;
+        return others
+            .Where(o => ap >= Kepler.PeriapsisRadius(o.Orbit!) - o.SoiRadiusM && pe <= o.Orbit!.SemiMajorAxisM * (1 + o.Orbit.Eccentricity) + o.SoiRadiusM)
+            .Select(o => (Body: o, Hit: EnterSoi(parent, o, path, fromUt, untilUt)))
+            .Where(x => x.Hit is not null)
+            .OrderBy(x => x.Hit!.CrossingUt)
+            .Select(x => x.Body)
+            .FirstOrDefault();
+    }
 
     /// <summary>
     /// A correction at <paramref name="ut"/> to a path around <paramref name="parent"/> so it passes <paramref name="moon"/> at
@@ -371,9 +428,9 @@ public static class Hops
     /// is cheapest. No burn when the path already passes within <see cref="OnCourseM"/>.
     /// </summary>
     private static (NodeBurn? Burn, SoiArrival Arrival) Correct(CelestialBody parent, CelestialBody moon, OrbitalElements path, double ut, double arriveUt,
-        double periapsisAltitudeM)
+        double periapsisAltitudeM, IReadOnlyList<CelestialBody> inTheWay)
     {
-        var aim = new Aim(path, parent.Mu, ut, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from));
+        var aim = new Aim(path, parent.Mu, ut, moon, periapsisAltitudeM, (p, from) => FollowDown(parent, moon, p, from, inTheWay));
         if (aim.ArrivalAfter(Vector3d.Zero) is { } now && OnCourse(now, periapsisAltitudeM)) return (null, now);
 
         var at = aim.At;
@@ -416,14 +473,17 @@ public static class Hops
     /// <param name="inclinationDeg">Arrive inclined this much to the planet's equator: once out of the moon's sphere, a
     /// burn on the way down tilts the path (<see cref="TiltOnTheWay"/>). Null arrives however the escape does.</param>
     /// <param name="aim">Instead of <paramref name="inclinationDeg"/>: arrive in a target's orbital plane (or at an inclination).</param>
+    /// <param name="bodies">The planner's bodies: the way down keeps clear of the planet's other moons. Null ignores them.</param>
     public static HopPlan Up(CelestialBody moon, CelestialBody parent, OrbitalElements craft, double earliestUt, double periapsisAltitudeM,
-        double? inclinationDeg = null, ArrivalAim? aim = null)
+        double? inclinationDeg = null, ArrivalAim? aim = null, IReadOnlyCollection<CelestialBody>? bodies = null)
     {
-        var plan = Untilted(moon, parent, craft, earliestUt, periapsisAltitudeM);
+        var inTheWay = InTheWay(bodies, parent, moon);
+        var plan = Untilted(moon, parent, craft, earliestUt, periapsisAltitudeM, inTheWay);
         if ((aim ?? ArrivalAim.Inclined(inclinationDeg)) is not { } tilt || tilt.Met(plan.Arrival)) return plan;
         var a = plan.Arrival;
         var (aimBurn, arrival) = TiltOnTheWay(a.Path, parent.Mu, a.CrossingUt, a.PeriapsisUt, parent, periapsisAltitudeM, tilt,
-                                     (p, from) => Relative(Kepler.StateAt(p, parent.Mu, from), parent, from) is var down && ComesDown(down, parent) ? down : null)
+                                     (p, from) => Relative(Kepler.StateAt(p, parent.Mu, from), parent, from) is var down && ComesDown(down, parent)
+                                                  && Blocker(parent, inTheWay, down.Path, from, down.PeriapsisUt) is null ? down : null)
                                  ?? throw new ArgumentException($"Couldn't find a burn on the way that arrives at {parent.Name} {tilt.Short}.");
         return Finish([.. plan.Departure, aimBurn], arrival, parent, UpNote(moon)) with { IsCorrection = plan.IsCorrection };
     }
@@ -431,19 +491,22 @@ public static class Hops
     private static string UpNote(CelestialBody moon) =>
         $"Once the craft has left {moon.Name}'s sphere of influence, plan Circularize at periapsis again from here for the exact burn.";
 
-    private static HopPlan Untilted(CelestialBody moon, CelestialBody parent, OrbitalElements craft, double earliestUt, double periapsisAltitudeM)
+    private static HopPlan Untilted(CelestialBody moon, CelestialBody parent, OrbitalElements craft, double earliestUt, double periapsisAltitudeM,
+        IReadOnlyList<CelestialBody> inTheWay)
     {
         if (moon.Orbit is not { } moonOrbit || moon.ParentId != parent.Id) throw new ArgumentException($"{moon.Name} doesn't orbit {parent.Name}.");
         var mu = moon.Mu;
         var horizon = Kepler.OrbitalPeriod(moonOrbit, parent.Mu) / 2;
         SoiArrival? Leave(OrbitalElements path, double from) => LeaveSoi(moon, parent, path, from, from + horizon);
-        // Only a path that comes down to its periapsis counts: one flung out of the planet's sphere has its periapsis behind it.
-        SoiArrival? Follow(OrbitalElements path, double from) => Leave(path, from) is { } a && ComesDown(a, parent) ? a : null;
+        // Only a path that comes down to its periapsis counts: one flung out of the planet's sphere has its periapsis behind
+        // it, and one that runs into another moon on the way down never gets there.
+        SoiArrival? Follow(OrbitalElements path, double from) =>
+            Leave(path, from) is { } a && ComesDown(a, parent) && Blocker(parent, inTheWay, a.Path, a.CrossingUt, a.PeriapsisUt) is null ? a : null;
         var note = UpNote(moon);
 
         if (Leave(craft, earliestUt) is { } coasting)
         {
-            if (ComesDown(coasting, parent) && OnCourse(coasting, periapsisAltitudeM)) return Finish([], coasting, parent, note) with { IsCorrection = true };
+            if (Follow(craft, earliestUt) is not null && OnCourse(coasting, periapsisAltitudeM)) return Finish([], coasting, parent, note) with { IsCorrection = true };
             // On the way out already: speed up or slow down, or push sideways (which swings where it leaves); the cheaper.
             var aim = new Aim(craft, mu, earliestUt, parent, periapsisAltitudeM, Follow);
             var at = aim.At;
@@ -527,11 +590,13 @@ public static class Hops
     /// correction also tilts the arrival to that inclination to the destination's equator.
     /// </summary>
     public static HopPlan Across(CelestialBody origin, CelestialBody destination, CelestialBody parent, OrbitalElements craft, double earliestUt,
-        double periapsisAltitudeM, double departureUt, double flightTimeS, double? inclinationDeg = null, ArrivalAim? aim = null)
+        double periapsisAltitudeM, double departureUt, double flightTimeS, double? inclinationDeg = null, ArrivalAim? aim = null,
+        IReadOnlyCollection<CelestialBody>? bodies = null)
     {
         var goal = aim ?? ArrivalAim.Inclined(inclinationDeg);
         if (origin.Orbit is null || destination.Orbit is null || origin.ParentId != parent.Id || destination.ParentId != parent.Id)
             throw new ArgumentException($"{origin.Name} and {destination.Name} don't both orbit {parent.Name}.");
+        var inTheWay = InTheWay(bodies, parent, origin, destination);
         var arriveUt = departureUt + flightTimeS;
         var horizon = Kepler.OrbitalPeriod(origin.Orbit, parent.Mu) / 4;
         var burns = new List<FlightBurn>();
@@ -543,7 +608,7 @@ public static class Hops
         SoiArrival leaving; // out of the origin's sphere: the path around the parent the course correction is on
         if (coasting is not null)
         {
-            var (fix, a) = Correct(parent, destination, coasting.Path, correctAt(coasting), arriveUt, periapsisAltitudeM);
+            var (fix, a) = Correct(parent, destination, coasting.Path, correctAt(coasting), arriveUt, periapsisAltitudeM, inTheWay);
             if (fix is { } f) burns.Add(new FlightBurn($"Course correction to {destination.Name}", correctAt(coasting), f));
             arrival = a;
             leaving = coasting;
@@ -565,7 +630,7 @@ public static class Hops
             // destination's) for the height, with or without first taking out the miss across the path's plane. What
             // the tuning can't reach is left to the course correction. The cheapest in all wins.
             var follow = (OrbitalElements p, double from) =>
-                LeaveSoi(origin, parent, p, from, from + horizon) is { } x ? FollowDown(parent, destination, x.Path, x.CrossingUt) : null;
+                LeaveSoi(origin, parent, p, from, from + horizon) is { } x ? FollowDown(parent, destination, x.Path, x.CrossingUt, inTheWay) : null;
             var tries = new List<(double Ut, Vector3d Dv, StateVector At, SoiArrival Exit, NodeBurn? Fix, SoiArrival Arrival)>();
             var offDeg = 0.0;
             foreach (var (want, isFlat) in new[] { (vInf, false), (flat, true) })
@@ -580,7 +645,7 @@ public static class Hops
                     if (LeaveSoi(origin, parent, path, ut, ut + horizon) is not { } exit) continue;
                     try
                     {
-                        var (fix, a) = Correct(parent, destination, exit.Path, correctAt(exit), arriveUt, periapsisAltitudeM);
+                        var (fix, a) = Correct(parent, destination, exit.Path, correctAt(exit), arriveUt, periapsisAltitudeM, inTheWay);
                         tries.Add((ut, burn, aimAt.At, exit, fix, a));
                     }
                     catch (ArgumentException) { }
@@ -606,7 +671,7 @@ public static class Hops
             // The course correction (or one where there was none) takes the tilt as well.
             var ut = correctAt(leaving);
             burns.RemoveAll(b => b.Title == $"Course correction to {destination.Name}");
-            var (fix, a) = CorrectTilted(parent, destination, leaving.Path, ut, arriveUt, periapsisAltitudeM, tilt);
+            var (fix, a) = CorrectTilted(parent, destination, leaving.Path, ut, arriveUt, periapsisAltitudeM, tilt, inTheWay);
             if (fix is { } f) burns.Add(new FlightBurn($"Course correction to {destination.Name}, {tilt.Short}", ut, f));
             arrival = a;
         }
@@ -745,15 +810,15 @@ public static class Hops
     /// equator; no burn when it already does. Starts from the plain correction (<see cref="Correct"/>), then from no burn.
     /// </summary>
     private static (NodeBurn? Burn, SoiArrival Arrival) CorrectTilted(CelestialBody parent, CelestialBody destination, OrbitalElements path, double ut,
-        double arriveUt, double altitudeM, ArrivalAim inclinationDeg)
+        double arriveUt, double altitudeM, ArrivalAim inclinationDeg, IReadOnlyList<CelestialBody> inTheWay)
     {
-        SoiArrival? Follow(OrbitalElements p, double from) => FollowDown(parent, destination, p, from);
+        SoiArrival? Follow(OrbitalElements p, double from) => FollowDown(parent, destination, p, from, inTheWay);
         if (Follow(path, ut) is { } now && Math.Abs(now.PeriapsisAltitudeM - altitudeM) < OnCourseM && inclinationDeg.Met(now)) return (null, now);
         var at = Kepler.StateAt(path, parent.Mu, ut);
         var seeds = new List<Vector3d>();
         try
         {
-            if (Correct(parent, destination, path, ut, arriveUt, altitudeM).Burn is { } plain) seeds.Add(ToVector(at, plain));
+            if (Correct(parent, destination, path, ut, arriveUt, altitudeM, inTheWay).Burn is { } plain) seeds.Add(ToVector(at, plain));
         }
         catch (ArgumentException) { }
         seeds.Add(Vector3d.Zero);

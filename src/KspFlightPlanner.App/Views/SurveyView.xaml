@@ -1,0 +1,153 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.SurveyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <!-- Tools › Ore survey (docs/SURVEY.md): a station's survey of the body it orbits. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="12,10">
+            <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Visibility="{Binding HasNoStations, Converter={StaticResource BoolToVisibility}}"
+                       Text="No station to survey with: put a survey scanner (M700) or a narrow-band scanner (M4435) in orbit, with an engineer aboard." />
+
+            <Grid Margin="0,0,0,8" Visibility="{Binding HasStations, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Station" Style="{StaticResource Label}" Margin="0,0,8,0" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Stations}" SelectedItem="{Binding Station}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock>
+                                <Run Text="{Binding Name, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding BodyName, Mode=OneWay}" />
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+
+            <Border Visibility="{Binding HasLatest, Converter={StaticResource BoolToVisibility}}" Padding="8,6" Margin="0,0,0,8" CornerRadius="4"
+                    Background="{DynamicResource AccentFillColorDefaultBrush}">
+                <TextBlock Text="{Binding Latest}" TextWrapping="Wrap" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Checks}" Margin="0,0,0,6">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Mark}" FontWeight="Bold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Ok}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="1" TextWrapping="Wrap">
+                                <Run Text="{Binding Text, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Detail, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </TextBlock>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <WrapPanel Margin="0,0,0,6">
+                <Button Content="Run orbital survey…" Command="{Binding RunSurveyCommand}" Margin="0,0,8,4"
+                        Visibility="{Binding CanRunSurvey, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="Presses the survey scanner's button in KSP, once the station meets the game's rules (it says what's missing)" />
+                <Button Content="Fetch ore data from KSP" Command="{Binding FetchMapCommand}" Margin="0,0,8,4"
+                        Visibility="{Binding NeedsMap, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="Reads the body's ore map through the planner's add-on (needs the live link)" />
+            </WrapPanel>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+            <TextBlock Text="{Binding CoverageText}" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <Image Source="{Binding MapImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" MaxHeight="260"
+                   HorizontalAlignment="Left" Margin="0,0,0,8"
+                   ToolTip="North up, 180° W on the left. Dark: not mapped. Dull: rough only. Colour: estimate, or true ore where the biome is analysed. White: best spots." />
+
+            <StackPanel Visibility="{Binding HasSpots, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
+                <Grid Margin="0,4,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding SpotsTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="Send to KSP as waypoints" Command="{Binding SendWaypointsCommand}"
+                            ToolTip="Puts these spots on the game's map (Ore 1 to Ore 5); sending again replaces them" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Spots}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,2">
+                                <TextBlock>
+                                    <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Position, Mode=OneWay}" FontFamily="Cascadia Mono, Consolas" />
+                                </TextBlock>
+                                <TextBlock Text="{Binding Advice}" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Text="Biomes" FontWeight="SemiBold" Margin="0,4,0,2" />
+            <ItemsControl ItemsSource="{Binding Biomes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,3">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Biome}" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="1" Text="{Binding Coverage}" Style="{StaticResource Note}" />
+                            </Grid>
+                            <TextBlock Text="{Binding Report}" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasReport}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Spots}" Style="{StaticResource Note}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Reports" FontWeight="SemiBold" Margin="0,10,0,2" />
+            <ItemsControl ItemsSource="{Binding Reports}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2">
+                            <TextBlock Style="{StaticResource Note}">
+                                <Run Text="{Binding Date, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Body, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextWrapping="Wrap" Margin="0,10,0,0"
+                       Text="Each pass maps 5° either side of the ground track while an engineer is aboard. Crew changes are seen when KSP saves. Analysed biomes' best spots show in Land at a spot as Ore survey spots." />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

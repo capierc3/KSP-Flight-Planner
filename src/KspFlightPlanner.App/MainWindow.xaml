@@ -118,6 +118,8 @@
                     <MenuItem Header="Comm_Net planner" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.CommNet}" />
                     <MenuItem Header="Power _budget" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.PowerBudget}" />
                     <Separator />
+                    <MenuItem Header="_Ore survey" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Survey}"
+                              ToolTip="A station's engineer maps the ore of the body it orbits" />
                     <MenuItem Header="Te_ch tree" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.TechTree}" />
                 </MenuItem>
                 <MenuItem Header="_KSP">

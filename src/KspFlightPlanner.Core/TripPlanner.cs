@@ -49,6 +49,15 @@ public sealed record TripOption(string Label, IReadOnlyList<TripLeg> Legs)
 
     public SoiArrival Arrival => Legs[^1].Plan.Arrival;
 
+    /// <summary>
+    /// The orbit round the destination the trip leaves the craft on: the arrival path with the capture burn applied, in
+    /// the save's own elements (what a background trip to an orbit aims for, docs/MATH.md §11.16). Null when there's no
+    /// capture burn (the air does the braking), so there's no orbit to aim for yet.
+    /// </summary>
+    public OrbitalElements? FinalOrbit => Legs[^1].Plan.Capture is { } capture
+        ? Rendezvous.OrbitAfter(capture.Ut, capture.Burn, Arrival.Path, Legs[^1].Hop.To.Mu)
+        : null;
+
     public IReadOnlyList<string> Warnings => Legs.SelectMany(l => l.Plan.Warnings).Distinct().ToList();
 
     public bool IsCorrection => Legs[0].Plan.IsCorrection;
@@ -117,14 +126,14 @@ public static class TripPlanner
 
         if (across < 0)
         {
-            var cheapest = Legs(hops, 0, craft, earliestUt, Height, Tilt, soonest: false, window: null);
+            var cheapest = Legs(hops, 0, craft, earliestUt, Height, Tilt, soonest: false, window: null, bodies);
             if (!cheapest.Legs.Any(l => l.Plan.Waits)) return [new TripOption("", cheapest.Legs)];
-            var now = Legs(hops, 0, craft, earliestUt, Height, Tilt, soonest: true, window: null);
+            var now = Legs(hops, 0, craft, earliestUt, Height, Tilt, soonest: true, window: null, bodies);
             return Label([new TripOption("", cheapest.Legs), new TripOption("", now.Legs)]);
         }
 
         // The legs up to the window are the same whichever window is taken.
-        var before = Legs(hops.Take(across).ToList(), 0, craft, earliestUt, Height, Tilt, soonest: false, window: null);
+        var before = Legs(hops.Take(across).ToList(), 0, craft, earliestUt, Height, Tilt, soonest: false, window: null, bodies);
         var hop = hops[across];
         var startOrbit = before.EndOrbit ?? craft;
         var startUt = before.EndUt;
@@ -134,7 +143,7 @@ public static class TripPlanner
         {
             try
             {
-                var rest = Legs(hops, across, startOrbit, startUt, Height, Tilt, soonest: false, window: (dep, tof));
+                var rest = Legs(hops, across, startOrbit, startUt, Height, Tilt, soonest: false, window: (dep, tof), bodies);
                 options.Add(new TripOption("", [.. before.Legs, .. rest.Legs]));
             }
             catch (ArgumentException ex) { problem ??= ex.Message; }
@@ -157,8 +166,8 @@ public static class TripPlanner
         if (window is not { } w || across < 0) return Options(from, to, craft, earliestUt, altitudeM, bodies, inclinationDeg, aim)[0];
         double Height(int i) => i == hops.Count - 1 ? altitudeM : hops[i].To.DefaultParkingAltitudeM;
         ArrivalAim? Tilt(int i) => i == hops.Count - 1 ? aim ?? ArrivalAim.Inclined(inclinationDeg) : null;
-        var before = Legs(hops.Take(across).ToList(), 0, craft, earliestUt, Height, Tilt, soonest: false, window: null);
-        var rest = Legs(hops, across, before.EndOrbit ?? craft, before.EndUt, Height, Tilt, soonest: false, window: w);
+        var before = Legs(hops.Take(across).ToList(), 0, craft, earliestUt, Height, Tilt, soonest: false, window: null, bodies);
+        var rest = Legs(hops, across, before.EndOrbit ?? craft, before.EndUt, Height, Tilt, soonest: false, window: w, bodies);
         return new TripOption("", [.. before.Legs, .. rest.Legs]);
     }
 
@@ -192,7 +201,7 @@ public static class TripPlanner
 
     /// <summary>Plans <paramref name="hops"/> from index <paramref name="start"/> on, each from where the last leaves the craft.</summary>
     private static (List<TripLeg> Legs, OrbitalElements? EndOrbit, double EndUt) Legs(IReadOnlyList<Hop> hops, int start, OrbitalElements craft, double earliestUt,
-        Func<int, double> height, Func<int, ArrivalAim?> tilt, bool soonest, (double Departure, double FlightTime)? window)
+        Func<int, double> height, Func<int, ArrivalAim?> tilt, bool soonest, (double Departure, double FlightTime)? window, IReadOnlyCollection<CelestialBody> bodies)
     {
         var legs = new List<TripLeg>();
         OrbitalElements? orbit = craft;
@@ -204,10 +213,10 @@ public static class TripPlanner
                 throw new ArgumentException($"The stop at {hops[i - 1].To.Name} is in its atmosphere, so the trip can't go on from there.");
             var plan = hop.Kind switch
             {
-                HopKind.Down => Hops.Down(hop.From, hop.To, orbit, ut, height(i), soonest, aim: tilt(i)),
-                HopKind.Up => Hops.Up(hop.From, hop.To, orbit, ut, height(i), aim: tilt(i)),
+                HopKind.Down => Hops.Down(hop.From, hop.To, orbit, ut, height(i), soonest, aim: tilt(i), bodies: bodies),
+                HopKind.Up => Hops.Up(hop.From, hop.To, orbit, ut, height(i), aim: tilt(i), bodies: bodies),
                 _ => window is { } w
-                    ? Hops.Across(hop.From, hop.To, hop.Parent, orbit, ut, height(i), w.Departure, w.FlightTime, aim: tilt(i))
+                    ? Hops.Across(hop.From, hop.To, hop.Parent, orbit, ut, height(i), w.Departure, w.FlightTime, aim: tilt(i), bodies: bodies)
                     : throw new ArgumentException("A hop across needs a launch window."),
             };
             if (i > 0) plan = plan with { Departure = plan.Departure.Select(b => b with { Note = Later(b.Note, hop) }).ToList() };
