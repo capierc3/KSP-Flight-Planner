@@ -151,17 +151,20 @@ public sealed class AerobrakeFlyViewModel : ObservableObject
     private double? MassKg => _last?.MassKg is > 0 and var m ? m
         : _sync.ActiveStack is { } v ? VesselAnalysis.Analyze(v, _sync.Parts.Catalog).WetMassT * 1000 : null;
 
-    /// <summary>Called when the action is picked: reads the flown craft's parts and fills in the targets for the body.</summary>
-    public void Activate()
+    /// <summary>
+    /// Called when the action is picked (or Go to is set to aerobrake at <paramref name="airBody"/>): reads the flown
+    /// craft's parts and fills in the targets for the body to brake at, the one the craft is around unless given.
+    /// </summary>
+    public void Activate(CelestialBody? airBody = null)
     {
         _ = LoadShapeAsync();
-        FillTargets();
+        FillTargets(airBody ?? _here()?.Body);
         UpdateLive();
     }
 
-    private void FillTargets()
+    private void FillTargets(CelestialBody? body)
     {
-        if (_here() is not (var body, _) || body.Name == _airBody || !body.HasAtmosphere) return;
+        if (body is null || body.Name == _airBody || !body.HasAtmosphere) return;
         _airBody = body.Name;
         var km = (body.DefaultParkingAltitudeM / 1000).ToString("0", C);
         (_targetApText, _targetPeText) = (km, km);
@@ -211,7 +214,14 @@ public sealed class AerobrakeFlyViewModel : ObservableObject
     /// The next step from the orbit now, for the aim (off the UI thread: the searches take a moment). Null with a reason
     /// when something's missing.
     /// </summary>
-    public async Task<(AerobrakeStep? Step, string? Problem)> NextStepAsync(CelestialBody body, OrbitalElements orbit)
+    public Task<(AerobrakeStep? Step, string? Problem)> NextStepAsync(CelestialBody body, OrbitalElements orbit) =>
+        StepFromAsync(body, AerobrakeOrbit.FromPath(body, orbit));
+
+    /// <summary>
+    /// The next step for the aim from <paramref name="now"/>, an orbit around <paramref name="body"/>: the one the craft
+    /// is on, or (Go to, aerobraking there) the path it'll arrive on.
+    /// </summary>
+    public async Task<(AerobrakeStep? Step, string? Problem)> StepFromAsync(CelestialBody body, AerobrakeOrbit now)
     {
         if (!body.HasAtmosphere || AirModel.For(body) is null) return (null, $"{body.Name} has no air to brake in.");
         if (_shape is null) await LoadShapeAsync();
@@ -225,7 +235,6 @@ public sealed class AerobrakeFlyViewModel : ObservableObject
         if (ShowsTargetApoapsis && !(tAp > air)) return (null, $"Enter an apoapsis to get down to, above the air ({air / 1000:N0} km).");
         if (aim == AerobrakeAim.TargetOrbit && !(tPe > air && tPe <= tAp)) return (null, "Enter a target periapsis above the air and no higher than the target apoapsis.");
         var passes = int.TryParse(_maxPassesText.Trim(), NumberStyles.Integer, C, out var p) && p >= 1 ? Math.Min(30, p) : 10;
-        var now = new AerobrakeOrbit(Kepler.PeriapsisRadius(orbit) - body.EquatorialRadiusM, -body.Mu / (2 * orbit.SemiMajorAxisM), orbit.InclinationDeg);
         var step = await Task.Run(() => AerobrakeLive.Next(body, now, mass, drag, aim, own, tAp, tPe, passes));
         return (step, null);
     }

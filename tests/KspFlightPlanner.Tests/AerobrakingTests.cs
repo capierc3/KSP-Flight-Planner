@@ -414,4 +414,28 @@ public sealed class AerobrakingTests : IDisposable
         Assert.False(go.Finish);
         Assert.InRange(go.PeriapsisM, 20_000, 70_000);
     }
+
+    [Fact]
+    public void Go_to_Kerbin_from_the_Mun_aims_the_arrival_at_the_first_pass()
+    {
+        var db = new PlannerDatabase(_path);
+        var repo = new BodyRepository(db);
+        var bodies = repo.GetBodies(repo.GetSystems()[0].Id);
+        var mun = bodies.Single(b => b.Name == "Mun");
+        var kerbin = bodies.Single(b => b.Name == "Kerbin");
+        var craft = new OrbitalElements(mun.EquatorialRadiusM + 50_000, 0, 0, 0, 0, 0.3, 1_000_000);
+        var drag = DragTable.Constant(4);
+
+        var guess = TripPlanner.Options(mun, kerbin, craft, 1_000_120, TransferFlights.AerobrakeFraction * kerbin.AtmosphereHeightM, bodies)[0];
+        var arriving = AerobrakeOrbit.FromPath(kerbin, guess.Arrival.Path);
+        Assert.InRange(arriving.ApoapsisM(kerbin)!.Value, 9_000_000, 12_500_000); // falling from about the Mun's height
+        var step = AerobrakeLive.Next(kerbin, arriving, 8_000, drag, AerobrakeAim.FewestPasses, 0, 0, 0, 10);
+        Assert.False(step.Finish);
+        Assert.InRange(step.PeriapsisM, 20_000, kerbin.AtmosphereHeightM);
+
+        var trip = TripPlanner.Options(mun, kerbin, craft, 1_000_120, step.PeriapsisM, bodies)[0];
+        _output.WriteLine($"first pass at {step.PeriapsisM / 1000:N1} km, arrives at {trip.Arrival.PeriapsisAltitudeM / 1000:N1} km: {step.Why}");
+        Assert.InRange(trip.Arrival.PeriapsisAltitudeM, step.PeriapsisM - 1_000, step.PeriapsisM + 1_000);
+        Assert.Equal(0, trip.CaptureDv);
+    }
 }

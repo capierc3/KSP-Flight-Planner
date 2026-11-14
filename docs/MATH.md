@@ -2090,6 +2090,28 @@ Worked example: a 20 t craft with 16 m² of drag back from the Mun (apoapsis 11,
 - Code: `AerobrakeLive.Next`, `AerobrakeLive.SetPeriapsis`, `AerobrakeTracker` (`AerobrakeLive.cs`); `Aerobraking.Continue`, `Aerobraking.DragNow` (`Aerobraking.cs`); tested in `AerobrakingTests` (`A_pass_continued_from_partway_ends_where_the_whole_pass_does`, `Tracker_measures_how_strong_the_drag_really_was`, `Tracker_ignores_readings_with_the_engines_on`, `Periapsis_set_on_the_way_in_with_a_burn_along_the_horizon`, `Next_step_finishes_once_the_apoapsis_is_down_to_the_target`)
 - Source: energy and vis-viva (§1.3); drag power from the drag equation (§9.2)
 
+### 9.6 Aerobraking at the end of a trip
+
+**From here › Go to** with **Aerobrake there** ticked (shown for a destination with air) aims the trip's arrival at the periapsis for the first pass, instead of at a capture orbit. The orbit it arrives on depends a little on that periapsis, and the periapsis depends on the orbit, so it's done in two goes:
+
+1. Plan the trip (§3.8) to a first guess in the air: 0.43 of the way up it, as the Transfer Planner's aerobrake arrival
+2. Take the path it arrives on, as the destination sees it: its periapsis, energy ε = −μ/2a (positive arriving from far away) and inclination
+3. Pick the first pass's periapsis from that path for the aim, attitude and craft (§9.4, as §9.5's next step). No safe first pass stops here
+4. Plan the trip again to that periapsis (skipped when the guess was within 300 m). A periapsis in the air has no capture burn (§3.8)
+
+Moving the periapsis by a few km changes the arrival energy very little, so one more go is enough. From there, inside the destination's sphere of influence, the Aerobrake action (§9.5) plans each pass after.
+
+Worked example: a craft in a 50 km orbit of the Mun going to Kerbin, 8 t with a constant 4 m² of drag, aiming for fewest passes:
+
+1. First guess: 0.43 × 70 km = **30.1 km**. It arrives on a path falling from about the Mun's height (apoapsis 9,000–12,500 km)
+2. Fewest passes from that path, safe with 30% more drag: **33.3 km**
+3. Planned again to 33.3 km: it arrives at **33.3 km** with no capture burn
+
+The mass is the craft's now: the burns on the way use some fuel, so it arrives a little lighter and slows a little more each pass than planned, which the 30% allowance covers.
+
+- Code: `FromHereViewModel.PlanTripAsync`, `AerobrakeFlyViewModel.StepFromAsync`; `AerobrakeOrbit.FromPath` (`Aerobraking.cs`); tested in `AerobrakingTests.Go_to_Kerbin_from_the_Mun_aims_the_arrival_at_the_first_pass`
+- Source: §3.8, §9.4, §9.5
+
 ## Sources
 
 - Howard D. Curtis, *Orbital Mechanics for Engineering Students* (Elsevier) — the reference for most formulas here

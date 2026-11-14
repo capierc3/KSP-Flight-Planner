@@ -113,6 +113,10 @@ public sealed record AerobrakeOrbit(double PeriapsisM, double EnergyJPerKg, doub
     public static AerobrakeOrbit FromExcessSpeed(double periapsisM, double excessSpeed, double inclinationDeg = 0) =>
         new(periapsisM, excessSpeed * excessSpeed / 2, inclinationDeg);
 
+    /// <summary>An orbit (or a path in from far away) around <paramref name="body"/>, as Kepler elements.</summary>
+    public static AerobrakeOrbit FromPath(CelestialBody body, OrbitalElements path) =>
+        new(Kepler.PeriapsisRadius(path) - body.EquatorialRadiusM, -body.Mu / (2 * path.SemiMajorAxisM), path.InclinationDeg);
+
     /// <summary>Apoapsis altitude, or null for a path that leaves.</summary>
     public double? ApoapsisM(CelestialBody body) =>
         EnergyJPerKg >= 0 ? null : -body.Mu / EnergyJPerKg - 2 * body.EquatorialRadiusM - PeriapsisM;

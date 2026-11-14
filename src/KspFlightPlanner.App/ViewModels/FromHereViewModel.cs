@@ -80,6 +80,10 @@ public sealed class FromHereViewModel : ObservableObject
     private string _satellitesText = "3";
     private bool _preferDive;
 
+    // Go to: aerobrake at the destination, and what the aim said about the arrival periapsis it picked.
+    private bool _aerobrakeThere;
+    private string? _aerobrakeNote;
+
     // Land at a spot: the spots on the body the craft is around, and the one picked or typed.
     private LandingTarget? _spot;
     private string _latitudeText = "";
@@ -150,13 +154,43 @@ public sealed class FromHereViewModel : ObservableObject
             foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
                          nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint), nameof(IsAerobrake) })
                 OnPropertyChanged(name);
+            NotifyGoToInputs();
             if (value.Action == QuickAction.Aerobrake) Aerobrake.Activate();
             Clear();
         }
     }
 
     public bool NeedsAltitude => _action.Action is QuickAction.SetApoapsis or QuickAction.SetPeriapsis or QuickAction.Deorbit or QuickAction.Deploy
-                                 || _action.Action == QuickAction.GoTo && !GoingToCraft;
+                                 || _action.Action == QuickAction.GoTo && !GoingToCraft && !AerobrakesThere;
+
+    /// <summary>Go to a body with air: it can be set to aerobrake there instead of burning to capture.</summary>
+    public bool CanAerobrakeThere => _action.Action == QuickAction.GoTo && !GoingToCraft && Destination() is { HasAtmosphere: true };
+
+    /// <summary>
+    /// Go to: aerobrake at the destination. The arrival periapsis is worked out from the craft's drag for the aim picked
+    /// (as the Aerobrake action does for a pass), and the trip is planned to it with no capture burn.
+    /// </summary>
+    public bool AerobrakeThere
+    {
+        get => _aerobrakeThere;
+        set
+        {
+            if (!SetProperty(ref _aerobrakeThere, value)) return;
+            if (value && Destination() is { } to) Aerobrake.Activate(to);
+            NotifyGoToInputs();
+            Clear();
+        }
+    }
+
+    private bool AerobrakesThere => _aerobrakeThere && CanAerobrakeThere;
+
+    /// <summary>The aim and attitude inputs: for the Aerobrake action, and for Go to set to aerobrake there.</summary>
+    public bool ShowsAerobrakeInputs => IsAerobrake || AerobrakesThere;
+
+    private void NotifyGoToInputs()
+    {
+        foreach (var name in new[] { nameof(NeedsAltitude), nameof(CanAerobrakeThere), nameof(ShowsAerobrakeInputs) }) OnPropertyChanged(name);
+    }
 
     /// <summary>Go to is set to KSP's target, and that's a craft: a rendezvous, which needs no height.</summary>
     private bool GoingToCraft => _destination is { IsTarget: true } && _sync.Link.Game?.Target is not null;
@@ -260,8 +294,9 @@ public sealed class FromHereViewModel : ObservableObject
             if (!SetProperty(ref _destination, value)) return;
             _altitudeText = DefaultAltitude();
             OnPropertyChanged(nameof(AltitudeText));
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            if (AerobrakesThere && Destination() is { } to) Aerobrake.Activate(to);
+            NotifyGoToInputs();
             Clear();
         }
     }
@@ -296,7 +331,8 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.CircularizeAtPeriapsis => "One burn at the next periapsis, however soon. On an orbit that's already round, it's two minutes from now. " +
                                               "Just arrived at a moon (inside its sphere of influence), this is the capture burn.",
         QuickAction.GoTo => "Anywhere in the system: the burns to leave, any course correction on the way, and the capture into a round orbit at this " +
-                            "height there, going the way it spins. A height in the atmosphere brings you down (or aerobrakes) instead. Trips through a " +
+                            "height there, going the way it spins. A height in the atmosphere brings you down instead; to slow down in the air, tick " +
+                            "Aerobrake there and the periapsis is worked out from the craft's drag. Trips through a " +
                             "launch window (another planet, or moon to moon) offer a few windows to choose from; from a moon to another planet, it stops " +
                             "in the planet's orbit on the way. Already on the way? It plans a course correction. KSP's target follows the game: a body " +
                             "goes there, a craft plans a rendezvous with it. Give an inclination for a polar (or any tilted) orbit there: a small burn " +
@@ -444,7 +480,13 @@ public sealed class FromHereViewModel : ObservableObject
                         Status = $"You're already around {destination.Name}. To change your orbit here, circularize or change the apoapsis or periapsis.";
                         return;
                     }
-                    if (!TryKm(out var height) || !TryInclination(required: false, out var tilt)) return;
+                    if (!TryInclination(required: false, out var tilt)) return;
+                    if (AerobrakesThere)
+                    {
+                        _ = PlanTripAsync(body, destination, orbit, now, after, double.NaN, tilt);
+                        return;
+                    }
+                    if (!TryKm(out var height)) return;
                     _ = PlanTripAsync(body, destination, orbit, now, after, height, tilt);
                     return;
                 case QuickAction.Aerobrake:
@@ -568,7 +610,30 @@ public sealed class FromHereViewModel : ObservableObject
         try
         {
             var bodies = _sync.StockBodies().Values.ToList();
-            var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
+            IReadOnlyList<TripOption> options;
+            if (double.IsNaN(height))
+            {
+                // Aerobraking there (docs/MATH.md §9.6): plan to a first guess in the air, take the path it arrives on, let
+                // the aim pick the periapsis for the first pass, and plan again to that.
+                var guess = TransferFlights.AerobrakeFraction * to.AtmosphereHeightM;
+                options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, guess, bodies, inclination));
+                Status = $"Working out the periapsis to aerobrake at {to.Name}…";
+                var (step, problem) = await Aerobrake.StepFromAsync(to, AerobrakeOrbit.FromPath(to, options[0].Arrival.Path));
+                if (step is null) { Status = problem; return; }
+                if (step.Finish)
+                {
+                    Status = $"No first pass at {to.Name} is safe for this aim from the path the trip comes in on. Try another aim or attitude, " +
+                             "or turn aerobraking off and capture with a burn.";
+                    return;
+                }
+                height = step.PeriapsisM;
+                if (Math.Abs(options[0].Arrival.PeriapsisAltitudeM - height) > AerobrakeLive.CloseEnoughM)
+                    options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
+                _aerobrakeNote = $"Aerobrakes at {to.Name}: periapsis {Km(height)} for the first pass. {step.Why} " +
+                                 $"Hold {Aerobrake.Attitude.Name.Split(" (")[0].ToLowerInvariant()} through it, engines off. Once inside " +
+                                 $"{to.Name}'s sphere of influence, switch to Aerobrake to follow the passes and plan the next.";
+            }
+            else options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
             (_plannedBody, _plannedFrom, _plannedUt, _plannedTo, _plannedHeight, _plannedInclination) = (from, orbit, now, to, height, inclination);
             foreach (var option in options) TripOptions.Add(new TripOptionRow(option.Label, OptionText(option, now), option));
             OnPropertyChanged(nameof(HasTripOptions));
@@ -616,6 +681,11 @@ public sealed class FromHereViewModel : ObservableObject
                      $"({option.Arrival.Path.InclinationDeg:0}° to its equator)" + (last.Plan.Capture is null ? " without a capture burn" : " and captures there") +
                      (stops.Count > 0 ? $" · stops in orbit around {string.Join(", then ", stops)} on the way" : "");
         var notes = option.Warnings.ToList();
+        if (_aerobrakeNote is { } aero)
+        {
+            notes.RemoveAll(n => n.Contains("so there's no capture burn")); // the general note on a periapsis in the air
+            notes.Insert(0, aero);
+        }
         if (burns.Count == 0) notes.Insert(0, "On course, with nothing to burn.");
         if (FuelNote() is { } fuel) notes.Add(fuel);
         Status = notes.Count > 0 ? string.Join(" ", notes) : null;
@@ -925,6 +995,7 @@ public sealed class FromHereViewModel : ObservableObject
         _meetFar = null;
         _plannedLanding = null;
         _plannedDeploy = null;
+        _aerobrakeNote = null;
         TripOptions.Clear();
         _trip = null;
         OnPropertyChanged(nameof(SelectedTrip));
@@ -971,8 +1042,8 @@ public sealed class FromHereViewModel : ObservableObject
             _target.Name = game?.Target is { } t ? $"KSP's target: {t.Name} (rendezvous)"
                 : game?.TargetBody is { } b ? $"KSP's target: {b}"
                 : "KSP's target (none set)";
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            NotifyGoToInputs();
         }
 
         var here = Here()?.Body;
@@ -991,8 +1062,8 @@ public sealed class FromHereViewModel : ObservableObject
                   ?? list.ElementAtOrDefault(1) ?? _target;
             OnPropertyChanged(nameof(Destinations));
             OnPropertyChanged(nameof(SelectedDestination));
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            NotifyGoToInputs();
         }
 
         // A new place to go: its parking height, unless burns are showing (their height is the one they were planned for).
