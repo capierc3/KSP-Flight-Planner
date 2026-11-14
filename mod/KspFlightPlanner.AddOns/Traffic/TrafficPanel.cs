@@ -103,10 +103,36 @@ namespace KspFlightPlanner.Traffic
                 }
                 GUILayout.EndScrollView();
             }
+            DrawControllers();
             if (HighLogic.LoadedSceneIsFlight && FlightGlobals.ActiveVessel is Vessel active) DrawRcs(active);
             if (GUILayout.Button("Close")) _button?.SetFalse();
             PanelWindow.Grip(_window, ref _resizing);
             GUI.DragWindow();
+        }
+
+        /// <summary>
+        /// The Traffic Controllers on duty: where, how many of their slots are in use now, the most they have on at once over
+        /// the next six hours (uploaded burns and craft in their zone), and how much they've handled (docs/MATH.md §11.17).
+        /// </summary>
+        private static void DrawControllers()
+        {
+            var duty = KerbinResources.KerbinResourcesScenario.Instance?.Duty;
+            if (duty == null || !TrafficSettings.Current.ControllerRules) return;
+            var controllers = duty.OnDuty.Where(CrewRules.IsTrafficController).ToList();
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Traffic Controllers on duty</b>", new GUIStyle(GUI.skin.label) { richText = true });
+            if (controllers.Count == 0) GUILayout.Label("None. Put a pilot on duty in the Kerbin Resources window (at KSC, or in a station's cupola or pod).");
+            var now = Planetarium.GetUniversalTime();
+            foreach (var c in controllers)
+            {
+                var cap = CrewRules.Capacity(c.Kerbal);
+                var load = CrewRules.Load(c.Kerbal, now, now + 1, now);
+                var peak = CrewRules.PeakLoad(c.Kerbal, now, now + 6 * 3600);
+                GUILayout.Label(CrewRules.CallName(c) + (c.AtKsc ? "" : ", round " + c.Body) + ": " + load + " of " + cap + " slots now, busiest next 6 h " + peak + " of " + cap +
+                                (peak >= cap ? " (full)" : peak >= cap - 1 ? " (nearly full)" : "") + "; handled " + CrewRules.Handled(c.Kerbal),
+                    new GUIStyle(GUI.skin.label) { wordWrap = true });
+            }
+            GUILayout.EndVertical();
         }
 
         /// <summary>Balance RCS: thrust limiters on the ship's RCS blocks so a push moves it without turning it.</summary>

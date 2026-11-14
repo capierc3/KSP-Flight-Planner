@@ -15,6 +15,9 @@ namespace KspFlightPlanner.Refueler
         internal readonly List<Part> Parts = new List<Part>();
         internal bool IsRoot;
 
+        /// <summary>The docking port this piece joined the stack by (its own side); null for the root piece.</summary>
+        internal ModuleDockingNode Port;
+
         /// <summary>The planner's rule (DockedPiece.IsCraftByDefault): a ship, lander, rover or plane with a command part and an engine.</summary>
         internal bool IsCraftByDefault =>
             (Type == VesselType.Ship || Type == VesselType.Lander || Type == VesselType.Rover || Type == VesselType.Plane)
@@ -76,7 +79,7 @@ namespace KspFlightPlanner.Refueler
                     if (DockedJoin(child, part) is ModuleDockingNode port)
                     {
                         var info = port.vesselInfo;
-                        into = new StackPiece { Name = info != null && !string.IsNullOrEmpty(info.name) ? info.name : "Docked part", Type = info != null ? info.vesselType : VesselType.Unknown };
+                        into = new StackPiece { Name = info != null && !string.IsNullOrEmpty(info.name) ? info.name : "Docked part", Type = info != null ? info.vesselType : VesselType.Unknown, Port = port };
                         pieces.Add(into);
                     }
                     todo.Push(new KeyValuePair<Part, StackPiece>(child, into));
@@ -115,6 +118,70 @@ namespace KspFlightPlanner.Refueler
                         amount += r.amount;
                         max += r.maxAmount;
                     }
+        }
+
+        /// <summary>
+        /// The pump's flow through the docking port a craft is joined by (kg/s), and a name for that port. Set by the port's
+        /// size, from its node type: Junior (size0), standard (size1, and anything not otherwise known) or Senior (size2
+        /// and up). The rates are the Refueler's settings. docs/MATH.md §11.9.
+        /// </summary>
+        internal static double PumpKgS(StackPiece piece, out string through)
+        {
+            var s = RefuelerSettings.Current;
+            var type = (piece?.Port?.nodeType ?? "").ToLowerInvariant();
+            var title = piece?.Port?.part?.partInfo?.title ?? "its docking port";
+            if (type.Contains("size0"))
+            {
+                through = title + " (Junior)";
+                return s.JuniorKgS;
+            }
+            if (type.Contains("size2") || type.Contains("size3") || type.Contains("size4"))
+            {
+                through = title + " (Senior)";
+                return s.SeniorKgS;
+            }
+            through = title + " (standard)";
+            return s.StandardKgS;
+        }
+
+        /// <summary>
+        /// How much of each fuel could still move (units), filling the craft (<paramref name="unload"/> false) or unloading
+        /// it: the smaller of what one side holds and what the other has room for. Also the mass of it all (t).
+        /// </summary>
+        internal static double[] Movable(IList<Part> craft, IList<Part> station, bool unload, out double tons)
+        {
+            var units = new double[Resources.Length];
+            tons = 0;
+            for (var i = 0; i < Resources.Length; i++)
+            {
+                Totals(craft, Resources[i], out var a, out var am);
+                Totals(station, Resources[i], out var b, out var bm);
+                units[i] = Math.Max(0, unload ? Math.Min(a, bm - b) : Math.Min(b, am - a));
+                tons += units[i] * Density(Resources[i]);
+            }
+            return units;
+        }
+
+        /// <summary>A resource's density (t per unit): 0.005 for liquid fuel and oxidizer, 0.004 for monopropellant.</summary>
+        internal static double Density(string resource) => PartResourceLibrary.Instance?.GetDefinition(resource)?.density ?? 0.005;
+
+        /// <summary>
+        /// Pumps <paramref name="tons"/> of fuel between the craft and the station, shared among the fuels by how much of each
+        /// could still move, so they all finish together. Returns the mass moved (t).
+        /// </summary>
+        internal static double Pump(IList<Part> craft, IList<Part> station, bool unload, double tons)
+        {
+            var units = Movable(craft, station, unload, out var total);
+            if (total <= 1e-9 || tons <= 0) return 0;
+            var share = Math.Min(1, tons / total);
+            double moved = 0;
+            for (var i = 0; i < Resources.Length; i++)
+            {
+                if (units[i] <= 0) continue;
+                var u = unload ? Move(craft, station, Resources[i], units[i] * share) : Move(station, craft, Resources[i], units[i] * share);
+                moved += u * Density(Resources[i]);
+            }
+            return moved;
         }
 
         /// <summary>

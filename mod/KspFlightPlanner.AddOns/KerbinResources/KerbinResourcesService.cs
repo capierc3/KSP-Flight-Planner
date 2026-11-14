@@ -65,7 +65,7 @@ namespace KspFlightPlanner.KerbinResources
         {
             var control = KerbinResourcesScenario.Instance?.Control;
             if (control == null) return new List<string>();
-            return control.Entries.Select(e => string.Join(Tab, e.Kind == ControlEntry.Burn
+            return control.Entries.Select(e => string.Join(Tab, e.Kind != ControlEntry.HandOff
                 ? new[] { R(e.Ut), e.Kerbal, e.Kind, e.Body, e.PostName, e.Vessel, e.BurnKind, e.Priority.ToString(CultureInfo.InvariantCulture), R(e.BurnSeconds) }
                 : new[] { R(e.Ut), e.Kerbal, e.Kind, e.Body, e.PostName, e.Vessel, e.Other, e.OtherBody, e.Gave ? "gave" : "took" })).ToList();
         }

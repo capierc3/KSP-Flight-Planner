@@ -71,16 +71,17 @@ namespace KspFlightPlanner.Traffic
         /// No free port at the meeting: parked on the station's own orbit 3 km behind it (out of physics range, so on
         /// rails, and on the same orbit, so it holds its place without fuel), waiting.
         /// </summary>
-        internal static void Wait(Route route, Vessel ship, Vessel station, string head)
+        internal static void Wait(Route route, Vessel ship, Vessel station, string head, string reason = null)
         {
+            reason = reason ?? "no free port open to " + PortAccess.RolePlural(route.Role) + " at " + station.vesselName;
             var to = station.orbitDriver.orbit;
             var speed = to.getOrbitalVelocityAtUT(Planetarium.GetUniversalTime()).magnitude;
             Ships.FollowOrbit(ship, to, TrailM / speed);
             route.State = RouteState.Waiting;
             route.WaitSince = Planetarium.GetUniversalTime();
             route.ToldLongWait = false;
-            TrafficScenario.Note(route, head + "; no free port open to " + PortAccess.RolePlural(route.Role) + " at " + station.vesselName + ": waiting " + (TrailM / 1000).ToString("0") + " km behind it till one frees up.", false);
-            ScreenMessages.PostScreenMessage(route.VesselName + " is waiting " + (TrailM / 1000).ToString("0") + " km behind " + station.vesselName + " for a free port", 8f,
+            TrafficScenario.Note(route, head + "; " + reason + ": waiting " + (TrailM / 1000).ToString("0") + " km behind it.", false);
+            ScreenMessages.PostScreenMessage(route.VesselName + " is waiting " + (TrailM / 1000).ToString("0") + " km behind " + station.vesselName + " (" + reason + ")", 8f,
                 ScreenMessageStyle.UPPER_CENTER);
         }
 
@@ -93,6 +94,14 @@ namespace KspFlightPlanner.Traffic
             if (ship == null || station == null)
             {
                 TrafficScenario.Stop(route, (ship == null ? route.VesselName : route.TargetName) + " is gone.");
+                return;
+            }
+            // A probe needs a Traffic Controller aboard to fly it in: it waits for one as for a port.
+            if (!route.ArrivalCleared && !CrewRules.ClearArrival(route, station, now, out _, out var held))
+            {
+                if (route.ArrivalHeldNote != held) TrafficScenario.Note(route, "Still waiting: " + held + ".", true);
+                route.ArrivalHeldNote = held;
+                route.NextBookTry = Time.time + 5f;
                 return;
             }
             if (Try(route, ship, station))

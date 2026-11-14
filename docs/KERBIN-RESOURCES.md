@@ -43,12 +43,21 @@ Who's on duty, and where. A kerbal goes on duty where they are: **at KSC** (Kerb
 - **The post is the station, and the seat is tracked separately.** A kerbal aboard a docked stack is on duty at the stack's main craft, the station KSP named the stack after. KR also tracks which craft their seat belongs to: the station's own parts, or a ship docked to it. Each docked port remembers the craft it came from, so the parts below it belong to that craft. A pilot in a shuttle docked at Min Station shows as "On duty at Min Station, in Min Bus mk1 (a docked ship, not the station's own parts)". The seat is checked every 10 seconds, so moving between the station and a docked ship updates it. Traffic Controller will only take controllers from the station's own parts.
 - The shift follows a part of the station, so a docking or undocking that changes the stack's id or name doesn't end it. A kerbal who leaves in a ship undocking from the station comes off duty ("left Min Station").
 - **Job titles.** Each shift has a job title, given by the add-on whose job it is through a hook (`DutyRoster.JobOf`). With no title, the kerbal shows as **Awaiting orders**. The title is checked when they go on duty and every 10 seconds after. Each change is kept in the shift's job history ("Traffic Controller then Shuttle pilot"), for shifts and fatigue later. The title shows on the data card, in the roster and in the shift list.
-- Titles today come from Traffic Controller, for pilots only ([TRAFFIC-CONTROLLER.md](TRAFFIC-CONTROLLER.md#controllers-probe-route-craft)). Later add-ons can give their own: a lab researcher, a refueling engineer.
+- Titles today come from Traffic Controller, for pilots only: "Mun Station Traffic Controller" (or "KSC Traffic Controller") and "Shuttle pilot" ([TRAFFIC-CONTROLLER.md](TRAFFIC-CONTROLLER.md#controllers-probe-route-craft)). Later add-ons can give their own: a lab researcher, a refueling engineer.
 - Every shift is kept, with when it started and ended and why it ended ("taken off", "left KSC", "left Mun Station", "dead"). That's the history the management update (shift lengths, fatigue) will work from.
 - Duty doesn't do anything by itself yet. Traffic Controller's controller rules will use it: only kerbals on duty, at KSC or on a station, can control probe burns and earn controller experience.
 - Later uses by trait (ideas, not built):
   - **Engineers:** the ore survey's engineer requirement, and refueling (the Refueler), only while an engineer is on duty there.
   - **Scientists:** a station's science lab researches only while a scientist aboard it is on duty. Going on duty starts research and coming off stops it, so the duty button works as the lab's switch.
+
+## Moving crew
+
+Built 2026-11-10, not tried in game. A kerbal can be moved to another part of the craft they're aboard, a docked stack counting as one craft: from the Station window's **Move…** button, in flight or at the space centre. A pilot in a hitchhiker can can't be a station's Traffic Controller, because that needs a part with controls, so moving them to the cupola fixes it.
+
+- Only to a part with a free seat. Any part of the stack counts, the station's own or a docked ship's.
+- On a loaded craft it's done the way KSP's own crew transfer does it, portraits and IVA included. On a craft that isn't loaded, the kerbal is moved in its saved record and given the first free seat. At the space centre the game is saved straight after, so the next scene sees the move.
+- A kerbal on duty stays on duty, since they haven't left the station. Their seat and job title are checked again straight away, so a pilot moved into the cupola becomes its Traffic Controller.
+- Automated shift changes will use the same move, when a kerbal coming off shift and the one taking over swap seats.
 
 ## Controller log
 
@@ -135,6 +144,7 @@ Pilots get a call sign from the config's list when they're hired (or first seen)
 | `DutyRoster.cs` | The duty roster and its shifts; finding where a kerbal is |
 | `ControlLog.cs` | The controller log: burns and hand-offs |
 | `CrewWindow.cs` | The window and the data card |
+| `CrewMove.cs` | Moving a kerbal to another part of their craft, loaded or not |
 | `KerbinResourcesService.cs` | kRPC "PlannerCrew": `Flights`, `OpenTrips`, `Shifts`, `Controllers`, `PutOnDuty`, `TakeOffDuty` |
 
 ## Credits

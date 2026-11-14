@@ -127,5 +127,13 @@ namespace KspFlightPlanner.KerbinResources
         }
 
         internal bool HasPart(uint id) => _parts.Any(p => p.Id == id);
+
+        /// <summary>The craft of the stack a part came from (the main craft's name for its own parts); null if it isn't in the stack.</summary>
+        internal string CraftOfPart(uint id)
+        {
+            for (var i = 0; i < _parts.Count; i++)
+                if (_parts[i].Id == id) return _craft[i];
+            return null;
+        }
     }
 }

@@ -152,6 +152,8 @@ namespace KspFlightPlanner.Traffic
                 var craft = Build(record, parts, branch, parent, r, craftName, craftType, newIdentity: true);
                 AheadOnOrbit(craft, UndockAheadM);
                 ReadyToFly(craft);
+                // Readied whole, so whatever was kept from its docking is done with.
+                DockedQuiet.ForgetParts(craft.GetNodes("PART").Select(n => uint.TryParse(n.GetValue("persistentId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0));
                 var stays = Enumerable.Range(0, parts.Count).Where(i => !branch.Contains(i)).ToList();
                 var stationRoot = int.Parse(record.GetValue("root"), CultureInfo.InvariantCulture);
                 var stationParent = stays.ToDictionary(i => i, i => parts[i].Parent);
@@ -229,14 +231,9 @@ namespace KspFlightPlanner.Traffic
                 DockTo(sp[s], hp[h], "Docked (dockee)", station.vesselName, sRec.GetValue("type"),
                     sp[int.Parse(sRec.GetValue("root"), CultureInfo.InvariantCulture)].Uid);
 
-                // Docked: the ship's engines off and its RCS blocks switched off, as the physics flyer leaves them.
-                foreach (var p in hp)
-                foreach (var m in p.Node.GetNodes("MODULE"))
-                {
-                    var kind = m.GetValue("name") ?? "";
-                    if (kind.StartsWith("ModuleEngines", StringComparison.Ordinal) && m.HasValue("EngineIgnited")) m.SetValue("EngineIgnited", "False");
-                    if (kind.StartsWith("ModuleRCS", StringComparison.Ordinal) && m.HasValue("rcsEnabled")) m.SetValue("rcsEnabled", "False");
-                }
+                // Docked: the ship made quiet (engines, RCS blocks and reaction wheels off, kept to turn back on), as in physics.
+                var portPid = uint.TryParse(hp[h].Node.GetValue("persistentId"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var pp) ? pp : 0;
+                DockedQuiet.QuietRecord(hp.Select(x => x.Node), portPid, ship.vesselName);
                 var merged = new ConfigNode("VESSEL");
                 sRec.CopyTo(merged);
                 foreach (var i in order) merged.AddNode(hp[i].Node);
@@ -331,7 +328,7 @@ namespace KspFlightPlanner.Traffic
         }
 
         /// <summary>
-        /// Just undocked on rails: the record's engines lit at zero throttle and its RCS thrusters and RCS switched on, as
+        /// Just undocked on rails: the record's engines lit at zero throttle, its RCS thrusters, RCS and reaction wheels switched on, as
         /// <see cref="Ships.ReadyToFly"/> does for a loaded ship. Thrust limiters are left as they are.
         /// </summary>
         private static void ReadyToFly(ConfigNode vessel)
@@ -350,6 +347,11 @@ namespace KspFlightPlanner.Traffic
                 }
                 else if (name == "ModuleRCS" || name == "ModuleRCSFX")
                     m.SetValue("rcsEnabled", "True", true);
+                else if (name == "ModuleReactionWheel" && m.GetValue("WheelState") == "Disabled")
+                {
+                    m.SetValue("WheelState", "Active");
+                    m.SetValue("stateString", "Running", true);
+                }
             }
             vessel.GetNode("CTRLSTATE")?.SetValue("mainThrottle", "0", true);
             var groups = vessel.GetNode("ACTIONGROUPS");

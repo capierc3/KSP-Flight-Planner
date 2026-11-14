@@ -39,7 +39,10 @@ namespace KspFlightPlanner.Traffic
         /// The two kinds of trip: to meet <paramref name="target"/> at <paramref name="meetUt"/>, or (target null) to the
         /// orbit <paramref name="goal"/> round <paramref name="goalBody"/>, reached at the last burn.
         /// </summary>
-        private static string Start(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way, string goalBody, IList<double> goal)
+        /// <param name="resumed">A held departure leaving now it's cleared (<see cref="Resume"/>): its plan may have gone
+        /// stale while it waited, and it leaves anyway, to be planned again once it's clear.</param>
+        private static string Start(string vessel, string target, IList<double> burns, IList<string> titles, double meetUt, string way, string goalBody, IList<double> goal,
+            bool resumed = false)
         {
             var scenario = RequireScenario();
             var toOrbit = target == null;
@@ -131,19 +134,29 @@ namespace KspFlightPlanner.Traffic
             if (!CrewRules.CanFly(route, craftCrew, out var notAllowed)) throw new ArgumentException(vessel + " can't fly this route: " + notAllowed);
 
             var now = Planetarium.GetUniversalTime();
-            if (route.Burns[0].Ut < now - 5) throw new ArgumentException("The first burn's time has passed: plan again.");
+            // Held at its station past its first burn (or too close to it to back off first): the plan is stale. It leaves
+            // anyway; the burns due in the next two minutes are dropped, and once it's clear of the station the course check
+            // has the planner plan the trip again from where it is.
+            var stale = false;
+            if (resumed && route.Burns[0].Ut < now + StaleLeadS)
+            {
+                foreach (var b in route.Burns)
+                    if (b.Ut < now + StaleLeadS) b.Done = true;
+                stale = true;
+            }
+            else if (route.Burns[0].Ut < now - 5) throw new ArgumentException("The first burn's time has passed: plan again.");
             if (meetUt < route.Burns[route.Burns.Count - 1].Ut) throw new ArgumentException("The meeting can't come before the last burn.");
 
             // Flown as planned in KSP's own prediction, does it meet the target (or reach its orbit)? A plan that already
             // misses isn't started.
-            var meeting = Ships.PredictMeeting(ship, to, route.Burns, now, meetUt);
+            var meeting = Ships.PredictMeeting(ship, to, route.Burns.Where(b => !b.Done).ToList(), now, meetUt);
             // A miss of a few km over days of flying (the planner's maths and KSP's drift apart across a change of sphere of
             // influence) is what the course corrections on the way are for: started, and corrected at the first check
             // (after backing off, after undocking on rails, or next frame). Only a plan that misses badly isn't started.
-            if (meeting.Problem != null || meeting.GapM > StartMissM)
+            if (!stale && (meeting.Problem != null || meeting.GapM > StartMissM))
                 throw new ArgumentException("Flown as planned, KSP's own prediction " + (meeting.Problem ?? "has it " + (toOrbit ? "reach the planned " + goalBody + " orbit " : "meet " + meet.vesselName + " ") + meeting + " off") +
                                             ": not started.");
-            var correctOnTheWay = meeting.GapM > CourseCheck.Tolerance(meetUt - now) || meeting.SpeedMs > CourseCheck.OffCourseMs;
+            var correctOnTheWay = stale || meeting.GapM > CourseCheck.Tolerance(meetUt - now) || meeting.SpeedMs > CourseCheck.OffCourseMs;
 
             // Enough fuel for the whole trip, with a margin for real burns' losses and the braking in? A ship that can't get
             // there isn't sent (nor, when a replan is the one asking, replanned onto a trip it can't finish).
@@ -170,6 +183,29 @@ namespace KspFlightPlanner.Traffic
                 if (ports[0] == null || !PortBooking.Try(route, ship, meet, ports))
                     throw new ArgumentException("No free port open to " + PortAccess.RolePlural(route.Role) + " at " + meet.vesselName + " for when it gets there (in " + KSPUtil.PrintTimeCompact(meetUt - now, false) +
                                                 "): " + vessel + " stays docked. Send it again once a port there is free.");
+            }
+
+            // Departure approval (stage D): a probe trip whose burns won't all have a controller (none on duty in that SOI,
+            // or its controllers fully booked then) waits for the player to say whether to fly it uncontrolled. A trip
+            // planned again on the way isn't asked again.
+            if (!resumed && route.StartedUt <= 0 && TrafficSettings.Current.DepartureApproval && CrewRules.NeedsController(craftCrew))
+            {
+                CrewRules.PlanControl(route, ship, now, isCraft: !docked);
+                var gaps = CrewRules.Uncovered(route, now);
+                if (gaps.Count > 0)
+                    return Hold(scenario, route, vessel, docked ? stack ?? railsStack : null,
+                        "waiting for your approval: " + gaps.Count + " burn" + (gaps.Count == 1 ? "" : "s") + " without a controller", now, string.Join("\n", gaps.ToArray()));
+            }
+
+            // Departure clearance (docs/TRAFFIC-CONTROLLER.md "Controllers"): a station with a Traffic Controller on duty
+            // clears the craft through one of them; without one it's uncontrolled airspace, and it leaves on its own.
+            KerbinResources.DutyShift clearedBy = null;
+            var clearance = "";
+            // With every controller there busy with another craft in the keep-out zone, it stays docked and waits its turn.
+            if (docked && !CrewRules.ClearDeparture(stack ?? railsStack, now, out clearedBy, out clearance))
+            {
+                if (resumed) throw new ArgumentException("no controller free after all (" + clearance + ")");
+                return Hold(scenario, route, vessel, stack ?? railsStack, clearance, now);
             }
 
             // Docked: undock it now (it's loaded, the player is flying the stack); the plan was checked on the stack's orbit,
@@ -221,6 +257,9 @@ namespace KspFlightPlanner.Traffic
                               RailsDocking.UndockAheadM.ToString("0") + " m it's ahead.");
             }
 
+            // The station it's leaving (0 when it was free-flying), for its controller's watch over it in the zone.
+            var departId = docked ? route.FromId : 0;
+
             // Free-flying when it started: it left from the body it's round.
             if (!docked) route.FromName = ship.mainBody.bodyName;
             route.Crew.AddRange(ship.GetVesselCrew().Where(c => c != null).Select(c => c.name));
@@ -228,6 +267,16 @@ namespace KspFlightPlanner.Traffic
 
             // Usually started while the player is flying the ship: off rails already, so it's checked again once it's left.
             route.Disturbed = CourseCheck.OffRails(ship) || CourseCheck.OffRails(meet);
+
+            // A probe's burns: the SOI each happens in, its kind, priority and slot, for the controllers' load (stage C).
+            if (CrewRules.NeedsController(route)) CrewRules.PlanControl(route, ship, now, isCraft: true);
+            // Cleared out by a station's controller: they have the flight, and hand it to the next SOI's (stage B).
+            if (clearedBy != null)
+            {
+                route.KnownTo = ship.mainBody.bodyName;
+                route.HandledBy = clearedBy.Kerbal;
+                route.HandledByPost = clearedBy.AtKsc ? KerbinResources.DutyShift.Ksc : clearedBy.PostName;
+            }
 
             // A ship planned again keeps what happened before on its log (found by name too: undocking gives a new id).
             var old = scenario.Routes.LastOrDefault(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
@@ -240,6 +289,13 @@ namespace KspFlightPlanner.Traffic
                 route.FromName = old.FromName;
             }
             if (sameTrip && old.StartedUt > 0) route.StartedUt = old.StartedUt;
+            // Planned again on the way: its controllers still know of it.
+            if (sameTrip && route.KnownTo.Length == 0)
+            {
+                route.KnownTo = old.KnownTo;
+                route.HandledBy = old.HandledBy;
+                route.HandledByPost = old.HandledByPost;
+            }
             // Planned again to the same station: it keeps the port it booked.
             if (sameTrip && !toOrbit && route.BookedPortId == 0) route.BookedPortId = old.BookedPortId;
             scenario.Routes.RemoveAll(r => r.VesselId == ship.persistentId || r.VesselName == vessel);
@@ -248,6 +304,18 @@ namespace KspFlightPlanner.Traffic
                           route.Burns.Sum(b => b.DeltaV).ToString("0") + " m/s planned of " + have.ToString("0") + " m/s in the tanks, with " + engine + "; " + Ships.Mass(ship).ToString("0.00") +
                           " t; KSP's prediction " + CourseCheck.Meets(route) + " within " + meeting + (route.Way.Length > 0 ? "; way: " + route.Way : ""));
             scenario.Routes.Add(route);
+            if (clearance.Length > 0)
+            {
+                TrafficScenario.Note(route, clearance, true);
+                CrewRules.LogClearance(clearedBy, vessel, ship.persistentId, now);
+            }
+            // Its controller watches it out of the zone, and takes no other craft there till it's out.
+            if (clearedBy != null)
+            {
+                route.ZoneController = clearedBy.Kerbal;
+                route.ZoneStationId = departId;
+            }
+            if (stale) route.Log.Add("Its plan went stale while it held for clearance: it's planned again once it's clear of " + route.FromName + ".");
             // Undocked on rails 60 m ahead of where the plan started (its burns brought forward to match): checked now.
             if (railsStack != null) CourseCheck.Check(route, ship, now, "After undocking on rails", expected: true);
             // Free-flying and already off by more than the course check allows: corrected now (docked ones are checked
@@ -287,6 +355,56 @@ namespace KspFlightPlanner.Traffic
         }
 
         /// <summary>
+        /// A held departure: no controller at the station is free to clear it, so it stays docked. Its route is kept as
+        /// Held (the plan, the trip, the booked port), and it undocks by itself once one is free (<see cref="Resume"/>).
+        /// </summary>
+        private static string Hold(TrafficScenario scenario, Route route, string vessel, Vessel station, string busy, double now, string approval = null)
+        {
+            route.State = RouteState.Held;
+            route.VesselId = 0;
+            route.VesselName = vessel;
+            if (station != null)
+            {
+                route.FromId = station.persistentId;
+                route.FromName = station.vesselName;
+            }
+            route.WaitSince = now;
+            route.ReplanNote = busy;
+            route.AwaitingApproval = approval != null;
+            route.ApprovalNote = approval ?? "";
+            var old = scenario.Routes.LastOrDefault(r => r.VesselName == vessel);
+            if (old != null) route.Log.AddRange(old.Log);
+            scenario.Routes.RemoveAll(r => r.VesselName == vessel);
+            scenario.Routes.Add(route);
+            TrafficScenario.Note(route, approval != null
+                ? "Holding" + (station != null ? " at " + station.vesselName : "") + ": " + busy + ". Answer in the game: fly it uncontrolled, or keep it here."
+                : "Holding at " + station.vesselName + ": " + busy + ". It undocks by itself once a controller is free.", true);
+            return route.Summary();
+        }
+
+        /// <summary>A held departure, now cleared: started as it was sent, undocking now. Its plan may have gone stale meanwhile.</summary>
+        internal static string Resume(Route held)
+        {
+            var burns = new List<double>();
+            var titles = new List<string>();
+            foreach (var b in held.Burns)
+            {
+                burns.Add(b.Ut);
+                burns.Add(b.Prograde);
+                burns.Add(b.Normal);
+                burns.Add(b.Radial);
+                titles.Add(b.Title);
+            }
+            if (held.EndsInOrbit)
+                return Start(held.VesselName, null, burns, titles, double.NaN, held.Way, held.GoalBody,
+                    new List<double> { held.GoalSma, held.GoalEcc, held.GoalInc, held.GoalLan, held.GoalArgPe, held.GoalMeanAnomaly, held.GoalEpoch }, resumed: true);
+            return Start(held.VesselName, held.TargetName, burns, titles, held.MeetUt, held.Way, null, null, resumed: true);
+        }
+
+        /// <summary>A held departure leaving with its first burn closer than this (s) is treated as stale: no time to back off first.</summary>
+        private const double StaleLeadS = 120;
+
+        /// <summary>
         /// The off-course routes waiting to be planned again, one line each, tab-separated: ship, target, game time now,
         /// then for the ship and then the target: body, semi-major axis (m), eccentricity, inclination, LAN and argument of
         /// periapsis (degrees), mean anomaly at epoch (radians), epoch (s). KSP's own orbit elements, as the save has them.
@@ -303,6 +421,12 @@ namespace KspFlightPlanner.Traffic
                 var ship = Ships.Find(r.VesselId);
                 var target = Ships.Find(r.TargetId);
                 if (ship == null || target == null) continue;
+                // A probe with nobody covering its SOI waits: its new plan's next burn would be missed too.
+                if (CrewRules.HoldsReplan(r, ship, out var held))
+                {
+                    CourseCheck.ReplanProblem(r, held);
+                    continue;
+                }
                 // Then the way it was planned ("Meets soonest"…) and the Δv in its tanks, so the planner keeps the way if the fuel allows.
                 list.Add(string.Join(Tab, new[] { ship.vesselName, target.vesselName, R(now), Elements(ship.orbitDriver.orbit), Elements(target.orbitDriver.orbit),
                     r.Way, R(Ships.DeltaVLeft(ship, out _)) }));

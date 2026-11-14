@@ -785,11 +785,15 @@ Worked example — a tilted orbit round Minmus (R = 60 km, μ = 1.7658×10⁹): 
 3. Aimed in 3D, the burn is **208.0 m/s** (prograde 113.7, normal 173.3, radial 17.0). The craft leaves Minmus's sphere 2.6 hours later and reaches 150 km over Kerbin **58.6 hours** (9.8 Kerbin days) after the burn, where the capture is **−874.7 m/s**.
 4. Across tilts of 30–150° and every node, the burn is 157–287 m/s. The worst is a polar orbit side-on to Minmus's path.
 
+**Other moons in the way.** Going out to Minmus (47,000 km) crosses the Mun's orbit (12,000 km). If the Mun's sphere is where the path crosses, KSP switches to the Mun there and the rest of the path is wrong. So every path is also checked against the planet's other moons, with the same crossing search as step 2, from the burn up to where it enters the destination's sphere. A moon is only checked when the path's height range, r_p to r_a, overlaps its orbit's, widened by its r_SOI. A path that enters another moon's sphere first counts as no arrival, and a first-guess transfer that does is skipped: the soonest window after it is looked for in steps of 1/48 of that moon's orbit (about 3.2 hours for the Mun), and the pane says how long that waits and why. The way back down (Minmus → Kerbin) and hops across get the same check, from leaving the origin's sphere to the arrival. Planning without the list of bodies (Plan mode's arrival-tilt estimate) skips it.
+
+Worked example — Kerbin → Minmus, the Mun's sphere is 2,430 km across at 12,000 km, so it covers about 2·asin(2,430/12,000) ≈ 23° of the crossing circle. The Mun moves round that in 23/360 of its 6.4-day (Kerbin-day) orbit, about 0.4 days. The transfer reaches the Mun's distance well before Minmus, so when the soonest transfer is blocked, a clear one leaves within half a day or so.
+
 Moon to moon (Mun → Minmus) and planet to planet are hops *across*: §3.8.
 
 **Already on the way, and missing.** A path that crosses the moon's orbit and passes within five of its spheres (or a tenth of its distance), without entering, also counts as on the way: a correction is planned rather than a new transfer. The correction is tried now, a quarter of the way to the meeting and halfway (a plane fix is cheaper later), and the cheapest wins.
 
-- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`, `Hops.ComesDown`, `Hops.EscapeVelocities`, `Hops.FallingVInfinity`, `Aim.Solve`, `Aim.Polish`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
+- Code: `Hops.Down`, `Hops.Up`, `Hops.EnterSoi`, `Hops.LeaveSoi`, `Hops.ComesDown`, `Hops.Blocker`, `Hops.EscapeVelocities`, `Hops.FallingVInfinity`, `Aim.Solve`, `Aim.Polish`; uses `Rendezvous.CheapestIntercept` and `Rendezvous.Intercept` (§4.4); the pane is `FromHereViewModel`; tested in `HopsTests`
 - Source: Curtis 8.9–8.10 (patched conics and the sphere of influence); Curtis 5.3 (Lambert's problem); vis-viva (§1.3)
 
 ### 3.8 Trips anywhere: routes, launch windows and options
@@ -2309,7 +2313,28 @@ Undocked, on rails or loaded, the craft is made ready to fly: every engine lit a
 
 **Fuel.** The Refueler window (its own toolbar button, apart from the Traffic Controller window) moves liquid fuel, oxidizer and monopropellant between one craft docked in the stack being flown and the station's tanks, either way, started and stopped by hand. The stack is first split back into the vessels that docked to make it, as the planner does (§8.1, `DockedCraft.Pieces`): the part tree is cut at every docked pair of ports, and each piece takes its name and type from its port's record of the vessel it came with (the root's piece takes the stack's name). Each piece is a **station part** or a **craft**: a craft by default when it's a ship, lander, rover or plane with a command part and an engine (the planner's rule, so both show the same split), otherwise a station part. The player can tick or untick any piece; the mark is kept in the save by vessel name. The station's tanks are the parts of every station part. Other craft docked there are never touched, so filling one shuttle doesn't drain the lander or the other shuttles beside it.
 
-Each frame it moves up to the craft's room for that resource / 30 s × the frame's time, so a craft's tanks fill or empty in about 30 s, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room; nothing is made or lost. Unloading stops by itself when the craft's Δv (§11.2) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit).
+Fuel is pumped, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room. Nothing is made or lost. The flow is a pump's, set by the docking port the craft is joined by, and it runs by game time, so it carries on through time warp. In zero g the propellant doesn't settle, so real spacecraft move it slowly through bladders or pressurant gas; a station pump through a standard port is taken as 5 kg/s. For comparison, an aerial-refuelling boom moves about 45 kg/s, and ISS refuelling from Progress about 0.05–0.1 kg/s.
+
+| Port (node type) | Flow *q* (setting) |
+|---|---|
+| Junior (size0) | 1 kg/s |
+| Standard (size1, and any port of unknown size) | 5 kg/s |
+| Senior (size2 and bigger) | 20 kg/s |
+
+Each frame, with Δt the game time since the last frame. For each fuel *i*, *M_i* is what can still move: the smaller of what one side holds and the other has room for. *ρ_i* is its density (t/unit).
+
+```
+M      = Σ M_i·ρ_i                    t still to move
+budget = q · Δt / 1000                t this frame
+move_i = M_i · min(1, budget / M)     units: shared by what's left of each fuel, so they all finish together
+time   = M · 1000 / q                 s, shown in the window as the time left
+```
+
+Example: filling an empty Kerb Shuttle mk2 (1,634 LF, 1,998 Ox, 150 Mono; ρ = 0.005, 0.005, 0.004 t/unit) from a station with plenty. M = 8.17 + 9.99 + 0.60 = 18.76 t. Through a standard port that's 18,760 / 5 = 3,752 s, about 1 hour 3 minutes. Through a Junior port it's 5 h 13 min, and through a Senior port 15 min 38 s. At 100× time warp the standard-port hour passes in under 40 real seconds. Every frame moves the same share of each fuel (LF 8.17 / 18.76 = 43.6 % of the mass), so all three run out together.
+
+On 2026-11-09 Kerb Station (406 parts, no rigid joints) broke apart during a fill at the old rate, a craft's tanks in 30 s. Stock KSP's own part-menu transfer is faster still: each receiving tank gains 1/20 of its capacity a second (`UIPartActionResourceTransfer.UpdateItem`), so the rate alone probably wasn't the cause. The pump is slower for realism, not as the fix.
+
+The station's SAS is switched off while fuel is pumped and back on after (docs/TRAFFIC-CONTROLLER.md "Docked craft"). Unloading stops by itself when the craft's Δv (§11.2) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit). In time warp an unloading step is at most a minute's pumping, so it can't run far past that figure.
 
 Example: Kerb Station (station) with Kerbin Station - Fuel Tank (probe), Kerb Station - Electrical (probe), Homeward Bound 4 and three Kerb Shuttle mk2s (ships with engines). The station's tanks are the station core, the fuel tank and the electrical module; filling Kerb Shuttle mk2 C takes fuel from those three only, in proportion to what each holds.
 
@@ -2323,8 +2348,8 @@ imbalance  = max_d |Σ_m s_m τ_md| / (|Σ_m s_m F_md| · size)        0 is perf
 
 The limiters are only changed when that makes it better. The autopilot balances a route craft's RCS the first time it needs RCS on a trip, and the panel has a button for the ship being flown. A block has one limiter for all six directions, so it's a best fit, and it shifts as fuel drains (the centre of mass moves).
 
-- Code: `FuelTransfer.Pieces`, `.StationParts`, `.Move`, `StackPiece.IsStation`, `RefuelerPanel`, `RcsBalance.Balance`, `TrafficPanel.DrawRcs` (mod/KspFlightPlanner.AddOns)
-- Source: §11.2; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
+- Code: `FuelTransfer.Pieces`, `.StationParts`, `.Move`, `StackPiece.IsStation`, `FuelTransfer.PumpKgS`, `.Movable`, `.Pump`, `RefuelerPanel.Update`, `RefuelerSettings`, `RcsBalance.Balance`, `TrafficPanel.DrawRcs` (mod/KspFlightPlanner.AddOns)
+- Source: §11.2; pump rates: KC-135 boom transfer rate (USAF fact sheet), ISS Progress refuelling (NASA); stock rate read from KSP 1.12 Assembly-CSharp; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
 
 ### 11.10 Docking and undocking on rails
 
@@ -2545,6 +2570,62 @@ Example: Kerbin 80 km → a 100 km orbit round the Mun (radius 200 km, μ = 6.51
 
 - Code: `TrafficService.StartOrbitRoute`, `.Start`, `Route.GoalOrbit`, `.EndsInOrbit`, `CourseCheck.GoalOf`, `.Check`, `RailsFlyer.ArriveInOrbit`, `PhysicsFlyer.Pilot.Plan`, `TrafficScenario.InOrbit` (mod/KspFlightPlanner.AddOns); `TripOption.FinalOrbit` (Core); `KspLink.StartBackgroundOrbitTripAsync`, `FromHereViewModel.FlyInBackgroundAsync` (App)
 - Source: §2 (`OrbitAfter`), §3.8, §11.3; Clohessy–Wiltshire equations (Curtis 7.4)
+
+### 11.17 Controller rules: critical burns and controller time
+
+The rules themselves are in docs/TRAFFIC-CONTROLLER.md ("Controllers"). Two pieces of maths sit under them.
+
+**Is a burn critical?** A burn is critical (priority 1) when skipping it would lose the craft. The add-on compares two orbits at the burn's time *t_b*: the one the craft coasts on without the burn, and the one it would be on after it (velocity + Δv along prograde, normal and radial, as in §11.1). Either test below makes the burn critical:
+
+```
+escapes(o) = e ≥ 1  or  r_ap > r_SOI                          leaves the body's sphere of influence
+low(o)     = r_pe < R + h_atm,  and the periapsis is still ahead   (on an escape path, not already passed)
+
+critical   = (escapes(coast) and not escapes(after))  or  (low(coast) and not low(after))
+```
+
+A burn the planner titled as a capture is always critical.
+
+Example (Mun: R = 200 km, r_SOI = 2,429.6 km). A probe arrives on a hyperbola with e = 1.15 and periapsis 30 km. The capture leaves it on 30 × 500 km, which is closed with an apoapsis well inside the SOI. Coasting escapes and the orbit after the burn doesn't, so the capture is critical. A transfer burn out of a 100 km circular orbit is the other way round: coasting stays closed, so skipping it loses nothing. It isn't critical.
+
+**A rails burn's time.** The rails flyer makes a burn instantly (§11.1), but the controller's log counts the time it would have taken at full thrust. The burn is already made, so the craft's mass now, *m₁*, is the mass after it. From the rocket equation m₀ = m₁·e^(Δv/vₑ), and the time is the propellant burnt over the flow rate F/vₑ:
+
+```
+t = (m₀ − m₁)·vₑ / F = m₁·vₑ/F · (e^(Δv/vₑ) − 1)        vₑ = Isp·g₀
+```
+
+Example: one Terrier (60 kN, Isp 345 s) on a probe left at 2.0 t after a 300 m/s burn. vₑ = 345 × 9.80665 = 3,383 m/s, Δv/vₑ = 0.0887, e^0.0887 − 1 = 0.0927. t = 2.0 × 3,383 / 60 × 0.0927 = 10.5 s. The physics flyer logs the real time from the start of the burn to its end.
+
+**Each burn's SOI on the planned path.** For departure approval and the load forecast, each burn still to come is placed in the SOI it happens in. The path is followed with KSP's patched conics, the earlier burns applied as the rails flyer applies them (`Ships.PathAt`). The burn's body is the one that path is round at the burn's time. Whether it's critical is worked out on that same path.
+
+**Slots.** A controller's capacity *C* comes from how much they've handled, *n* (burns, hand-offs and clearances on their log):
+
+```
+C = 2 if n < 10,   4 if 10 ≤ n < 20,   8 if n ≥ 20          (all six numbers are settings)
+```
+
+A burn of length *T* at time *t_b* holds a slot over
+
+```
+[ t_b − T/2 ,  t_b + T/2 + 60 s ]         T: the burn at full thrust (§11.5), at least 2 s
+```
+
+A controller's load over a span is the number of their uploaded burns whose slots overlap it, plus the craft they're handling in their station's zone when the span starts within 5 minutes. A burn may be uploaded to a controller whose load over its slot is under *C*. With none free, it takes the slot of the least urgent overlapping burn with a higher priority number (ties: the later one), which loses its upload. A zone clearance needs a controller with no craft in the zone and a load under *C* over the next 5 minutes.
+
+Example: Fermy has handled 3 things, so *C* = 2. Two probes' burns are uploaded to Fermy: a phasing burn (priority 5) over 10:00:00–10:02:30 and a correction (priority 3) over 10:01:00–10:02:20. A capture (priority 1) of 40 s at 10:01:30 needs 10:01:10–10:02:50. That overlaps both, so the load is 2 = *C*. The phasing burn has the highest number, so it gives up its slot, and the capture is uploaded.
+
+**Departure approval's forecast.** For each burn of the new trip, round body *B*, with slot [*a*, *b*]:
+
+```
+supply = Σ C over the Traffic Controllers on duty covering B now
+demand = burns of other trips round B, not yet made, with priority number ≤ this one's, whose slots overlap [a, b]
+uncovered  if  no controller covers B,  or  demand ≥ supply
+```
+
+Planned burns count whether they've been uploaded yet or not. Who will be on duty later, and CommNet links, can't be known ahead, so they aren't part of it.
+
+- Code: `CrewRules.IsCritical`, `.Escapes`, `.Low`, `.PlanControl`, `.Upload`, `.AfterBurn`, `.HandOff`, `.Linked`, `.Capacity`, `.Load`, `.PeakLoad`, `.Uncovered`, `.Occupies` (Traffic/Controllers.cs); `Ships.FullThrustSeconds`, `.PathAt`; `RailsFlyer.DoBurn`; `PhysicsFlyer.Pilot.EndBurn` (mod/KspFlightPlanner.AddOns)
+- Source: §11.1; Tsiolkovsky rocket equation (Curtis 11.2)
 
 ## 12. Calendar dates and ages
 

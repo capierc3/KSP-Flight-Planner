@@ -221,7 +221,7 @@ namespace KspFlightPlanner.KerbinResources
             GUILayout.Label("<b>Duty</b>", Rich(), GUILayout.Width(80));
             if (shift != null)
             {
-                GUILayout.Label("<b>" + shift.JobTitle + "</b> at " + shift.PostName + (shift.Body.Length > 0 && !shift.AtKsc ? " (" + shift.Body + ")" : "") +
+                GUILayout.Label("<b>" + shift.JobTitle + "</b>" + (shift.JobTitle.StartsWith(shift.PostName) ? "" : " at " + shift.PostName) + (shift.Body.Length > 0 && !shift.AtKsc ? " (" + shift.Body + ")" : "") +
                                 (shift.InDockedShip ? ", in " + shift.Seat + " (docked)" : "") +
                                 ", on duty for " + Span(now - shift.StartUt), RichWrap());
                 if (GUILayout.Button("Off duty", GUILayout.Width(80))) duty.TakeOff(kerbal, now);
@@ -243,10 +243,12 @@ namespace KspFlightPlanner.KerbinResources
             if (shifts > 0) Row("Time on duty", Span(duty.TimeOnDuty(kerbal, now)) + " over " + shifts + " shift" + (shifts == 1 ? "" : "s"));
             var burns = scenario.Control.BurnsOf(kerbal);
             var handOffs = scenario.Control.HandOffsOf(kerbal);
-            if (burns + handOffs > 0)
+            var clearances = scenario.Control.ClearancesOf(kerbal);
+            if (burns + handOffs + clearances > 0)
             {
                 var bodies = scenario.Control.Of(kerbal).Select(e => e.Body).Where(b => b.Length > 0).Distinct();
                 Row("Controlled", burns + " burn" + (burns == 1 ? "" : "s") + "   ·   " + handOffs + " hand-off" + (handOffs == 1 ? "" : "s") +
+                                  "   ·   " + clearances + " clearance" + (clearances == 1 ? "" : "s") +
                                   "   ·   " + string.Join(", ", bodies));
             }
         }
@@ -261,7 +263,9 @@ namespace KspFlightPlanner.KerbinResources
                 GUILayout.Space(6);
                 GUILayout.Label("<b>Controlled</b>", Rich());
                 foreach (var e in control)
-                    GUILayout.Label(Date(e.Ut) + "  " + (e.Kind == ControlEntry.Burn
+                    GUILayout.Label(Date(e.Ut) + "  " + (e.Kind == ControlEntry.Clearance
+                        ? e.Vessel + (e.BurnKind == "docking" ? ": cleared to dock at " : ": cleared to leave ") + e.PostName
+                        : e.Kind == ControlEntry.Burn
                         ? e.Vessel + ": " + (e.BurnKind.Length > 0 ? e.BurnKind : "burn") + " (priority " + e.Priority + ", " + Span(e.BurnSeconds) + ")" + " from " + e.PostName
                         : e.Vessel + (e.Gave ? " handed to " : " taken from ") + e.Other + (e.OtherBody.Length > 0 ? " (" + e.OtherBody + ")" : "")));
             }

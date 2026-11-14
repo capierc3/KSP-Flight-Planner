@@ -61,6 +61,12 @@ namespace KspFlightPlanner.Traffic
             if (route.BothLoadedSince < 0) route.BothLoadedSince = Time.time;
             if (Time.time - route.BothLoadedSince < SettleS) return;
 
+            // Cleared to dock by the station's controller (a probe with nobody to fly it in stays parked, asked again next scene).
+            if (!CrewRules.MayDockOnRails(route, ship, station))
+            {
+                route.DockTried = true;
+                return;
+            }
             route.DockTried = true;
             if (!Ships.PickPorts(ship, station, out var mine, out var theirs, TrafficScenario.PortsNotFor(route, station)))
             {
@@ -116,6 +122,12 @@ namespace KspFlightPlanner.Traffic
 
         private static void DoBurn(Route route, Vessel ship, RouteBurn burn)
         {
+            // A probe makes a burn only if a controller uploaded it (docs/TRAFFIC-CONTROLLER.md "Controllers").
+            if (!CrewRules.Upload(route, burn, ship, Planetarium.GetUniversalTime(), atBurn: true))
+            {
+                TrafficScenario.MissBurn(route, burn, ship, CrewRules.UploadProblem(burn, ship.orbitDriver.orbit.referenceBody.bodyName));
+                return;
+            }
             burn.Done = true;
             var number = route.Burns.IndexOf(burn) + 1;
             var engine = Ships.MainEngine(ship);
@@ -145,7 +157,15 @@ namespace KspFlightPlanner.Traffic
             Debug.Log("[KspFlightPlanner] " + route.VesselName + ": " + line);
             ScreenMessages.PostScreenMessage(route.VesselName + ": " + (burn.Title.Length > 0 ? burn.Title : "burn " + number) + ", " + got.ToString("0") + " m/s",
                 6f, ScreenMessageStyle.UPPER_CENTER);
-            if (got < planned - 0.5) TrafficScenario.Stop(route, "Out of fuel at burn " + number + ": got " + got.ToString("0") + " of " + planned.ToString("0") + " m/s.");
+            if (got < planned - 0.5)
+            {
+                TrafficScenario.Stop(route, "Out of fuel at burn " + number + ": got " + got.ToString("0") + " of " + planned.ToString("0") + " m/s.");
+                return;
+            }
+            // A probe's controller checks the course once the burn is made (planned again if it went wrong) and logs it.
+            // (It waits for a CommNet link if no controller has one: CrewRules.AfterBurn.)
+            if (burn.Uploaded && CrewRules.NeedsController(route))
+                CrewRules.AfterBurn(route, burn, ship, Ships.FullThrustSeconds(ship, engine, got), burn.Ut, Planetarium.GetUniversalTime());
         }
 
         /// <summary>
@@ -222,9 +242,15 @@ namespace KspFlightPlanner.Traffic
         internal static void ComeIn(Route route, Vessel ship, Vessel target, string head)
         {
             if (LineUp(route, ship, target, head)) return;
-            // Nobody near either ship: docked on rails, on the saved records, as KSP would leave them docked.
+            // Nobody near either ship: docked on rails, on the saved records, as KSP would leave them docked. Cleared to by
+            // the station's controller first; a probe with nobody to fly it in waits behind the station instead.
             if (!ship.loaded && !target.loaded)
             {
+                if (!CrewRules.MayDockOnRails(route, ship, target))
+                {
+                    PortBooking.Wait(route, ship, target, head, route.ArrivalHeldNote);
+                    return;
+                }
                 var targetName = target.vesselName;
                 if (RailsDocking.Dock(ship, target, out var why, TrafficScenario.PortsNotFor(route, target), route.BookedPortId) != null)
                 {
@@ -253,6 +279,7 @@ namespace KspFlightPlanner.Traffic
             var station = Ships.Find(route.TargetId);
             if (ship == null || station == null || ship.loaded || station.loaded || Time.time < route.AwayDockTry) return;
             route.AwayDockTry = Time.time + AwayDockRetryS;
+            if (!CrewRules.MayDockOnRails(route, ship, station)) return; // a probe, and nobody aboard to fly it in: stays parked
             var stationName = station.vesselName;
             if (RailsDocking.Dock(ship, station, out var why, TrafficScenario.PortsNotFor(route, station), route.BookedPortId) == null)
             {

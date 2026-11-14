@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using KspFlightPlanner.KerbinResources;
@@ -25,7 +26,7 @@ namespace KspFlightPlanner.Traffic
     /// along on a route flown by a pilot with enough flights on it to train others. Probe craft (no crew) aren't held by
     /// this; the controller rules for them come later.
     /// </summary>
-    internal static class CrewRules
+    internal static partial class CrewRules
     {
         /// <summary>
         /// May this craft start this route? Asked once, when the route starts, before anything undocks, with the craft's own
@@ -128,12 +129,16 @@ namespace KspFlightPlanner.Traffic
 
         internal const string TrafficControllerJob = "Traffic Controller", ShuttlePilotJob = "Shuttle pilot";
 
+        /// <summary>The shift's job is Traffic Controller, at KSC or a station ("Mun Station Traffic Controller").</summary>
+        internal static bool IsTrafficController(DutyShift s) => s?.Job != null && s.Job.EndsWith(TrafficControllerJob);
+
         /// <summary>
         /// The job title for a kerbal on duty (Kerbin Resources asks; null leaves them awaiting orders). Pilots only for now:
         /// <list type="bullet">
-        /// <item>At KSC: Traffic Controller (for Kerbin's SOI, standing in for the tracking station).</item>
+        /// <item>At KSC: "KSC Traffic Controller" (for Kerbin's SOI, standing in for the tracking station).</item>
         /// <item>On a station (KSP's vessel type Station, or a craft routes fly to), in a command part (cupola, pod, cockpit)
-        /// of its own parts: Traffic Controller. In a part with no controls (a hitchhiker can, a habitat): no job.</item>
+        /// of its own parts: "Mun Station Traffic Controller", named after the post. In a part with no controls (a
+        /// hitchhiker can, a habitat): no job.</item>
         /// <item>In a ship docked to the station, a craft flying a route, or a ship of their own: Shuttle pilot, if they're in its command part.</item>
         /// </list>
         /// Whether a controller can actually control (a CommNet link, capacity) is decided when the controller rules are built.
@@ -141,7 +146,7 @@ namespace KspFlightPlanner.Traffic
         internal static string JobOf(DutyShift shift)
         {
             if (shift == null || CrewLog.TraitOf(shift.Kerbal) != "Pilot") return null;
-            if (shift.AtKsc) return TrafficControllerJob;
+            if (shift.AtKsc) return DutyShift.Ksc + " " + TrafficControllerJob;
             var post = FindVessel(shift.PostId);
             var saved = post?.protoVessel ?? FindSaved(shift.PostId);
             var command = post != null && post.loaded ? HasCommand(post, shift.SeatPartId) : HasCommand(saved, shift.SeatPartId);
@@ -152,7 +157,7 @@ namespace KspFlightPlanner.Traffic
             var station = !flying && (type == VesselType.Station ||
                                       scenario != null && scenario.Routes.Any(r => !r.Finished && (r.TargetId == shift.PostId || r.TargetName == shift.PostName)));
             if (!command) return null;
-            return station ? TrafficControllerJob : ShuttlePilotJob;
+            return station ? shift.PostName + " " + TrafficControllerJob : ShuttlePilotJob;
         }
 
         private static Vessel FindVessel(uint id)
@@ -185,18 +190,26 @@ namespace KspFlightPlanner.Traffic
         }
 
         /// <summary>
-        /// Does this station direct its traffic (clearance into its keep-out zone, the arrival and departure lanes)? It
-        /// does with a pilot aboard (one in a ship docked to it counts: it's aboard the station as KSP sees it). Without
-        /// one, route craft still come and dock there on their own, kept apart only by their pilots' safety stops.
+        /// Does this station direct its traffic (clearance into its keep-out zone, the arrival and departure lanes,
+        /// departure clearance)? With the controller rules on, only with a Traffic Controller on duty in its own parts: a
+        /// pilot off duty, or one in a ship docked to it, doesn't count. With them off, any pilot aboard does. Without one
+        /// it's uncontrolled airspace: route craft still come and go on their own, kept apart only by their safety stops.
         /// </summary>
         internal static bool HasTrafficControl(Vessel station, out string why)
         {
             why = "";
             if (station == null) return false;
+            if (TrafficSettings.Current.ControllerRules)
+            {
+                if (ControllersAt(station).Any()) return true;
+                why = "no Traffic Controller on duty aboard " + station.vesselName;
+                return false;
+            }
             foreach (var kerbal in station.GetVesselCrew())
                 if (kerbal.trait == "Pilot") return true;
             why = "no pilot aboard " + station.vesselName;
             return false;
         }
+
     }
 }

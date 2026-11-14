@@ -44,6 +44,7 @@ namespace KspFlightPlanner.Refueler
 
         private void OnDestroy()
         {
+            RestoreSas();
             GameEvents.onGUIApplicationLauncherReady.Remove(AddButton);
             if (_button != null && ApplicationLauncher.Instance != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
             if (_icon != null) Destroy(_icon);
@@ -65,10 +66,46 @@ namespace KspFlightPlanner.Refueler
             _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, "Refueler", GUILayout.Width(_window.width), GUILayout.Height(_window.height));
         }
 
-        /// <summary>The transfer runs here, a little every frame, until it's done or stopped.</summary>
+        // The stack whose SAS the pump switched off (persistent id; 0 = none): SAS on while fuel moves shakes a big stack, so
+        // it's off while pumping and back on when the pumping ends, however it ends.
+        private uint _sasOffOn;
+
+        /// <summary>Starting to pump: the stack's SAS off, if it was on, to be put back after.</summary>
+        private void SasOff(Vessel stack)
+        {
+            if (stack == null || !stack.ActionGroups[KSPActionGroup.SAS]) return;
+            stack.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
+            _sasOffOn = stack.persistentId;
+            ScreenMessages.PostScreenMessage("Refueler: SAS off while fuel is pumped", 4f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        /// <summary>Pumping over: SAS back on, on the stack it was switched off on, if it's still loaded.</summary>
+        private void RestoreSas()
+        {
+            if (_sasOffOn == 0) return;
+            var stack = FlightGlobals.Vessels?.FirstOrDefault(v => v != null && v.persistentId == _sasOffOn);
+            _sasOffOn = 0;
+            if (stack == null || !stack.loaded) return;
+            stack.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
+            ScreenMessages.PostScreenMessage("Refueler: SAS back on", 4f, ScreenMessageStyle.UPPER_CENTER);
+        }
+
+        // The game time the pump last ran to (NaN when it isn't running).
+        private double _lastUt = double.NaN;
+
+        /// <summary>
+        /// The pump runs here, every frame, by game time: each frame it moves the port's flow (kg/s) times the game time since
+        /// the last, so it keeps pumping through time warp (the stack's tanks change even while it's packed) and an hour's
+        /// fill passes in seconds at 100×. docs/MATH.md §11.9.
+        /// </summary>
         private void Update()
         {
-            if (!_moving) return;
+            if (!_moving)
+            {
+                _lastUt = double.NaN;
+                RestoreSas();
+                return;
+            }
             if (!(FlightGlobals.ActiveVessel is Vessel stack))
             {
                 _moving = false;
@@ -90,15 +127,17 @@ namespace KspFlightPlanner.Refueler
                 _note = "Stopped: " + _craft + " keeps " + keep.ToString("0") + " m/s.";
                 return;
             }
-            double moved = 0;
-            foreach (var res in FuelTransfer.Resources)
-            {
-                // At this rate a craft's tanks fill or empty in about 30 s.
-                FuelTransfer.Totals(craft, res, out _, out var room);
-                var units = Math.Max(1, room / 30) * Time.deltaTime;
-                moved += _unload ? FuelTransfer.Move(craft, station, res, units) : FuelTransfer.Move(station, craft, res, units);
-            }
-            if (moved <= 1e-6)
+            var now = Planetarium.GetUniversalTime();
+            if (double.IsNaN(_lastUt)) _lastUt = now;
+            var dt = now - _lastUt;
+            _lastUt = now;
+            if (dt <= 0) return;
+            // Unloading in big time-warp steps could overshoot the Δv to keep: at most a minute's pumping per step then.
+            if (_unload) dt = Math.Min(dt, 60);
+            var tons = FuelTransfer.PumpKgS(piece, out _) / 1000 * dt;
+            FuelTransfer.Pump(craft, station, _unload, tons);
+            FuelTransfer.Movable(craft, station, _unload, out var left);
+            if (left <= 1e-6)
             {
                 _moving = false;
                 _note = _unload ? "Done: " + _craft + " is empty or the station's tanks are full." : "Done: " + _craft + " is full or the station's tanks are empty.";
@@ -177,6 +216,12 @@ namespace KspFlightPlanner.Refueler
                 GUILayout.Space(4);
             }
             GUILayout.Label("<b>" + name + " Δv:</b> " + Ships.DeltaVLeft(craft, out _).ToString("N0") + " m/s", Heading());
+            // The pump: its flow through the craft's port, and how long what's left takes at that rate (game time).
+            var kgs = FuelTransfer.PumpKgS(piece, out var through);
+            FuelTransfer.Movable(craft, station, _unload, out var movable);
+            GUILayout.Label("<b>Pump:</b> " + kgs.ToString("0.#") + " kg/s through " + through +
+                            (movable > 1e-6 && kgs > 0 ? "; " + (movable * 1000).ToString("N0") + " kg to " + (_unload ? "unload" : "fill") + ", " +
+                                                         KSPUtil.PrintTimeCompact(movable * 1000 / kgs, false) + (_moving ? " left" : " at this rate") : ""), RichWrap());
             if (!_moving)
             {
                 GUILayout.BeginHorizontal();
@@ -196,6 +241,7 @@ namespace KspFlightPlanner.Refueler
                 {
                     _moving = true;
                     _note = null;
+                    SasOff(FlightGlobals.ActiveVessel);
                 }
             }
             else if (GUILayout.Button("Stop"))
@@ -256,6 +302,10 @@ namespace KspFlightPlanner.Refueler
         private static GUIStyle _heading;
 
         private static GUIStyle Heading() => _heading ?? (_heading = new GUIStyle(GUI.skin.label) { richText = true });
+
+        private static GUIStyle _richWrap;
+
+        private static GUIStyle RichWrap() => _richWrap ?? (_richWrap = new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
 
         private static string Long(string res) => res == "LiquidFuel" ? "Liquid fuel" : res == "MonoPropellant" ? "Monopropellant" : res;
 

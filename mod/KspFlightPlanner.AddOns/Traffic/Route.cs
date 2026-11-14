@@ -14,6 +14,27 @@ namespace KspFlightPlanner.Traffic
         public string Title = "";
         public bool Done;
 
+        // The controller rules (docs/TRAFFIC-CONTROLLER.md "Controllers"), for a probe's burns. Set when the burn is uploaded:
+        // what kind of burn it is (CrewRules.KindOf), its priority (1 most urgent to 10), whether skipping it would lose the
+        // ship (always priority 1), and the controller who uploaded it, the body whose SOI they cover and their post.
+        public string Kind = "";
+        public int Priority;
+        public bool Critical;
+        public bool Uploaded;
+        public string Controller = "";
+        public string ControllerBody = "";
+        public string ControllerPost = "";
+
+        /// <summary>Nobody could upload it: not made (Done is set too), and the trip planned again.</summary>
+        public bool Missed;
+
+        /// <summary>The SOI it happens in on the planned path, and its slot length (s): for the controllers' load forecast (stage C) and departure approval (stage D).</summary>
+        public string PlannedBody = "";
+        public double SlotSeconds;
+
+        /// <summary>Why the last upload try failed (not saved).</summary>
+        internal string LastProblem;
+
         public double DeltaV => Math.Sqrt(Prograde * Prograde + Normal * Normal + Radial * Radial);
     }
 
@@ -22,9 +43,11 @@ namespace KspFlightPlanner.Traffic
     /// OffCourse = a check found it would miss: paused, no more burns, until the planner sends a new plan;
     /// Approaching = met the target with the player there: lined up on a free port's axis, the physics flyer brings it in;
     /// Waiting = met the target with no free port: parked 3 km behind it on its orbit till one frees up (PortBooking);
-    /// InOrbit = a trip to an orbit (no target craft) has made its last burn: done, like Docked.
+    /// InOrbit = a trip to an orbit (no target craft) has made its last burn: done, like Docked;
+    /// Held = still docked at its station, waiting for a free Traffic Controller there to clear it to leave (no craft of its
+    /// own yet: VesselId 0, FromId the station). It undocks by itself once one is free (TrafficScenario.WatchHeld).
     /// </summary>
-    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching, Waiting, InOrbit }
+    internal enum RouteState { Flying, Arrived, Docked, Stopped, OffCourse, Approaching, Waiting, InOrbit, Held }
 
     /// <summary>
     /// A ship flying a planned trip without anyone at the controls: at each burn's time its orbit is changed as that burn
@@ -109,6 +132,53 @@ namespace KspFlightPlanner.Traffic
         /// <summary>Why the planner couldn't plan it again yet (off course only), so the same reason isn't shown twice.</summary>
         internal string ReplanNote;
 
+        /// <summary>The body whose SOI had no controller to upload its next burn, so the warning is said once (not saved).</summary>
+        internal string NoControllerFor;
+
+        /// <summary>
+        /// Docking clearance granted at its station (CrewRules.ClearArrival), and why it was last held without it, said once.
+        /// Not saved: a save made mid-approach meets again on load and asks again.
+        /// </summary>
+        internal bool ArrivalCleared;
+
+        /// <summary>
+        /// The Traffic Controller handling it inside a station's keep-out zone (kerbal name, and the station's persistent id),
+        /// set when it's cleared to leave or to dock. A controller handles one craft in the zone at a time
+        /// (CrewRules.Occupies). Not saved.
+        /// </summary>
+        internal string ZoneController;
+        internal uint ZoneStationId;
+
+        /// <summary>When a held departure next asks for clearance again (real time; not saved).</summary>
+        internal float NextHeldTry;
+        internal string ArrivalHeldNote;
+
+        /// <summary>
+        /// Controllers (stage B): the SOI whose controllers know of the flight (handed over, or where it was last controlled),
+        /// and who has it now (kerbal, and their post). Empty before any controller has had it.
+        /// </summary>
+        public string KnownTo = "";
+        public string HandledBy = "";
+        public string HandledByPost = "";
+
+        /// <summary>A burn made with no controller linked to check it (1-based; 0 = none), and how long it took: checked once one is.</summary>
+        public int PendingCheck;
+        public double PendingCheckSeconds;
+
+        /// <summary>Departure approval (stage D): held for the player's answer, and the burns that won't be covered, one a line.</summary>
+        public bool AwaitingApproval;
+        public string ApprovalNote = "";
+
+        /// <summary>The approval question is on screen (not saved: asked again after a scene change).</summary>
+        internal bool ApprovalShown;
+
+        /// <summary>Just into another SOI: the flight is handed to its controllers when it can be (not saved: an upload tries too).</summary>
+        internal bool HandOffDue;
+        internal float NextHandOffTry;
+
+        /// <summary>When it next tries to upload its next burn (real time; not saved).</summary>
+        internal float NextUploadTry;
+
         /// <summary>Why the crew rules last kept the autopilot off it (not saved), so it's said once.</summary>
         internal string NotAllowedNote;
 
@@ -175,6 +245,11 @@ namespace KspFlightPlanner.Traffic
                 case RouteState.Waiting:
                     return head + "waiting 3 km behind it for a free port, since " + KSPUtil.dateTimeFormatter.PrintDateCompact(WaitSince, true, true) +
                            (ToldLongWait ? " (over a day: free a port there)" : "");
+                case RouteState.Held when AwaitingApproval:
+                    return head + "waiting for your approval in KSP: some burns won't have a controller";
+                case RouteState.Held:
+                    return head + "docked at " + FromName + ", holding for clearance to leave since " + KSPUtil.dateTimeFormatter.PrintDateCompact(WaitSince, true, true) +
+                           (ReplanNote != null ? " (" + ReplanNote + ")" : "");
                 case RouteState.Docked: return head + "docked";
                 case RouteState.InOrbit: return head + "arrived in orbit";
                 case RouteState.OffCourse: return head + "off course, waiting to be planned again" + (ReplanNote != null ? " (" + ReplanNote + ")" : "");
@@ -215,6 +290,13 @@ namespace KspFlightPlanner.Traffic
             node.AddValue("state", State.ToString());
             node.AddValue("disturbed", Disturbed);
             node.AddValue("autopilot", Autopilot);
+            node.AddValue("knownTo", KnownTo);
+            node.AddValue("handledBy", HandledBy);
+            node.AddValue("handledByPost", HandledByPost);
+            node.AddValue("pendingCheck", PendingCheck);
+            node.AddValue("pendingCheckS", PendingCheckSeconds.ToString("R", CultureInfo.InvariantCulture));
+            node.AddValue("awaitingApproval", AwaitingApproval);
+            node.AddValue("approvalNote", (ApprovalNote ?? "").Replace("\n", " | "));
             foreach (var b in Burns)
             {
                 var n = node.AddNode("BURN");
@@ -224,6 +306,19 @@ namespace KspFlightPlanner.Traffic
                 n.AddValue("radial", b.Radial.ToString("R", CultureInfo.InvariantCulture));
                 n.AddValue("title", b.Title);
                 n.AddValue("done", b.Done);
+                if (b.PlannedBody.Length > 0) n.AddValue("body", b.PlannedBody);
+                if (b.SlotSeconds > 0) n.AddValue("slotS", b.SlotSeconds.ToString("R", CultureInfo.InvariantCulture));
+                if (b.Uploaded || b.Missed || b.Kind.Length > 0)
+                {
+                    n.AddValue("kind", b.Kind);
+                    n.AddValue("priority", b.Priority);
+                    n.AddValue("critical", b.Critical);
+                    n.AddValue("uploaded", b.Uploaded);
+                    n.AddValue("controller", b.Controller);
+                    n.AddValue("controllerBody", b.ControllerBody);
+                    n.AddValue("controllerPost", b.ControllerPost);
+                    n.AddValue("missed", b.Missed);
+                }
             }
             var log = node.AddNode("LOG");
             foreach (var line in Log) log.AddValue("line", line);
@@ -250,6 +345,13 @@ namespace KspFlightPlanner.Traffic
                 State = (RouteState)Enum.Parse(typeof(RouteState), node.GetValue("state")),
                 Disturbed = node.GetValue("disturbed") == "True",
                 Autopilot = node.GetValue("autopilot") != "False",
+                KnownTo = node.GetValue("knownTo") ?? "",
+                HandledBy = node.GetValue("handledBy") ?? "",
+                HandledByPost = node.GetValue("handledByPost") ?? "",
+                PendingCheck = int.TryParse(node.GetValue("pendingCheck"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var pending) ? pending : 0,
+                PendingCheckSeconds = double.TryParse(node.GetValue("pendingCheckS"), NumberStyles.Float, CultureInfo.InvariantCulture, out var pendingS) ? pendingS : 0,
+                AwaitingApproval = node.GetValue("awaitingApproval") == "True",
+                ApprovalNote = (node.GetValue("approvalNote") ?? "").Replace(" | ", "\n"),
             };
             route.Crew.AddRange(node.GetValues("crew"));
             route.Crew.AddRange(node.GetValues("pilot")); // saves from before Kerbin Resources kept pilots only
@@ -275,6 +377,16 @@ namespace KspFlightPlanner.Traffic
                     Radial = D(n, "radial"),
                     Title = n.GetValue("title") ?? "",
                     Done = n.GetValue("done") == "True",
+                    Kind = n.GetValue("kind") ?? "",
+                    Priority = int.TryParse(n.GetValue("priority"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var priority) ? priority : 0,
+                    Critical = n.GetValue("critical") == "True",
+                    Uploaded = n.GetValue("uploaded") == "True",
+                    Controller = n.GetValue("controller") ?? "",
+                    ControllerBody = n.GetValue("controllerBody") ?? "",
+                    ControllerPost = n.GetValue("controllerPost") ?? "",
+                    Missed = n.GetValue("missed") == "True",
+                    PlannedBody = n.GetValue("body") ?? "",
+                    SlotSeconds = double.TryParse(n.GetValue("slotS"), NumberStyles.Float, CultureInfo.InvariantCulture, out var slot) ? slot : 0,
                 });
             // Saved mid-approach: meet again on load (it parks, or lines up again if the player is there).
             if (route.State == RouteState.Approaching) route.State = RouteState.Flying;

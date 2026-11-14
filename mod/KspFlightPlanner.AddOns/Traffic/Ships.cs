@@ -379,6 +379,8 @@ namespace KspFlightPlanner.Traffic
                         rcs.rcsEnabled = true;
                         thrusters++;
                     }
+                foreach (var w in part.FindModulesImplementing<ModuleReactionWheel>())
+                    if (w.State == ModuleReactionWheel.WheelState.Disabled) w.State = ModuleReactionWheel.WheelState.Active;
             }
             if (v.ctrlState != null) v.ctrlState.mainThrottle = 0;
             v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
@@ -624,6 +626,17 @@ namespace KspFlightPlanner.Traffic
 
             public override string ToString() =>
                 Count + "× " + Part + " (" + IspVacuum.ToString("0") + " s, burns " + string.Join(" + ", Propellants.Select(p => p.Key).ToArray()) + ")";
+        }
+
+        /// <summary>
+        /// How long a burn just made took at full thrust (s), from the ship's mass now (after it): t = m₁·vₑ/F·(e^(Δv/vₑ) − 1).
+        /// The rails flyer makes burns instantly, but a controller's time on them counts as if flown. Zero with no thrust.
+        /// </summary>
+        public static double FullThrustSeconds(Vessel ship, Engine engine, double deltaV)
+        {
+            if (engine == null || engine.ThrustKn <= 0 || engine.IspVacuum <= 0) return 0;
+            var ve = engine.IspVacuum * G0;
+            return Mass(ship) * ve / engine.ThrustKn * (Math.Exp(deltaV / ve) - 1);
         }
 
         /// <summary>

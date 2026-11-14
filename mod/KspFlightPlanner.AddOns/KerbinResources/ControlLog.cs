@@ -14,10 +14,13 @@ namespace KspFlightPlanner.KerbinResources
         internal const string Burn = "burn";
         internal const string HandOff = "handoff";
 
+        /// <summary>A craft cleared to leave the controller's station (departure clearance before undocking).</summary>
+        internal const string Clearance = "clearance";
+
         public double Ut;
         public string Kerbal = "";
 
-        /// <summary><see cref="Burn"/> or <see cref="HandOff"/>.</summary>
+        /// <summary><see cref="Burn"/>, <see cref="HandOff"/> or <see cref="Clearance"/>.</summary>
         public string Kind = Burn;
 
         /// <summary>The body whose SOI the controller covered.</summary>
@@ -55,7 +58,7 @@ namespace KspFlightPlanner.KerbinResources
             n.AddValue("postName", PostName);
             n.AddValue("vesselId", VesselId);
             n.AddValue("vessel", Vessel);
-            if (Kind == Burn)
+            if (Kind != HandOff)
             {
                 n.AddValue("burnKind", BurnKind);
                 n.AddValue("priority", Priority);
@@ -104,6 +107,25 @@ namespace KspFlightPlanner.KerbinResources
         internal int BurnsOf(string kerbal) => _entries.Count(e => e.Kerbal == kerbal && e.Kind == ControlEntry.Burn);
 
         internal int HandOffsOf(string kerbal) => _entries.Count(e => e.Kerbal == kerbal && e.Kind == ControlEntry.HandOff);
+
+        internal int ClearancesOf(string kerbal) => _entries.Count(e => e.Kerbal == kerbal && e.Kind == ControlEntry.Clearance);
+
+        /// <summary>
+        /// A controller cleared a craft to leave their station (<paramref name="what"/> "departure", before it undocked) or
+        /// to dock at it ("docking"). Logged only if they're on duty now. Saved like a burn: priority 10, no burn time.
+        /// </summary>
+        internal ControlEntry Cleared(DutyRoster duty, string kerbal, string craft, uint craftId, double now, string what = "departure")
+        {
+            var shift = duty.ShiftOf(kerbal);
+            if (shift == null) return null;
+            var e = new ControlEntry
+            {
+                Ut = now, Kerbal = kerbal, Kind = ControlEntry.Clearance, Body = shift.Body, PostId = shift.PostId, PostName = shift.PostName,
+                VesselId = craftId, Vessel = craft ?? "", BurnKind = what, Priority = 10,
+            };
+            _entries.Add(e);
+            return e;
+        }
 
         /// <summary>
         /// A controller oversaw a probe's burn. Logged only if they're on duty now; their post and body come from the duty

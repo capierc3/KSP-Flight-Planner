@@ -186,31 +186,14 @@ namespace KspFlightPlanner.Traffic
         }
 
         /// <summary>
-        /// Docked: the craft's engines are shut down and its RCS thrusters switched off (its own parts only, found from its
-        /// docking port), so nothing on it can fire by accident at the station. Returns what it did, for the log.
+        /// Docked: the craft is made quiet (<see cref="DockedQuiet.Quiet"/>): engines shut down, RCS thrusters and reaction
+        /// wheels switched off (its own parts only, found from its docking port), turned back on when it undocks. Returns
+        /// what it did, for the log.
         /// </summary>
         internal static string ShutDown(uint portPartId)
         {
             var stack = Ships.VesselOfPart(portPartId);
-            var port = Ships.FindPort(stack, portPartId);
-            if (port == null || port.otherNode == null) return "";
-            int engines = 0, thrusters = 0;
-            foreach (var part in Ships.DockedCraftParts(port))
-            {
-                foreach (var e in part.FindModulesImplementing<ModuleEngines>())
-                    if (e.EngineIgnited)
-                    {
-                        e.Shutdown();
-                        engines++;
-                    }
-                foreach (var rcs in part.FindModulesImplementing<ModuleRCS>())
-                    if (rcs.rcsEnabled)
-                    {
-                        rcs.rcsEnabled = false;
-                        thrusters++;
-                    }
-            }
-            return engines + thrusters == 0 ? "" : " Shut down " + engines + " engine" + (engines == 1 ? "" : "s") + " and switched off " + thrusters + " RCS block" + (thrusters == 1 ? "" : "s") + ".";
+            return DockedQuiet.Quiet(Ships.FindPort(stack, portPartId));
         }
 
         /// <summary>Lets go of every ship (leaving the scene).</summary>
@@ -466,6 +449,13 @@ namespace KspFlightPlanner.Traffic
                         _checkedFor = burn;
                         if (!CourseCheck.Check(_route, Vessel, now, "Before burn " + _number)) return;
                     }
+                    // A probe makes a burn only if a controller uploaded it (docs/TRAFFIC-CONTROLLER.md "Controllers").
+                    if (!CrewRules.Upload(_route, burn, Vessel, now, atBurn: true))
+                    {
+                        _aim = Vector3d.zero;
+                        TrafficScenario.MissBurn(_route, burn, Vessel, CrewRules.UploadProblem(burn, Vessel.orbit.referenceBody.bodyName));
+                        return;
+                    }
                     StartBurn(burn, now);
                     return;
                 }
@@ -624,10 +614,14 @@ namespace KspFlightPlanner.Traffic
                                             (double.IsNaN(left) ? "" : (_startDv - left).ToString("0.0") + " of " + _startDv.ToString("0.0") + " m/s, " +
                                                                      left.ToString("0.00") + " m/s off") +
                                             (problem != null ? "; " + problem : "") + ".", problem != null);
+                var flown = _burn;
                 _burn = null;
                 _goal = null;
                 // Checked straight away, while there's the most time to fix it: a real burn is never quite the instant one.
-                CourseCheck.Check(_route, Vessel, now, "After burn " + _number);
+                // For a probe this is its controller's check, and the burn goes on their log.
+                // (A probe's check waits for a CommNet link if no controller has one: CrewRules.AfterBurn.)
+                if (flown != null && flown.Uploaded && CrewRules.NeedsController(_route)) CrewRules.AfterBurn(_route, flown, Vessel, now - _startUt, now, now);
+                else CourseCheck.Check(_route, Vessel, now, "After burn " + _number);
             }
 
             // The thrust limiters the player had on each engine, while a burn has them set (null when not).
@@ -695,6 +689,54 @@ namespace KspFlightPlanner.Traffic
             /// <summary>It has said the station it's coming in to has no traffic control.</summary>
             private bool _toldNoControl;
 
+            /// <summary>Held still at its waiting point last frame (the zone's edge, once it's first in line).</summary>
+            private bool _heldAtEdge;
+
+            /// <summary>When it called the station for docking clearance (real time; −1 = not yet).</summary>
+            private float _clearAskedSince = -1;
+
+            /// <summary>How long the station takes to answer a call for docking clearance (real s).</summary>
+            private const float ClearanceAnswerS = 5f;
+
+            /// <summary>
+            /// Docking clearance (docs/TRAFFIC-CONTROLLER.md "Controllers"): what it's still waiting for, or null once cleared.
+            /// A crewed craft at a station with no Traffic Controller on duty is in uncontrolled airspace and needs none.
+            /// Otherwise it holds still at the keep-out zone's edge, calls the station, and after a moment the controller
+            /// answers: cleared (a probe is then flown in by them), or for a probe at a station with nobody on duty, wait.
+            /// </summary>
+            private string DockingClearance(Vessel station, bool controlled)
+            {
+                if (_route.ArrivalCleared) return null;
+                if (!controlled && !CrewRules.NeedsController(_route))
+                {
+                    _route.ArrivalCleared = true;
+                    return null;
+                }
+                if (!_heldAtEdge)
+                {
+                    _clearAskedSince = -1;
+                    return "holding at the keep-out zone for docking clearance";
+                }
+                if (_clearAskedSince < 0)
+                {
+                    _clearAskedSince = Time.time;
+                    TrafficScenario.Note(_route, "Holding " + (Vessel.CoMD - station.GetWorldPos3D()).magnitude.ToString("0") + " m off " + station.vesselName +
+                                                ": asking for docking clearance.", false);
+                }
+                if (Time.time - _clearAskedSince < ClearanceAnswerS) return "asked " + station.vesselName + " for docking clearance";
+                var now = Planetarium.GetUniversalTime();
+                if (CrewRules.ClearArrival(_route, station, now, out var controller, out var why))
+                {
+                    _route.ArrivalHeldNote = null;
+                    CrewRules.LogArrival(_route, controller, why, Vessel, now);
+                    return null;
+                }
+                _clearAskedSince = Time.time; // asks again in a moment
+                if (_route.ArrivalHeldNote != why) TrafficScenario.Note(_route, "Can't dock yet: " + why + ".", true);
+                _route.ArrivalHeldNote = why;
+                return why;
+            }
+
             /// <summary>
             /// Coming in to the port: the speed it wants falls off towards the spot 150 m out so it can always stop there
             /// with the braking it plans on, and the engines make up the difference, pointed along it. While it's only
@@ -729,7 +771,8 @@ namespace KspFlightPlanner.Traffic
                 }
                 // Not cleared in yet (another route craft leaving, docking or ahead of it): it waits at the keep-out zone's edge
                 // in the arrival lane, each one in the queue a further 60 m down it.
-                var way = GiveWayTo(_route, station) ?? (noPort ? "no free port yet" : null);
+                // Then, first in line with a port, it holds at the zone's edge for the controller's docking clearance.
+                var way = GiveWayTo(_route, station) ?? (noPort ? "no free port yet" : null) ?? DockingClearance(station, controlled);
                 var holdM = way != null
                     ? ZoneRadius(station, Vessel) + QueueGapM * QueuePlace(_route, station)
                     : Math.Max(HoldM, Ships.Size(station) + Ships.Size(Vessel) + 15);
@@ -769,6 +812,7 @@ namespace KspFlightPlanner.Traffic
                     }
                     return;
                 }
+                _heldAtEdge = way != null && dHold < ArrivedM && speed < StillMs && QueuePlace(_route, station) == 0;
                 if (dHold < ArrivedM && speed < StillMs && way != null)
                 {
                     _throttle = 0;
@@ -839,9 +883,18 @@ namespace KspFlightPlanner.Traffic
                 _speedingUp = !_braking && (_speedingUp ? closing < cruise - 0.1 : closing < 0.5 * cruise);
                 var along = _braking || _speedingUp ? (_braking ? wantClose : cruise) - closing : closing <= 0.2 ? wantClose - closing : 0;
                 var dv = los * along + lateral;
-                var dvSize = dv.magnitude;
                 var head = "close in: " + d.ToString("0") + " m to go, " + closing.ToString("0.0") + " m/s" + (_speedingUp ? " (speeding up to " + cruise.ToString("0.0") + ")" : "") + ", pass " +
                            (double.IsInfinity(miss) ? "–" : miss.ToString("0") + " m") + " off (" + allowed.ToString("0") + " allowed), ";
+                // Inside the hold point's 20 m but too fast to count as stopped: stop there. Coming in at its slowest, 0.3 m/s,
+                // it sat right on the "still" line: it drifted past the point never quite under 0.3 m/s, turned back and
+                // crossed it again, round and round (Kerb Shuttle mk2 B at Mun Station, 2026-11-09).
+                if (dHold < ArrivedM)
+                {
+                    dv = -v;
+                    head = "at the hold point, " + speed.ToString("0.00") + " m/s: ";
+                    along = -1;
+                }
+                var dvSize = dv.magnitude;
 
                 if (dvSize < 0.05)
                 {
@@ -1294,6 +1347,19 @@ namespace KspFlightPlanner.Traffic
                     return;
                 }
                 _station = station;
+                // Parked beside it (not come in through the hold): docking clearance first, asked where it sits.
+                if (!_route.ArrivalCleared)
+                {
+                    _heldAtEdge = true;
+                    var held = DockingClearance(station, Controlled(station));
+                    if (held != null)
+                    {
+                        _translating = false;
+                        _aim = Vector3d.zero;
+                        Status = "holding " + (Vessel.CoMD - station.GetWorldPos3D()).magnitude.ToString("0") + " m off " + station.vesselName + ": " + held;
+                        return;
+                    }
+                }
                 if (!PortsStillGood() && !PickDockingPorts(station))
                 {
                     GiveUp("no free port on " + station.vesselName + " that one of its ports fits");

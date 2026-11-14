@@ -210,6 +210,9 @@ namespace KspFlightPlanner.Traffic
             }
         }
 
+        /// <summary>A burn was missed (nobody uploaded it): the route goes off course, to be planned again from where it coasts on.</summary>
+        internal static void Missed(Route route, Vessel ship, string why) => GoOffCourse(route, ship, why);
+
         /// <summary>Pauses the route (no more burns, no parking) and stops time warp, so the planner can plan it again in time.</summary>
         private static void GoOffCourse(Route route, Vessel ship, string why, bool expected = false)
         {
