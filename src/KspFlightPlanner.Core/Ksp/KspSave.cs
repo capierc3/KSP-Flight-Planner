@@ -119,6 +119,11 @@ public sealed record SavedPart(string Name, double MassT, IReadOnlyList<PartReso
 
     /// <summary>The names of the part's modules (ModuleCommand, ModuleOrbitalSurveyor…), in the save's order.</summary>
     public IReadOnlyList<string> ModuleNames { get; init; } = [];
+    /// <summary>The part's rotation in the vessel (rotation): x, y, z, w.</summary>
+    public System.Numerics.Quaternion Rotation { get; init; } = System.Numerics.Quaternion.Identity;
+
+    /// <summary>Stack nodes with a part on them (attN): the node's name and the other part's <see cref="Uid"/>.</summary>
+    public IReadOnlyList<PartLink> StackLinks { get; init; } = [];
 }
 
 /// <summary>An engine module's settings in the save, in the same order as the part's engines in the catalog.</summary>
@@ -296,7 +301,7 @@ public static class KspSaveReader
         return new SavedVessel(v.GetValue("pid") ?? v.GetValue("persistentId") ?? "", v.GetValue("name") ?? "(unnamed)",
             v.GetValue("type") ?? "", v.GetValue("sit") ?? "", orbit)
         {
-            Parts = v.GetNodes("PART").Select(ReadPart).ToList(),
+            Parts = WithStackLinks(v.GetNodes("PART").ToList()),
             DockedNames = v.GetNodes("PART").SelectMany(p => p.GetNodes("MODULE"))
                 .Where(m => m.GetValue("name") == "ModuleDockingNode" && (m.GetValue("state") ?? "").StartsWith("Docked", StringComparison.Ordinal))
                 .Select(m => m.GetNode("DOCKEDVESSEL")?.GetValue("vesselName"))
@@ -329,6 +334,7 @@ public static class KspSaveReader
             Uid = p.GetValue("uid") ?? "",
             ParentIndex = int.TryParse(p.GetValue("parent"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent) ? parent : 0,
             IsCommand = modules.Any(m => m.GetValue("name") == "ModuleCommand"),
+            Rotation = CraftReader.Rotation(p.GetValue("rotation")),
             DockingPorts = modules.Where(m => m.GetValue("name") == "ModuleDockingNode")
                 .Select(m => new SavedDockingPort(m.GetValue("state") ?? "", m.GetValue("dockUId") ?? "",
                     m.GetNode("DOCKEDVESSEL") is { } d && d.GetValue("vesselName") is { } n
@@ -337,6 +343,25 @@ public static class KspSaveReader
                 .ToList(),
             ModuleNames = modules.Select(m => m.GetValue("name")).OfType<string>().ToList(),
         };
+    }
+
+    /// <summary>The parts, each with its stack links: the save writes "attN = bottom, 1" (the other part's index; -1 empty).</summary>
+    private static List<SavedPart> WithStackLinks(List<ConfigNode> nodes)
+    {
+        var parts = nodes.Select(ReadPart).ToList();
+        for (var i = 0; i < parts.Count; i++)
+        {
+            var links = new List<PartLink>();
+            foreach (var v in nodes[i].Values.Where(v => v.Key == "attN"))
+            {
+                var comma = v.Value.IndexOf(',');
+                if (comma > 0 && int.TryParse(v.Value[(comma + 1)..].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var other)
+                    && other >= 0 && other < parts.Count && other != i)
+                    links.Add(new PartLink(v.Value[..comma].Trim(), parts[other].Uid));
+            }
+            parts[i] = parts[i] with { StackLinks = links };
+        }
+        return parts;
     }
 
     private static bool Flag(ConfigNode node, string key) => bool.TryParse(node.GetValue(key), out var value) && value;

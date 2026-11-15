@@ -47,9 +47,18 @@ public static class TransferWindows
 
             // The first dip: a column cheaper than both neighbours and within half again of the cheapest. The search
             // starts a little in the past, so a window that is just open is a dip too, not the edge of the plot.
-            var column = Enumerable.Range(1, plot.Columns - 2).FirstOrDefault(c =>
-                byDeparture[c] <= byDeparture[c - 1] && byDeparture[c] <= byDeparture[c + 1] && byDeparture[c] <= floor * 1.5, -1);
+            bool Dip(int c) => byDeparture[c] <= byDeparture[c - 1] && byDeparture[c] <= byDeparture[c + 1] && byDeparture[c] <= floor * 1.5;
+            var column = Enumerable.Range(1, plot.Columns - 2).FirstOrDefault(Dip, -1);
             if (column < 0) column = Array.IndexOf(byDeparture, floor);
+            else
+            {
+                // One window can dip more than once (an eccentric or tilted orbit, like Moho's): take its cheapest dip, any
+                // within half a synodic period of the first. The next window is a whole synodic period on.
+                var seasonEnd = plot.DepartureAt(column) + synodic / 2;
+                column = Enumerable.Range(column, plot.Columns - 1 - column)
+                    .Where(c => plot.DepartureAt(c) <= seasonEnd && (c == column || Dip(c)))
+                    .MinBy(c => byDeparture[c]);
+            }
 
             var window = Refine(request, plot, column);
             if (window is null) return null;

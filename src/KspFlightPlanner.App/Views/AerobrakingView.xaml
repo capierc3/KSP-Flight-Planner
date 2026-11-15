@@ -1,0 +1,197 @@
+<UserControl x:Class="KspFlightPlanner.App.Views.AerobrakingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="Cell" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,3,18,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,18,4" />
+        </Style>
+        <Style x:Key="Input" TargetType="TextBox">
+            <Setter Property="Width" Value="90" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Margin" Value="0,2" />
+        </Style>
+        <Style x:Key="Unit" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Pick a craft and an orbit that dips into the air; see what each pass does (docs/MATH.md §9). -->
+    <ScrollViewer Padding="24,12,8,16" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,16,0" MaxWidth="980" HorizontalAlignment="Left">
+            <TextBlock Text="Aerobraking" FontSize="20" FontWeight="Bold" />
+            <TextBlock Style="{StaticResource Note}" FontSize="13"
+                       Text="Dip into the air at periapsis and let drag slow you. Each pass lowers the apoapsis; this shows where you are after each one." />
+
+            <TextBlock Style="{StaticResource Note}" Margin="0,2,0,0" Text="The craft, the orbit and how to choose the periapsis are in the Calculators pane." />
+            <TextBlock Text="{Binding DragNote}" Style="{StaticResource Note}" Margin="0,6,0,0" />
+
+            <TextBlock Text="{Binding Status}" Style="{StaticResource Note}" Margin="0,10,0,0" />
+            <Border Margin="0,12,0,0" Padding="12,8" CornerRadius="4" BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Suggestion}" FontWeight="SemiBold" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <Trigger Property="Text" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding Burns}" TextWrapping="Wrap" Margin="0,4,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <Trigger Property="Text" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Pass by pass -->
+            <TextBlock Text="Pass by pass" Style="{StaticResource SectionHeader}" />
+            <Grid Grid.IsSharedSizeScope="True">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition SharedSizeGroup="P0" /><ColumnDefinition SharedSizeGroup="P1" /><ColumnDefinition SharedSizeGroup="P2" />
+                            <ColumnDefinition SharedSizeGroup="P3" /><ColumnDefinition SharedSizeGroup="P4" /><ColumnDefinition SharedSizeGroup="P5" />
+                            <ColumnDefinition SharedSizeGroup="P6" /><ColumnDefinition SharedSizeGroup="P7" /><ColumnDefinition SharedSizeGroup="P8" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Pass" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="1" Text="Enters the air" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="2" Text="Periapsis" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="3" Text="Lowest" Style="{StaticResource Head}" ToolTip="Drag pulls it a little below the periapsis" />
+                        <TextBlock Grid.Column="4" Text="Speed lost" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="5" Text="Peak drag" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="6" Text="Apoapsis after" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="7" Text="Periapsis after" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="8" Text="Next pass in" Style="{StaticResource Head}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Passes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition SharedSizeGroup="P0" /><ColumnDefinition SharedSizeGroup="P1" /><ColumnDefinition SharedSizeGroup="P2" />
+                                            <ColumnDefinition SharedSizeGroup="P3" /><ColumnDefinition SharedSizeGroup="P4" /><ColumnDefinition SharedSizeGroup="P5" />
+                                            <ColumnDefinition SharedSizeGroup="P6" /><ColumnDefinition SharedSizeGroup="P7" /><ColumnDefinition SharedSizeGroup="P8" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Number}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Enters}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Periapsis}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Lowest}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="4" Text="{Binding SpeedLost}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="5" Text="{Binding PeakG}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="6" Text="{Binding ApoapsisAfter}" FontWeight="SemiBold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Cell}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ComesDown}" Value="True">
+                                                            <Setter Property="Foreground" Value="#EF5350" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="7" Text="{Binding PeriapsisAfter}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="8" Text="{Binding NextPass}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Cell}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsStop}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                                            <Setter Property="FontWeight" Value="Bold" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Notes}" Margin="0,8,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding StringFormat='• {0}'}" Style="{StaticResource Note}" Margin="0,1" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Other heights -->
+            <TextBlock Text="Other periapsis heights" Style="{StaticResource SectionHeader}" />
+            <TextBlock Text="The same arrival dipping to other heights. Click one to use it (that switches to your own periapsis)." Style="{StaticResource Note}" Margin="0,0,0,6" />
+            <Grid Grid.IsSharedSizeScope="True">
+                <StackPanel>
+                    <Grid Margin="8,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition SharedSizeGroup="C0" /><ColumnDefinition SharedSizeGroup="C1" />
+                            <ColumnDefinition SharedSizeGroup="C2" /><ColumnDefinition SharedSizeGroup="C3" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Periapsis" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="1" Text="After pass 1" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="2" Text="Ends" Style="{StaticResource Head}" />
+                        <TextBlock Grid.Column="3" Text="Peak drag" Style="{StaticResource Head}" ToolTip="The hardest pass it comes back out of" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Compare}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding DataContext.PickPeriapsisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}" HorizontalContentAlignment="Left" HorizontalAlignment="Left"
+                                        Padding="8,0" Margin="0,1" BorderThickness="0">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition SharedSizeGroup="C0" /><ColumnDefinition SharedSizeGroup="C1" />
+                                            <ColumnDefinition SharedSizeGroup="C2" /><ColumnDefinition SharedSizeGroup="C3" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Periapsis}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding FirstPass}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Passes}" Style="{StaticResource Cell}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding PeakG}" Style="{StaticResource Cell}" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Margin="0,16,0,0"
+                       Text="Over the equator, holding one attitude, drag only (no lift). Worked-out periapses allow for 30% more drag than predicted on every pass. Air density from your bake; the craft's drag from KSP's drag cubes. Each pass bites harder than the one before, so the last one is the one to watch." />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

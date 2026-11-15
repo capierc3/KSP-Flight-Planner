@@ -55,6 +55,18 @@ public sealed class TransferWindowsTests : IDisposable
     }
 
     [Fact]
+    public void A_window_that_dips_twice_shows_its_cheapest_dip()
+    {
+        var (kerbin, moho, sun) = (_stock["Kerbin"], _stock["Moho"], _stock["Kerbol"]);
+        // Year 1, Day 223: Moho's porkchop dips now (~5,450 m/s) and again ~45 days on (~5,020 m/s), the same window.
+        var now = 222 * GameCalendar.Kerbin.SecondsPerDay + 5 * 3600 + 35 * 60 + 33;
+        var next = TransferWindows.Next(kerbin, moho, sun, now)!;
+        _output.WriteLine($"{GameCalendar.Kerbin.FormatDay(next.Window.DepartureUt)}  {next.Window.TotalDv:N0} m/s");
+        Assert.InRange(next.Window.DepartureUt - now, 30 * GameCalendar.Kerbin.SecondsPerDay, 60 * GameCalendar.Kerbin.SecondsPerDay);
+        Assert.True(next.Window.TotalDv < 5_200);
+    }
+
+    [Fact]
     public void A_window_open_now_is_shown_rather_than_the_next_one()
     {
         var (kerbin, duna, sun) = (_stock["Kerbin"], _stock["Duna"], _stock["Kerbol"]);

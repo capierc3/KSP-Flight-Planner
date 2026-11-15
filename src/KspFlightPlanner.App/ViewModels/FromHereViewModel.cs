@@ -9,7 +9,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.App.ViewModels;
 
-public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, SetInclination, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land }
+public enum QuickAction { CircularizeAtApoapsis, CircularizeAtPeriapsis, SetApoapsis, SetPeriapsis, SetInclination, GoTo, MatchPlanes, Rendezvous, Deploy, Deorbit, Land, Aerobrake }
 
 public sealed record QuickActionOption(QuickAction Action, string Name)
 {
@@ -67,6 +67,7 @@ public sealed class FromHereViewModel : ObservableObject
     private string _altitudeText = "";
     private string _inclinationText = "";
     private string? _status;
+    private string? _backgroundStatus;
     private string _resultText = "";
     private bool _busy;
     private DestinationOption? _destination;
@@ -95,6 +96,10 @@ public sealed class FromHereViewModel : ObservableObject
     private string _satellitesText = "3";
     private bool _preferDive;
 
+    // Go to: aerobrake at the destination, and what the aim said about the arrival periapsis it picked.
+    private bool _aerobrakeThere;
+    private string? _aerobrakeNote;
+
     // Land at a spot: the spots on the body the craft is around, and the one picked or typed.
     private LandingTarget? _spot;
     private string _latitudeText = "";
@@ -102,8 +107,10 @@ public sealed class FromHereViewModel : ObservableObject
     private string _twrText = Landing.DefaultTwr.ToString(CultureInfo.CurrentCulture);
     private (string? Body, KspSave? Save, string? Target) _spotsFor = ("\0", null, null);
 
-    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events, BodyRotation rotation)
+    public FromHereViewModel(SaveSync sync, FlightRepository flights, PlannerEvents events, BodyRotation rotation, FlightRecorder recorder)
     {
+        Aerobrake = new AerobrakeFlyViewModel(sync, recorder, () => Here());
+        Aerobrake.Changed += Clear;
         _sync = sync;
         _flights = flights;
         _events = events;
@@ -142,7 +149,13 @@ public sealed class FromHereViewModel : ObservableObject
         new(QuickAction.Deploy, "Deploy satellites"),
         new(QuickAction.Deorbit, "Deorbit"),
         new(QuickAction.Land, "Land at a spot"),
+        new(QuickAction.Aerobrake, "Aerobrake"),
     ];
+
+    /// <summary>The Aerobrake action's inputs and its live view of the passes.</summary>
+    public AerobrakeFlyViewModel Aerobrake { get; }
+
+    public bool IsAerobrake => _action.Action == QuickAction.Aerobrake;
 
     public ObservableCollection<FlightBurnRow> Burns { get; } = [];
 
@@ -162,14 +175,45 @@ public sealed class FromHereViewModel : ObservableObject
             _altitudeText = DefaultAltitude();
             _inclinationText = value.Action == QuickAction.SetInclination ? "90" : "";
             foreach (var name in new[] { nameof(AltitudeText), nameof(NeedsAltitude), nameof(AltitudeLabel), nameof(ActionHint), nameof(NeedsDestination), nameof(NeedsTargetCraft), nameof(NeedsSpot), nameof(NeedsSatellites), nameof(OptionsTitle),
-                         nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint) })
+                         nameof(InclinationText), nameof(NeedsInclination), nameof(InclinationLabel), nameof(InclinationHint), nameof(IsAerobrake) })
                 OnPropertyChanged(name);
+            NotifyGoToInputs();
+            if (value.Action == QuickAction.Aerobrake) Aerobrake.Activate();
             Clear();
         }
     }
 
     public bool NeedsAltitude => _action.Action is QuickAction.SetApoapsis or QuickAction.SetPeriapsis or QuickAction.Deorbit or QuickAction.Deploy
-                                 || _action.Action == QuickAction.GoTo && !GoingToCraft;
+                                 || _action.Action == QuickAction.GoTo && !GoingToCraft && !AerobrakesThere;
+
+    /// <summary>Go to a body with air: it can be set to aerobrake there instead of burning to capture.</summary>
+    public bool CanAerobrakeThere => _action.Action == QuickAction.GoTo && !GoingToCraft && Destination() is { HasAtmosphere: true };
+
+    /// <summary>
+    /// Go to: aerobrake at the destination. The arrival periapsis is worked out from the craft's drag for the aim picked
+    /// (as the Aerobrake action does for a pass), and the trip is planned to it with no capture burn.
+    /// </summary>
+    public bool AerobrakeThere
+    {
+        get => _aerobrakeThere;
+        set
+        {
+            if (!SetProperty(ref _aerobrakeThere, value)) return;
+            if (value && Destination() is { } to) Aerobrake.Activate(to);
+            NotifyGoToInputs();
+            Clear();
+        }
+    }
+
+    private bool AerobrakesThere => _aerobrakeThere && CanAerobrakeThere;
+
+    /// <summary>The aim and attitude inputs: for the Aerobrake action, and for Go to set to aerobrake there.</summary>
+    public bool ShowsAerobrakeInputs => IsAerobrake || AerobrakesThere;
+
+    private void NotifyGoToInputs()
+    {
+        foreach (var name in new[] { nameof(NeedsAltitude), nameof(CanAerobrakeThere), nameof(ShowsAerobrakeInputs) }) OnPropertyChanged(name);
+    }
 
     /// <summary>Go to is set to KSP's target, and that's a craft: a rendezvous, which needs no height.</summary>
     private bool GoingToCraft => _destination is { IsTarget: true } && CurrentTarget() is not null;
@@ -427,8 +471,9 @@ public sealed class FromHereViewModel : ObservableObject
             if (!SetProperty(ref _destination, value)) return;
             _altitudeText = DefaultAltitude();
             OnPropertyChanged(nameof(AltitudeText));
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            if (AerobrakesThere && Destination() is { } to) Aerobrake.Activate(to);
+            NotifyGoToInputs();
             Clear();
         }
     }
@@ -463,7 +508,8 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.CircularizeAtPeriapsis => "One burn at the next periapsis, however soon. On an orbit that's already round, it's two minutes from now. " +
                                               "Just arrived at a moon (inside its sphere of influence), this is the capture burn.",
         QuickAction.GoTo => "Anywhere in the system: the burns to leave, any course correction on the way, and the capture into a round orbit at this " +
-                            "height there, going the way it spins. A height in the atmosphere brings you down (or aerobrakes) instead. Trips through a " +
+                            "height there, going the way it spins. A height in the atmosphere brings you down instead; to slow down in the air, tick " +
+                            "Aerobrake there and the periapsis is worked out from the craft's drag. Trips through a " +
                             "launch window (another planet, or moon to moon) offer a few windows to choose from; from a moon to another planet, it stops " +
                             "in the planet's orbit on the way. Already on the way? It plans a course correction. KSP's target follows the game: a body " +
                             "goes there, a craft plans a rendezvous with it. Give an inclination for a polar (or any tilted) orbit there: a small burn " +
@@ -482,6 +528,9 @@ public sealed class FromHereViewModel : ObservableObject
         QuickAction.Land => "Pick a spot (or type its latitude and longitude). Tilts your orbit first if it doesn't reach that far north or south, then " +
                             "waits for a pass close to the spot: a deorbit burn half an orbit before, a small burn on the way down to swing the track " +
                             "over it, and a braking burn from 1 km above the ground. On a body with air the landing spot is a rough estimate.",
+        QuickAction.Aerobrake => "Slow down in the air instead of with the engines. Plan it for the burn that sets the periapsis for the next pass (or, when " +
+                                 "the braking is done, lifts it out of the air). Each pass is followed live below, and the drag it measures is " +
+                                 "used for the next.",
         _ => "Burns retrograde at the next apoapsis to drop the periapsis into the atmosphere (or onto the ground).",
     };
 
@@ -547,6 +596,10 @@ public sealed class FromHereViewModel : ObservableObject
     public string? Status { get => _status; private set { if (SetProperty(ref _status, value)) OnPropertyChanged(nameof(HasStatus)); } }
     public bool HasStatus => !string.IsNullOrEmpty(Status);
 
+    /// <summary>What happened to "Fly it in the background", shown under its button (Status is far above it on a long plan).</summary>
+    public string? BackgroundStatus { get => _backgroundStatus; private set { if (SetProperty(ref _backgroundStatus, value)) OnPropertyChanged(nameof(HasBackgroundStatus)); } }
+    public bool HasBackgroundStatus => !string.IsNullOrEmpty(BackgroundStatus);
+
     /// <summary>Total Δv and the orbit the burns leave you in.</summary>
     public string ResultText { get => _resultText; private set => SetProperty(ref _resultText, value); }
 
@@ -568,7 +621,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (Here() is not (var body, var orbit) || _sync.Now is not { } now) return;
         var after = now + LeadS;
         if (orbit.Eccentricity >= 1 && _action.Action is not (QuickAction.CircularizeAtApoapsis or QuickAction.CircularizeAtPeriapsis or QuickAction.SetApoapsis
-                or QuickAction.GoTo or QuickAction.SetInclination))
+                or QuickAction.GoTo or QuickAction.SetInclination or QuickAction.Aerobrake))
         {
             Status = $"You're on a path that escapes {body.Name}: capture first (circularize at periapsis, or change the apoapsis).";
             return;
@@ -615,8 +668,17 @@ public sealed class FromHereViewModel : ObservableObject
                         Status = $"You're already around {destination.Name}. To change your orbit here, circularize or change the apoapsis or periapsis.";
                         return;
                     }
-                    if (!TryKm(out var height) || !TryInclination(required: false, out var tilt)) return;
+                    if (!TryInclination(required: false, out var tilt)) return;
+                    if (AerobrakesThere)
+                    {
+                        _ = PlanTripAsync(body, destination, orbit, now, after, double.NaN, tilt);
+                        return;
+                    }
+                    if (!TryKm(out var height)) return;
                     _ = PlanTripAsync(body, destination, orbit, now, after, height, tilt);
+                    return;
+                case QuickAction.Aerobrake:
+                    _ = PlanAerobrakeAsync(body, orbit, now);
                     return;
                 case QuickAction.Land:
                     if (LandingFromInputs() is not { } leg) return;
@@ -682,6 +744,49 @@ public sealed class FromHereViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Aerobrake: the next step from the orbit now (§9.5), and the burn (or, finishing into a target orbit, the two) for it.
+    /// </summary>
+    private async Task PlanAerobrakeAsync(CelestialBody body, OrbitalElements orbit, double now)
+    {
+        _busy = true;
+        Status = "Working out the periapsis…";
+        CommandManager.InvalidateRequerySuggested();
+        try
+        {
+            var (step, problem) = await Aerobrake.NextStepAsync(body, orbit);
+            if (step is null) { Status = problem; return; }
+            var pe = Kepler.PeriapsisRadius(orbit) - body.EquatorialRadiusM;
+            if (!step.Finish && Math.Abs(pe - step.PeriapsisM) < AerobrakeLive.CloseEnoughM)
+            {
+                Status = AerobrakeFlyViewModel.NextStepText(step, orbit, body);
+                return;
+            }
+            var burns = new List<FlightBurn> { AerobrakeLive.SetPeriapsis(body, orbit, now, LeadS, step.PeriapsisM) };
+            if (step.ApoapsisM is { } ap)
+            {
+                var after = Rendezvous.OrbitAfter(burns[0].Ut, burns[0].Burn, orbit, body.Mu);
+                burns.Add(QuickBurns.SetApsis(body, after, burns[0].Ut, 1, ap, apoapsis: true));
+            }
+            (_plannedBody, _plannedFrom, _plannedUt) = (body, orbit, now);
+            for (var i = 0; i < burns.Count; i++) Burns.Add(new FlightBurnRow(i + 1, burns[i]));
+            var end = burns.Aggregate(orbit, (o, b) => Rendezvous.OrbitAfter(b.Ut, b.Burn, o, body.Mu));
+            ResultText = $"{Format.Speed0(burns.Sum(b => b.DeltaV))} in all · leaves you in {FlightViewModel.OrbitText(end, body)} around {body.Name}";
+            OnPropertyChanged(nameof(HasBurns));
+            Status = step.Why + (step.Finish ? "" : $" Hold {Aerobrake.Attitude.Name.Split(" (")[0].ToLowerInvariant()} through the pass, engines off.");
+            RefreshLive();
+        }
+        catch (ArgumentException ex)
+        {
+            Status = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    /// <summary>
     /// Plans the ways to <paramref name="to"/> off the UI thread (a launch window search takes a moment), lists them and
     /// shows the first (the cheapest).
     /// </summary>
@@ -693,7 +798,30 @@ public sealed class FromHereViewModel : ObservableObject
         try
         {
             var bodies = _sync.StockBodies().Values.ToList();
-            var options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
+            IReadOnlyList<TripOption> options;
+            if (double.IsNaN(height))
+            {
+                // Aerobraking there (docs/MATH.md §9.6): plan to a first guess in the air, take the path it arrives on, let
+                // the aim pick the periapsis for the first pass, and plan again to that.
+                var guess = TransferFlights.AerobrakeFraction * to.AtmosphereHeightM;
+                options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, guess, bodies, inclination));
+                Status = $"Working out the periapsis to aerobrake at {to.Name}…";
+                var (step, problem) = await Aerobrake.StepFromAsync(to, AerobrakeOrbit.FromPath(to, options[0].Arrival.Path));
+                if (step is null) { Status = problem; return; }
+                if (step.Finish)
+                {
+                    Status = $"No first pass at {to.Name} is safe for this aim from the path the trip comes in on. Try another aim or attitude, " +
+                             "or turn aerobraking off and capture with a burn.";
+                    return;
+                }
+                height = step.PeriapsisM;
+                if (Math.Abs(options[0].Arrival.PeriapsisAltitudeM - height) > AerobrakeLive.CloseEnoughM)
+                    options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
+                _aerobrakeNote = $"Aerobrakes at {to.Name}: periapsis {Km(height)} for the first pass. {step.Why} " +
+                                 $"Hold {Aerobrake.Attitude.Name.Split(" (")[0].ToLowerInvariant()} through it, engines off. Once inside " +
+                                 $"{to.Name}'s sphere of influence, switch to Aerobrake to follow the passes and plan the next.";
+            }
+            else options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, height, bodies, inclination));
             (_plannedBody, _plannedFrom, _plannedUt, _plannedTo, _plannedHeight, _plannedInclination) = (from, orbit, now, to, height, inclination);
             foreach (var option in options) TripOptions.Add(new TripOptionRow(option.Label, OptionText(option, now), option));
             OnPropertyChanged(nameof(HasTripOptions));
@@ -741,6 +869,11 @@ public sealed class FromHereViewModel : ObservableObject
                      $"({option.Arrival.Path.InclinationDeg:0}° to its equator)" + (last.Plan.Capture is null ? " without a capture burn" : " and captures there") +
                      (stops.Count > 0 ? $" · stops in orbit around {string.Join(", then ", stops)} on the way" : "");
         var notes = option.Warnings.ToList();
+        if (_aerobrakeNote is { } aero)
+        {
+            notes.RemoveAll(n => n.Contains("so there's no capture burn")); // the general note on a periapsis in the air
+            notes.Insert(0, aero);
+        }
         if (burns.Count == 0) notes.Insert(0, "On course, with nothing to burn.");
         if (FuelNote() is { } fuel) notes.Add(fuel);
         Status = notes.Count > 0 ? string.Join(" ", notes) : null;
@@ -1052,6 +1185,7 @@ public sealed class FromHereViewModel : ObservableObject
     {
         Burns.Clear();
         Status = null;
+        BackgroundStatus = null;
         ResultText = "";
         _plannedRendezvous = null;
         _plannedTarget = null;
@@ -1060,6 +1194,7 @@ public sealed class FromHereViewModel : ObservableObject
         _meetFar = null;
         _plannedLanding = null;
         _plannedDeploy = null;
+        _aerobrakeNote = null;
         TripOptions.Clear();
         _trip = null;
         OnPropertyChanged(nameof(SelectedTrip));
@@ -1109,8 +1244,8 @@ public sealed class FromHereViewModel : ObservableObject
             _target.Name = current is { } t ? (!Picking ? $"KSP's target: {t.Name} (rendezvous)" : $"The target: {t.Name} (rendezvous)")
                 : game?.TargetBody is { } b ? $"KSP's target: {b}"
                 : "KSP's target (none set)";
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            NotifyGoToInputs();
         }
 
         var here = Here()?.Body;
@@ -1129,8 +1264,8 @@ public sealed class FromHereViewModel : ObservableObject
                   ?? list.ElementAtOrDefault(1) ?? _target;
             OnPropertyChanged(nameof(Destinations));
             OnPropertyChanged(nameof(SelectedDestination));
-            OnPropertyChanged(nameof(NeedsAltitude));
             OnPropertyChanged(nameof(NeedsInclination));
+            NotifyGoToInputs();
         }
 
         // A new place to go: its parking height, unless burns are showing (their height is the one they were planned for).
@@ -1204,10 +1339,11 @@ public sealed class FromHereViewModel : ObservableObject
         OrbitalElements? end = null;
         if (trip is not null && (end = trip.FinalOrbit) is null)
         {
-            Status = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
+            BackgroundStatus = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
             return;
         }
         var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
+        BackgroundStatus = "Starting it in KSP…";
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
         try
@@ -1216,31 +1352,31 @@ public sealed class FromHereViewModel : ObservableObject
             {
                 var to = trip.Legs[^1].Hop.To;
                 var summary = await _sync.Link.StartBackgroundOrbitTripAsync(vessel, to.Name, burns, end, SelectedTrip?.Label ?? "");
-                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
+                BackgroundStatus = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
                          $"after the last burn, {_calendar.FormatDate(burns.Max(b => b.Ut))}.";
             }
             else if (_plannedRendezvous is { } plan)
             {
                 var leg = plan.Legs[^1];
                 var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
-                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
+                BackgroundStatus = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
                          $"{_calendar.FormatDate(leg.ArrivalUt)}.";
             }
         }
         catch (KRPC.Client.RPCException ex)
         {
-            Status = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
+            BackgroundStatus = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
                 ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
                 : ex.Message;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             // kRPC hands the add-on's refusals over as these (a plan that misses, no fuel, a ship not found).
-            Status = "Not started: " + AddOnReason(ex.Message);
+            BackgroundStatus = "Not started: " + AddOnReason(ex.Message);
         }
         catch (Exception)
         {
-            Status = "Lost the connection to KSP.";
+            BackgroundStatus = "Lost the connection to KSP.";
         }
         finally
         {

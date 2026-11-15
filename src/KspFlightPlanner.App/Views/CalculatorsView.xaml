@@ -11,7 +11,7 @@
         <StackPanel Margin="0,0,18,0">
             <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                        Visibility="{Binding ShowsNoCalculator, Converter={StaticResource BoolToVisibility}}"
-                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits, Engine chart, CommNet planner or Power budget show here: whichever of them you looked at last." />
+                       Text="Inputs for the Transfer Planner, Rendezvous, Resonant Orbits, Engine chart, CommNet planner, Power budget or Aerobraking show here: whichever of them you looked at last." />
 
             <StackPanel DataContext="{Binding Transfer}"
                         Visibility="{Binding DataContext.ShowsTransferInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
@@ -471,6 +471,88 @@
                 </ItemsControl>
                 <CheckBox Content="Run fuel cells when short" IsChecked="{Binding FuelCells}" Margin="0,6,0,0"
                           ToolTip="Fuel cells burn liquid fuel and oxidizer to cover what the panels and generators can't" />
+            </StackPanel>
+
+            <!-- Aerobraking: the craft, how it comes in, and how to choose the periapsis -->
+            <StackPanel DataContext="{Binding Aerobraking}"
+                        Visibility="{Binding DataContext.ShowsAerobrakingInputs, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Aerobraking" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+
+                <TextBlock Text="Planet" Style="{StaticResource Label}" Margin="0,0,0,3" />
+                <ComboBox ItemsSource="{Binding Bodies}" SelectedItem="{Binding Body}" DisplayMemberPath="Name" AutomationProperties.Name="Planet" />
+
+                <TextBlock Text="Craft" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding Crafts}" SelectedItem="{Binding Craft}" AutomationProperties.Name="Craft">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" />
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Note}" FontSize="11" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="Hold" Style="{StaticResource Label}" Margin="0,8,0,3" />
+                <ComboBox ItemsSource="{Binding Attitudes}" SelectedItem="{Binding Attitude}" DisplayMemberPath="Name" AutomationProperties.Name="Attitude" />
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Mass (t)" Style="{StaticResource Label}" />
+                    <TextBox Grid.Column="1" Text="{Binding MassText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2" AutomationProperties.Name="Mass" />
+                    <TextBlock Grid.Row="1" Text="Drag area (m²), blank: from the parts" Style="{StaticResource Label}" TextWrapping="Wrap" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding DragText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2"
+                             AutomationProperties.Name="Drag area" ToolTip="Leave blank to work it out from the craft's parts" />
+                </Grid>
+                <TextBlock Text="{Binding DragNote}" Style="{StaticResource Note}" Margin="0,4,0,0" />
+
+                <TextBlock Text="Coming in on" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding Arrivals}" SelectedItem="{Binding Arrival}" DisplayMemberPath="Name" AutomationProperties.Name="Coming in on" />
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding ArrivalUnit, StringFormat='Apoapsis or speed ({0})'}" Style="{StaticResource Label}" />
+                    <TextBox Grid.Column="1" Text="{Binding ApoapsisText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2" AutomationProperties.Name="Arrival apoapsis or speed" />
+                    <TextBlock Grid.Row="1" Text="Inclination (°)" Style="{StaticResource Label}"
+                               ToolTip="0 = going round with the planet's spin, 180 = against it" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding InclinationText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2" AutomationProperties.Name="Inclination" />
+                </Grid>
+                <Button Content="Use the craft's orbit" Command="{Binding UseOrbitCommand}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                        ToolTip="Fill in the picked vessel's orbit (it has to be around this planet)" />
+
+                <TextBlock Text="Periapsis" Style="{StaticResource Label}" FontWeight="SemiBold" Margin="0,14,0,3" />
+                <ComboBox ItemsSource="{Binding Aims}" SelectedItem="{Binding Aim}" DisplayMemberPath="Name" AutomationProperties.Name="Choose the periapsis" />
+                <TextBlock Text="{Binding Aim.Hint}" Style="{StaticResource Note}" Margin="0,4,0,0" />
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Periapsis (km)" Style="{StaticResource Label}" />
+                    <TextBox Grid.Column="1" Text="{Binding PeriapsisText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2"
+                             IsReadOnly="{Binding IsPeriapsisWorkedOut}" AutomationProperties.Name="Periapsis" />
+                    <TextBlock Grid.Row="1" Text="{Binding TargetApoapsisLabel}" Style="{StaticResource Label}" TextWrapping="Wrap"
+                               Visibility="{Binding ShowsTargetApoapsis, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding TargetApoapsisText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2"
+                             Visibility="{Binding ShowsTargetApoapsis, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Target apoapsis" />
+                    <TextBlock Grid.Row="2" Text="Target periapsis (km)" Style="{StaticResource Label}"
+                               Visibility="{Binding ShowsTargetPeriapsis, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TargetPeriapsisText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2"
+                             Visibility="{Binding ShowsTargetPeriapsis, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Target periapsis" />
+                    <TextBlock Grid.Row="3" Text="Most passes" Style="{StaticResource Label}"
+                               Visibility="{Binding ShowsTargetApoapsis, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding MaxPassesText, UpdateSourceTrigger=PropertyChanged, Delay=400}" Margin="0,2"
+                             Visibility="{Binding ShowsTargetApoapsis, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Most passes" />
+                </Grid>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

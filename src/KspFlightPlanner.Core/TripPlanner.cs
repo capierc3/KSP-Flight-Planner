@@ -137,6 +137,17 @@ public static class TripPlanner
         var hop = hops[across];
         var startOrbit = before.EndOrbit ?? craft;
         var startUt = before.EndUt;
+
+        // Already escaping the origin (the ejection is flown): no window to pick, so follow the escape path out of the
+        // sphere and go on as from an orbit around the parent, with a course correction on the way.
+        if (AlreadyLeaving(hops, across, startOrbit, startUt) is { } leaving)
+        {
+            var cheapest = Legs(leaving.Hops, across, leaving.Orbit, leaving.Ut, Height, Tilt, soonest: false, window: null, bodies);
+            if (!cheapest.Legs.Any(l => l.Plan.Waits)) return [new TripOption("", [.. before.Legs, .. cheapest.Legs])];
+            var now = Legs(leaving.Hops, across, leaving.Orbit, leaving.Ut, Height, Tilt, soonest: true, window: null, bodies);
+            return Label([new TripOption("", [.. before.Legs, .. cheapest.Legs]), new TripOption("", [.. before.Legs, .. now.Legs])]);
+        }
+
         var options = new List<TripOption>();
         string? problem = null;
         foreach (var (_, dep, tof) in Windows(hop, startOrbit, startUt, Height(across)))
@@ -225,6 +236,21 @@ public static class TripPlanner
             ut = (plan.Capture?.Ut ?? plan.Arrival.PeriapsisUt) + Rendezvous.BurnGapS;
         }
         return (legs, orbit, ut);
+    }
+
+    /// <summary>
+    /// For a craft on an escape path out of the hop across's origin: the hops with that one made a hop down from the
+    /// parent, and the craft's path around the parent once out of the origin's sphere (and when). Null otherwise.
+    /// </summary>
+    private static (List<Hop> Hops, OrbitalElements Orbit, double Ut)? AlreadyLeaving(IReadOnlyList<Hop> hops, int across, OrbitalElements orbit, double ut)
+    {
+        var hop = hops[across];
+        if (orbit.Eccentricity < 1 || hop.From.Orbit is not { } originOrbit) return null;
+        var horizon = Kepler.OrbitalPeriod(originOrbit, hop.Parent.Mu) / 4;
+        if (Hops.LeaveSoi(hop.From, hop.Parent, orbit, ut, ut + horizon) is not { } exit) return null;
+        var list = hops.ToList();
+        list[across] = new Hop(HopKind.Down, hop.Parent, hop.To, hop.Parent);
+        return (list, exit.Path, exit.CrossingUt + Rendezvous.BurnGapS);
     }
 
     private static string Later(string? note, Hop hop) =>

@@ -54,6 +54,7 @@ public static class Panes
     public const string EngineChart = "enginechart";
     public const string CommNet = "commnet";
     public const string PowerBudget = "power";
+    public const string Aerobraking = "aerobraking";
     public const string Guide = "guide";
     public const string Survey = "survey";
 
@@ -89,6 +90,7 @@ public static class Panes
         new(EngineChart, "Engine chart", true, Plan, vm => new EngineChartView { DataContext = vm.EngineChart }),
         new(CommNet, "CommNet", true, Plan, vm => new CommNetView { DataContext = vm.CommNet }),
         new(PowerBudget, "Power budget", true, Plan, vm => new PowerBudgetView { DataContext = vm.PowerBudget }),
+        new(Aerobraking, "Aerobraking", true, Plan, vm => new AerobrakingView { DataContext = vm.Aerobraking }),
         new(Flight, "Flight", true, Fly, vm => new FlightView { DataContext = vm.Flight }),
         new(FlightReport, "Flight report", true, [WorkMode.Fly, WorkMode.Plan], vm => new FlightReportView { DataContext = vm.FlightLog.Report }),
         new(FlightCompare, "Compare flights", true, [WorkMode.Plan, WorkMode.Fly], vm => new FlightCompareView { DataContext = vm.FlightLog.Compare }),

@@ -24,7 +24,16 @@ public sealed record CraftPart(
     bool? CrossfeedSwitch)
 {
     public bool? RunningPrimaryMode { get; init; }
+
+    /// <summary>The part's rotation in the craft (rot): x, y, z, w.</summary>
+    public System.Numerics.Quaternion Rotation { get; init; } = System.Numerics.Quaternion.Identity;
+
+    /// <summary>Stack nodes with a part on them (attN): the node's name and the other part's <see cref="Id"/>.</summary>
+    public IReadOnlyList<PartLink> StackLinks { get; init; } = [];
 }
+
+/// <summary>A part on one of another part's stack nodes: the node's name ("top", "bottom") and the part there.</summary>
+public sealed record PartLink(string Node, string PartId);
 
 /// <summary>A ship saved in the VAB or SPH (Ships/VAB/*.craft, Ships/SPH/*.craft).</summary>
 /// <param name="Facility">VAB or SPH.</param>
@@ -112,7 +121,33 @@ public static class CraftReader
             bool.TryParse(crossfeed, out var on) ? on : null)
         {
             RunningPrimaryMode = multiMode is null ? null : !bool.TryParse(multiMode.GetValue("runningPrimary"), out var primary) || primary,
+            Rotation = Rotation(p.GetValue("rot")),
+            StackLinks = p.Values.Where(v => v.Key == "attN").Select(v => StackLink(v.Value)).OfType<PartLink>().ToList(),
         };
+    }
+
+    /// <summary>"x,y,z,w" → a rotation; identity when unreadable (or all zeros).</summary>
+    public static System.Numerics.Quaternion Rotation(string? text)
+    {
+        var n = (text ?? "").Split(',');
+        if (n.Length != 4) return System.Numerics.Quaternion.Identity;
+        var q = new System.Numerics.Quaternion((float)Number(n[0]), (float)Number(n[1]), (float)Number(n[2]), (float)Number(n[3]));
+        return q.LengthSquared() < 1e-6f ? System.Numerics.Quaternion.Identity : System.Numerics.Quaternion.Normalize(q);
+    }
+
+    /// <summary>
+    /// "bottom,Tube2_4294194958_0|-0.318|0_0|-1|0_0|-0.318|0_0|-1|0": the node, then the part on it followed by four
+    /// '_'-separated vectors. An empty node names "Null_0"; that gives null.
+    /// </summary>
+    private static PartLink? StackLink(string value)
+    {
+        var comma = value.IndexOf(',');
+        if (comma <= 0) return null;
+        var rest = value[(comma + 1)..];
+        var cut = rest.Length;
+        for (var i = 0; i < 4 && cut > 0; i++) cut = rest.LastIndexOf('_', cut - 1);
+        var id = cut > 0 ? rest[..cut] : rest;
+        return id.Length == 0 || id.StartsWith("Null", StringComparison.Ordinal) ? null : new PartLink(value[..comma].Trim(), id);
     }
 
     /// <summary>"liquidEngine3.v2_4294121630" → "liquidEngine3.v2" (the id is the last '_' and digits).</summary>

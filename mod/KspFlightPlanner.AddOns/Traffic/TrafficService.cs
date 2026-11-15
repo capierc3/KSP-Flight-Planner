@@ -131,7 +131,13 @@ namespace KspFlightPlanner.Traffic
             var craftCrew = dockedPort != null ? Ships.DockedCraftParts(dockedPort).SelectMany(p => p.protoModuleCrew).Select(c => c.name).ToList()
                 : railsStack != null ? RailsDocking.CraftCrew(railsStack, vessel)
                 : ship.GetVesselCrew().Select(c => c.name).ToList();
-            if (!CrewRules.CanFly(route, craftCrew, out var notAllowed)) throw new ArgumentException(vessel + " can't fly this route: " + notAllowed);
+            if (!CrewRules.CanFly(route, craftCrew, out var notAllowed))
+            {
+                // Said in game too, so it's seen from the flight scene, not only in the planner.
+                UnityEngine.Debug.Log("[KspFlightPlanner] " + vessel + ": route not started: " + notAllowed);
+                ScreenMessages.PostScreenMessage(vessel + " can't fly this route: " + notAllowed, 10f, ScreenMessageStyle.UPPER_CENTER);
+                throw new ArgumentException(vessel + " can't fly this route: " + notAllowed);
+            }
 
             var now = Planetarium.GetUniversalTime();
             // Held at its station past its first burn (or too close to it to back off first): the plan is stale. It leaves
