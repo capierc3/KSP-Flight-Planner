@@ -192,6 +192,8 @@
                     <Button Content="Fly it in the background" Command="{Binding BackgroundCommand}" Padding="12,2" Margin="6,0,0,0"
                             ToolTip="The game flies this on its own (the planner's add-on moves the craft at each burn and burns its fuel), so you can fly something else or watch from the tracking station: a meeting ends docked at the target, a Go to ends in the planned orbit" />
                 </StackPanel>
+                <TextBlock Text="{Binding BackgroundStatus}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Visibility="{Binding HasBackgroundStatus, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

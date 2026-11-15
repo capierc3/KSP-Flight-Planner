@@ -67,6 +67,7 @@ public sealed class FromHereViewModel : ObservableObject
     private string _altitudeText = "";
     private string _inclinationText = "";
     private string? _status;
+    private string? _backgroundStatus;
     private string _resultText = "";
     private bool _busy;
     private DestinationOption? _destination;
@@ -594,6 +595,10 @@ public sealed class FromHereViewModel : ObservableObject
 
     public string? Status { get => _status; private set { if (SetProperty(ref _status, value)) OnPropertyChanged(nameof(HasStatus)); } }
     public bool HasStatus => !string.IsNullOrEmpty(Status);
+
+    /// <summary>What happened to "Fly it in the background", shown under its button (Status is far above it on a long plan).</summary>
+    public string? BackgroundStatus { get => _backgroundStatus; private set { if (SetProperty(ref _backgroundStatus, value)) OnPropertyChanged(nameof(HasBackgroundStatus)); } }
+    public bool HasBackgroundStatus => !string.IsNullOrEmpty(BackgroundStatus);
 
     /// <summary>Total Δv and the orbit the burns leave you in.</summary>
     public string ResultText { get => _resultText; private set => SetProperty(ref _resultText, value); }
@@ -1180,6 +1185,7 @@ public sealed class FromHereViewModel : ObservableObject
     {
         Burns.Clear();
         Status = null;
+        BackgroundStatus = null;
         ResultText = "";
         _plannedRendezvous = null;
         _plannedTarget = null;
@@ -1333,10 +1339,11 @@ public sealed class FromHereViewModel : ObservableObject
         OrbitalElements? end = null;
         if (trip is not null && (end = trip.FinalOrbit) is null)
         {
-            Status = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
+            BackgroundStatus = $"This way of going lets {trip.Legs[^1].Hop.To.Name}'s air do the braking at the end: the game can't fly that in the background. Plan an orbit above the air.";
             return;
         }
         var burns = Burns.Where(b => b.State != BurnState.Passed && !b.Burn.ByReleasedCraft).Select(b => (b.Burn.Ut, b.Burn.Burn, b.Burn.Title)).ToList();
+        BackgroundStatus = "Starting it in KSP…";
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
         try
@@ -1345,31 +1352,31 @@ public sealed class FromHereViewModel : ObservableObject
             {
                 var to = trip.Legs[^1].Hop.To;
                 var summary = await _sync.Link.StartBackgroundOrbitTripAsync(vessel, to.Name, burns, end, SelectedTrip?.Label ?? "");
-                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
+                BackgroundStatus = $"The game is flying it: {summary}. Watch from the tracking station; it's in orbit around {to.Name} " +
                          $"after the last burn, {_calendar.FormatDate(burns.Max(b => b.Ut))}.";
             }
             else if (_plannedRendezvous is { } plan)
             {
                 var leg = plan.Legs[^1];
                 var summary = await _sync.Link.StartBackgroundTripAsync(vessel, leg.Target.Name, burns, leg.ArrivalUt, SelectedTrip?.Label ?? "");
-                Status = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
+                BackgroundStatus = $"The game is flying it: {summary}. Watch from the tracking station; it's parked beside {leg.Target.Name} " +
                          $"{_calendar.FormatDate(leg.ArrivalUt)}.";
             }
         }
         catch (KRPC.Client.RPCException ex)
         {
-            Status = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
+            BackgroundStatus = ex.Message.Contains("PlannerTraffic", StringComparison.Ordinal) || ex.Message.Contains("service", StringComparison.OrdinalIgnoreCase)
                 ? "The planner's add-on in KSP is missing or too old: install it from mod/ (see its project file), then restart KSP. " + ex.Message
                 : ex.Message;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             // kRPC hands the add-on's refusals over as these (a plan that misses, no fuel, a ship not found).
-            Status = "Not started: " + AddOnReason(ex.Message);
+            BackgroundStatus = "Not started: " + AddOnReason(ex.Message);
         }
         catch (Exception)
         {
-            Status = "Lost the connection to KSP.";
+            BackgroundStatus = "Lost the connection to KSP.";
         }
         finally
         {
