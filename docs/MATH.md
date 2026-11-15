@@ -21,6 +21,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - **11. Background trips** — 11.1 Flying a burn without flying the craft; 11.2 The fuel a background burn uses; 11.3 Staying on course, and planning again; 11.4 The physics flyer: turning the ship; 11.5 The physics flyer: flying a burn; 11.6 The physics flyer: coming in to the station; 11.7 The physics flyer: docking; 11.8 The physics flyer: leaving a station; 11.9 Fuel transfer and RCS balance; 11.10 Docking and undocking on rails; 11.11 Station traffic; 11.12 Crew rules and the flight log; 11.13 The pilot's safety stop; 11.14 Booking a port, and waiting for one; 11.15 Which route craft may use a port
 - **12. Calendar dates and ages** — 12.1 Dates; 12.2 Birthdays and ages
 - **13. Power and heat in game** — 13.1 Night on the surface, and the next sunset; 13.2 Night in orbit; 13.3 Charge through the night; 13.4 Core heat and radiators
+- **14. Science** — 14.1 What a run of an experiment earns
 
 **Where to look for…**
 
@@ -43,6 +44,7 @@ Each section has the formulas, a worked example, the code that implements them a
 - Flying a whole mission, each step from where the last one left you: §8.5
 - Slowing down in a planet's air instead of with the engines, and where each pass leaves you: §9.3; which periapsis to aim for: §9.4; following a pass live and measuring the drag: §9.5
 - Where the ore is, and how fast a station maps it: §10.1, §10.2
+- How much science an experiment still pays in a biome: §14.1
 
 ## 1. Foundations
 
@@ -2919,6 +2921,31 @@ Worked example (the base in §13.3):
 
 - Code: `PowerReader` (heat), `PowerBudget.Heat` (mod/KspFlightPlanner.AddOns/PowerHeat)
 - Source: KSP 1.12 `ModuleCoreHeat.MoveCoreEnergyToRadiators`, `.GetInfo`, `ModuleActiveRadiator.GetInfo` (read from Assembly-CSharp); stock part configs (ISRU, RadialDrill, foldingRadSmall/Med)
+
+## 14. Science
+
+The sums behind Tools › Science ([SCIENCE.md](SCIENCE.md) has what the pane shows and where the numbers come from in the save and the game).
+
+### 14.1 What a run of an experiment earns
+
+A subject is one experiment in one situation at one body, sometimes in one biome. Its cap is the experiment's science cap times the body's multiplier for that situation, and each result earns less as the subject fills up:
+
+```
+cap      = scienceCap × m                        (m: the body's multiplier for the situation, the save's sbv)
+value    = data ÷ dataScale × m × (1 − earned ÷ cap)
+one run  = baseValue × dataScale of data, so it earns  baseValue × m × (1 − earned ÷ cap)
+```
+
+`1 − earned ÷ cap` is the save's `scv`. KSP's `ResearchAndDevelopment.GetSubjectValue` is exactly this, with no floor, so the planner never lets a value go below 0. Data a vessel is still carrying hasn't been counted in `earned` yet. The planner brings each carried copy home first, in turn, and works out the next run from what's left after them. The numbers are for recovered data; sending data home multiplies it by the part's transmit fraction.
+
+Worked example (gravity scan: baseValue 20, scienceCap 22, dataScale 3):
+
+1. Kerbin, space high over Grasslands: m = 1.5, so cap = 22 × 1.5 = **33**. The save has earned 16.8, so the next run earns 20 × 1.5 × (1 − 16.8 ÷ 33) = 30 × 0.491 = **14.73**, and 33 − 16.8 = 16.2 is left
+2. Kerbin, space high over Highlands, never scanned: the first run earns 20 × 1.5 = **30** of 33
+3. Minmus, space low over Lowlands (m = 4, cap 88), nothing earned yet, but a probe carries one run (60 data). That copy will earn 60 ÷ 3 × 4 × 1 = 80, leaving 8. Another run would earn 20 × 4 × (1 − 80 ÷ 88) = **7.27**
+
+- Code: `ScienceGaps.Entry`, `.Value` (src/KspFlightPlanner.Core/Ksp/Science.cs)
+- Source: KSP 1.12's `ResearchAndDevelopment.GetSubjectValue` and the save's `Science { sci, cap, sbv, scv }` records (scv = 1 − sci ÷ cap in every record); experiment values from `GameData/Squad/Resources/ScienceDefs.cfg`
 
 ## Sources
 

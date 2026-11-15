@@ -387,6 +387,14 @@ internal static class Migrations
             PRIMARY KEY (ksp_save, vessel_id)
         );
 
+        -- Science gaps (docs/SCIENCE.md): the game's experiments, which parts run them, and the bodies' multipliers and
+        -- biomes, fetched from the game through the planner's add-on once per save.
+        CREATE TABLE science_catalogs (
+            ksp_save      TEXT PRIMARY KEY,
+            catalog_json  TEXT NOT NULL,     -- ScienceCatalog
+            fetched_utc   TEXT NOT NULL
+        );
+
         CREATE TABLE survey_reports (
             id           INTEGER PRIMARY KEY,
             ksp_save     TEXT NOT NULL,

@@ -86,6 +86,7 @@ public sealed class PlannerDatabase
         "survey_reports",
         // Fetched from the running game; kept so the survey works without it.
         "survey_maps",
+        "science_catalogs",
         // Read from the KSP install rather than typed in, but kept so a rebuild doesn't need KSP to be there.
         "ksp_resources",
         "ksp_parts",

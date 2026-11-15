@@ -90,6 +90,7 @@ public partial class App : Application
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 Windows = new TransferWindowsViewModel(bodies, sync),
                 Survey = new SurveyViewModel(survey, sync, link),
+                Science = new ScienceViewModel(new ScienceRepository(database), sync, link),
                 Aerobraking = new AerobrakingViewModel(bodies, sync),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };

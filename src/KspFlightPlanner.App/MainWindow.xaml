@@ -122,6 +122,8 @@
                     <Separator />
                     <MenuItem Header="_Ore survey" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Survey}"
                               ToolTip="A station's engineer maps the ore of the body it orbits" />
+                    <MenuItem Header="_Science" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.Science}"
+                              ToolTip="Where each experiment still pays: science left per biome and situation" />
                     <MenuItem Header="Te_ch tree" Command="{x:Static app:MainCommands.ShowPane}" CommandParameter="{x:Static app:Panes.TechTree}" />
                 </MenuItem>
                 <MenuItem Header="_KSP">

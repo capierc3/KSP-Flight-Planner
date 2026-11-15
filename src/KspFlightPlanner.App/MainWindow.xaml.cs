@@ -91,6 +91,7 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Stations with an engineer surveying the ore of the body they orbit.</summary>
     public required SurveyViewModel Survey { get; init; }
+    public required ScienceViewModel Science { get; init; }
 
     /// <summary>What each pass through a planet's air does to an orbit.</summary>
     public required AerobrakingViewModel Aerobraking { get; init; }

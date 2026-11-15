@@ -222,6 +222,36 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Science_catalog_round_trips_per_save_and_survives_a_rebuild()
+    {
+        _db.ActiveSave = "Protogen";
+        var science = new ScienceRepository(_db);
+        var catalog = Core.Ksp.ScienceCatalogReader.Parse(
+            ["gravityScan	Gravity Scan	20	22	3	51	51	0	0"],
+            ["GravMax	gravityScan"],
+            ["Minmus	5	0	0	0	4	2.5	0	0	1	0	30000	Lowlands|Greater Flats	"],
+            new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc));
+        science.SaveCatalog(catalog);
+
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
+            cmd.ExecuteNonQuery();
+        }
+        TestDb.Release(_path);
+        _db.Initialize();
+
+        var loaded = science.GetCatalog()!;
+        Assert.Equal(catalog.Experiments, loaded.Experiments);
+        Assert.Equal(["gravityScan"], loaded.PartExperiments["GravMax"]);
+        Assert.Equal(["Lowlands", "Greater Flats"], loaded.Body("Minmus")!.Biomes);
+        Assert.Equal(4, loaded.Body("Minmus")!.Multiplier(Core.Ksp.ScienceSituation.InSpaceLow));
+        _db.ActiveSave = "Other";
+        Assert.Null(science.GetCatalog());
+    }
+
+    [Fact]
     public void Survey_data_round_trips_per_save_and_survives_a_rebuild()
     {
         _db.ActiveSave = "Protogen";
