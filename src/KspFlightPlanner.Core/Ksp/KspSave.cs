@@ -164,7 +164,7 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
 
 /// <summary>
 /// CommNet as the save has it: the tracking station's level and the difficulty modifiers on antenna range and on the
-/// tracking station's power (docs/MATH.md §7.7).
+/// tracking station's power (docs/ROCKETS-AND-MISSIONS.md, “Antenna range and signal (CommNet planner)”).
 /// </summary>
 /// <param name="TrackingStationLevel">1 to 3. Career saves record it; sandbox and science saves have every building upgraded.</param>
 public sealed record SavedCommNet(bool Enabled, int TrackingStationLevel, double RangeModifier, double DsnModifier)
@@ -324,7 +324,7 @@ public static class KspSaveReader
             LongitudeDeg = Number(v.GetValue("lon")),
             AltitudeM = Number(v.GetValue("alt")),
             CarriedScience = v.GetNodes("PART").SelectMany(p => p.GetNodes("MODULE")).SelectMany(m => m.GetNodes("ScienceData"))
-                .Select(d => new CarriedScience(d.GetValue("subjectID") ?? "", Number(d.GetValue("data"))))
+                .Select(d => new CarriedScience(d.GetValue("subjectID") ?? "", Number(d.GetValue("data")), d.GetValue("xmit") is { } x ? Number(x) : 1))
                 .Where(c => c.SubjectId.Length > 0 && double.IsFinite(c.Data))
                 .ToList(),
         };

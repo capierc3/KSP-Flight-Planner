@@ -279,9 +279,9 @@ public sealed class SurveyViewModel : ObservableObject
             var biome = map.BiomeOf(i);
             uint color;
             if (!float.IsNaN(coverage.Estimate[i]))
-                color = biome is not null && analysed.Contains((map.BodyName, biome)) ? Heat(map.Abundance[i] / top) : Heat(map.Estimate[i] / top);
+                color = biome is not null && analysed.Contains((map.BodyName, biome)) ? MapColors.Heat(map.Abundance[i] / top) : MapColors.Heat(map.Estimate[i] / top);
             else if (!float.IsNaN(coverage.Rough[i]))
-                color = Dull(Heat(map.Estimate[i] / top));
+                color = MapColors.Dull(MapColors.Heat(map.Estimate[i] / top));
             else
                 color = 0xFF2B2B2B;
             pixels[row * width + column] = color;
@@ -300,21 +300,5 @@ public sealed class SurveyViewModel : ObservableObject
         bitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, width * 4, 0);
         bitmap.Freeze();
         return bitmap;
-    }
-
-    /// <summary>Blue (none) through green and yellow to red (the body's richest).</summary>
-    private static uint Heat(double t)
-    {
-        t = Math.Clamp(t, 0, 1);
-        double r, g, b;
-        if (t < 0.5) { r = 0; g = t * 2; b = 1 - t * 2; }
-        else { r = (t - 0.5) * 2; g = 1 - (t - 0.5) * 2 * 0.6; b = 0; }
-        return 0xFF000000 | (uint)(r * 230 + 25) << 16 | (uint)(g * 200 + 30) << 8 | (uint)(b * 200 + 40);
-    }
-
-    private static uint Dull(uint color)
-    {
-        uint Mix(int shift) => ((((color >> shift) & 0xFF) + 0x50) / 2) << shift;
-        return 0xFF000000 | Mix(16) | Mix(8) | Mix(0);
     }
 }

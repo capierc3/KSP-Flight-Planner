@@ -41,7 +41,10 @@ namespace KspFlightPlanner.Science
             return lines;
         }
 
-        /// <summary>Each part that runs experiments: part name, then its experiment ids joined by commas.</summary>
+        /// <summary>
+        /// Each part that runs experiments: part name, its experiment ids joined by commas, then each one's transmit fraction
+        /// (xmitDataScalar, the best of the part's modules) in the same order.
+        /// </summary>
         [KRPCProcedure]
         public static IList<string> PartExperiments()
         {
@@ -49,9 +52,10 @@ namespace KspFlightPlanner.Science
             foreach (var part in PartLoader.LoadedPartsList)
             {
                 if (part == null || part.partPrefab == null) continue;
-                var ids = part.partPrefab.Modules.OfType<ModuleScienceExperiment>()
-                    .Select(m => m.experimentID).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-                if (ids.Count > 0) lines.Add(Join(part.name, string.Join(",", ids.ToArray())));
+                var modules = part.partPrefab.Modules.OfType<ModuleScienceExperiment>().Where(m => !string.IsNullOrEmpty(m.experimentID)).ToList();
+                var ids = modules.Select(m => m.experimentID).Distinct().ToList();
+                var xmits = ids.Select(id => N(modules.Where(m => m.experimentID == id).Max(m => m.xmitDataScalar))).ToArray();
+                if (ids.Count > 0) lines.Add(Join(part.name, string.Join(",", ids.ToArray()), string.Join(",", xmits)));
             }
             return lines;
         }
@@ -59,7 +63,7 @@ namespace KspFlightPlanner.Science
         /// <summary>
         /// Every body: name, its six situation multipliers (landed, splashed, flying low, flying high, space low, space high),
         /// atmosphere, ocean, solid surface (1/0), flying-high and space-high altitudes in metres, biome names joined by "|",
-        /// mini-biome tags joined by "|".
+        /// mini-biome tags joined by "|", where the atmosphere ends in metres (0 without one).
         /// </summary>
         [KRPCProcedure]
         public static IList<string> Bodies()
@@ -76,7 +80,8 @@ namespace KspFlightPlanner.Science
                     N(v.InSpaceLowDataValue), N(v.InSpaceHighDataValue),
                     b.atmosphere ? "1" : "0", b.ocean ? "1" : "0", b.hasSolidSurface && !b.isStar ? "1" : "0",
                     N(v.flyingAltitudeThreshold), N(v.spaceAltitudeThreshold),
-                    string.Join("|", biomes), string.Join("|", minis)));
+                    string.Join("|", biomes), string.Join("|", minis),
+                    N(b.atmosphere ? b.atmosphereDepth : 0)));
             }
             return lines;
         }
