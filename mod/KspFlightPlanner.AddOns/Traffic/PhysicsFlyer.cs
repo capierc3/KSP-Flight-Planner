@@ -9,7 +9,7 @@ namespace KspFlightPlanner.Traffic
     /// The physics route flyer: flies a route craft for real while it's loaded with physics running near the player, by
     /// writing its controls every physics tick (the input hook kRPC uses to fly ships that aren't the one being flown).
     /// It faces the next burn, and flies the burn itself with the ship's engines: started half its length early, steered
-    /// along the Δv still to go, cut off when that's gone (docs/MATH.md §11.4–11.5). Arrival and docking come next. While
+    /// along the Δv still to go, cut off when that's gone (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: turning the ship" and "The physics flyer: flying a burn"). Arrival and docking come next. While
     /// it flies, the rails flyer waits; the course check runs once the ship is back on rails, and absorbs the small error
     /// a real burn leaves.
     /// </summary>
@@ -69,7 +69,7 @@ namespace KspFlightPlanner.Traffic
         }
 
         /// <summary>
-        /// Station traffic, in physics (docs/MATH.md §11.11): the craft <paramref name="me"/> gives way to at this station,
+        /// Station traffic, in physics (docs/TRAFFIC-CONTROLLER.md, "Station traffic"): the craft <paramref name="me"/> gives way to at this station,
         /// as "name is doing what"; null when the way is clear (its clearance into the keep-out zone). One backing out of
         /// its ports (and climbing out the departure lane) always has the way; then one docking at it; then one that
         /// started coming in to it first (first come, first served). With <paramref name="leavingOnly"/> (it's docking
@@ -741,7 +741,7 @@ namespace KspFlightPlanner.Traffic
             /// Coming in to the port: the speed it wants falls off towards the spot 150 m out so it can always stop there
             /// with the braking it plans on, and the engines make up the difference, pointed along it. While it's only
             /// coasting it faces backwards along its drift, ready to brake: the flip, then the braking burn
-            /// (docs/MATH.md §11.6). Stopped there, the route has arrived, and docking takes over.
+            /// (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: coming in to the station"). Stopped there, the route has arrived, and docking takes over.
             /// </summary>
             private void Approach()
             {
@@ -751,7 +751,7 @@ namespace KspFlightPlanner.Traffic
                     GiveUp(_route.TargetName + " is gone");
                     return;
                 }
-                // Its booked port (§11.14), booked now if it has none yet; with none free, it waits out at the zone's edge.
+                // Its booked port (docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one"), booked now if it has none yet; with none free, it waits out at the zone's edge.
                 if (Time.time >= _route.NextBookTry) PortBooking.Try(_route, Vessel, station);
                 var noPort = _route.BookedPortId == 0;
                 if (!noPort && _route.ApproachPortId != _route.BookedPortId) _route.ApproachPortId = _route.BookedPortId;
@@ -857,7 +857,7 @@ namespace KspFlightPlanner.Traffic
                 _route.ApproachNextCheckUt = double.NaN;
                 _correcting = false;
 
-                // Close in, flown as a pilot flies the last of an intercept (docs/MATH.md §11.6): along the line, brake
+                // Close in, flown as a pilot flies the last of an intercept (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: coming in to the station"): along the line, brake
                 // whenever it's closing over a fifth faster than it wants (about the distance over 30 s, never faster than it
                 // can stop, never faster than it already is); sideways, keep the pass within a tenth of the distance.
                 var los = d > 1e-3 ? -r / d : Vector3d.zero;
@@ -921,7 +921,7 @@ namespace KspFlightPlanner.Traffic
                 Status = head + (_throttle > 0 ? (along < 0 ? "braking" : "correcting") + ", throttle " + (_throttle * 100).ToString("0") + "%" : "turning");
             }
 
-            // ---------------- Leaving (docs/MATH.md §11.8) ----------------
+            // ---------------- Leaving (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: leaving a station") ----------------
 
             /// <summary>How fast it backs away from the station it left (m/s), and how far at least (m).</summary>
             private const double BackOffMs = 1, BackOffM = 30;
@@ -1024,7 +1024,7 @@ namespace KspFlightPlanner.Traffic
                         return;
                     }
                     // At the top: no stopping. It keeps its climbing speed and adds the separation push backwards along the
-                    // orbit (0.5 m/s at a time, §11.8): climbing alone would bring it back to the station an orbit later;
+                    // orbit (0.5 m/s at a time, docs/TRAFFIC-CONTROLLER.md, "The physics flyer: leaving a station"): climbing alone would bring it back to the station an orbit later;
                     // with the push it drifts steadily away. Its path is then checked to stay 100 m clear till its first
                     // burn, pushing again if not, and the plan is checked (and made again) from here.
                     if (_laneExitVel == null) _laneExitVel = rel;
@@ -1118,7 +1118,7 @@ namespace KspFlightPlanner.Traffic
                 Status = "backing off from " + stack.vesselName + ": " + away.ToString("0") + " of " + clear.ToString("0") + " m";
             }
 
-            // ---------------- Docking (docs/MATH.md §11.7) ----------------
+            // ---------------- Docking (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: docking") ----------------
 
             /// <summary>Fastest it moves round the station and out to the port's axis (m/s), and on the final approach.</summary>
             private const double MoveMs = 2, FinalMs = 0.8;
@@ -1146,7 +1146,7 @@ namespace KspFlightPlanner.Traffic
             private Vessel _lastFrame;
             private Vector3 _lastMove;
 
-            // The pilot's safety stop (docs/MATH.md §11.13): what it's stopped for, when it looks again (real time), how
+            // The pilot's safety stop (docs/TRAFFIC-CONTROLLER.md, "The pilot's safety stop"): what it's stopped for, when it looks again (real time), how
             // many looks so far, and whether it has said it's blocked.
             private Vessel _stopFor;
             private float _stopUntil;
@@ -1782,7 +1782,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// Turns a ship to an orientation and holds it, on each axis separately (pitch, roll, yaw in the ship's control
         /// frame): the turn rate it wants falls off as the error closes, so it can always stop in time with the torque it
-        /// has, and the controls make up the difference between that rate and the one it has (docs/MATH.md §11.4).
+        /// has, and the controls make up the difference between that rate and the one it has (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: turning the ship").
         /// </summary>
         private sealed class Attitude
         {

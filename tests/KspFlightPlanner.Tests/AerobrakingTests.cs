@@ -161,7 +161,7 @@ public sealed class AerobrakingTests : IDisposable
 
     /// <summary>
     /// Light drag, no spin: ln(v_in / v_out) ≈ (CdA / 2m) ∫ρ ds, and near periapsis ∫ρ ds ≈ ρ_p √(2π r_p H (1+e)/e) for an
-    /// air thinning by e every H (docs/MATH.md §9.3). The sum the simulator does should land close to that.
+    /// air thinning by e every H (docs/MATH.md §9.2). The sum the simulator does should land close to that.
     /// </summary>
     [Fact]
     public void Light_pass_matches_the_exponential_air_estimate()
@@ -225,7 +225,7 @@ public sealed class AerobrakingTests : IDisposable
         Assert.Equal([30_000, 35_000, 40_000, 45_000, 50_000, 55_000, 60_000, 65_000], Aerobraking.SweepHeights(70_000));
     }
 
-    /// <summary>The worked example in docs/MATH.md §9.3.</summary>
+    /// <summary>The worked example in docs/MATH.md §9.2.</summary>
     [Fact]
     public void Worked_example_mun_return_at_35_km()
     {
@@ -310,7 +310,7 @@ public sealed class AerobrakingTests : IDisposable
         Assert.InRange(engines, 800, 900);
     }
 
-    // ── Flying it (§9.5) ─────────────────────────────────────────────
+    // ── Flying it (§9.4) ─────────────────────────────────────────────
 
     private static FlightSample Reading(double ut, PassPoint p, double massKg, string body = "Kerbin") =>
         new(ut, ut, body, "FLYING", 0, p.AltitudeM, 0, p.Speed, p.VerticalSpeed, double.NaN, double.NaN, 0, 0, 0, 0, 0, massKg, 0, 0, 0, 0, 1);

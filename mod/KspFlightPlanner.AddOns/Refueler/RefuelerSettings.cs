@@ -2,7 +2,7 @@ namespace KspFlightPlanner.Refueler
 {
     /// <summary>
     /// The Refueler's pump rates, per save, in KSP's difficulty settings (section "KSP Flight Planner"): how fast fuel flows
-    /// through each size of docking port, in kg/s. docs/MATH.md §11.9.
+    /// through each size of docking port, in kg/s. docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
     /// </summary>
     public sealed class RefuelerSettings : GameParameters.CustomParameterNode
     {

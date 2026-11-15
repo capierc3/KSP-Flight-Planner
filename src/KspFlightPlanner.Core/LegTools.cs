@@ -107,7 +107,7 @@ public sealed record DeployResult(CelestialBody Body, double AltitudeM, Resonant
 /// <summary>
 /// Tools that belong to a mission's legs. A tool replaces the Δv-map values of the steps it covers with its own result,
 /// keeping the steps themselves (so per-step choices such as aerobraking and phases stay where they were).
-/// See docs/MATH.md §6.2.
+/// See docs/ROCKETS-AND-MISSIONS.md, “Leg tools: replacing map values with a planned leg”.
 /// </summary>
 public static class LegTools
 {

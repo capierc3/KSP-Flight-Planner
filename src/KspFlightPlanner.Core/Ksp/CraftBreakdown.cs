@@ -25,7 +25,7 @@ public sealed record CategoryShare(string? Category, int Count, double DryMassT,
 
 /// <summary>
 /// What a design is made of, beyond its staging Δv (<see cref="StagingSimulation"/>): its parts with mass and cost,
-/// which stage drops each, mass and cost by part category, and things that look wrong (docs/MATH.md §7.5).
+/// which stage drops each, mass and cost by part category, and things that look wrong (docs/ROCKETS-AND-MISSIONS.md, “A design taken apart: mass, cost and what each stage drops”).
 /// </summary>
 /// <param name="FinalMassT">What's left once the last stage has burned.</param>
 /// <param name="WeakestKeptPart">The part with the lowest crash tolerance among those that stay to the end.</param>
@@ -76,7 +76,7 @@ public sealed record CraftBreakdown(
             parts.Sum(p => p.Definition?.CrewCapacity ?? 0), finalMass, weakest, warnings, notes);
     }
 
-    /// <summary>A stage's TWR at the start of its burn on a body's surface (docs/MATH.md §7.4).</summary>
+    /// <summary>A stage's TWR at the start of its burn on a body's surface (docs/MATH.md §7.2).</summary>
     public static double TwrAt(StageResult stage, double surfaceGravity, double surfacePressureAtm) =>
         stage.StartMassT > 0 && surfaceGravity > 0 ? DesignCheck.ThrustAt(stage, surfacePressureAtm) / (stage.StartMassT * surfaceGravity) : 0;
 

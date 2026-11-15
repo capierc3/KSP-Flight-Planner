@@ -4,7 +4,7 @@ namespace KspFlightPlanner.Refueler
 {
     /// <summary>
     /// The Refueler's own part of the save: the player's marks on docked vessels, by name. True for a station tank (its
-    /// fuel is the station's), false for a craft of its own. Vessels without a mark follow the rule (docs/MATH.md §11.9).
+    /// fuel is the station's), false for a craft of its own. Vessels without a mark follow the rule (docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance").
     /// </summary>
     [KSPScenario(ScenarioCreationOptions.AddToAllGames, GameScenes.FLIGHT)]
     public sealed class RefuelerScenario : ScenarioModule

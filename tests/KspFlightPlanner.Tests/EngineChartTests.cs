@@ -2,7 +2,7 @@ using KspFlightPlanner.Core.Ksp;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>Stock engine and tank figures, so each sizing can be checked by hand (docs/MATH.md §7.6).</summary>
+/// <summary>Stock engine and tank figures, so each sizing can be checked by hand (docs/MATH.md §7.3).</summary>
 public sealed class EngineChartTests
 {
     private const double G0 = 9.80665;

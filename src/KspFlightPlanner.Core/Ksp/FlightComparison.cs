@@ -16,7 +16,7 @@ public sealed record FlightFigures(
     double MaxG,
     double? TouchdownSpeed);
 
-/// <summary>A rocket's flights compared: the same figures for each, and which version of the design each flew. docs/MATH.md §8.9.</summary>
+/// <summary>A rocket's flights compared: the same figures for each, and which version of the design each flew. docs/ROCKETS-AND-MISSIONS.md, “Comparing a rocket's flights”.</summary>
 public static class FlightComparison
 {
     /// <summary>Launch masses within this fraction of each other are the same design (fuel loads round, a crew member more or less).</summary>

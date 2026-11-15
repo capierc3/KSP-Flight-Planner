@@ -8,7 +8,7 @@ namespace KspFlightPlanner.Traffic
     /// <summary>
     /// Keeps a route honest between the flyers: checks once when it starts, and again after the ship or its target has been
     /// off rails (physics running, so something may have moved it). A route that would miss goes off course: it pauses,
-    /// time warp stops, and the planner plans it again from where the ship is. docs/MATH.md §11.3.
+    /// time warp stops, and the planner plans it again from where the ship is. docs/MATH.md §10.3.
     /// </summary>
     internal static class CourseCheck
     {
@@ -46,7 +46,7 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>
         /// What the route aims at, as an orbit: the target craft's, or for a trip to an orbit the planned orbit itself
-        /// (docs/MATH.md §11.16). Null when the craft is gone or the body isn't in the game.
+        /// (docs/MATH.md §10.4). Null when the craft is gone or the body isn't in the game.
         /// </summary>
         internal static Orbit GoalOf(Route route) =>
             route.EndsInOrbit ? route.GoalOrbit() : Ships.Find(route.TargetId)?.orbitDriver.orbit;
@@ -74,7 +74,7 @@ namespace KspFlightPlanner.Traffic
         private const double CorrectMaxMs = 60;
 
         /// <summary>
-        /// A course correction (docs/MATH.md §11.3): a burn two minutes from now (or the next burn, if it's sooner than
+        /// A course correction (docs/MATH.md §10.3): a burn two minutes from now (or the next burn, if it's sooner than
         /// that), solved so that, flown as planned from there, the ship is at the target's position at the meeting time:
         /// three unknowns (its prograde, normal and radial Δv) for the three of the miss, by Newton's method with the
         /// slopes measured by nudging each by 0.1 m/s through KSP's own prediction. Then the match at the meeting is set to

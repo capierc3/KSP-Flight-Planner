@@ -9,10 +9,11 @@ How the planner reads KSP's save files and the live game (kRPC): which save is b
 - 3. Docking and undocking
 - 4. Telling docked craft apart
 - 5. Keeping a linked location on its vessel
+- How the numbers are worked out
 
 ## 1. Which save the game is playing
 
-kRPC can't name the save the game has loaded, and the connection stays up when the player loads another one. So the planner works it out, and while the game plays another save than the chosen one it records no flights, ends none, and doesn't lay the live game over the chosen save (Math guide §8.2). A popup offers to switch to the other save.
+kRPC can't name the save the game has loaded, and the connection stays up when the player loads another one. So the planner works it out, and while the game plays another save than the chosen one it records no flights, ends none, and doesn't lay the live game over the chosen save ([Following the live game (kRPC)](#following-the-live-game-krpc)). A popup offers to switch to the other save.
 
 **A save KSP just wrote.** KSP writes the save it's playing a few seconds after loading it and at every scene change (and the one it leaves on going back to the main menu). So every save folder is watched while connected. A save written now is the one being played if:
 
@@ -40,7 +41,7 @@ Worked example (the probe of 2026-10-20, Protogen chosen): loading SandBox, KSP 
 
 ## 2. Which vessel a logged flight is now
 
-A flight is logged under the vessel's name at launch (the *rocket*). Vessels get renamed later — a relay is usually given its final name once it's in its orbit — so the Flight log and the Vessels pane find each flight's vessel in the save by **launch time** instead. KSP stores each vessel's launch time as `lct`; a vessel that splits off another (a relay released from its carrier) gets the moment it split. The log's launch time is the game time less MET at its first sample (Math guide §8.5), which is that same moment. With *launched* = the save's vessels whose launch time is within 2 s of the flight's:
+A flight is logged under the vessel's name at launch (the *rocket*). Vessels get renamed later — a relay is usually given its final name once it's in its orbit — so the Flight log and the Vessels pane find each flight's vessel in the save by **launch time** instead. KSP stores each vessel's launch time as `lct`; a vessel that splits off another (a relay released from its carrier) gets the moment it split. The log's launch time is the game time less MET at its first sample (Math guide §8.3), which is that same moment. With *launched* = the save's vessels whose launch time is within 2 s of the flight's:
 
 ```
 tagged by hand              that vessel (or none, if tagged to none)
@@ -68,7 +69,7 @@ vessel that comes off again              the waiting log carries on, with that v
 
 **Spotting a docking live.** Between two readings (≤ 3 s apart, same stage, off rails) the mass jumps by more than max(20 kg, 0.2 % of the mass): up for a docking, down for an undocking. Burning fuel or mining never moves the mass that fast; a staging changes the stage. The flown vessel vanishing into the one flown next (KSP kept the other) shows as a switch of vessel instead. Either way the next listing of the game's vessels says which: a vessel *gone* is one that was in the listing before, isn't now, and was alongside the kept vessel — same body, semi-major axis within 5 %, inclination within 2° (a rendezvous leaves a few m/s between them, a fraction of a percent in orbit size). The kept vessel must be in both listings, so a quickload (every vessel back with a new id) isn't taken for a docking. A vessel *appeared* alongside after a mass drop is one that came off.
 
-**Finding the flight again.** A flight's launch times are its launch plus, for every undocking of its own vessel, game time − MET of the vessel it came off as. A vessel is the flight's if its game time − MET is within 2 s of any of them (Math guide §8.5, §2). A flight docked into another vessel (or undocked but not seen since) is *away*: it's only picked up by the name it docked as, by a vessel seen first in space or more than a minute after its MET started — a new launch of a rocket with the same name is never taken for it. Samples recorded after an undocking have MET = game time − the log's launch, so the log's clock runs on.
+**Finding the flight again.** A flight's launch times are its launch plus, for every undocking of its own vessel, game time − MET of the vessel it came off as. A vessel is the flight's if its game time − MET is within 2 s of any of them (Math guide §8.3, §2). A flight docked into another vessel (or undocked but not seen since) is *away*: it's only picked up by the name it docked as, by a vessel seen first in space or more than a minute after its MET started — a new launch of a rocket with the same name is never taken for it. Samples recorded after an undocking have MET = game time − the log's launch, so the log's clock runs on.
 
 If KSP hands the kept vessel the docked ship's name on undocking (players report stations renamed after the ship that docked), the flown vessel *is* that ship now: the ship's waiting log carries on with it, and the flight that was being recorded goes with the vessel that came off under its old name.
 
@@ -91,7 +92,7 @@ A docked stack is one vessel in KSP, so the save lists *Kerb Station* with the s
 
 **Craft or station part.** A piece is its own craft when its type is Ship, Lander, Rover or Plane **and** it has a command part (`ModuleCommand`: a pod or probe core) **and** an engine. Everything else (Probe, Relay, Station, Base, Debris, or no command part or engine) is part of the stack. The type decides because a module or fuel tank brought up on its own probe core and engine looks just like a craft otherwise. The player can say otherwise on the piece's page (Vessels: **Counts as**); the say is kept by the piece's name, per save, so it holds when the same shuttle docks again.
 
-A piece takes the stack's orbit and situation (live while connected, Math guide §8.2), with only its own parts: its Δv is what it has once it undocks. Its id is the stack's id and its root part's uid (`<pid>#<uid>`). A linked location whose vessel has gone (it docked, or undocked as a new vessel) is relinked to the vessel it became (§5). A plan made for a docked piece keeps following it after it undocks: KSP keeps the piece's root part as the new vessel's root, so the piece id finds the saved vessel whose root part has that uid (or, docked somewhere else, the piece with that uid). Before KSP saves again, the undocked craft is the live vessel of that name not yet in the save. Fly mode counts it as the flight's own craft when sending burns.
+A piece takes the stack's orbit and situation (live while connected, [Following the live game (kRPC)](#following-the-live-game-krpc)), with only its own parts: its Δv is what it has once it undocks. Its id is the stack's id and its root part's uid (`<pid>#<uid>`). A linked location whose vessel has gone (it docked, or undocked as a new vessel) is relinked to the vessel it became (§5). A plan made for a docked piece keeps following it after it undocks: KSP keeps the piece's root part as the new vessel's root, so the piece id finds the saved vessel whose root part has that uid (or, docked somewhere else, the piece with that uid). Before KSP saves again, the undocked craft is the live vessel of that name not yet in the save. Fly mode counts it as the flight's own craft when sending burns.
 
 Worked example, the Protogen save as read on 2026-10-27: *Kerb Station* (Station) has four docked pieces. *Kerb Shuttle mk1* (Ship: pod, probe core, RK-7 engine, 42 parts) and *Homeward Bound 2* (Ship, 36 parts) are craft. *Kerb Station - Electrical* (Probe, no command part left and no engine, 34 parts) and *Kerbin Station - Fuel Tank* (Probe with a probe core and a Skipper, 61 parts) are station parts: the tank flew itself up, but it's a Probe. *Mun Station* has *Grand Lander* (Lander) docked, a craft.
 
@@ -114,3 +115,64 @@ Worked example (a route craft trip in the Protogen Hauler Test save): *Kerb Shut
 
 - Code: `VesselRelink.Follow` (`Core/Ksp/VesselRelink.cs`), run by `SaveSync.RefreshLinkedLocations` with the previous reading; `DockedCraft.FindVessel`; tested in `VesselRelinkTests`
 - Source: KSP's save format (`VESSEL` `pid`/`root`, `PART` `uid`), and the add-on's `RailsDocking.Undock`
+
+## How the numbers are worked out
+
+Reading orbits from a save and from the live game. The orbital mechanics is in the Math guide (docs/MATH.md).
+
+### Importing vessels from a KSP save
+
+KSP stores every vessel's orbit in the save (`saves/<name>/persistent.sfs`) as an `ORBIT` block with the same Keplerian elements a placed custom location uses — so importing is a unit conversion, not an orbit fit:
+
+```
+SMA  semi-major axis a (m, from the body's centre)     ECC  eccentricity e
+INC  inclination (°)    LAN  Ω (°)    LPE  argument of periapsis ω (°)
+MNA  mean anomaly M at the epoch (radians)    EPH  epoch (UT seconds)    IDENT / REF  the body orbited
+
+periapsis altitude = a(1 − e) − R        apoapsis altitude = a(1 + e) − R        (R = body's equatorial radius)
+mean anomaly (°)   = MNA × 180/π,  wrapped into 0–360°  (Ω and ω are wrapped the same way)
+date of position   = EPH
+```
+
+From there the location moves exactly like the vessel: Kepler's equation (Math guide §1.4) from M at EPH. Only `ORBITING` vessels with e < 1 import; landed, sub-orbital and escaping vessels don't have an orbit to place. When KSP writes the save again, a linked location's orbit and position are replaced by the new values (name, description and images are kept).
+
+Worked example — the relay "KerbLink Mk2 A" around Kerbin (R = 600,000 m):
+
+1. SMA = 3,470,794.97 m, ECC = 0.0027130 → a·e = **9,416.3 m**
+2. Periapsis = 3,470,794.97 − 9,416.3 − 600,000 = **2,861,378.7 m** (2,861.4 km); apoapsis = 3,470,794.97 + 9,416.3 − 600,000 = **2,880,211.2 m** (2,880.2 km)
+3. MNA = 4.0125185 rad × 57.29578 = **229.900°** at EPH = 816,532.3 s (Year 1, Day 38)
+4. INC 0.560°, LAN 281.711°, LPE 160.828° are copied as they are
+
+- Code: `KspSaveReader.Parse`, `SaveImport.Convert`, `SaveImport.Refresh`; tested in `KspSaveTests`
+- Source: KSP 1.12 save format (`ORBIT` node written by `OrbitSnapshot`); Curtis 4.4 (orbital elements)
+
+### Following the live game (kRPC)
+
+While connected to the game (*KSP › Connect to KSP*), the planner reads the game time every 2 s and, in flight, every vessel's orbit every 10 s (both set in *Settings › Live connection*). kRPC answers one call per game frame or so, so the game-time read (scene, time, the flown craft's nodes: about 5 + 4 per node calls) takes a few frames, while the vessel read (about 14 calls per vessel) grows with the vessel and debris count. Hover the KSP status in the main window to see how long the last of each took. kRPC reports the same elements as the save, in radians: a, e, i, Ω, ω, M at epoch and the epoch. So a live orbit is the save's `ORBIT` block ([Importing vessels from a KSP save](#importing-vessels-from-a-ksp-save)) with i, Ω and ω × 180/π.
+
+**Which save vessel is it?** kRPC has no vessel ids, so live vessels are paired with save vessels by name. A different type adds 100 to the score. Among same-named vessels, the closest orbit wins:
+
+```
+score = |ln(a₁/a₂)| + |e₁ − e₂| + |i₁ − i₂|/180°        (+10 if they orbit different bodies)
+```
+
+**Has the orbit really changed?** KSP restates a coasting craft's orbit at a new epoch, so the numbers change while the path doesn't. Two statements are the same path when a, e and i agree, and the craft is in the same place at the same time *t*. The angles that are undefined for circular or equatorial orbits are compared through the combinations that stay defined:
+
+```
+n = √(μ / a³)                                  mean motion (rad/s)
+ϖ = Ω + ω                                      longitude of periapsis (Ω skipped if i ≈ 0, ϖ skipped if e ≈ 0)
+L(t) = ϖ + M₀ + n·(t − epoch)                  mean longitude: where the craft is along the orbit at t
+same path ⇔ |Δa|/a, |Δe|, |Δi|, |ΔΩ|, |Δϖ|, |ΔL(t)| all ≤ 10⁻⁵   (angles in radians, wrapped to ±π)
+```
+
+10⁻⁵ rad is about 10 m per 1,000 km of orbit radius. That's more than a coasting craft's jitter under physics, and far less than any burn. Only a real change re-plans the Rendezvous pane and moves linked custom locations. Otherwise only the game time moves the plan's start, once per 60 s of game time.
+
+Worked example: "KerbLink Mk2 A" (a = 3,470,794.97 m, M₀ = 4.0125185 rad at epoch 816,532.3 s), restated by KSP 1,000 s later:
+
+1. n = √(3.5316×10¹² / 3,470,794.97³) = **0.000290631 rad/s** (period 21,619 s)
+2. The restated orbit has M₀′ = 4.0125185 + 0.000290631 × 1,000 = **4.3031497 rad** at epoch 817,532.3 s
+3. At any t, L(t) − L′(t) = (4.0125185 + n·(t − 816,532.3)) − (4.3031497 + n·(t − 817,532.3)) = 0, so it's the same path: nothing re-plans
+4. Had the craft been 0.01 rad (35 km) further along, |ΔL| = 0.01 > 10⁻⁵, so it counts as changed
+
+- Code: `LiveMerge.Apply`, `LiveMerge.SamePath` (`Core/Ksp/LiveGame.cs`), read by `KspLink.ReadVessels`, laid over the save by `SaveSync.ApplyLive`; tested in `LiveGameTests`
+- Source: kRPC SpaceCenter API (`Orbit` class); mean longitude as in Murray & Dermott, *Solar System Dynamics* 2.9; Curtis 3.4 (mean motion)

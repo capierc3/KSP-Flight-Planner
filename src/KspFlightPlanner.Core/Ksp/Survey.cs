@@ -77,7 +77,7 @@ public sealed record SurveyReading(double Ut, string BodyName, OrbitalElements O
 
 /// <summary>
 /// Which parts of the surface each survey level has covered, and when: the game time each grid point was first under a
-/// station's strip. docs/SURVEY.md, docs/MATH.md §10.
+/// station's strip. docs/SURVEY.md ("How the numbers are worked out").
 /// </summary>
 public sealed class SurveyCoverage
 {

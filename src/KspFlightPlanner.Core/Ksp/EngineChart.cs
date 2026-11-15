@@ -36,7 +36,7 @@ public sealed record EngineOption(KspPart Engine, PartEngine Mode, int Count, bo
 
 /// <summary>
 /// The engine chart: for a payload and the Δv it needs, the lightest (or cheapest) stage each engine makes, and which
-/// engine wins (docs/MATH.md §7.6). Liquid engines get as much tankage as they need (tank dry mass from the best
+/// engine wins (docs/MATH.md §7.3). Liquid engines get as much tankage as they need (tank dry mass from the best
 /// tank for their propellant); solid boosters come with their fuel, so only their number can change.
 /// </summary>
 public sealed class EngineChart
@@ -112,7 +112,7 @@ public sealed class EngineChart
         return best;
     }
 
-    /// <summary>Thrust at a pressure (§7.4): vacuum thrust, falling with Isp as pressure rises; never below 0.</summary>
+    /// <summary>Thrust at a pressure (§7.2): vacuum thrust, falling with Isp as pressure rises; never below 0.</summary>
     public static double ThrustAt(PartEngine mode, double pressureAtm)
     {
         var seaLevel = mode.MaxThrustKn * mode.IspSeaLevelS / mode.IspVacuumS;
@@ -128,7 +128,7 @@ public sealed class EngineChart
         return best;
     }
 
-    /// <summary>n engines of a kind sized for the need (§7.6), or null if they can't give the Δv.</summary>
+    /// <summary>n engines of a kind sized for the need (§7.3), or null if they can't give the Δv.</summary>
     private static EngineOption? Size(Candidate c, int n, StageNeed need)
     {
         var ve = c.Mode.IspVacuumS * VesselAnalysis.G0;

@@ -6,7 +6,7 @@ namespace KspFlightPlanner.Traffic
     /// <summary>
     /// Which route craft may dock at this port: a right-click setting on every docking port (added by the add-on's
     /// ModuleManager patch, TrafficPorts.cfg), saved with the part. Route craft pick only ports open to their role
-    /// (docs/MATH.md §11.15). The player can always dock by hand.
+    /// (docs/TRAFFIC-CONTROLLER.md, "Which route craft may use a port"). The player can always dock by hand.
     /// </summary>
     public sealed class ModuleTrafficPort : PartModule
     {
@@ -31,7 +31,7 @@ namespace KspFlightPlanner.Traffic
         public string role = CrewSupplies;
     }
 
-    /// <summary>Reading the port and role settings, from loaded parts or saved ones (docs/MATH.md §11.15).</summary>
+    /// <summary>Reading the port and role settings, from loaded parts or saved ones (docs/TRAFFIC-CONTROLLER.md, "Which route craft may use a port").</summary>
     internal static class PortAccess
     {
         /// <summary>A port with this setting is open to a route craft with this role.</summary>

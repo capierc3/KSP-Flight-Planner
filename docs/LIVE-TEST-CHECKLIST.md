@@ -318,7 +318,7 @@ Notes:
 
 ## 10f. Fly a whole mission ⚠ new
 
-A mission Kerbin surface → Minmus surface (with a landing spot) → Kerbin surface, saved. See docs/MATH.md §8.12.
+A mission Kerbin surface → Minmus surface (with a landing spot) → Kerbin surface, saved. See [ROCKETS-AND-MISSIONS.md “Flying a whole mission”](ROCKETS-AND-MISSIONS.md#flying-a-whole-mission).
 
 - [ ] Plan mode: **Fly this mission** on the Mission pane (or **Fly** in Saved missions) → Fly mode opens the Flight pane with
       six steps: Launch to 80 km, Go to Minmus, Land at …, Launch to 10 km around Minmus, Go to Kerbin straight into the

@@ -5,7 +5,7 @@ using System.Linq;
 namespace KspFlightPlanner.PowerHeat
 {
     /// <summary>
-    /// A craft's charge through a day and a night, and its core heat against its radiators (MATH.md §13.3–13.4). The same
+    /// A craft's charge through a day and a night, and its core heat against its radiators (docs/POWER-AND-HEAT.md, "Charge through the night" and "Core heat and radiators"). The same
     /// sums serve the editor (what-if switches, a chosen place) and the Station window (what's on now, where it is now).
     /// </summary>
     internal sealed class PowerBudget

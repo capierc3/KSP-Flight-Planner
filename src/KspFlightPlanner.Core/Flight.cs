@@ -146,7 +146,7 @@ public sealed record Flight
         return orbit;
     }
 
-    /// <summary>Distance at <paramref name="ut"/> between the craft (on <paramref name="actual"/>) and where the plan has it. docs/MATH.md §8.3.</summary>
+    /// <summary>Distance at <paramref name="ut"/> between the craft (on <paramref name="actual"/>) and where the plan has it. docs/MATH.md §8.1.</summary>
     public double? DriftM(OrbitalElements actual, double ut, double mu) =>
         PlannedOrbitAt(ut, mu) is { } planned
             ? (Kepler.StateAt(actual, mu, ut).Position - Kepler.StateAt(planned, mu, ut).Position).Length

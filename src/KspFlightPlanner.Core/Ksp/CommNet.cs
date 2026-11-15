@@ -4,7 +4,7 @@ namespace KspFlightPlanner.Core.Ksp;
 
 /// <summary>
 /// KSP's CommNet: how a vessel's antennas add up, how far two of them can talk, how strong the signal is at a
-/// distance, and how far each body gets from home (docs/MATH.md §7.7).
+/// distance, and how far each body gets from home (docs/ROCKETS-AND-MISSIONS.md, “Antenna range and signal (CommNet planner)”).
 /// </summary>
 public static class CommNet
 {

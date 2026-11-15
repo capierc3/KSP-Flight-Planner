@@ -13,7 +13,7 @@ public sealed record PowerSituation(string Where, double SunDistanceM, double Ni
 /// <param name="IsOn">Counted in the budget (loads switched off, fuel cells left off, aren't).</param>
 public sealed record PowerLine(string Title, string Kind, int Count, double EcPerSecond, bool Makes, bool IsOn, bool InSunOnly);
 
-/// <summary>A craft's power over its longest night and the day that follows (docs/MATH.md §7.8).</summary>
+/// <summary>A craft's power over its longest night and the day that follows (docs/POWER-AND-HEAT.md, “Power through the longest night (power budget)”).</summary>
 /// <param name="MadeInSunEcS">Solar panels (at this distance) plus generators and fuel cells.</param>
 /// <param name="MadeInDarkEcS">Generators, plus fuel cells up to what they can make.</param>
 /// <param name="BatteryNeededEc">What the batteries must hold to last the night.</param>
@@ -42,7 +42,7 @@ public sealed record PowerBudgetResult(
 
 /// <summary>
 /// Electric charge on a craft: what its panels, generators and fuel cells make, what its parts use, and whether
-/// its batteries see it through the longest night (docs/MATH.md §7.8).
+/// its batteries see it through the longest night (docs/POWER-AND-HEAT.md, “Power through the longest night (power budget)”).
 /// </summary>
 public static class PowerBudget
 {

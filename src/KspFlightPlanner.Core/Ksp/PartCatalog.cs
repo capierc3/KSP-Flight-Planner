@@ -42,7 +42,7 @@ public sealed record PartEngine(string? EngineId, double MaxThrustKn, double Isp
 /// <summary>An antenna: DIRECT/RELAY/INTERNAL, its power (range rating, metres) and whether several combine.</summary>
 public sealed record PartAntenna(string Type, double Power, bool Combinable, double CombinableExponent);
 
-/// <summary>What a part does with electric charge (docs/MATH.md §7.8).</summary>
+/// <summary>What a part does with electric charge (docs/POWER-AND-HEAT.md, “Power through the longest night (power budget)”).</summary>
 public enum PowerKind
 {
     /// <summary>A solar panel: its rate is at Kerbin's distance from the Sun, facing it.</summary>

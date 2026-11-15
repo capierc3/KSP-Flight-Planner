@@ -65,7 +65,7 @@ namespace KspFlightPlanner.Traffic
         /// A trip to an orbit round a body instead of to a craft (TargetId 0): the planned orbit after the last burn, in KSP's
         /// own elements (degrees, mean anomaly in radians, its epoch). It stands in for the target: the checks and course
         /// corrections aim the ship at where this orbit puts it at <see cref="MeetUt"/> (the last burn's time), and the last
-        /// burn is the "match" onto it. docs/MATH.md §11.16.
+        /// burn is the "match" onto it. docs/MATH.md §10.4.
         /// </summary>
         public string GoalBody = "";
         public double GoalSma, GoalEcc, GoalInc, GoalLan, GoalArgPe, GoalMeanAnomaly, GoalEpoch;
@@ -100,7 +100,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>What it carries (<see cref="ModuleTrafficRole"/>: crew & supplies, or tanker), read from its command parts when the route starts: the ports it may use.</summary>
         public string Role = ModuleTrafficRole.CrewSupplies;
 
-        /// <summary>The station port booked for it (part persistent id; 0 = none yet): docs/MATH.md §11.14.</summary>
+        /// <summary>The station port booked for it (part persistent id; 0 = none yet): docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one".</summary>
         public uint BookedPortId;
 
         /// <summary>Waiting for a free port since (game time), and whether it has said it's been a day.</summary>

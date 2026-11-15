@@ -12,7 +12,7 @@ namespace KspFlightPlanner.Refueler
     /// you're flying it lists each docked vessel with a tick for "station tank" (whose fuel is the station's), and moves
     /// fuel between one docked craft and those station tanks, either way, started and stopped by hand. Other craft docked
     /// at the station are left alone. Unloading stops by itself when the craft is down to the Δv you said to keep.
-    /// docs/MATH.md §11.9.
+    /// docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public sealed class RefuelerPanel : MonoBehaviour
@@ -96,7 +96,7 @@ namespace KspFlightPlanner.Refueler
         /// <summary>
         /// The pump runs here, every frame, by game time: each frame it moves the port's flow (kg/s) times the game time since
         /// the last, so it keeps pumping through time warp (the stack's tanks change even while it's packed) and an hour's
-        /// fill passes in seconds at 100×. docs/MATH.md §11.9.
+        /// fill passes in seconds at 100×. docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
         /// </summary>
         private void Update()
         {

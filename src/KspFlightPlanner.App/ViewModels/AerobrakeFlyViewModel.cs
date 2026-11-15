@@ -12,7 +12,7 @@ namespace KspFlightPlanner.App.ViewModels;
 public sealed record FlownPassRow(string Number, string Predicted, string Actual, string Drag, string SpeedLost, string PeakG);
 
 /// <summary>
-/// From here's Aerobrake action (docs/MATH.md §9.5): picks the periapsis for the next pass from the craft's live orbit,
+/// From here's Aerobrake action (docs/MATH.md §9.4): picks the periapsis for the next pass from the craft's live orbit,
 /// follows each pass from the game's readings (height, speed, g, where it'll leave the air), and measures the drag against
 /// the model so the next pass is planned with the drag as it really is.
 /// </summary>

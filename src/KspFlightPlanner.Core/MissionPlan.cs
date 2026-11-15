@@ -72,7 +72,7 @@ public static class MissionPlanner
 
     /// <summary>
     /// Flies "craft → low orbit → craft" around one body as one leg. The map reaches a craft only through its body's low
-    /// orbit, but going from one craft to the next you never stop there: the leg is a rendezvous (§6.5), so a low orbit
+    /// orbit, but going from one craft to the next you never stop there: the leg is a rendezvous (§6.4), so a low orbit
     /// in the middle would read like a stop the mission makes. <paramref name="isCraft"/> picks the craft.
     /// </summary>
     public static IReadOnlyList<RouteSegment> CombineCraftHops(IReadOnlyList<RouteSegment> segments, Func<DvMapNode, bool> isCraft) =>

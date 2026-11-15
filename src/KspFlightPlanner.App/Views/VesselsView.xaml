@@ -118,7 +118,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                               Text="Stage numbers as in KSP (the first to fire is the highest). Stages without Δv are left out. How it's worked out: Math guide §7.2." />
+                               Text="Stage numbers as in KSP (the first to fire is the highest). Stages without Δv are left out. How it's worked out: ROCKETS-AND-MISSIONS.md (“A saved design's stage-by-stage Δv”)." />
                 </StackPanel>
 
                 <ContentControl Content="{Binding Notes}" ContentTemplate="{StaticResource NoteBox}"

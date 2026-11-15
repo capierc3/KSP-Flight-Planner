@@ -11,10 +11,10 @@ public sealed record PitchPoint(double MetS, double AltitudeM, double PitchDeg, 
 
 /// <summary>
 /// How the climb to orbit went, read from the flight's samples: how much was lost to pointing off prograde, when the
-/// turn started and reached 45°, the launch TWR, and advice. docs/MATH.md §8.10.
+/// turn started and reached 45°, the launch TWR, and advice. docs/MATH.md §8.7.
 /// </summary>
 /// <param name="SteeringLoss">Δv lost to thrust not along the path: ∫ (F/m)·(1 − cos δ) dt, δ = pitch − climb angle.</param>
-/// <param name="DragLoss">The rest of drag &amp; steering (§8.6) once steering is taken out (never below 0).</param>
+/// <param name="DragLoss">The rest of drag &amp; steering (§8.4) once steering is taken out (never below 0).</param>
 /// <param name="MeanOffPrograde">Average pitch − climb angle while in thick air (q ≥ 1 kPa), degrees; positive is above prograde.</param>
 /// <param name="HasPitch">The flight's pitch was recorded against the horizon (older logs: the pitch figures are null).</param>
 public sealed record AscentDiagnosis(
@@ -30,7 +30,7 @@ public sealed record AscentDiagnosis(
 
 public static class AscentCoach
 {
-    // Rules of thumb for KSP ascents from Kerbin-like bodies (docs/MATH.md §8.10).
+    // Rules of thumb for KSP ascents from Kerbin-like bodies (docs/MATH.md §8.7).
     public const double LowTwr = 1.25, HighTwr = 2.2;
     public const double LateTurnSpeed = 120, EarlyTurnSpeed = 20;
     public const double Late45M = 15_000, Early45M = 5_000;
@@ -45,7 +45,7 @@ public static class AscentCoach
     public static double ProgradePitch(FlightSample s) =>
         Math.Asin(Math.Clamp(s.VerticalSpeed / Math.Max(1, s.SurfaceSpeed), -1, 1)) * 180 / Math.PI;
 
-    /// <summary>The ascent's samples: from the launch to the sample in orbit (§8.6).</summary>
+    /// <summary>The ascent's samples: from the launch to the sample in orbit (§8.4).</summary>
     public static IReadOnlyList<FlightSample> AscentSamples(FlightLog log, AscentReport ascent) =>
         log.Samples.TakeWhile(s => s.MetS <= ascent.EndMetS).ToList();
 

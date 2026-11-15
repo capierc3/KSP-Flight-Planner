@@ -13,7 +13,7 @@ namespace KspFlightPlanner.KerbinResources
     /// ends it, and the flight is logged with whoever is aboard. Of the two halves at an undocking or a docking, the
     /// lighter one is taken as the craft travelling and the heavier as the place (a shuttle leaving a station, not the
     /// station leaving the shuttle). Traffic Controller's route craft are left to Traffic Controller while a route flies
-    /// them: it logs their flights itself, docked on rails or not (<see cref="LoggedElsewhere"/>). docs/MATH.md §11.12.
+    /// them: it logs their flights itself, docked on rails or not (<see cref="LoggedElsewhere"/>). docs/TRAFFIC-CONTROLLER.md, "Crew rules and the flight log".
     /// </summary>
     [KSPScenario(ScenarioCreationOptions.AddToAllGames, GameScenes.FLIGHT, GameScenes.TRACKSTATION, GameScenes.SPACECENTER)]
     public sealed class KerbinResourcesScenario : ScenarioModule

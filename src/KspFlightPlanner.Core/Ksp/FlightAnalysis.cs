@@ -5,7 +5,7 @@ namespace KspFlightPlanner.Core.Ksp;
 /// <summary>One stretch with the engines running.</summary>
 public sealed record FlightBurnRecord(double StartMetS, double DurationS, double DeltaV, string Body, int FirstStage, int LastStage);
 
-/// <summary>How the climb to orbit went. Speeds are orbital (against the stars). docs/MATH.md §8.6.</summary>
+/// <summary>How the climb to orbit went. Speeds are orbital (against the stars). docs/MATH.md §8.4.</summary>
 /// <param name="ReachedOrbit">False when the flight never got into orbit: the figures then run to the end of the log.</param>
 /// <param name="EndMetS">When the craft got into orbit (KSP's ORBITING: periapsis above the air).</param>
 /// <param name="SpeedGained">Orbital speed at the end − at the launch (the pad already moves with the planet's spin).</param>
@@ -174,7 +174,7 @@ public static class FlightAnalysis
     /// out from the orbit with Kepler's equation. On rails the craft follows its orbit exactly; only a change of sphere of
     /// influence changes it, so a gap that crosses one is filled forward from the sample before it until the craft leaves
     /// the old body's sphere, and back from the sample after it until it entered the new one. Gaps where the mass changed
-    /// (a burn while not recorded), in the air or on the ground aren't filled. docs/MATH.md §8.7.
+    /// (a burn while not recorded), in the air or on the ground aren't filled. docs/MATH.md §8.5.
     /// </summary>
     public static IReadOnlyList<FilledPoint> FillGaps(IReadOnlyList<FlightSample> s, Func<string, CelestialBody?> body,
         Func<CelestialBody, CelestialBody?>? parent = null)

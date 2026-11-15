@@ -744,7 +744,7 @@ public sealed class FromHereViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Aerobrake: the next step from the orbit now (§9.5), and the burn (or, finishing into a target orbit, the two) for it.
+    /// Aerobrake: the next step from the orbit now (§9.4), and the burn (or, finishing into a target orbit, the two) for it.
     /// </summary>
     private async Task PlanAerobrakeAsync(CelestialBody body, OrbitalElements orbit, double now)
     {
@@ -801,7 +801,7 @@ public sealed class FromHereViewModel : ObservableObject
             IReadOnlyList<TripOption> options;
             if (double.IsNaN(height))
             {
-                // Aerobraking there (docs/MATH.md §9.6): plan to a first guess in the air, take the path it arrives on, let
+                // Aerobraking there (docs/MATH.md §9.5): plan to a first guess in the air, take the path it arrives on, let
                 // the aim pick the periapsis for the first pass, and plan again to that.
                 var guess = TransferFlights.AerobrakeFraction * to.AtmosphereHeightM;
                 options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, guess, bodies, inclination));

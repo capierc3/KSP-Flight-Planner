@@ -9,7 +9,7 @@ public sealed record RestPlan(IReadOnlyList<FlightBurn> Burns, IReadOnlyList<Fli
 /// Re-planning the rest of a rendezvous leg once some of it has been flown, keeping its steps: the burns already flown
 /// stay, any still to come before the last one stay as planned, and the last burn before the meeting is solved again
 /// from the craft's real orbit. On the coast after the transfer, a course correction is added. The meeting time may
-/// move a little, to keep clear of the 180° transfer. docs/MATH.md §8.4.
+/// move a little, to keep clear of the 180° transfer. docs/MATH.md §8.2.
 /// </summary>
 public static class FlightReplan
 {

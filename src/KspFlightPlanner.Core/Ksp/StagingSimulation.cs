@@ -20,7 +20,7 @@ public sealed record StageResult(
     public IReadOnlyDictionary<string, double> Burned { get; init; } = new Dictionary<string, double>();
 }
 
-/// <summary>Everything worked out for a saved design (docs/MATH.md §7.2).</summary>
+/// <summary>Everything worked out for a saved design (docs/ROCKETS-AND-MISSIONS.md, “A saved design's stage-by-stage Δv”).</summary>
 /// <param name="LaunchMassT">Mass when the first stage lights (launch clamps excluded, as KSP does).</param>
 public sealed record DesignReport(
     string Name,

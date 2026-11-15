@@ -360,7 +360,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// Just undocked for a trip: every engine on it lit (at zero throttle) and its RCS thrusters and RCS switched on,
         /// so the autopilot, or a player who takes over mid-trip, finds it ready to fly. Docking shut them down. The
-        /// thrust limiters are left as they are. Returns what it did, for the log. docs/MATH.md §11.8.
+        /// thrust limiters are left as they are. Returns what it did, for the log. docs/TRAFFIC-CONTROLLER.md, "The physics flyer: leaving a station".
         /// </summary>
         public static string ReadyToFly(Vessel v)
         {
@@ -684,7 +684,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// The Δv the ship can still make with its main engine kind, in vacuum, from the fuel it has: as many full sets of
         /// the engine's propellants (in its ratio) as the scarcest one allows, burnt off its whole mass (rocket equation).
-        /// Zero with no engine or fuel. docs/MATH.md §11.2.
+        /// Zero with no engine or fuel. docs/MATH.md §10.2.
         /// </summary>
         public static double DeltaVLeft(Vessel v, out Engine engine)
         {

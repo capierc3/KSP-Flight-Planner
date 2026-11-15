@@ -30,7 +30,7 @@ public sealed record AerobrakeSuggestion(double PeriapsisM, int? StopAfterPass, 
 }
 
 /// <summary>
-/// Picks a periapsis for an aim (docs/MATH.md §9.4). Every choice allows for the drag being 30% more than worked out:
+/// Picks a periapsis for an aim (docs/MATH.md §9.3). Every choice allows for the drag being 30% more than worked out:
 /// each pass, flown from the orbit the passes before it leave, must still come back out with that much more. (Pass by
 /// pass, not all at once: you see each pass's real result, and can nudge the periapsis before the next.)
 /// </summary>

@@ -459,7 +459,7 @@ public sealed class FlightLogRecorder
     };
 }
 
-/// <summary>Δv spent between samples. docs/MATH.md §8.5.</summary>
+/// <summary>Δv spent between samples. docs/MATH.md §8.3.</summary>
 public static class FlightLogMath
 {
     /// <summary>
@@ -514,7 +514,7 @@ public static class FlightLogs
     /// it's really around), and that orbit never moves again. Two signs: the orbit puts the craft at another distance from
     /// the body's centre than its altitude does, or game time moved on and the mean anomaly didn't. On rails the readings
     /// can be from different moments, and on the pad the craft isn't going anywhere, so those aren't judged.
-    /// docs/MATH.md §8.5.
+    /// docs/MATH.md §8.3.
     /// </summary>
     /// <param name="previous">The reading before, from the same streams (null for the first).</param>
     /// <param name="bodyRadiusM">The radius of the body the streams were opened against.</param>

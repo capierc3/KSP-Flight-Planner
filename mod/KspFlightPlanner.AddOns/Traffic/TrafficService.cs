@@ -29,7 +29,7 @@ namespace KspFlightPlanner.Traffic
         /// craft: no meeting, no port, no docking; once the last burn (the capture) is made, it's there. <paramref name="burns"/>
         /// and <paramref name="titles"/> as for <see cref="StartRoute"/>. <paramref name="orbit"/> is the planned orbit after the
         /// last burn as seven numbers, KSP's own elements: semi-major axis (m), eccentricity, inclination, LAN and argument of
-        /// periapsis (degrees), mean anomaly at epoch (radians), epoch (s). docs/MATH.md §11.16.
+        /// periapsis (degrees), mean anomaly at epoch (radians), epoch (s). docs/MATH.md §10.4.
         /// </summary>
         [KRPCProcedure]
         public static string StartOrbitRoute(string vessel, string body, IList<double> burns, IList<string> titles, IList<double> orbit, string way) =>
@@ -90,7 +90,7 @@ namespace KspFlightPlanner.Traffic
                 });
             route.Burns.Sort((a, b) => a.Ut.CompareTo(b.Ut));
 
-            // A trip to an orbit: the planned orbit stands in for the target, reached at the last burn (§11.16).
+            // A trip to an orbit: the planned orbit stands in for the target, reached at the last burn (docs/MATH.md §10.4).
             Orbit to;
             if (toOrbit)
             {
@@ -175,13 +175,13 @@ namespace KspFlightPlanner.Traffic
                 throw new ArgumentException(vessel + " has " + have.ToString("0") + " m/s of fuel; this trip needs " + need.ToString("0") + " m/s (" +
                                             needWithMargin.ToString("0") + " with the margin for real burns): refuel it or plan a cheaper trip.");
 
-            // What it carries, from its own command parts (a docked craft's, not its stack's): the ports it may use (§11.15).
+            // What it carries, from its own command parts (a docked craft's, not its stack's): the ports it may use (docs/TRAFFIC-CONTROLLER.md, "Which route craft may use a port").
             route.Role = dockedPort != null ? PortAccess.RoleOf(Ships.DockedCraftParts(dockedPort))
                 : railsStack != null ? RailsDocking.CraftRole(railsStack, vessel)
                 : PortAccess.RoleOf(ship);
 
             // A short trip (meeting within the hour) books its port before it undocks, and stays docked without one: the
-            // station it's going to will look much the same when it gets there (docs/MATH.md §11.14). A long trip books on
+            // station it's going to will look much the same when it gets there (docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one"). A long trip books on
             // the way in.
             if (!toOrbit && docked && meetUt - now <= PortBooking.BookLeadS)
             {
@@ -256,7 +256,7 @@ namespace KspFlightPlanner.Traffic
                 // planned times, every burn would come a little further round the body than planned, turning the whole
                 // path a hair; over a days-long trip that missed by km (6.5 km Mun → Kerbin, 87 km Minmus → Mun, 2026-11-07)
                 // and called it off course. Its burns come that moment sooner instead, so it flies the planned path
-                // itself (docs/MATH.md §11.10).
+                // itself (docs/TRAFFIC-CONTROLLER.md, "Docking and undocking on rails").
                 var lead = RailsDocking.UndockLeadS(ship.orbitDriver.orbit);
                 foreach (var b in route.Burns) b.Ut -= lead;
                 route.Log.Add("Undocked from " + stationName + " on rails; engines lit, RCS on; burns brought " + lead.ToString("0.00") + " s forward for the " +

@@ -33,7 +33,7 @@ namespace KspFlightPlanner.Refueler
     /// station's fuel is the pieces of the stack marked as station parts (its tanks, its core), never the other craft
     /// docked there. Liquid fuel, oxidizer and monopropellant, taken from every unlocked tank in proportion to what each
     /// holds and put into every unlocked tank in proportion to its free room. A real transfer: nothing is made or lost.
-    /// docs/MATH.md §11.9.
+    /// docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
     /// </summary>
     internal static class FuelTransfer
     {
@@ -123,7 +123,7 @@ namespace KspFlightPlanner.Refueler
         /// <summary>
         /// The pump's flow through the docking port a craft is joined by (kg/s), and a name for that port. Set by the port's
         /// size, from its node type: Junior (size0), standard (size1, and anything not otherwise known) or Senior (size2
-        /// and up). The rates are the Refueler's settings. docs/MATH.md §11.9.
+        /// and up). The rates are the Refueler's settings. docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
         /// </summary>
         internal static double PumpKgS(StackPiece piece, out string through)
         {

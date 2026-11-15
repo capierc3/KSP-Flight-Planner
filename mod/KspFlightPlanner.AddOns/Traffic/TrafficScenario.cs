@@ -38,7 +38,7 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>
         /// Puts a finished route on Kerbin Resources' flight log, once, with the kerbals aboard when it started (docs/MATH.md
-        /// §11.12). Any trip Kerbin Resources had open for the craft (it saw it undock) is dropped: this is that trip.
+        /// docs/TRAFFIC-CONTROLLER.md, "Crew rules and the flight log"). Any trip Kerbin Resources had open for the craft (it saw it undock) is dropped: this is that trip.
         /// </summary>
         private static void Credit(Route route)
         {
@@ -71,9 +71,9 @@ namespace KspFlightPlanner.Traffic
                 (r.State == RouteState.Flying || r.State == RouteState.Arrived || r.State == RouteState.Approaching || r.State == RouteState.Waiting));
 
         /// <summary>
-        /// Station ports other route craft have claimed (part persistent ids): the one each has booked (§11.14), the one each is
+        /// Station ports other route craft have claimed (part persistent ids): the one each has booked (docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one"), the one each is
         /// coming in to or docking at, and the one each has just left while it backs off. A route craft picks a port no other
-        /// has (docs/MATH.md §11.11).
+        /// has (docs/TRAFFIC-CONTROLLER.md, "Station traffic").
         /// </summary>
         internal static HashSet<uint> ClaimedPorts(Route except)
         {
@@ -91,7 +91,7 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>
         /// The station's ports this route's craft may not pick: those other route craft have claimed, and those not open to
-        /// its role (docs/MATH.md §11.15).
+        /// its role (docs/TRAFFIC-CONTROLLER.md, "Which route craft may use a port").
         /// </summary>
         internal static HashSet<uint> PortsNotFor(Route route, Vessel station)
         {

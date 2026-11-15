@@ -16,7 +16,7 @@ public sealed record RouteTrip(IReadOnlyList<FlightBurn> Burns, double MeetUt)
 }
 
 /// <summary>
-/// Planning a background trip again when the game finds the ship off course (docs/MATH.md §11.3). The planning is the
+/// Planning a background trip again when the game finds the ship off course (docs/MATH.md §10.3). The planning is the
 /// same as From here › Go to… a craft: a meeting around the target's body, with the trip there first when the ship is
 /// around another body, the way of making it the player picked when it fits the fuel, else the next that does.
 /// Extra cases come from a ship caught mid-trip:

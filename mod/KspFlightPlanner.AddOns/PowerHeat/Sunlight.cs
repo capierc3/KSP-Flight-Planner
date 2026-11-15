@@ -2,7 +2,7 @@ using System;
 
 namespace KspFlightPlanner.PowerHeat
 {
-    /// <summary>Day and night where a craft is, or will be (MATH.md §13.1–13.2).</summary>
+    /// <summary>Day and night where a craft is, or will be (docs/MATH.md §11.1–2).</summary>
     internal static class Sunlight
     {
         /// <summary>The Sun: the body every other body ends up orbiting.</summary>

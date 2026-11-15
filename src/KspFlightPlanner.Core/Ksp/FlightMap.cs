@@ -21,7 +21,7 @@ public sealed record FlightMapView(string Body, double RadiusM, double Atmospher
 
 /// <summary>
 /// The flight on a map, top-down on a body's equator. Each sample's position comes from its orbit (Kepler, §1.4), in the
-/// same frame as the bodies' orbits; around a moon, the moon's position then is added. docs/MATH.md §8.8.
+/// same frame as the bodies' orbits; around a moon, the moon's position then is added. docs/MATH.md §8.6.
 /// </summary>
 public static class FlightMap
 {
