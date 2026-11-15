@@ -918,16 +918,17 @@ Each row is a porkchop search (§3.4) with the default orbits: leave a round par
 
 ```
 cheapest(d) = min over flight times of total Δv, for each departure column d
-the window  = the first d with cheapest(d) ≤ both neighbours and ≤ 1.5 × the cheapest overall
+a dip      = a d with cheapest(d) ≤ both neighbours and ≤ 1.5 × the cheapest overall
+the window = the cheapest dip within S/2 of the first dip       S: the synodic period
 ```
 
-then zooms in around it (as `TransferPlanner.Plan` does) keeping the departure within a column either side. The search starts 3 % of a synodic period in the past (never before UT 0), so a window whose best day was yesterday is a dip, not the edge of the plot, and shows as **Now**. A row says *Now* from a game day before its best day; once the clock is 3 % of a synodic period past it, that body is searched again from today and the row moves down the list. The rest are kept, so time passing only costs a search when a window goes. A quickload back before the search started searches again too.
+One window can dip more than once: Moho's orbit is eccentric (0.2) and tilted (7°), so on Year 1, Day 223 its porkchop dips at once (~5,450 m/s) and again 46 days on (4,980 m/s). Both belong to the same window (the next is a whole synodic period away), so the pane shows the cheaper. It then zooms in around it (as `TransferPlanner.Plan` does) keeping the departure within a column either side. The search starts 3 % of a synodic period in the past (never before UT 0), so a window whose best day was yesterday is a dip, not the edge of the plot, and shows as **Now**. A row says *Now* from a game day before its best day; once the clock is 3 % of a synodic period past it, that body is searched again from today and the row moves down the list. The rest are kept, so time passing only costs a search when a window goes. A quickload back before the search started searches again too.
 
 Worked example — from Kerbin at UT 0 (`TransferWindowsTests.Lists_every_planet_from_kerbin_soonest_first`):
 
 | To | Best day | Δv (eject + capture) | Flight |
 |---|---|---|---|
-| Moho | Year 1, Day 5 | 5,533.6 m/s | 119 d |
+| Moho | Year 1, Day 35 | 4,940.8 m/s | 95 d |
 | Jool | Year 1, Day 204 | 5,036.9 m/s | 1,480 d |
 | Duna | Year 1, Day 231 | 1,707.5 m/s | 270 d |
 | Eeloo | Year 1, Day 240 | 3,588.6 m/s | 2,180 d |

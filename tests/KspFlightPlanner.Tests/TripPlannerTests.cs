@@ -126,6 +126,26 @@ public sealed class TripPlannerTests : IDisposable
     }
 
     [Fact]
+    public void Planning_again_after_the_ejection_corrects_the_course_instead_of_looking_for_a_window()
+    {
+        var now = 4_810_000.0;
+        var (kerbin, moho) = (Body("Kerbin"), Body("Moho"));
+        var lko = new OrbitalElements(kerbin.EquatorialRadiusM + 80_000, 0, 0, 0, 0, 0.3, now);
+        var soonest = TripPlanner.Options(kerbin, moho, lko, now + 120, 10_000, _bodies).MinBy(o => o.DepartureUt)!;
+        var leave = soonest.Legs[0].Plan.Burns[0];
+
+        // Flown 5 m/s hot, still inside Kerbin's sphere on the escape path: Go to Moho again.
+        var escaping = Rendezvous.OrbitAfter(leave.Ut, leave.Burn with { Prograde = leave.Burn.Prograde + 5 }, lko, kerbin.Mu);
+        Assert.True(escaping.Eccentricity > 1);
+        var again = Assert.Single(TripPlanner.Options(kerbin, moho, escaping, leave.Ut + 600, 10_000, _bodies));
+        Show(again, now);
+
+        Assert.Equal(["Course correction to Moho", "Capture at Moho (10 km)"], again.Burns.Select(b => b.Title));
+        Assert.Equal(10_000, again.Arrival.PeriapsisAltitudeM, 500.0);
+        Assert.InRange(again.DeltaV, soonest.DeltaV - soonest.LeaveDv, soonest.DeltaV); // no second ejection
+    }
+
+    [Fact]
     public void Mun_to_minmus_goes_across_around_kerbin()
     {
         var now = 1_000_000.0;
