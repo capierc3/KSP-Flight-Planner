@@ -65,6 +65,8 @@ The planner's in-game add-ons are built as one DLL from `mod/KspFlightPlanner.Ad
 - [ ] The safety stop with a kerbal on EVA
 - [ ] Two route craft meeting at Kerb Station (uncontrolled), one coming in while the other leaves, with the sideways step-aside
 - [ ] Refueler window: its own toolbar button, and fuel moves only to and from the vessels ticked as station tanks (other docked craft are left alone)
+- [ ] The Refueler keeps pumping on rails (built 2026-11-18): after you switch vessels, go to the tracking station or the space centre, and through time warp there; started and stopped from the Station window too
+- [ ] The Station window in the tracking station (built 2026-11-18): its toolbar button, every station listed, the craft you select picked
 
 ## Known rough edges
 
@@ -182,7 +184,7 @@ Settings (Difficulty Settings → KSP Flight Planner → Traffic Controller): th
 
 Built 2026-11-10, not tried in game. The **Station** window manages one station: what's docked, what's coming and going, who's aboard, and the controllers' load against their capacity.
 
-- **Where:** in flight (and the map), its own toolbar button shows the craft you're flying, station or not. At the space centre, clicking the **Administration building** opens it. With no strategies to manage (science mode, sandbox), KSP only says the building is closed, so that box is closed and the window opens instead, with every station listed down the left to pick from. A station is a craft of KSP's type Station, one routes fly to, or one someone's on duty aboard. A copy in the planner comes later.
+- **Where:** in flight (and the map), its own toolbar button shows the craft you're flying, station or not. In the **tracking station** the same button opens it with every station listed down the left, and selecting a craft in the tracking station's list or map picks it there (station or not); clicks on the window don't reach the map behind it. At the space centre, clicking the **Administration building** opens it. With no strategies to manage (science mode, sandbox), KSP only says the building is closed, so that box is closed and the window opens instead, with every station listed down the left to pick from. A station is a craft of KSP's type Station, one routes fly to, or one someone's on duty aboard. A copy in the planner comes later.
 - **Header:** name, body and orbit. **Controlled** (each Traffic Controller on duty in the station's own parts, with slots in use now, the busiest over the next 6 hours, any craft they're handling in the zone, and how much they've handled) or **uncontrolled airspace**.
 - **Ports:** each of the station's own ports, numbered: free, booked by a route craft (with when it arrives), a craft coming in, one backing off, or occupied by a docked craft. A button beside each changes which route craft may use it (the port's right-click Traffic setting).
 - **Docked craft:** each with its crew, whether it's quiet (engines, RCS and wheels off), and its route's state. A held departure can be cancelled; the craft stays docked.
@@ -190,6 +192,7 @@ Built 2026-11-10, not tried in game. The **Station** window manages one station:
 - **Crew:** everyone aboard, part by part (a docked ship's crew marked so), with trait and duty. Buttons put each on or off duty, and **Move…** lists the parts with a free seat to move them to (see [KERBIN-RESOURCES.md](KERBIN-RESOURCES.md#moving-crew)). A pilot in the station's own parts without controls (a hitchhiker can) gets a hint to move to a cupola or pod, and the section says when no pilot in a part with controls could be the station's controller.
 - **Power** and **Heat:** whether the whole stack's batteries last the night where it is, the Sun now (next sunset or sunrise), the charge flow measured from the batteries, and whether its radiators keep up with its drills and ISRU. See [POWER-AND-HEAT.md](POWER-AND-HEAT.md).
 - **Supplies:** the station's own tanks, each resource with how full it is.
+- **Fuel (Refueler):** when anything is docked, the Refueler's controls for the stack, loaded or not: the station-tank ticks, a craft's tanks against the station's, and Start/Stop to fill or unload it. See [Fuel transfer and RCS balance](#fuel-transfer-and-rcs-balance).
 
 The window reads the station once a second, loaded or not. Changes made at the space centre (a crew move, a port setting) are saved to the save file straight away.
 
@@ -373,7 +376,9 @@ Undocked, on rails or loaded, the craft is made ready to fly: every engine lit a
 ### Fuel transfer and RCS balance
 
 
-**Fuel.** The Refueler window (its own toolbar button, apart from the Traffic Controller window) moves liquid fuel, oxidizer and monopropellant between one craft docked in the stack being flown and the station's tanks, either way, started and stopped by hand. The stack is first split back into the vessels that docked to make it, as the planner does ([SAVE-AND-LIVE-GAME.md “Importing vessels from a KSP save”](SAVE-AND-LIVE-GAME.md#importing-vessels-from-a-ksp-save), `DockedCraft.Pieces`): the part tree is cut at every docked pair of ports, and each piece takes its name and type from its port's record of the vessel it came with (the root's piece takes the stack's name). Each piece is a **station part** or a **craft**: a craft by default when it's a ship, lander, rover or plane with a command part and an engine (the planner's rule, so both show the same split), otherwise a station part. The player can tick or untick any piece; the mark is kept in the save by vessel name. The station's tanks are the parts of every station part. Other craft docked there are never touched, so filling one shuttle doesn't drain the lander or the other shuttles beside it.
+**Fuel.** The Refueler moves liquid fuel, oxidizer and monopropellant between one craft docked in a stack and the station's tanks, either way, started and stopped by hand. Its controls are in its own window in flight (its own toolbar button, apart from the Traffic Controller window, for the stack being flown) and in the Station window's **Fuel** section (in flight, the tracking station and the space centre, for any station). The stack is first split back into the vessels that docked to make it, as the planner does ([SAVE-AND-LIVE-GAME.md “Importing vessels from a KSP save”](SAVE-AND-LIVE-GAME.md#importing-vessels-from-a-ksp-save), `DockedCraft.Pieces`): the part tree is cut at every docked pair of ports, and each piece takes its name and type from its port's record of the vessel it came with (the root's piece takes the stack's name). Each piece is a **station part** or a **craft**: a craft by default when it's a ship, lander, rover or plane with a command part and an engine (the planner's rule, so both show the same split), otherwise a station part. The player can tick or untick any piece; the mark is kept in the save by vessel name. The station's tanks are the parts of every station part. Other craft docked there are never touched, so filling one shuttle doesn't drain the lander or the other shuttles beside it.
+
+**On rails.** Start makes a pump job, kept in the save (`PUMP` nodes in the Refueler scenario: stack, craft, fill or unload, the Δv to keep, the game time it last pumped to), one per stack. The job runs in the Refueler scenario, not in a window, four times a real second, in flight, the tracking station and the space centre, so it carries on when you close the window, fly something else, or leave the flight scene. When the stack is loaded it moves fuel between its parts; when it isn't, between its saved parts' tanks, the stack split the same way from the saved records (a part joins its parent by docking when its port is docked and either port's record names the other part, `dockUId`; the child side's `DOCKEDVESSEL` names the vessel it came with). It ends by itself when the craft is full (or empty), when unloading reaches the Δv to keep, or when the craft has undocked, with a message on screen. Nothing runs in the editor or main menu, where game time doesn't pass either. Quickloading takes the jobs back to the save's.
 
 Fuel is pumped, taken from every unlocked tank in proportion to what each holds and put into every unlocked tank in proportion to its free room. Nothing is made or lost. The flow is a pump's, set by the docking port the craft is joined by, and it runs by game time, so it carries on through time warp. In zero g the propellant doesn't settle, so real spacecraft move it slowly through bladders or pressurant gas; a station pump through a standard port is taken as 5 kg/s. For comparison, an aerial-refuelling boom moves about 45 kg/s, and ISS refuelling from Progress about 0.05–0.1 kg/s.
 
@@ -383,20 +388,20 @@ Fuel is pumped, taken from every unlocked tank in proportion to what each holds 
 | Standard (size1, and any port of unknown size) | 5 kg/s |
 | Senior (size2 and bigger) | 20 kg/s |
 
-Each frame, with Δt the game time since the last frame. For each fuel *i*, *M_i* is what can still move: the smaller of what one side holds and the other has room for. *ρ_i* is its density (t/unit).
+Each step, with Δt the game time since the last step. For each fuel *i*, *M_i* is what can still move: the smaller of what one side holds and the other has room for. *ρ_i* is its density (t/unit).
 
 ```
 M      = Σ M_i·ρ_i                    t still to move
-budget = q · Δt / 1000                t this frame
+budget = q · Δt / 1000                t this step
 move_i = M_i · min(1, budget / M)     units: shared by what's left of each fuel, so they all finish together
 time   = M · 1000 / q                 s, shown in the window as the time left
 ```
 
-Example: filling an empty Kerb Shuttle mk2 (1,634 LF, 1,998 Ox, 150 Mono; ρ = 0.005, 0.005, 0.004 t/unit) from a station with plenty. M = 8.17 + 9.99 + 0.60 = 18.76 t. Through a standard port that's 18,760 / 5 = 3,752 s, about 1 hour 3 minutes. Through a Junior port it's 5 h 13 min, and through a Senior port 15 min 38 s. At 100× time warp the standard-port hour passes in under 40 real seconds. Every frame moves the same share of each fuel (LF 8.17 / 18.76 = 43.6 % of the mass), so all three run out together.
+Example: filling an empty Kerb Shuttle mk2 (1,634 LF, 1,998 Ox, 150 Mono; ρ = 0.005, 0.005, 0.004 t/unit) from a station with plenty. M = 8.17 + 9.99 + 0.60 = 18.76 t. Through a standard port that's 18,760 / 5 = 3,752 s, about 1 hour 3 minutes. Through a Junior port it's 5 h 13 min, and through a Senior port 15 min 38 s. At 100× time warp the standard-port hour passes in under 40 real seconds. Every step moves the same share of each fuel (LF 8.17 / 18.76 = 43.6 % of the mass), so all three run out together.
 
 On 2026-11-09 Kerb Station (406 parts, no rigid joints) broke apart during a fill at the old rate, a craft's tanks in 30 s. Stock KSP's own part-menu transfer is faster still: each receiving tank gains 1/20 of its capacity a second (`UIPartActionResourceTransfer.UpdateItem`), so the rate alone probably wasn't the cause. The pump is slower for realism, not as the fix.
 
-The station's SAS is switched off while fuel is pumped and back on after (docs/TRAFFIC-CONTROLLER.md "Docked craft"). Unloading stops by itself when the craft's Δv ([MATH.md §10.2](MATH.md#102-the-fuel-a-background-burn-uses)) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit). In time warp an unloading step is at most a minute's pumping, so it can't run far past that figure.
+The station's SAS is switched off while fuel is pumped and the stack is loaded, and back on after (docs/TRAFFIC-CONTROLLER.md "Docked craft"); a stack that was unloaded when its pumping ended gets SAS back the next time it loads. Unloading stops by itself when the craft's Δv ([MATH.md §10.2](MATH.md#102-the-fuel-a-background-burn-uses), from its own saved parts when it isn't loaded) is down to the figure the player keeps (300 m/s to start with, enough to deorbit from a low orbit). Unloading pumps a minute of game time at a time, the Δv checked before each minute, at most 50 minutes a step, so it can't run far past that figure; at high time warp it falls behind game time and catches up over the next steps.
 
 Example: Kerb Station (station) with Kerbin Station - Fuel Tank (probe), Kerb Station - Electrical (probe), Homeward Bound 4 and three Kerb Shuttle mk2s (ships with engines). The station's tanks are the station core, the fuel tank and the electrical module; filling Kerb Shuttle mk2 C takes fuel from those three only, in proportion to what each holds.
 
@@ -410,7 +415,7 @@ imbalance  = max_d |Σ_m s_m τ_md| / (|Σ_m s_m F_md| · size)        0 is perf
 
 The limiters are only changed when that makes it better. The autopilot balances a route craft's RCS the first time it needs RCS on a trip, and the panel has a button for the ship being flown. A block has one limiter for all six directions, so it's a best fit, and it shifts as fuel drains (the centre of mass moves).
 
-- Code: `FuelTransfer.Pieces`, `.StationParts`, `.Move`, `StackPiece.IsStation`, `FuelTransfer.PumpKgS`, `.Movable`, `.Pump`, `RefuelerPanel.Update`, `RefuelerSettings`, `RcsBalance.Balance`, `TrafficPanel.DrawRcs` (mod/KspFlightPlanner.AddOns)
+- Code: `FuelTransfer.Pieces` (loaded and saved), `.StationTanks`, `.Move`, `StackPiece.IsStation`, `.Tanks`, `.DeltaV`, `FuelTransfer.PumpKgS`, `.Movable`, `.Pump`, `RefuelerScenario.Step`, `RefuelerView`, `Ships.DeltaVLeft` (saved parts), `RefuelerSettings`, `RcsBalance.Balance`, `TrafficPanel.DrawRcs` (mod/KspFlightPlanner.AddOns)
 - Source: [MATH.md §10.2](MATH.md#102-the-fuel-a-background-burn-uses); pump rates: KC-135 boom transfer rate (USAF fact sheet), ISS Progress refuelling (NASA); stock rate read from KSP 1.12 Assembly-CSharp; RCS balancing as RCS Build Aid shows the imbalance and MechJeb's RCS balancer corrects it, read for the idea
 
 ### Docking and undocking on rails
@@ -685,10 +690,10 @@ Planned burns count whether they've been uploaded yet or not. Who will be on dut
 | `CrewRules.cs`, `Controllers.cs`, `TrafficSettings.cs` | Crew-rule gates: route qualification and training (`CanFly`, `Standings`), traffic control, controllers (`Upload`, `Checked`, `HoldsReplan`, `ClearDeparture`, `IsCritical`); per-save settings |
 | `../KerbinResources/` | Kerbin Resources: flight log, personnel, crew window (code map in [KERBIN-RESOURCES.md](KERBIN-RESOURCES.md)) |
 | `DockedQuiet.cs` | Docked craft made quiet, and woken on undocking |
-| `StationView.cs`, `StationWindow.cs` | The Station window: reading a station loaded or not, the window in flight, and taking over the Administration building |
+| `StationView.cs`, `StationWindow.cs` | The Station window: reading a station loaded or not, the window in flight and the tracking station, and taking over the Administration building |
 | `../PowerHeat/` | Power and heat: reading the parts (`PowerReader`), day and night (`Sunlight`), the sums (`PowerBudget`), splitting an editor station into modules (`ModuleSplit`), the shared drawing (`PowerView`), and the editor's Power & Heat window ([POWER-AND-HEAT.md](POWER-AND-HEAT.md)) |
 | `Ships.cs`, `RcsBalance.cs`, `TrafficPanel.cs`, `../PanelWindow.cs` | Ship helpers, RCS balance, the in-game Traffic Controller panel, shared window resizing |
-| `Refueler/FuelTransfer.cs`, `RefuelerPanel.cs`, `RefuelerScenario.cs` | Splitting a stack into station tanks and craft, moving fuel, the in-game Refueler window |
+| `Refueler/FuelTransfer.cs`, `RefuelerScenario.cs`, `RefuelerView.cs`, `RefuelerPanel.cs` | Splitting a stack (loaded or saved) into station tanks and craft and moving fuel; the saved pump jobs that run on rails; the controls shared with the Station window; the in-game Refueler window |
 | `src/KspFlightPlanner.App/Services/RouteWatch.cs` | The planner answering re-plan requests |
 | `src/KspFlightPlanner.Core/Ksp/VesselRelink.cs` | Following a vessel across docking and undocking |
 

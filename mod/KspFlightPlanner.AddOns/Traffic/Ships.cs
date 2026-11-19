@@ -710,6 +710,25 @@ namespace KspFlightPlanner.Traffic
             return engine == null ? 0 : DeltaVLeft(engine, Amount, mass);
         }
 
+        /// <summary>The same for a craft docked in an unloaded stack, from its own saved parts (the Refueler's pump on rails).</summary>
+        public static double DeltaVLeft(IList<ProtoPartSnapshot> parts, out Engine engine)
+        {
+            var amounts = new Dictionary<string, double>();
+            double mass = 0;
+            foreach (var p in parts)
+            {
+                mass += p.mass;
+                foreach (var r in p.resources)
+                {
+                    mass += r.amount * (PartResourceLibrary.Instance?.GetDefinition(r.resourceName)?.density ?? 0);
+                    if (r.flowState) amounts[r.resourceName] = (amounts.TryGetValue(r.resourceName, out var a) ? a : 0) + r.amount;
+                }
+            }
+            double Amount(string name) => amounts.TryGetValue(name, out var a) ? a : 0;
+            engine = PickEngine(parts.Where(p => p.partInfo != null).Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p.partInfo.partPrefab)), Amount);
+            return engine == null ? 0 : DeltaVLeft(engine, Amount, mass);
+        }
+
         private static double DeltaVLeft(Engine engine, Func<string, double> amount, double mass)
         {
             var sets = engine.Propellants.Min(p => p.Value > 0 ? amount(p.Key) / p.Value : double.MaxValue);
