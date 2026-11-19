@@ -181,6 +181,126 @@ public sealed class SurveyRepository(PlannerDatabase database)
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>A Survey Engineer's last reading (stored next to the stations', keyed "crew:" and their name).</summary>
+    public SurveyCrewReading? GetCrewReading(string kerbal)
+    {
+        if (Save is not { } save) return null;
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT reading_json FROM survey_readings WHERE ksp_save = $save AND vessel_id = $id;";
+        cmd.Parameters.AddWithValue("$save", save);
+        cmd.Parameters.AddWithValue("$id", "crew:" + kerbal);
+        return cmd.ExecuteScalar() is string json ? JsonSerializer.Deserialize<SurveyCrewReading>(json) : null;
+    }
+
+    public void SaveCrewReading(SurveyCrewReading reading)
+    {
+        if (Save is not { } save) return;
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT OR REPLACE INTO survey_readings (ksp_save, vessel_id, vessel_name, reading_json) VALUES ($save, $id, $name, $json);
+            """;
+        cmd.Parameters.AddWithValue("$save", save);
+        cmd.Parameters.AddWithValue("$id", "crew:" + reading.Kerbal);
+        cmd.Parameters.AddWithValue("$name", reading.Kerbal);
+        cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(reading));
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Bodies whose survey is done, with when, who surveyed them, and whether the game has been told.</summary>
+    public IReadOnlyList<(string Body, double Ut, IReadOnlyList<string> Writers, bool Told)> DoneBodies()
+    {
+        if (Save is not { } save) return [];
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT body_name, done_ut, writers, told FROM survey_done WHERE ksp_save = $save;";
+        cmd.Parameters.AddWithValue("$save", save);
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, double, IReadOnlyList<string>, bool)>();
+        while (r.Read())
+            list.Add((r.GetString(0), r.GetDouble(1), JsonSerializer.Deserialize<List<string>>(r.GetString(2)) ?? [], r.GetInt64(3) != 0));
+        return list;
+    }
+
+    /// <summary>Notes a body done (first time only; returns whether it was new).</summary>
+    public bool AddDone(string bodyName, double ut, IReadOnlyList<string> writers)
+    {
+        if (Save is not { } save) return false;
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "INSERT OR IGNORE INTO survey_done (ksp_save, body_name, done_ut, writers, told) VALUES ($save, $body, $ut, $writers, 0);";
+        cmd.Parameters.AddWithValue("$save", save);
+        cmd.Parameters.AddWithValue("$body", bodyName);
+        cmd.Parameters.AddWithValue("$ut", ut);
+        cmd.Parameters.AddWithValue("$writers", JsonSerializer.Serialize(writers));
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    public void MarkDoneTold(string bodyName)
+    {
+        if (Save is not { } save) return;
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE survey_done SET told = 1 WHERE ksp_save = $save AND body_name = $body;";
+        cmd.Parameters.AddWithValue("$save", save);
+        cmd.Parameters.AddWithValue("$body", bodyName);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Forgets bodies done after <paramref name="ut"/> (the game went back in time).</summary>
+    public void DeleteDoneAfter(double ut)
+    {
+        if (Save is not { } save) return;
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM survey_done WHERE ksp_save = $save AND done_ut > $ut;";
+        cmd.Parameters.AddWithValue("$save", save);
+        cmd.Parameters.AddWithValue("$ut", ut);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>The game's anomalies for this save (empty until fetched).</summary>
+    public IReadOnlyList<SurveyAnomaly> Anomalies()
+    {
+        if (Save is not { } save) return [];
+        using var connection = database.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT body_name, name, display_name, latitude, longitude FROM survey_anomalies WHERE ksp_save = $save ORDER BY body_name, name;";
+        cmd.Parameters.AddWithValue("$save", save);
+        using var r = cmd.ExecuteReader();
+        var list = new List<SurveyAnomaly>();
+        while (r.Read()) list.Add(new SurveyAnomaly(r.GetString(0), r.GetString(1), r.GetString(2), r.GetDouble(3), r.GetDouble(4)));
+        return list;
+    }
+
+    /// <summary>Replaces the save's anomaly list.</summary>
+    public void SaveAnomalies(IReadOnlyList<SurveyAnomaly> anomalies)
+    {
+        if (Save is not { } save) return;
+        using var connection = database.Open();
+        using var tx = connection.BeginTransaction();
+        using (var del = connection.CreateCommand())
+        {
+            del.CommandText = "DELETE FROM survey_anomalies WHERE ksp_save = $save;";
+            del.Parameters.AddWithValue("$save", save);
+            del.ExecuteNonQuery();
+        }
+        foreach (var a in anomalies.GroupBy(a => (a.BodyName, a.Name)).Select(g => g.First()))
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "INSERT INTO survey_anomalies (ksp_save, body_name, name, display_name, latitude, longitude) VALUES ($save, $body, $name, $display, $lat, $lon);";
+            cmd.Parameters.AddWithValue("$save", save);
+            cmd.Parameters.AddWithValue("$body", a.BodyName);
+            cmd.Parameters.AddWithValue("$name", a.Name);
+            cmd.Parameters.AddWithValue("$display", a.DisplayName);
+            cmd.Parameters.AddWithValue("$lat", a.LatitudeDeg);
+            cmd.Parameters.AddWithValue("$lon", a.LongitudeDeg);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
     private static byte[] Bytes(float[] values) => MemoryMarshal.AsBytes(values.AsSpan()).ToArray();
 
     private static float[] Floats(byte[] bytes) => MemoryMarshal.Cast<byte, float>(bytes).ToArray();

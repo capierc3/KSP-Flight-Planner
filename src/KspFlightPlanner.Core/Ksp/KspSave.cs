@@ -159,6 +159,18 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
     /// <summary>R&amp;D's science subjects by id: what each has earned of its cap (empty in sandbox).</summary>
     public IReadOnlyDictionary<string, SavedScienceSubject> ScienceSubjects { get; init; } = new Dictionary<string, SavedScienceSubject>();
 
+    /// <summary>Survey Engineers on duty and the craft each can watch, as the add-on last saved them (RolesScenario › WORKER).</summary>
+    public IReadOnlyList<SurveyWorker> SurveyWorkers { get; init; } = [];
+
+    /// <summary>Finished bodies' survey reports, written or being written (RolesScenario › REPORT).</summary>
+    public IReadOnlyList<SurveyReportJob> SurveyReportJobs { get; init; } = [];
+
+    /// <summary>Anomalies a craft has visited (RolesScenario › VISIT).</summary>
+    public IReadOnlyList<AnomalyVisit> AnomalyVisits { get; init; } = [];
+
+    /// <summary>The crew roles' survey rules from the difficulty settings (PARAMETERS › RolesSettings).</summary>
+    public RolesRules Roles { get; init; } = RolesRules.Default;
+
     public bool IsEngineer(string kerbal) => CrewTraits.TryGetValue(kerbal, out var trait) && trait == "Engineer";
 }
 
@@ -256,9 +268,12 @@ public static class KspSaveReader
         var resources = game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResourceScenario")?.GetNode("RESOURCE_SETTINGS");
         string? BodyById(string? id) => int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)
             && i >= 0 && i < SavedOrbit.StockBodyOrder.Length ? SavedOrbit.StockBodyOrder[i] : null;
+        var roles = RolesReader.FromSave(game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "RolesScenario"));
         return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels)
         {
             Waypoints = waypoints, Research = research, CommNet = ReadCommNet(game),
+            SurveyWorkers = roles.Workers, SurveyReportJobs = roles.Reports, AnomalyVisits = roles.Visits,
+            Roles = RolesReader.Rules(game.GetNode("PARAMETERS")?.GetNode("RolesSettings")),
             ScienceSubjects = (rdNode?.GetNodes("Science") ?? [])
                 .Select(n => new SavedScienceSubject(n.GetValue("id") ?? "", Number(n.GetValue("sci")), Number(n.GetValue("cap")), Number(n.GetValue("sbv"))))
                 .Where(x => x.Id.Length > 0 && double.IsFinite(x.Cap))

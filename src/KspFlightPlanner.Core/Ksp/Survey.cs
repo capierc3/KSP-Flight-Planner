@@ -13,6 +13,18 @@ public enum SurveyLevel
 
     /// <summary>True values: the biome has been analysed from the ground.</summary>
     Surveyed,
+
+    /// <summary>A report that a landmark was spotted by the narrow-band (the "biome" is the landmark's name).</summary>
+    Spotted,
+
+    /// <summary>A report that a craft visited an anomaly and identified it.</summary>
+    Identified,
+
+    /// <summary>The body is done: its surveyors are writing the final report ("biome" empty).</summary>
+    Done,
+
+    /// <summary>The body's final survey report was filed ("biome" empty).</summary>
+    Filed,
 }
 
 /// <summary>
@@ -175,8 +187,112 @@ public sealed class SurveyCoverage
         return added;
     }
 
+    /// <summary>
+    /// Credits the time between two readings of a Survey Engineer who both times was surveying the same body: the craft in
+    /// both readings (same scanners) are followed together, and at each step only the strip of the craft the engineer is
+    /// watching is marked (<see cref="FollowCrew"/>). A craft whose orbit changed flies its first orbit to halfway and its
+    /// second after. <paramref name="watches"/> gets who watched which craft from when. Returns how many points were new.
+    /// </summary>
+    public int CreditCrew(SurveyCrewReading from, SurveyCrewReading to, SurveyMap map, double mu, List<SurveyWatch>? watches = null)
+    {
+        if (to.Ut <= from.Ut || from.BodyName != to.BodyName || from.BodyName != map.BodyName || from.Kerbal != to.Kerbal) return 0;
+        var middle = (from.Ut + to.Ut) / 2;
+        var crafts = new List<CrewCraft>();
+        foreach (var a in from.Crafts)
+        {
+            var b = to.Crafts.FirstOrDefault(c => c.Pid == a.Pid);
+            if (b is null || b.HasSurveyScanner != a.HasSurveyScanner || b.HasNarrowBand != a.HasNarrowBand) continue;
+            crafts.Add(new CrewCraft(a.Name, a.Orbit, b.Orbit == a.Orbit ? a.Orbit : b.Orbit, middle,
+                a.HasSurveyScanner && from.BodyScanned && to.BodyScanned, a.HasNarrowBand));
+        }
+        return FollowCrew(crafts, from.Ut, to.Ut, map, mu, from.Kerbal, watches);
+    }
+
+    /// <summary>A craft as <see cref="FollowCrew"/> follows it: its orbit before and after <see cref="SwitchUt"/>, and which levels its scanners can map.</summary>
+    public sealed record CrewCraft(string Name, OrbitalElements Before, OrbitalElements After, double SwitchUt, bool Rough, bool Estimate)
+    {
+        public OrbitalElements OrbitAt(double ut) => ut < SwitchUt ? Before : After;
+    }
+
+    /// <summary>
+    /// Follows several craft together from <paramref name="fromUt"/> to <paramref name="toUt"/>, as one engineer watching one
+    /// craft's scanners at a time (docs/KERBIN-RESOURCES.md "Survey Engineer at work"): they stay with the craft they're
+    /// watching while its strip is still mapping new ground; once it isn't, they switch to the craft mapping the most new
+    /// ground then; if none is, they stay. At the start they take the one mapping most. Only the watched craft's strip is
+    /// marked. Steps are half a grid step over the ground for the fastest craft. Returns how many points were new.
+    /// </summary>
+    public int FollowCrew(IReadOnlyList<CrewCraft> crafts, double fromUt, double toUt, SurveyMap map, double mu, string kerbal, List<SurveyWatch>? watches = null)
+    {
+        crafts = crafts.Where(c => (c.Rough || c.Estimate) && Usable(c.Before) && Usable(c.After)).ToList();
+        if (crafts.Count == 0 || !(toUt > fromUt)) return 0;
+        var spin = 2 * Math.PI / map.RotationPeriodS;
+        var stepRad = _stepDeg / 2 * Math.PI / 180;
+        var shortest = (toUt - fromUt) / 200_000; // at most this many steps, however long the gap
+        var slowest = crafts.Max(c => Math.Max(Kepler.OrbitalPeriod(c.Before, mu), Kepler.OrbitalPeriod(c.After, mu)));
+        var idleLimit = Math.Max(IdleRotations * Math.Abs(map.RotationPeriodS), IdleRotations * slowest);
+        var anyRough = crafts.Any(c => c.Rough);
+        var anyEstimate = crafts.Any(c => c.Estimate);
+        int Left() => (anyRough ? Rough.Count(float.IsNaN) : 0) + (anyEstimate ? Estimate.Count(float.IsNaN) : 0);
+        var left = Left();
+        var added = 0;
+        var lastNew = fromUt;
+        var watching = -1;
+        var idleSteps = 0; // steps in a row the watched craft has mapped nothing new
+        var counts = new int[crafts.Count];
+        var spots = new (double Lat, double Lon, bool Low, double Rate)[crafts.Count];
+        for (var t = fromUt; left > added; )
+        {
+            for (var i = 0; i < crafts.Count; i++)
+            {
+                var orbit = crafts[i].OrbitAt(t);
+                var r = Kepler.StateAt(orbit, mu, t).Position;
+                var length = r.Length;
+                var lat = Math.Asin(Math.Clamp(r.Z / length, -1, 1)) * 180 / Math.PI;
+                var lon = Wrap180(Math.Atan2(r.Y, r.X) * 180 / Math.PI - map.InitialRotationDeg - spin * t * 180 / Math.PI);
+                var low = length - map.RadiusM <= NarrowBandMaxAltitudeM;
+                var h = Math.Sqrt(mu * orbit.SemiMajorAxisM * (1 - orbit.Eccentricity * orbit.Eccentricity));
+                spots[i] = (lat, lon, low, h / (length * length) + Math.Abs(spin));
+                counts[i] = Strip(lat, lon, (float)t, crafts[i].Rough, crafts[i].Estimate && low, mark: false);
+            }
+            idleSteps = watching >= 0 && counts[watching] == 0 ? idleSteps + 1 : 0;
+            // Switch only once the watched craft has mapped nothing for a few steps: on the grid, a strip moving half a
+            // grid step can add nothing for a step or two while still over new ground.
+            if (watching < 0 || idleSteps >= SwitchAfterIdleSteps)
+            {
+                var best = -1;
+                for (var i = 0; i < crafts.Count; i++)
+                    if (counts[i] > 0 && (best < 0 || counts[i] > counts[best])) best = i;
+                if (best >= 0 && best != watching)
+                {
+                    watching = best;
+                    idleSteps = 0;
+                    watches?.Add(new SurveyWatch(t, kerbal, crafts[best].Name));
+                }
+            }
+            if (watching >= 0 && counts[watching] > 0)
+            {
+                var s = spots[watching];
+                added += Strip(s.Lat, s.Lon, (float)t, crafts[watching].Rough, crafts[watching].Estimate && s.Low, mark: true);
+                lastNew = t;
+            }
+            else if (t - lastNew > idleLimit) break;
+            if (t >= toUt) break;
+            var fastest = spots.Max(x => x.Rate);
+            t = Math.Min(toUt, t + Math.Max(stepRad / fastest, shortest));
+        }
+        return added;
+    }
+
+    /// <summary>How many steps in a row (each half a grid step over the ground) the watched craft maps nothing before the engineer looks elsewhere: 3°.</summary>
+    public const int SwitchAfterIdleSteps = 6;
+
+    private static bool Usable(OrbitalElements o) => o.SemiMajorAxisM > 0 && o.Eccentricity is >= 0 and < 1;
+
     /// <summary>Marks the grid points within the strip of a spot under the station; returns how many were new.</summary>
-    private int Mark(double latDeg, double lonDeg, float ut, bool rough, bool estimate)
+    private int Mark(double latDeg, double lonDeg, float ut, bool rough, bool estimate) => Strip(latDeg, lonDeg, ut, rough, estimate, mark: true);
+
+    /// <summary>The grid points within the strip of a spot that are new at each level: counted, or marked too.</summary>
+    private int Strip(double latDeg, double lonDeg, float ut, bool rough, bool estimate, bool mark)
     {
         if (!rough && !estimate) return 0;
         var radius = StripHalfWidthDeg * Math.PI / 180;
@@ -203,8 +319,8 @@ public sealed class SurveyCoverage
                 var cosDistance = sinLat * sinRow + cosLat * cosRow * Math.Cos((colLon - lonDeg) * Math.PI / 180);
                 if (cosDistance < cosLimit) continue;
                 var i = row * _columns + column;
-                if (rough && float.IsNaN(Rough[i])) { Rough[i] = ut; added++; }
-                if (estimate && float.IsNaN(Estimate[i])) { Estimate[i] = ut; added++; }
+                if (rough && float.IsNaN(Rough[i])) { if (mark) Rough[i] = ut; added++; }
+                if (estimate && float.IsNaN(Estimate[i])) { if (mark) Estimate[i] = ut; added++; }
             }
         }
         return added;
@@ -263,6 +379,31 @@ public sealed record SurveyCandidate(string Biome, double LatitudeDeg, double Lo
 /// <summary>Turns a body's map and coverage into reports, per biome. docs/SURVEY.md.</summary>
 public static class SurveyReports
 {
+    /// <summary>
+    /// How much of the body's surface a level has covered, by area: each grid point counts by the cosine of its latitude,
+    /// so the crowded points near the poles don't count extra.
+    /// </summary>
+    public static double AreaCovered(SurveyCoverage coverage, SurveyLevel level)
+    {
+        var grid = coverage.Of(level);
+        var columns = SurfaceBake.GridColumns(coverage.StepDeg);
+        double all = 0, covered = 0;
+        for (var i = 0; i < grid.Length; i++)
+        {
+            var w = Math.Cos(SurfaceBake.RowLatitude(coverage.StepDeg, i / columns) * Math.PI / 180);
+            all += w;
+            if (!float.IsNaN(grid[i])) covered += w;
+        }
+        return all > 0 ? covered / all : 0;
+    }
+
+    /// <summary>
+    /// A body's survey is done (docs/SURVEY.md "When a body is done"): the narrow-band has covered at least
+    /// <paramref name="donePercent"/>% of the surface by area, and every biome has its narrow-band report.
+    /// </summary>
+    public static bool IsDone(SurveyCoverage coverage, IReadOnlyList<BiomeSurvey> biomes, int donePercent) =>
+        biomes.Count > 0 && biomes.All(b => b.EstimateUt is not null) && AreaCovered(coverage, SurveyLevel.Estimate) >= donePercent / 100.0;
+
     /// <summary>How many spots the engineer suggests.</summary>
     public const int MaxCandidates = 5;
 

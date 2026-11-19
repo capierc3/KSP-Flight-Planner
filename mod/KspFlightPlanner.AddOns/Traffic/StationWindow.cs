@@ -445,6 +445,19 @@ namespace KspFlightPlanner.Traffic
             return demand > supply ? demand + " burns as urgent or more at once, " + supply + " slots: one may be bumped" : "";
         }
 
+        /// <summary>"signing in", "running Gravity Scan", "sending (12 s left)"…</summary>
+        private static string Step(Roles.OfficerSession s)
+        {
+            var left = System.Math.Max(0, s.Until - Planetarium.GetUniversalTime());
+            switch (s.Stage)
+            {
+                case Roles.OfficerSession.Step.SignIn: return "signing in";
+                case Roles.OfficerSession.Step.Run: return "running an experiment";
+                case Roles.OfficerSession.Step.Send: return "sending " + (s.Captured.Definition?.experimentTitle ?? "data") + ", " + left.ToString("0") + " s left";
+                default: return "signing out";
+            }
+        }
+
         /// <summary>
         /// Who's aboard, part by part: trait, duty and job, a button to put them on or off duty, and one to move them to
         /// another part with a free seat (a pilot needs a part with controls to be the station's Traffic Controller).
@@ -462,7 +475,16 @@ namespace KspFlightPlanner.Traffic
                 GUILayout.BeginHorizontal();
                 var where = "in " + part.Title + (part.Craft != v.MainCraft ? " (docked " + part.Craft + ")" : "");
                 var dutyText = shift != null ? "<b>" + shift.JobTitle + "</b>" : "off duty";
-                var hint = trait == "Pilot" && part.Craft == v.MainCraft && !part.Command && v.IsStation ? "  <i>no controls here: move to a cupola or pod to control traffic</i>" : "";
+                var hint = trait == "Pilot" && part.Craft == v.MainCraft && !part.Command && v.IsStation ? "  <i>no controls here: move to a cupola or pod to control traffic</i>"
+                    : (trait == "Scientist" || trait == "Engineer") && shift != null && !part.Lab ? "  <i>not in a research lab: move to one to work as " + (trait == "Scientist" ? "Science Officer" : "Survey Engineer") + "</i>"
+                    : "";
+                if (shift != null && Roles.SurveyRoles.IsScienceOfficer(shift))
+                {
+                    var session = Roles.RolesScenario.Instance?.Officers.SessionOf(kerbal);
+                    dutyText += session != null
+                        ? " (working " + session.ProbeName + ": " + Step(session) + (shift.AtKsc ? "" : ", their share of the lab's research paused") + ")"
+                        : " (researching)";
+                }
                 GUILayout.Label("   <b>" + kerbal + "</b> (" + trait + "), " + where + ": " + dutyText + hint, RichWrap());
                 if (duty != null && trait.Length > 0 && trait != "Tourist")
                 {

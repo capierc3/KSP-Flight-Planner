@@ -41,10 +41,30 @@ namespace KspFlightPlanner.KerbinResources
         internal static Func<Vessel, bool> LoggedElsewhere;
 
         /// <summary>
-        /// Extra lines for a kerbal's data card from another add-on (set by Traffic Controller: the routes a pilot is cleared
-        /// for and training on), as label and value.
+        /// Extra lines for a kerbal's data card from other add-ons (Traffic Controller: the routes a pilot is cleared for and
+        /// training on; Roles: surveys and science sent), as label and value.
         /// </summary>
-        internal static Func<string, IEnumerable<KeyValuePair<string, string>>> CardRows;
+        private static readonly List<Func<string, IEnumerable<KeyValuePair<string, string>>>> CardRowGivers =
+            new List<Func<string, IEnumerable<KeyValuePair<string, string>>>>();
+
+        internal static void AddCardRows(Func<string, IEnumerable<KeyValuePair<string, string>>> giver)
+        {
+            if (giver != null && !CardRowGivers.Contains(giver)) CardRowGivers.Add(giver);
+        }
+
+        internal static IEnumerable<KeyValuePair<string, string>> CardRows(string kerbal)
+        {
+            foreach (var giver in CardRowGivers)
+            {
+                List<KeyValuePair<string, string>> rows;
+                try { rows = giver(kerbal).ToList(); }
+                catch (Exception e) { Debug.LogWarning("[KspFlightPlanner] Kerbin Resources: card rows failed: " + e.Message); continue; }
+                foreach (var r in rows) yield return r;
+            }
+        }
+
+        /// <summary>The survey and science work each kerbal did, written by Roles (docs/KERBIN-RESOURCES.md "Survey and science roles").</summary>
+        internal readonly WorkLog Work = new WorkLog();
 
         public override void OnAwake()
         {
@@ -99,6 +119,7 @@ namespace KspFlightPlanner.KerbinResources
             Log.RenameKerbal(from, to);
             Duty.RenameKerbal(from, to);
             Control.RenameKerbal(from, to);
+            Work.RenameKerbal(from, to);
             KerbalRenamed?.Invoke(from, to);
         }
 
@@ -173,6 +194,7 @@ namespace KspFlightPlanner.KerbinResources
             Personnel.Save(node.AddNode("PERSONNEL"));
             Duty.Save(node.AddNode("DUTY"));
             Control.Save(node.AddNode("CONTROLLERS"));
+            Work.Save(node.AddNode("WORK"));
         }
 
         public override void OnLoad(ConfigNode node)
@@ -181,6 +203,7 @@ namespace KspFlightPlanner.KerbinResources
             Personnel.Load(node.GetNode("PERSONNEL"));
             Duty.Load(node.GetNode("DUTY"));
             Control.Load(node.GetNode("CONTROLLERS"));
+            Work.Load(node.GetNode("WORK"));
         }
     }
 }

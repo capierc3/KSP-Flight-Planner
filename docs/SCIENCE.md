@@ -126,7 +126,7 @@ Worked example — Minmus (μ = 1.7658 × 10⁹ m³/s², R = 60 km, space-high l
 2. **Map.** Colour the biome grid by what's left. Built.
 3. **Upcoming passes** for a picked vessel. Built.
 4. **Scan now** in game. Built.
-5. **Crew and links** (agreed 2026-11-15, not built). A Science Officer on duty at a station, or at KSC for Kerbin's SOI, runs and sends the experiments of linked probes you aren't flying: same SOI and a CommNet path. The rules are in [KERBIN-RESOURCES.md “Survey and science roles”](KERBIN-RESOURCES.md#survey-and-science-roles).
+5. **Crew and links** (built 2026-11-15, not tried in game). A Science Officer on duty at a station, or at KSC for Kerbin's SOI, runs and sends the experiments of linked probes you aren't flying: same SOI and a CommNet path. The rules are in [KERBIN-RESOURCES.md “Survey and science roles”](KERBIN-RESOURCES.md#survey-and-science-roles).
 
 ## Open questions
 

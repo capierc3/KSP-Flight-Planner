@@ -108,7 +108,7 @@ namespace KspFlightPlanner.Science
             return found.OrderByDescending(f => f.Key).Select(f => f.Value).ToList();
         }
 
-        static string Points(double value)
+        internal static string Points(double value)
         {
             return value >= 10 ? value.ToString("N0") : value.ToString("0.#");
         }
@@ -126,12 +126,12 @@ namespace KspFlightPlanner.Science
         }
 
         /// <summary>KSP's value of recovered data: data ÷ dataScale × multiplier × (1 − earned ÷ cap), never below 0.</summary>
-        static double Value(double data, double dataScale, double multiplier, double earned, double cap)
+        internal static double Value(double data, double dataScale, double multiplier, double earned, double cap)
         {
             return cap <= 0 || dataScale <= 0 ? 0 : Math.Max(0, data / dataScale * multiplier * (1 - earned / cap));
         }
 
-        static float Multiplier(CelestialBody body, ExperimentSituations situation)
+        internal static float Multiplier(CelestialBody body, ExperimentSituations situation)
         {
             var v = body.scienceValues;
             switch (situation)
@@ -146,7 +146,7 @@ namespace KspFlightPlanner.Science
             }
         }
 
-        static string Label(ExperimentSituations situation)
+        internal static string Label(ExperimentSituations situation)
         {
             switch (situation)
             {

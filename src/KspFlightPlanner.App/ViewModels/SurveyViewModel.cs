@@ -22,6 +22,9 @@ public sealed record SurveyBiomeRow(string Biome, string Coverage, string Report
 /// <summary>One of the engineer's spots to try.</summary>
 public sealed record SurveySpotRow(string Title, string Position, string Advice);
 
+/// <summary>A landmark the survey has found: its name so far, where, and what it is.</summary>
+public sealed record SurveyPlaceRow(string Name, string Position, string What);
+
 /// <summary>A report in the pane's log.</summary>
 public sealed record SurveyReportItem(string Date, string Body, string Text);
 
@@ -46,6 +49,8 @@ public sealed class SurveyViewModel : ObservableObject
     private bool _refreshingStations;
     private ImageSource? _mapImage;
     private bool _working;
+    private string _reportStatus = "";
+    private IReadOnlyList<SurveyPlaceRow> _places = [];
 
     public SurveyViewModel(SurveyTracker tracker, SaveSync sync, KspLink link)
     {
@@ -109,6 +114,27 @@ public sealed class SurveyViewModel : ObservableObject
     /// <summary>"Stabur Kerman's spots to try".</summary>
     public string SpotsTitle => Station is { Engineers.Count: > 0 } s ? $"{s.Engineers[0]}'s spots to try" : "Spots to try";
 
+    /// <summary>
+    /// Where the body's final survey report stands (docs/SURVEY.md "When a body is done"): mapped and being written, or
+    /// filed by whom and when. Empty while the body isn't done.
+    /// </summary>
+    public string ReportStatus
+    {
+        get => _reportStatus;
+        private set { if (SetProperty(ref _reportStatus, value)) OnPropertyChanged(nameof(HasReportStatus)); }
+    }
+
+    public bool HasReportStatus => ReportStatus.Length > 0;
+
+    /// <summary>Landmarks the survey has found on the body: anomalies (unknown until visited) and natural features.</summary>
+    public IReadOnlyList<SurveyPlaceRow> Places
+    {
+        get => _places;
+        private set { if (SetProperty(ref _places, value)) OnPropertyChanged(nameof(HasPlaces)); }
+    }
+
+    public bool HasPlaces => Places.Count > 0;
+
     /// <summary>The body's map: grey where nothing's been mapped, the estimate's colour where it has, true ore where analysed.</summary>
     public ImageSource? MapImage { get => _mapImage; private set => SetProperty(ref _mapImage, value); }
 
@@ -160,6 +186,8 @@ public sealed class SurveyViewModel : ObservableObject
             Biomes = [];
             CoverageText = "";
             MapImage = null;
+            ReportStatus = "";
+            Places = [];
             return;
         }
 
@@ -168,7 +196,7 @@ public sealed class SurveyViewModel : ObservableObject
         var map = _tracker.Map(s.BodyName);
         Checks =
         [
-            new("Engineer aboard", s.Engineers.Count > 0, s.Engineers.Count > 0 ? string.Join(", ", s.Engineers) : "Nothing is mapped without one"),
+            EngineerCheck(s, save),
             new("Survey scanner (M700)", s.HasSurveyScanner, s.HasSurveyScanner ? "Maps rough ore: Poor, Fair, Good…" : "Needed for the rough map"),
             new($"{s.BodyName}'s orbital survey done in game", scanned, scanned ? ""
                 : s.HasSurveyScanner ? "Run it from a polar orbit (below)" : "Needs any craft with a survey scanner in a polar orbit (a probe will do): pick it above"),
@@ -177,6 +205,17 @@ public sealed class SurveyViewModel : ObservableObject
             new($"{s.BodyName}'s ore data from the game", map is not null, map is not null ? $"Fetched {map.FetchedUtc.ToLocalTime():g}" : "Needs the live link and the planner's add-on"),
         ];
 
+        ReportStatus = ReportLine(s.BodyName);
+        Places = _sync.StockBodies().GetValueOrDefault(s.BodyName) is { } stock
+            ? _tracker.Landmarks(stock).Where(l => l.Shown && l.Kind != LandmarkSurvey.LaunchSite).Select(l => new SurveyPlaceRow(l.Name,
+                SurveyReports.LatLon(l.LatitudeDeg, l.LongitudeDeg),
+                l.Stage switch
+                {
+                    LandmarkStage.Spotted when l.Kind == LandmarkSurvey.Anomaly => "Something odd: send a craft within range to find out what",
+                    LandmarkStage.Identified => "Anomaly, identified" + (l.Note is { } n ? $": {n}" : ""),
+                    _ => (l.Kind == LandmarkSurvey.Anomaly ? "Anomaly" : "Natural feature") + (l.Note is { } n2 ? $": {n2}" : ""),
+                })).ToList()
+            : [];
         if (map is null)
         {
             Spots = [];
@@ -197,6 +236,38 @@ public sealed class SurveyViewModel : ObservableObject
         Spots = SurveyReports.Candidates(map, coverage, biomes).Select((c, i) => new SurveySpotRow(
             SurveyTracker.SpotName(i, c), c.Position,
             c.Analysed ? "Analysed: the true value here" : "Land here and run a biome analysis to find its best spots")).ToList();
+    }
+
+    /// <summary>
+    /// The first check: with Survey Engineers on (the save's setting), an engineer on duty in a station's lab, or at KSC,
+    /// watching this craft's scanners; with it off, any engineer aboard.
+    /// </summary>
+    private SurveyCheck EngineerCheck(SurveyStation s, KspSave save)
+    {
+        if (!save.Roles.SurveyEngineers)
+            return new("Engineer aboard", s.Engineers.Count > 0, s.Engineers.Count > 0 ? string.Join(", ", s.Engineers) : "Nothing is mapped without one");
+        var workers = _tracker.Workers.Where(w => w.Crafts.Any(c => string.Equals(c.Pid, s.VesselId, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (workers.Count > 0)
+            return new("Survey Engineer working its scanners", true, string.Join(", ", workers.Select(w => $"{w.Kerbal} ({w.PostName})")) +
+                (workers.Any(w => w.Crafts.Count > 1) ? ". They watch whichever of their craft is over new ground." : ""));
+        if (_tracker.IsDone(s.BodyName)) return new("Survey Engineer working its scanners", true, $"Not needed: {s.BodyName} is mapped");
+        var aboard = s.Engineers.Count > 0 ? $"{string.Join(", ", s.Engineers)} aboard: put them on duty in a research lab (Kerbin Resources)" : null;
+        return new("Survey Engineer working its scanners", false,
+            aboard ?? $"An engineer on duty in a research lab on a station round {s.BodyName}" + (s.BodyName == "Kerbin" ? ", or at KSC," : "") +
+            " with a CommNet link to this craft");
+    }
+
+    /// <summary>"Mapped. Bill Rockmore is writing the survey report: 2h 10m of 6h." or "Filed by Bill Rockmore on …".</summary>
+    private string ReportLine(string bodyName)
+    {
+        if (_tracker.ReportJob(bodyName) is { } job)
+            return job.Filed
+                ? $"Final survey report filed by {(job.FiledBy.Length > 0 ? job.FiledBy : "the survey team")} on {GameCalendar.Kerbin.FormatDate(job.FiledUt!.Value)}: the ore figures and spots below, and the places of interest found."
+                : $"{bodyName} is mapped. {(job.Writers.Count > 0 ? string.Join(" and ", job.Writers) : "Nobody")} {(job.Writers.Count == 1 ? "is" : "are")} writing the survey report: " +
+                  $"{GameCalendar.Kerbin.FormatDuration(job.WorkedS)} of {GameCalendar.Kerbin.FormatDuration(job.NeedS)} on duty so far.";
+        return _tracker.IsDone(bodyName)
+            ? $"{bodyName} is mapped. The game hears of it the next time the planner is connected (its surveyors then write the report)."
+            : "";
     }
 
     private async Task SendWaypointsAsync()

@@ -423,6 +423,9 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The ore survey's best spots on a body (by name), added to <see cref="Spots"/>.</summary>
     public Func<string, IReadOnlyList<LandingTarget>>? SurveySpots { get; set; }
 
+    /// <summary>The landmarks the survey has found on a body (hidden ones left out, docs/SURVEY.md); all of them when unset.</summary>
+    public Func<CelestialBody, IReadOnlyList<Landmark>>? VisibleLandmarks { get; set; }
+
     public LandingTarget? SelectedSpot
     {
         get => _spot;
@@ -964,7 +967,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (key == _spotsFor) return;
         var bodyChanged = key.Item1 != _spotsFor.Body;
         _spotsFor = key;
-        Spots = body is null ? [] : Landing.Targets(body, _sync.Save, SurveySpots?.Invoke(body.Name));
+        Spots = body is null ? [] : Landing.Targets(body, _sync.Save, SurveySpots?.Invoke(body.Name), VisibleLandmarks?.Invoke(body));
         OnPropertyChanged(nameof(Spots));
         var keep = !bodyChanged && _spot is { } current ? Spots.FirstOrDefault(s => s.Name == current.Name && s.Source == current.Source) : null;
         var pick = Spots.FirstOrDefault(s => s.Name == target && s.Source is "Flag" or "Landed craft")

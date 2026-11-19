@@ -104,8 +104,8 @@ namespace KspFlightPlanner.Traffic
         {
             Instance = this;
             KerbinResources.KerbinResourcesScenario.LoggedElsewhere = FliesRoute;
-            KerbinResources.KerbinResourcesScenario.CardRows = CrewRules.CardRows;
-            KerbinResources.DutyRoster.JobOf = CrewRules.JobOf;
+            KerbinResources.KerbinResourcesScenario.AddCardRows(CrewRules.CardRows);
+            KerbinResources.DutyRoster.AddJobGiver(CrewRules.JobOf);
             KerbinResources.KerbinResourcesScenario.KerbalRenamed += OnKerbalRenamed;
             GameEvents.onVesselGoOffRails.Add(OnVesselGoOffRails);
             GameEvents.onVesselSOIChanged.Add(OnVesselSoiChanged);

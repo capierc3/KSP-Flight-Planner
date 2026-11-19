@@ -1204,7 +1204,7 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
             var landingBody = LegTools.FindLanding(segment.Legs) >= 0 ? _bodies.GetValueOrDefault(segment.Legs[^1].To.BodyName) : null;
             var landing = stop.Landing is { } spot && landingBody is not null ? LegTools.EvaluateLanding(segment.Legs, spot, _bodies, name => _surfaceBakes?.Get(name)) : null;
-            stop.SetLanding(landingBody?.Name, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save, SurveySpots?.Invoke(landingBody.Name)));
+            stop.SetLanding(landingBody?.Name, landing, landingBody is null ? [] : Landing.Targets(landingBody, _sync?.Save, SurveySpots?.Invoke(landingBody.Name), VisibleLandmarks?.Invoke(landingBody)));
 
             var legs = rendezvous is not null ? LegTools.ApplyRendezvous(segment.Legs, rendezvousSpan!, rendezvous, earliest)
                 : transfer is not null ? LegTools.ApplyTransfer(segment.Legs, transfer)
@@ -1324,6 +1324,9 @@ public sealed partial class MissionBuilderViewModel : ObservableObject
 
     /// <summary>The ore survey's best spots on a body (by name), offered as landing spots.</summary>
     public Func<string, IReadOnlyList<LandingTarget>>? SurveySpots { get; set; }
+
+    /// <summary>The landmarks the survey has found on a body (hidden ones left out, docs/SURVEY.md); all of them when unset.</summary>
+    public Func<CelestialBody, IReadOnlyList<Landmark>>? VisibleLandmarks { get; set; }
 
     /// <summary>How the picked design has flown so far, from the flight log; null if it hasn't.</summary>
     public string? FlownText => SelectedDesign?.Report?.Name is { } name ? FlightHistory(name) : null;

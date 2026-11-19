@@ -72,6 +72,11 @@
             </WrapPanel>
             <TextBlock Text="{Binding Status}" Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,0,0,6" />
 
+            <Border Visibility="{Binding HasReportStatus, Converter={StaticResource BoolToVisibility}}" Padding="8,6" Margin="0,0,0,8" CornerRadius="4"
+                    BorderThickness="1" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}">
+                <TextBlock Text="{Binding ReportStatus}" TextWrapping="Wrap" />
+            </Border>
+
             <TextBlock Text="{Binding CoverageText}" FontWeight="SemiBold" Margin="0,4,0,4" />
             <Image Source="{Binding MapImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" MaxHeight="260"
                    HorizontalAlignment="Left" Margin="0,0,0,8"
@@ -95,6 +100,22 @@
                                     <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Position, Mode=OneWay}" FontFamily="Cascadia Mono, Consolas" />
                                 </TextBlock>
                                 <TextBlock Text="{Binding Advice}" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding HasPlaces, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
+                <TextBlock Text="Places of interest" FontWeight="SemiBold" Margin="0,4,0,2" />
+                <ItemsControl ItemsSource="{Binding Places}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,2">
+                                <TextBlock>
+                                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Position, Mode=OneWay}" FontFamily="Cascadia Mono, Consolas" />
+                                </TextBlock>
+                                <TextBlock Text="{Binding What}" Style="{StaticResource Note}" TextWrapping="Wrap" />
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

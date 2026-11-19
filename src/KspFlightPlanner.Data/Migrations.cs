@@ -409,6 +409,28 @@ internal static class Migrations
             PRIMARY KEY (ksp_save, body_name)
         );
 
+        -- Bodies whose survey is done (docs/SURVEY.md "When a body is done"): when, who surveyed it, and whether the game
+        -- has been told (its add-on writes the report).
+        CREATE TABLE survey_done (
+            ksp_save      TEXT NOT NULL,
+            body_name     TEXT NOT NULL,
+            done_ut       REAL NOT NULL,
+            writers       TEXT NOT NULL,     -- JSON array of kerbal names
+            told          INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (ksp_save, body_name)
+        );
+
+        -- The game's anomalies (every body's surface objects), fetched through the add-on once per save.
+        CREATE TABLE survey_anomalies (
+            ksp_save      TEXT NOT NULL,
+            body_name     TEXT NOT NULL,
+            name          TEXT NOT NULL,
+            display_name  TEXT NOT NULL,
+            latitude      REAL NOT NULL,
+            longitude     REAL NOT NULL,
+            PRIMARY KEY (ksp_save, body_name, name)
+        );
+
         CREATE TABLE survey_reports (
             id           INTEGER PRIMARY KEY,
             ksp_save     TEXT NOT NULL,

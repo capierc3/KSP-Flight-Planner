@@ -14,7 +14,7 @@ The ore map comes from the game through the planner's kRPC add-on (`mod/KspFligh
 
 ## The planner's rules
 
-**A surveying station** orbits a body and has an **Engineer** aboard (crew trait from the save's roster). Coverage only builds while that's true. *Agreed 2026-11-15, not built:* the engineer must be on duty as the station's Survey Engineer, and they also work the scanners of linked probes in the same SOI (or, from KSC, around Kerbin). See [KERBIN-RESOURCES.md “Survey and science roles”](KERBIN-RESOURCES.md#survey-and-science-roles). If the engineer leaves part way, the strips they finished stay, and the rest stays blank until an engineer is back.
+**A surveying station** orbits a body and has an **Engineer** aboard (crew trait from the save's roster). Coverage only builds while that's true. *Since 2026-11-15 (built, not tried in game):* with the save's *Survey needs a Survey Engineer* setting on (the default), the engineer must be on duty in a research lab as the station's Survey Engineer, and they also work the scanners of linked probes in the same SOI (or, from KSC, around Kerbin), watching whichever craft is over new ground. The pane's first check says who is working the picked craft's scanners. See [KERBIN-RESOURCES.md “Survey and science roles”](KERBIN-RESOURCES.md#survey-and-science-roles). If the engineer leaves part way, the strips they finished stay, and the rest stays blank until an engineer is back.
 
 **Coverage.** Each pass maps a strip **±5°** either side of the ground track (KerbNet's narrowest view). It's worked out from the station's orbit and the body's rotation between two readings of the save that both show the station surveying. Readings that disagree (the engineer came or went, the station changed body) credit nothing in between, since we don't know when it happened. If the station's orbit changed between them, the first orbit covers the first half and the second the rest. If the game clock goes back (a quickload or revert), coverage and reports after that time are taken away.
 
@@ -36,7 +36,7 @@ A scanner is a part whose modules include `ModuleOrbitalSurveyor` (survey scanne
 
 They're named "Ore 1: Greater Flats ≈ 7%" and so on. They show in Land at a spot ("Ore survey"), and *Send to KSP as waypoints* puts them on the game's map (sending again replaces the survey's earlier waypoints on that body).
 
-### When a body is done (agreed 2026-11-15, not built)
+### When a body is done (built 2026-11-15, not tried in game)
 
 Today nothing happens when a body is finished: the stations keep surveying ground they've already mapped. The game itself has no "map complete" moment either. Its M700 orbital survey is one button press, done at once ("Orbital survey complete"), and that is the only notice it gives.
 

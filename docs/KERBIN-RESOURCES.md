@@ -117,7 +117,32 @@ Pilots get a call sign from the config's list when they're hired (or first seen)
 
 ## Survey and science roles
 
-Agreed 2026-11-15, not built. An engineer or scientist works only while on duty, the same way pilots do for Traffic Controller. Their job title comes through the `DutyRoster.JobOf` hook, and from a station they can work the instruments of probes nearby.
+Agreed and built 2026-11-15 (add-on `Roles/`, planner `SurveyTracker`), not tried in game yet. An engineer or scientist works only while on duty, the same way pilots do for Traffic Controller. Their job title comes through Kerbin Resources' job-title hook (`DutyRoster.AddJobGiver`, which now takes titles from more than one add-on), and from a station they can work the instruments of probes nearby.
+
+**Settings**, per save, in KSP's difficulty settings under *KSP Flight Planner › Crew roles*:
+
+- *Survey needs a Survey Engineer* (on). Off brings back the old rule: any engineer aboard a station with scanners surveys.
+- *Body done at % mapped* (95)
+- *Writing the survey report (hours)* (6)
+- *Hide landmarks until surveyed* (on)
+- *Visit identifies an anomaly within (km)* (3)
+- *Science Officers work probes* (on)
+- *Sign in*, *Run an experiment* and *Sign out* (15, 10 and 15 s)
+
+The planner reads the survey ones from the save.
+
+**How it was built, where it differs from the design above:**
+
+- **Science Officer seat:** any scientist on duty in a lab seat is a Science Officer, whether or not anything aboard has experiments. They're the lab's researcher too.
+- **Where officers work:** only in flight and the tracking station, where KSP runs CommNet and keeps the craft. At the space centre they wait, and so do the add-on's link checks for engineers. The planner then uses the add-on's last look, saved with the game.
+- **High time warp:** a probe's place is looked at once a real second, so at high warp a short stay in a biome can be missed. A session's own steps are worked out at their exact game times.
+- **The lab pause:**
+  - On a loaded station whose only researcher is the officer, the lab is switched off for the session and back on after.
+  - On a station that isn't loaded, the lab's research clock is moved on by the officer's share of the session when it ends: all of it alone, half with two researchers, and so on.
+  - On a loaded station with other researchers, the lab carries on as it is.
+- **Live link:** while the planner is linked to the game, it asks the add-on who's surveying at every update, so a probe going behind a moon stops being credited. Otherwise it uses what the save says.
+- **Survey log:** the survey log entries for biomes mapped and landmarks spotted go to the game only while the planner is connected. Finds made while it wasn't are in the planner's reports but not on the kerbal's card.
+- **Station window:** it shows each Science Officer's state, for example "researching", or "working Probe S-1: sending Gravity Scan, 12 s left". It also hints at moving an engineer or scientist on duty outside a lab into one.
 
 ### Who gets which job
 
@@ -311,6 +336,13 @@ Example: Jeb is first seen at the founding (ut 0) and is given 92.4 years. His b
 | `CrewWindow.cs` | The window and the data card |
 | `CrewMove.cs` | Moving a kerbal to another part of their craft, loaded or not |
 | `KerbinResourcesService.cs` | kRPC "PlannerCrew": `Flights`, `OpenTrips`, `Shifts`, `Controllers`, `PutOnDuty`, `TakeOffDuty` |
+| `WorkLog.cs` | The work log: biomes mapped, landmarks spotted, survey reports filed, probe science sent |
+| `../Roles/SurveyRoles.cs` | Survey Engineer and Science Officer titles, lab seats, scanners, linked probes, the engineers' craft for the planner |
+| `../Roles/ScienceOfficers.cs` | Science Officers' probe sessions, transfer times, the lab pause |
+| `../Roles/RolesScenario.cs` | Report writing, the save (`RolesScenario`: WORKER, REPORT, VISIT, OFFICERS) |
+| `../Roles/Anomalies.cs` | The game's anomalies, and visits that identify them |
+| `../Roles/RolesService.cs` | kRPC "PlannerRoles": `SurveyWorkers`, `SurveyDone`, `SurveyReports`, `Anomalies`, `Visits`, `LogSurvey`, `Sessions` |
+| `../Roles/RolesSettings.cs` | The crew roles' settings |
 
 ## Credits
 

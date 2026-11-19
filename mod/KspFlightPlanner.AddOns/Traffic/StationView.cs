@@ -20,6 +20,9 @@ namespace KspFlightPlanner.Traffic
         public List<string> Crew = new List<string>();
         public bool Command;
 
+        /// <summary>A research lab (ModuleScienceLab): where Science Officers and Survey Engineers sit.</summary>
+        public bool Lab;
+
         public bool Port;
         public bool PortFree;
         public bool PortDocked;
@@ -124,6 +127,7 @@ namespace KspFlightPlanner.Traffic
                     Id = p.persistentId, ParentId = p.parent != null ? p.parent.persistentId : 0, Title = p.partInfo?.title ?? p.name,
                     Craft = map.CraftOfPart(p.persistentId) ?? map.Main, Seats = p.CrewCapacity,
                     Crew = p.protoModuleCrew.Select(c => c.name).ToList(), Command = p.FindModuleImplementing<ModuleCommand>() != null,
+                    Lab = p.Modules.Cast<PartModule>().Any(m => m.moduleName == "ModuleScienceLab"),
                     Port = dock != null, PortFree = Ships.IsFree(dock),
                     PortDocked = dock != null && (dock.otherNode != null || state.StartsWith("Docked", StringComparison.Ordinal) || state.StartsWith("PreAttached", StringComparison.Ordinal)),
                     Access = p.FindModuleImplementing<ModuleTrafficPort>()?.access ?? ModuleTrafficPort.Any,
@@ -183,6 +187,7 @@ namespace KspFlightPlanner.Traffic
                     Title = CrewMove.Title(pp), Craft = map.CraftOfPart(pp.persistentId) ?? map.Main,
                     Seats = pp.partInfo?.partPrefab != null ? pp.partInfo.partPrefab.CrewCapacity : 0,
                     Crew = pp.protoModuleCrew.Select(c => c.name).ToList(), Command = pp.modules.Any(m => m.moduleName == "ModuleCommand"),
+                    Lab = pp.modules.Any(m => m.moduleName == "ModuleScienceLab"),
                     Port = dock != null, PortFree = state == "Ready",
                     PortDocked = state.StartsWith("Docked", StringComparison.Ordinal) || state.StartsWith("PreAttached", StringComparison.Ordinal),
                     Access = string.IsNullOrEmpty(access) ? ModuleTrafficPort.Any : access,

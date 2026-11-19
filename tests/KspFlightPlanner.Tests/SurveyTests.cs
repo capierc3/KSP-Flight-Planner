@@ -4,7 +4,7 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>The ore survey: reading the save, coverage from ground tracks, reports (docs/SURVEY.md, docs/SURVEY.md, "How the numbers are worked out").</summary>
+/// <summary>The ore survey: reading the save, coverage from ground tracks, reports (docs/SURVEY.md, with its "How the numbers are worked out").</summary>
 public sealed class SurveyTests
 {
     private const double MinmusRadius = 60_000;

@@ -52,6 +52,9 @@ public sealed class LocationsViewModel : ObservableObject
     private IReadOnlyList<CelestialBody> _stock = [];
     private DeltaVMap? _map;
 
+    /// <summary>The landmarks the survey has found on a body (hidden ones left out, docs/SURVEY.md); all of them when unset.</summary>
+    public Func<CelestialBody, IReadOnlyList<Landmark>>? VisibleLandmarks { get; set; }
+
     public LocationsViewModel(BodyRepository bodies, DvMapRepository maps, CustomLocationRepository locations, PlannerEvents events,
         SurfaceBakeRepository? bakes = null)
     {
@@ -174,7 +177,7 @@ public sealed class LocationsViewModel : ObservableObject
 
     private BodyDetailViewModel CreateBodyDetail(CelestialBody body) =>
         new(body, _stock, _map, _locations.GetAll().Where(l => l.BodyName == body.Name).ToList(), id => SelectLocation(id),
-            _bakes?.Get(body.Name));
+            _bakes?.Get(body.Name), VisibleLandmarks?.Invoke(body));
 
     private CustomLocationEditorViewModel CreateEditor(CustomLocation location) =>
         new(location, BodyOptions(), Analyze, PhaseFromHome, _locations, this, OnSaved, OnDeleted);
@@ -239,7 +242,8 @@ public sealed class BodyDetailViewModel
     private const double G0 = 9.80665;
 
     public BodyDetailViewModel(CelestialBody body, IReadOnlyList<CelestialBody> all, DeltaVMap? map,
-        IReadOnlyList<CustomLocation> customHere, Action<long> openLocation, SurfaceBake? bake = null)
+        IReadOnlyList<CustomLocation> customHere, Action<long> openLocation, SurfaceBake? bake = null,
+        IReadOnlyList<Landmark>? visibleLandmarks = null)
     {
         Body = body;
         var byId = all.ToDictionary(b => b.Id);
@@ -358,10 +362,13 @@ public sealed class BodyDetailViewModel
         // Surface
         if (body.Biomes.Count > 0)
             groups.Add(new FactGroup($"Biomes ({body.Biomes.Count})", [new("Biomes", string.Join(", ", body.Biomes))]));
-        if (body.Landmarks.Count > 0)
-            groups.Add(new FactGroup("Landmarks", body.Landmarks
+        var landmarks = visibleLandmarks ?? body.Landmarks;
+        if (landmarks.Count > 0)
+            groups.Add(new FactGroup("Landmarks", landmarks
                 .Select(m => new Fact(m.Name, $"{Units.LatLon(m.LatitudeDeg, m.LongitudeDeg)} · {m.Kind}" + (m.Note is { } n ? $" · {n}" : "")))
                 .ToList()));
+        else if (body.Landmarks.Count > 0)
+            groups.Add(new FactGroup("Landmarks", [new("None found yet", "Landmarks show once a narrow-band survey has covered them (Tools › Ore survey)")]));
 
         // Sampled from the player's game (KSP › Bake Surface Data)
         groups.Add(new FactGroup("From your game (surface bake)", bake is null
