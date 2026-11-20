@@ -41,7 +41,7 @@ namespace KspFlightPlanner.KerbinResources
 
         /// <summary>
         /// The job they're doing now ("Traffic Controller", "Shuttle pilot"), given by the add-on that gives that job
-        /// (<see cref="DutyRoster.JobOf"/>); "" while no add-on has one for them, shown as <see cref="AwaitingOrders"/>.
+        /// (<see cref="DutyRoster.AddJobGiver"/>); "" while no add-on has one for them, shown as <see cref="AwaitingOrders"/>.
         /// </summary>
         public string Job = "";
 
@@ -163,18 +163,35 @@ namespace KspFlightPlanner.KerbinResources
         private readonly List<DutyShift> _shifts = new List<DutyShift>();
 
         /// <summary>
-        /// The job title for a kerbal on duty, from the add-on whose job it is (set by Traffic Controller: "Traffic
-        /// Controller", "Shuttle pilot"). Null or "" when it has none for them: they're shown as awaiting orders. Asked when
-        /// they go on duty and every few seconds after, as they move.
+        /// Where job titles come from: each add-on whose job it is gives titles for the kerbals it has one for (Traffic
+        /// Controller: pilots, "Traffic Controller", "Shuttle pilot"; Roles: engineers and scientists, "Survey Engineer",
+        /// "Science Officer"). The first title given wins; with none, the kerbal is shown as awaiting orders. Asked when they
+        /// go on duty and every few seconds after, as they move.
         /// </summary>
-        internal static Func<DutyShift, string> JobOf;
+        private static readonly List<Func<DutyShift, string>> JobGivers = new List<Func<DutyShift, string>>();
+
+        /// <summary>Adds a source of job titles (once; adding the same one again does nothing).</summary>
+        internal static void AddJobGiver(Func<DutyShift, string> giver)
+        {
+            if (giver != null && !JobGivers.Contains(giver)) JobGivers.Add(giver);
+        }
 
         private static void UpdateJob(DutyShift s, double now)
         {
             string job = null;
-            try { job = JobOf?.Invoke(s); }
-            catch (Exception e) { UnityEngine.Debug.LogWarning("[KspFlightPlanner] Kerbin Resources: job title for " + s.Kerbal + " failed: " + e.Message); }
+            foreach (var giver in JobGivers)
+            {
+                try { job = giver(s); }
+                catch (Exception e) { UnityEngine.Debug.LogWarning("[KspFlightPlanner] Kerbin Resources: job title for " + s.Kerbal + " failed: " + e.Message); }
+                if (!string.IsNullOrEmpty(job)) break;
+            }
             s.SetJob(job, now);
+        }
+
+        /// <summary>Looks every shift's job title over again now (a body's survey finished, a report was filed).</summary>
+        internal void UpdateJobs(double now)
+        {
+            foreach (var s in OnDuty) UpdateJob(s, now);
         }
 
         internal IReadOnlyList<DutyShift> Shifts => _shifts;

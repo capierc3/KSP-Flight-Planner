@@ -200,7 +200,8 @@ public static class Landing
     /// spots), then the body's wiki landmarks. Debris and the loose parts of a deployed science station are left out
     /// (the station's control unit stays in): they'd crowd the list.
     /// </summary>
-    public static IReadOnlyList<LandingTarget> Targets(CelestialBody body, KspSave? save, IEnumerable<LandingTarget>? more = null)
+    /// <param name="landmarks">The landmarks to list (the survey's view: hidden ones left out); the body's own when null.</param>
+    public static IReadOnlyList<LandingTarget> Targets(CelestialBody body, KspSave? save, IEnumerable<LandingTarget>? more = null, IReadOnlyList<Landmark>? landmarks = null)
     {
         var craft = new List<LandingTarget>();
         var flags = new List<LandingTarget>();
@@ -219,8 +220,8 @@ public static class Landing
             waypoints.AddRange(save.Waypoints.Where(w => w.BodyName == body.Name)
                 .Select(w => new LandingTarget(w.Name, "KerbNet waypoint", w.LatitudeDeg, w.LongitudeDeg)));
         }
-        var landmarks = body.Landmarks.Select(m => new LandingTarget(m.Name, "Landmark", m.LatitudeDeg, m.LongitudeDeg));
-        return [.. craft, .. flags, .. waypoints, .. more ?? [], .. landmarks];
+        var marks = (landmarks ?? body.Landmarks).Select(m => new LandingTarget(m.Name, "Landmark", m.LatitudeDeg, m.LongitudeDeg));
+        return [.. craft, .. flags, .. waypoints, .. more ?? [], .. marks];
     }
 
     /// <summary>Distance along the surface between two spots (haversine, §1.9).</summary>

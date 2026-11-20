@@ -423,6 +423,9 @@ public sealed class FromHereViewModel : ObservableObject
     /// <summary>The ore survey's best spots on a body (by name), added to <see cref="Spots"/>.</summary>
     public Func<string, IReadOnlyList<LandingTarget>>? SurveySpots { get; set; }
 
+    /// <summary>The landmarks the survey has found on a body (hidden ones left out, docs/SURVEY.md); all of them when unset.</summary>
+    public Func<CelestialBody, IReadOnlyList<Landmark>>? VisibleLandmarks { get; set; }
+
     public LandingTarget? SelectedSpot
     {
         get => _spot;
@@ -744,7 +747,7 @@ public sealed class FromHereViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Aerobrake: the next step from the orbit now (§9.5), and the burn (or, finishing into a target orbit, the two) for it.
+    /// Aerobrake: the next step from the orbit now (§9.4), and the burn (or, finishing into a target orbit, the two) for it.
     /// </summary>
     private async Task PlanAerobrakeAsync(CelestialBody body, OrbitalElements orbit, double now)
     {
@@ -801,7 +804,7 @@ public sealed class FromHereViewModel : ObservableObject
             IReadOnlyList<TripOption> options;
             if (double.IsNaN(height))
             {
-                // Aerobraking there (docs/MATH.md §9.6): plan to a first guess in the air, take the path it arrives on, let
+                // Aerobraking there (docs/MATH.md §9.5): plan to a first guess in the air, take the path it arrives on, let
                 // the aim pick the periapsis for the first pass, and plan again to that.
                 var guess = TransferFlights.AerobrakeFraction * to.AtmosphereHeightM;
                 options = await Task.Run(() => TripPlanner.Options(from, to, orbit, after, guess, bodies, inclination));
@@ -964,7 +967,7 @@ public sealed class FromHereViewModel : ObservableObject
         if (key == _spotsFor) return;
         var bodyChanged = key.Item1 != _spotsFor.Body;
         _spotsFor = key;
-        Spots = body is null ? [] : Landing.Targets(body, _sync.Save, SurveySpots?.Invoke(body.Name));
+        Spots = body is null ? [] : Landing.Targets(body, _sync.Save, SurveySpots?.Invoke(body.Name), VisibleLandmarks?.Invoke(body));
         OnPropertyChanged(nameof(Spots));
         var keep = !bodyChanged && _spot is { } current ? Spots.FirstOrDefault(s => s.Name == current.Name && s.Source == current.Source) : null;
         var pick = Spots.FirstOrDefault(s => s.Name == target && s.Source is "Flag" or "Landed craft")

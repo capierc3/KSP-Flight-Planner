@@ -17,7 +17,7 @@ public sealed record FlownPass(int Number, double EntryUt, double ExitUt, double
     double SpeedLost, double PeakG, double? DragFactor, bool CameDown);
 
 /// <summary>
-/// Aerobraking while it's flown (docs/MATH.md §9.5): the next step from the orbit the craft is on, the burn that sets its
+/// Aerobraking while it's flown (docs/MATH.md §9.4): the next step from the orbit the craft is on, the burn that sets its
 /// periapsis, and a tracker that measures the drag from the game's readings.
 /// </summary>
 public static class AerobrakeLive
@@ -43,7 +43,7 @@ public static class AerobrakeLive
         var goal = aim is AerobrakeAim.Gentlest or AerobrakeAim.TargetOrbit ? targetApoapsisM : (double?)null;
         var start = now;
 
-        // Within 2% of the goal's radius counts as there (as for the aims, §9.4).
+        // Within 2% of the goal's radius counts as there (as for the aims, §9.3).
         var reached = goal is { } g && apoapsisM <= g + 0.02 * (body.EquatorialRadiusM + g);
         AerobrakeStep Finish(string why) => new(finishPe, true, why, aim == AerobrakeAim.TargetOrbit && !reached ? targetApoapsisM : null);
 
@@ -80,7 +80,7 @@ public static class AerobrakeLive
     /// <summary>
     /// Moves the periapsis to <paramref name="periapsisM"/>. At the next apoapsis when that comes first (the cheapest place,
     /// and the apoapsis stays put); otherwise, on the way in, a burn along the horizon <paramref name="leadS"/> from now,
-    /// sized by search (§9.5).
+    /// sized by search (§9.4).
     /// </summary>
     public static FlightBurn SetPeriapsis(CelestialBody body, OrbitalElements orbit, double now, double leadS, double periapsisM)
     {
@@ -125,7 +125,7 @@ public static class AerobrakeLive
 }
 
 /// <summary>
-/// Follows a craft through its passes from the game's readings (twice a second), and measures the drag (§9.5): the orbital
+/// Follows a craft through its passes from the game's readings (twice a second), and measures the drag (§9.4): the orbital
 /// energy v²/2 − μ/r only changes by drag when the engines are off, so what the game shows going, against what the model
 /// says should go over the same moments, is how strong the drag really is.
 /// </summary>

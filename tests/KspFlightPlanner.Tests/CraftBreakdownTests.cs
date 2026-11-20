@@ -2,7 +2,7 @@ using KspFlightPlanner.Core.Ksp;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>A small two-stage rocket with round masses and costs, so every figure can be checked by hand (docs/MATH.md §7.5).</summary>
+/// <summary>A small two-stage rocket with round masses and costs, so every figure can be checked by hand (docs/ROCKETS-AND-MISSIONS.md, “A design taken apart: mass, cost and what each stage drops”).</summary>
 public sealed class CraftBreakdownTests
 {
     // pod: 0.8 t, √600, 1 seat, 14 m/s. tank: 0.5 t, √500 full (90 LF + 110 Ox = √91.8 of fuel), 6 m/s.

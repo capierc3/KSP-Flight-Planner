@@ -150,7 +150,7 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                         <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                                   Text="Stage numbers as in KSP (the first to fire is the highest). Pick a stage to see its TWR on every body in the Rocket pane. How it's worked out: Math guide §7.2, §7.4." />
+                                   Text="Stage numbers as in KSP (the first to fire is the highest). Pick a stage to see its TWR on every body in the Rocket pane. How it's worked out: ROCKETS-AND-MISSIONS.md (“A saved design's stage-by-stage Δv”), §7.2." />
                     </StackPanel>
 
                     <!-- Mass and cost by part type | the open mission -->
@@ -320,7 +320,7 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                               Text="Mass with what the tanks hold at launch; cost as KSP charges it, for the fuel actually loaded. Greyed parts aren't unlocked in this save. Pick one to see it in the Part pane. How it's worked out: Math guide §7.5." />
+                               Text="Mass with what the tanks hold at launch; cost as KSP charges it, for the fuel actually loaded. Greyed parts aren't unlocked in this save. Pick one to see it in the Part pane. How it's worked out: ROCKETS-AND-MISSIONS.md (“A design taken apart: mass, cost and what each stage drops”)." />
                 </StackPanel>
             </ScrollViewer>
         </Grid>

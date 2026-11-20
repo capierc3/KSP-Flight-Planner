@@ -3,7 +3,7 @@ using KspFlightPlanner.Core.Models;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>Stock antennas and orbits, checked by hand (docs/MATH.md §7.7).</summary>
+/// <summary>Stock antennas and orbits, checked by hand (docs/ROCKETS-AND-MISSIONS.md, “Antenna range and signal (CommNet planner)”).</summary>
 public sealed class CommNetTests
 {
     private static readonly PartAntenna Communotron16 = new("DIRECT", 500e3, true, 1);

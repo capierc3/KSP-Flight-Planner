@@ -112,7 +112,7 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>
         /// The Traffic Controllers on duty: where, how many of their slots are in use now, the most they have on at once over
-        /// the next six hours (uploaded burns and craft in their zone), and how much they've handled (docs/MATH.md §11.17).
+        /// the next six hours (uploaded burns and craft in their zone), and how much they've handled (docs/TRAFFIC-CONTROLLER.md, "Controller rules: critical burns and controller time").
         /// </summary>
         private static void DrawControllers()
         {

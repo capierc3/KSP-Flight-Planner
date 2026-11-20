@@ -222,6 +222,48 @@ public sealed class DatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Science_catalog_round_trips_per_save_and_survives_a_rebuild()
+    {
+        _db.ActiveSave = "Protogen";
+        var science = new ScienceRepository(_db);
+        var catalog = Core.Ksp.ScienceCatalogReader.Parse(
+            ["gravityScan	Gravity Scan	20	22	3	51	51	0	0"],
+            ["GravMax	gravityScan	0.4"],
+            ["Minmus	5	0	0	0	4	2.5	0	0	1	0	30000	Lowlands|Greater Flats		3000"],
+            new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc));
+        science.SaveCatalog(catalog);
+        var cells = Core.Ksp.SurfaceBake.GridRows(10) * Core.Ksp.SurfaceBake.GridColumns(10);
+        var biomeMap = new Core.Ksp.ScienceBiomeMap("Minmus", 10, 60_000, 40_400, 12.5,
+            Enumerable.Range(0, cells).Select(i => (short)(i % 3 - 1)).ToArray(), ["Lowlands", "Greater Flats"],
+            new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc));
+        science.SaveBiomeMap(biomeMap);
+
+        using (var c = _db.Open())
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "DROP TABLE ksp_part_antennas;"; // forces a rebuild that carries user tables over
+            cmd.ExecuteNonQuery();
+        }
+        TestDb.Release(_path);
+        _db.Initialize();
+
+        var loaded = science.GetCatalog()!;
+        Assert.Equal(catalog.Experiments, loaded.Experiments);
+        Assert.Equal(["gravityScan"], loaded.PartExperiments["GravMax"]);
+        Assert.Equal(0.4, loaded.PartTransmit["GravMax"]["gravityScan"]);
+        Assert.Equal(3000, loaded.Body("Minmus")!.AtmosphereHeightM);
+        Assert.Equal(["Lowlands", "Greater Flats"], loaded.Body("Minmus")!.Biomes);
+        Assert.Equal(4, loaded.Body("Minmus")!.Multiplier(Core.Ksp.ScienceSituation.InSpaceLow));
+        var loadedMap = science.GetBiomeMap("Minmus")!;
+        Assert.Equal(biomeMap.Biomes, loadedMap.Biomes);
+        Assert.Equal(biomeMap.BiomeNames, loadedMap.BiomeNames);
+        Assert.Equal((12.5, biomeMap.FetchedUtc), (loadedMap.InitialRotationDeg, loadedMap.FetchedUtc));
+        _db.ActiveSave = "Other";
+        Assert.Null(science.GetCatalog());
+        Assert.Null(science.GetBiomeMap("Minmus"));
+    }
+
+    [Fact]
     public void Survey_data_round_trips_per_save_and_survives_a_rebuild()
     {
         _db.ActiveSave = "Protogen";

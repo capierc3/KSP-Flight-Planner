@@ -132,7 +132,7 @@ public sealed record AerobrakePlan(IReadOnlyList<AerobrakePass> Passes, IReadOnl
 }
 
 /// <summary>
-/// Aerobraking, pass by pass (docs/MATH.md §9.3): coast to the top of the air on the orbit, step through the air with
+/// Aerobraking, pass by pass (docs/MATH.md §9.2): coast to the top of the air on the orbit, step through the air with
 /// gravity and drag (the air turning with the planet), then read the orbit it leaves on. Repeat at each periapsis.
 /// In the orbit's plane, over the equator; drag only (no lift), with the craft holding one attitude.
 /// </summary>
@@ -220,7 +220,7 @@ public static class Aerobraking
         body.RotationPeriodS == 0 ? 0 : 2 * Math.PI / body.RotationPeriodS * Math.Cos(inclinationDeg * Math.PI / 180);
 
     /// <summary>
-    /// The rest of a pass already under way, from the craft's height, speed and climb rate now (docs/MATH.md §9.5): where it
+    /// The rest of a pass already under way, from the craft's height, speed and climb rate now (docs/MATH.md §9.4): where it
     /// leaves the air, and on what orbit. Stepped from here exactly as a planned pass is; speed lost and peak g are from now on.
     /// </summary>
     /// <param name="orbitalSpeed">Speed against the stars (not the ground).</param>
@@ -242,7 +242,7 @@ public static class Aerobraking
 
     /// <summary>
     /// The drag slowing the craft now: its pull (m/s²) and the orbital energy it takes per second (J/kg/s, the pull times
-    /// the speed along it). §9.5 compares the energy the game shows going with this, to measure the drag.
+    /// the speed along it). §9.4 compares the energy the game shows going with this, to measure the drag.
     /// </summary>
     public static (double Accel, double EnergyRate) DragNow(CelestialBody body, double altitudeM, double orbitalSpeed, double verticalSpeed,
         double inclinationDeg, double massKg, DragTable drag)

@@ -360,7 +360,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// Just undocked for a trip: every engine on it lit (at zero throttle) and its RCS thrusters and RCS switched on,
         /// so the autopilot, or a player who takes over mid-trip, finds it ready to fly. Docking shut them down. The
-        /// thrust limiters are left as they are. Returns what it did, for the log. docs/MATH.md §11.8.
+        /// thrust limiters are left as they are. Returns what it did, for the log. docs/TRAFFIC-CONTROLLER.md, "The physics flyer: leaving a station".
         /// </summary>
         public static string ReadyToFly(Vessel v)
         {
@@ -684,7 +684,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// The Δv the ship can still make with its main engine kind, in vacuum, from the fuel it has: as many full sets of
         /// the engine's propellants (in its ratio) as the scarcest one allows, burnt off its whole mass (rocket equation).
-        /// Zero with no engine or fuel. docs/MATH.md §11.2.
+        /// Zero with no engine or fuel. docs/MATH.md §10.2.
         /// </summary>
         public static double DeltaVLeft(Vessel v, out Engine engine)
         {
@@ -707,6 +707,25 @@ namespace KspFlightPlanner.Traffic
             }
             double Amount(string name) => amounts.TryGetValue(name, out var a) ? a : 0;
             engine = PickEngine(parts.Where(p => p.partInfo != null).Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p)), Amount);
+            return engine == null ? 0 : DeltaVLeft(engine, Amount, mass);
+        }
+
+        /// <summary>The same for a craft docked in an unloaded stack, from its own saved parts (the Refueler's pump on rails).</summary>
+        public static double DeltaVLeft(IList<ProtoPartSnapshot> parts, out Engine engine)
+        {
+            var amounts = new Dictionary<string, double>();
+            double mass = 0;
+            foreach (var p in parts)
+            {
+                mass += p.mass;
+                foreach (var r in p.resources)
+                {
+                    mass += r.amount * (PartResourceLibrary.Instance?.GetDefinition(r.resourceName)?.density ?? 0);
+                    if (r.flowState) amounts[r.resourceName] = (amounts.TryGetValue(r.resourceName, out var a) ? a : 0) + r.amount;
+                }
+            }
+            double Amount(string name) => amounts.TryGetValue(name, out var a) ? a : 0;
+            engine = PickEngine(parts.Where(p => p.partInfo != null).Select(p => new KeyValuePair<string, Part>(p.partInfo.name, p.partInfo.partPrefab)), Amount);
             return engine == null ? 0 : DeltaVLeft(engine, Amount, mass);
         }
 

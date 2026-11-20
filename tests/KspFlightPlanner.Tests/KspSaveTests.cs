@@ -75,7 +75,7 @@ public sealed class KspSaveTests : IDisposable
         Assert.Equal("Kerbol", save.Vessels[2].Orbit!.BodyName); // REF 0, no IDENT
     }
 
-    // Worked example in docs/MATH.md §8.1.
+    // Worked example in docs/SAVE-AND-LIVE-GAME.md, “Importing vessels from a KSP save”.
     [Fact]
     public void Converts_an_orbiting_vessel_to_a_placed_location()
     {

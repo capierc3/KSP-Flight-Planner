@@ -83,6 +83,9 @@ public sealed record SavedVessel(string Id, string Name, string Type, string Sit
     /// vessel as the save has it.
     /// </summary>
     public string? DockedInId { get; init; }
+
+    /// <summary>Science data aboard that hasn't been recovered or sent home (ScienceData nodes in its parts' modules).</summary>
+    public IReadOnlyList<CarriedScience> CarriedScience { get; init; } = [];
 }
 
 /// <summary>
@@ -153,12 +156,27 @@ public sealed record KspSave(string Title, string Mode, double Ut, IReadOnlyList
     public IReadOnlySet<(string Body, string Biome)> AnalysedBiomes { get; init; } = new HashSet<(string, string)>();
 
     /// <summary>The kerbal is an engineer.</summary>
+    /// <summary>R&amp;D's science subjects by id: what each has earned of its cap (empty in sandbox).</summary>
+    public IReadOnlyDictionary<string, SavedScienceSubject> ScienceSubjects { get; init; } = new Dictionary<string, SavedScienceSubject>();
+
+    /// <summary>Survey Engineers on duty and the craft each can watch, as the add-on last saved them (RolesScenario › WORKER).</summary>
+    public IReadOnlyList<SurveyWorker> SurveyWorkers { get; init; } = [];
+
+    /// <summary>Finished bodies' survey reports, written or being written (RolesScenario › REPORT).</summary>
+    public IReadOnlyList<SurveyReportJob> SurveyReportJobs { get; init; } = [];
+
+    /// <summary>Anomalies a craft has visited (RolesScenario › VISIT).</summary>
+    public IReadOnlyList<AnomalyVisit> AnomalyVisits { get; init; } = [];
+
+    /// <summary>The crew roles' survey rules from the difficulty settings (PARAMETERS › RolesSettings).</summary>
+    public RolesRules Roles { get; init; } = RolesRules.Default;
+
     public bool IsEngineer(string kerbal) => CrewTraits.TryGetValue(kerbal, out var trait) && trait == "Engineer";
 }
 
 /// <summary>
 /// CommNet as the save has it: the tracking station's level and the difficulty modifiers on antenna range and on the
-/// tracking station's power (docs/MATH.md §7.7).
+/// tracking station's power (docs/ROCKETS-AND-MISSIONS.md, “Antenna range and signal (CommNet planner)”).
 /// </summary>
 /// <param name="TrackingStationLevel">1 to 3. Career saves record it; sandbox and science saves have every building upgraded.</param>
 public sealed record SavedCommNet(bool Enabled, int TrackingStationLevel, double RangeModifier, double DsnModifier)
@@ -245,14 +263,22 @@ public static class KspSaveReader
             .Where(w => w.BodyName.Length > 0 && double.IsFinite(w.LatitudeDeg) && double.IsFinite(w.LongitudeDeg))
             .ToList();
         var mode = game.GetValue("Mode") ?? "";
-        var research = mode == "SANDBOX" ? null
-            : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment") is { } rd ? ReadResearch(rd) : null;
+        var rdNode = mode == "SANDBOX" ? null : game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResearchAndDevelopment");
+        var research = rdNode is null ? null : ReadResearch(rdNode);
         var resources = game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "ResourceScenario")?.GetNode("RESOURCE_SETTINGS");
         string? BodyById(string? id) => int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)
             && i >= 0 && i < SavedOrbit.StockBodyOrder.Length ? SavedOrbit.StockBodyOrder[i] : null;
+        var roles = RolesReader.FromSave(game.GetNodes("SCENARIO").FirstOrDefault(n => n.GetValue("name") == "RolesScenario"));
         return new KspSave(title, mode, Number(flight?.GetValue("UT")), vessels)
         {
             Waypoints = waypoints, Research = research, CommNet = ReadCommNet(game),
+            SurveyWorkers = roles.Workers, SurveyReportJobs = roles.Reports, AnomalyVisits = roles.Visits,
+            Roles = RolesReader.Rules(game.GetNode("PARAMETERS")?.GetNode("RolesSettings")),
+            ScienceSubjects = (rdNode?.GetNodes("Science") ?? [])
+                .Select(n => new SavedScienceSubject(n.GetValue("id") ?? "", Number(n.GetValue("sci")), Number(n.GetValue("cap")), Number(n.GetValue("sbv"))))
+                .Where(x => x.Id.Length > 0 && double.IsFinite(x.Cap))
+                .Select(x => double.IsFinite(x.Science) ? x : x with { Science = 0 })
+                .GroupBy(x => x.Id).ToDictionary(g => g.Key, g => g.First()),
             CrewTraits = (game.GetNode("ROSTER")?.GetNodes("KERBAL") ?? [])
                 .Select(k => (Name: k.GetValue("name"), Trait: k.GetValue("trait")))
                 .Where(k => k is { Name.Length: > 0, Trait: not null })
@@ -312,6 +338,10 @@ public static class KspSaveReader
             LatitudeDeg = Number(v.GetValue("lat")),
             LongitudeDeg = Number(v.GetValue("lon")),
             AltitudeM = Number(v.GetValue("alt")),
+            CarriedScience = v.GetNodes("PART").SelectMany(p => p.GetNodes("MODULE")).SelectMany(m => m.GetNodes("ScienceData"))
+                .Select(d => new CarriedScience(d.GetValue("subjectID") ?? "", Number(d.GetValue("data")), d.GetValue("xmit") is { } x ? Number(x) : 1))
+                .Where(c => c.SubjectId.Length > 0 && double.IsFinite(c.Data))
+                .ToList(),
         };
     }
 

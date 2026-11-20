@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>Planning a background trip again from where the ship was found off course (§11.3).</summary>
+/// <summary>Planning a background trip again from where the ship was found off course (docs/MATH.md §10.3).</summary>
 public sealed class RouteReplanTests : IDisposable
 {
     private readonly ITestOutputHelper _output;

@@ -79,7 +79,7 @@ Notes:
 ## 2. Fuel planning: Δv as fuel, and refuelling a craft
 
 The Rocket pane (Plan mode) checks a saved design **or a craft in flight** against the mission, and says what the Δv
-means in fuel, in KSP's units (one unit of liquid fuel or oxidizer is 5 L). docs/MATH.md §7.9.
+means in fuel, in KSP's units (one unit of liquid fuel or oxidizer is 5 L). docs/MATH.md §7.4.
 
 ### Set up a station-to-station mission
 

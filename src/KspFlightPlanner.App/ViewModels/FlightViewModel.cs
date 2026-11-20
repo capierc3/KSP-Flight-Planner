@@ -68,7 +68,7 @@ public sealed record MissionStepRow(int Number, string Title, string StateText, 
 /// </summary>
 public sealed class FlightViewModel : ObservableObject
 {
-    /// <summary>Further than this from the planned path lights up Re-plan. docs/MATH.md §8.3.</summary>
+    /// <summary>Further than this from the planned path lights up Re-plan. docs/MATH.md §8.1.</summary>
     public const double DriftThresholdM = 1_000;
 
     /// <summary>How long after a burn's node time it counts as flown (about half a long burn comes after the node).</summary>
@@ -496,7 +496,7 @@ public sealed class FlightViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Re-plans the rest of the current rendezvous leg, keeping its steps and meeting time (docs/MATH.md §8.4). False when
+    /// Re-plans the rest of the current rendezvous leg, keeping its steps and meeting time (docs/MATH.md §8.2). False when
     /// the leg hasn't started, so the whole flight is planned again instead.
     /// </summary>
     private bool ReplanRest(Flight f, double now, bool afterBurn)

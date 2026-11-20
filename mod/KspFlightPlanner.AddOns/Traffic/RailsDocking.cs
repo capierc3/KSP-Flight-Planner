@@ -12,7 +12,7 @@ namespace KspFlightPlanner.Traffic
     /// stack's record into a record of its own, re-rooted at its own root part; docking hangs the arriving ship's parts off
     /// a free port on the station, its port turned to face the station's. Both ports are set free, or docked to each
     /// other, as KSP's own docking does. A backup of the game is saved first ("persistent-before-rails-dock").
-    /// docs/MATH.md §11.10.
+    /// docs/TRAFFIC-CONTROLLER.md, "Docking and undocking on rails".
     /// </summary>
     internal static class RailsDocking
     {
@@ -186,7 +186,7 @@ namespace KspFlightPlanner.Traffic
                 var sp = Parts(sRec);
                 var hp = Parts(hRec);
                 int s = -1, h = -1;
-                // The booked port first (docs/MATH.md §11.14), then the rest in order.
+                // The booked port first (docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one"), then the rest in order.
                 foreach (var i in Enumerable.Range(0, sp.Count).Where(i => IsFree(sp[i]) && (claimed == null || !claimed.Contains(sp[i].Pid))).OrderBy(i => prefer != 0 && sp[i].Pid == prefer ? 0 : 1))
                 {
                     h = Enumerable.Range(0, hp.Count).Where(j => IsFree(hp[j]) && Fits(sp[i].Name, hp[j].Name)).DefaultIfEmpty(-1).First();

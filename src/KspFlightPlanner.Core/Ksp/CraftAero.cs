@@ -14,7 +14,7 @@ public enum AeroAttitude
 }
 
 /// <summary>
-/// A craft's drag from its parts' drag cubes, the way KSP adds it up (docs/MATH.md §9.2): every face of every part, its
+/// A craft's drag from its parts' drag cubes, the way KSP adds it up (docs/ROCKETS-AND-MISSIONS.md, “A craft's drag from its parts”): every face of every part, its
 /// area less what the parts stacked on it cover, times how much drag a face pointing that way makes at that Mach number.
 /// Lift from wings is left out.
 /// </summary>
@@ -168,7 +168,7 @@ public sealed class CraftAero
         new(Enumerable.Range(0, 61).Select(i => DragArea(i * 0.5, attitude)).ToArray(), 0.5, _physics.PseudoReynolds);
 }
 
-/// <summary>A craft's drag area by Mach number, with KSP's thin-air multiplier (docs/MATH.md §9.2).</summary>
+/// <summary>A craft's drag area by Mach number, with KSP's thin-air multiplier (docs/ROCKETS-AND-MISSIONS.md, “A craft's drag from its parts”).</summary>
 public sealed class DragTable(double[] areas, double step, FloatCurve? pseudoReynolds)
 {
     /// <summary>The same drag area at every speed, with no thin-air multiplier: for a drag area typed in.</summary>

@@ -26,7 +26,7 @@ public sealed record Refuel(IReadOnlyList<RefuelLine> Lines, double NeedMassT)
 /// <summary>
 /// Δv as fuel: how much of each propellant a phase burns, and what a craft already in flight needs pumped in for a trip
 /// (a shuttle refuelling at a station). Mass burned for a Δv from mass m is m·(1 − e^(−Δv / (Isp·g₀))); it splits across
-/// the propellants as the engines draw them. docs/MATH.md §7.9.
+/// the propellants as the engines draw them. docs/MATH.md §7.4.
 /// </summary>
 public static class FuelPlan
 {

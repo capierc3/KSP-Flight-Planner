@@ -51,7 +51,7 @@ public sealed record TripOption(string Label, IReadOnlyList<TripLeg> Legs)
 
     /// <summary>
     /// The orbit round the destination the trip leaves the craft on: the arrival path with the capture burn applied, in
-    /// the save's own elements (what a background trip to an orbit aims for, docs/MATH.md §11.16). Null when there's no
+    /// the save's own elements (what a background trip to an orbit aims for, docs/MATH.md §10.4). Null when there's no
     /// capture burn (the air does the braking), so there's no orbit to aim for yet.
     /// </summary>
     public OrbitalElements? FinalOrbit => Legs[^1].Plan.Capture is { } capture

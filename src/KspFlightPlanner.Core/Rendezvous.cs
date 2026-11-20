@@ -804,7 +804,7 @@ public static class Rendezvous
     /// <summary>
     /// The cheapest intercept (transfer + match-velocity Δv) leaving between <paramref name="depStart"/> and
     /// <paramref name="depEnd"/> with a flight time in the given range. Searching, not fixing the times, steers clear of
-    /// the 180° transfer, where a tiny tilt between the orbits makes Lambert's answer enormous. docs/MATH.md §8.4.
+    /// the 180° transfer, where a tiny tilt between the orbits makes Lambert's answer enormous. docs/MATH.md §8.2.
     /// Paths passing below <paramref name="floorRadiusM"/> (see <see cref="LowestPassRadiusM"/>) are left out.
     /// </summary>
     public static InterceptPoint CheapestIntercept(OrbitalElements chaser, OrbitalElements target, double mu, double depStart, double depEnd,

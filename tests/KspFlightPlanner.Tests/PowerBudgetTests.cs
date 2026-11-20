@@ -4,7 +4,7 @@ using KspFlightPlanner.Data;
 
 namespace KspFlightPlanner.Tests;
 
-/// <summary>Stock power parts and bodies, checked by hand (docs/MATH.md §7.8).</summary>
+/// <summary>Stock power parts and bodies, checked by hand (docs/POWER-AND-HEAT.md, “Power through the longest night (power budget)”).</summary>
 public sealed class PowerBudgetTests : IDisposable
 {
     // Trimmed from ModuleManager.ConfigCache: a probe core, a battery, a solar panel, an RTG, a fuel cell, an antenna,

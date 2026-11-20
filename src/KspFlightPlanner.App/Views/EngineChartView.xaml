@@ -49,7 +49,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock Style="{StaticResource Note}" Margin="56,4,0,0"
-                       Text="Grey: nothing can do it. Each stage gets the propellant and tanks it needs (solid boosters only come whole), starting with full tanks for the TWR. How it's worked out: Math guide §7.6." />
+                       Text="Grey: nothing can do it. Each stage gets the propellant and tanks it needs (solid boosters only come whole), starting with full tanks for the TWR. How it's worked out: Math guide §7.3." />
 
             <!-- Every engine sized for the payload and Δv typed in -->
             <TextBlock Text="{Binding OptionsTitle}" Style="{StaticResource SectionHeader}" />

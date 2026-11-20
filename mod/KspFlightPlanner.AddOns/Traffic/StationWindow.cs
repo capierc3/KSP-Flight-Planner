@@ -14,8 +14,10 @@ namespace KspFlightPlanner.Traffic
     /// The Station window (Traffic Controller stage E, docs/TRAFFIC-CONTROLLER.md "Station pane"). In flight a toolbar
     /// button shows the craft you're flying: whether its traffic is controlled and the controllers' load, its ports, the
     /// craft docked to it, the next day's traffic (arrivals, held departures, burns its SOI's controllers upload), who's
-    /// aboard with their duty and a button to move each to another part, and its supplies. At the space centre it takes
-    /// over the Administration building (closed in science mode): clicking it opens the window with every station listed.
+    /// aboard with their duty and a button to move each to another part, its supplies, and the Refueler's pump. At the space
+    /// centre it takes over the Administration building (closed in science mode): clicking it opens the window with every
+    /// station listed. In the tracking station its toolbar button opens it with every station listed and the craft you
+    /// select there picked.
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class StationWindow : MonoBehaviour
@@ -45,6 +47,16 @@ namespace KspFlightPlanner.Traffic
 
         private bool AtKsc => HighLogic.LoadedScene == GameScenes.SPACECENTER;
 
+        private bool AtTracking => HighLogic.LoadedScene == GameScenes.TRACKSTATION;
+
+        /// <summary>Away from flight the window lists every station to pick from.</summary>
+        private bool Listed => AtKsc || AtTracking;
+
+        // The craft last selected in the tracking station, so a new selection picks it once (the list can still pick another).
+        private uint _trackingSelected;
+
+        private readonly Refueler.RefuelerView _fuel = new Refueler.RefuelerView();
+
         private void Start()
         {
             if (AtKsc) return; // opened by the Administration building (WatchAdmin)
@@ -58,6 +70,7 @@ namespace KspFlightPlanner.Traffic
             GameEvents.onGUIApplicationLauncherReady.Remove(AddButton);
             if (_button != null && ApplicationLauncher.Instance != null) ApplicationLauncher.Instance.RemoveModApplication(_button);
             if (_icon != null) Destroy(_icon);
+            _fuel.Dispose();
             InputLockManager.RemoveControlLock(LockId);
         }
 
@@ -65,7 +78,7 @@ namespace KspFlightPlanner.Traffic
         {
             if (_button != null || ApplicationLauncher.Instance == null) return;
             _button = ApplicationLauncher.Instance.AddModApplication(() => Open(), () => _open = false, null, null, null, null,
-                ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW, _icon);
+                ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.TRACKSTATION, _icon);
         }
 
         private void Open()
@@ -93,10 +106,10 @@ namespace KspFlightPlanner.Traffic
 
         private void Update()
         {
-            if (!AtKsc) return;
-            WatchAdmin();
-            // Clicks on the window don't reach the buildings behind it.
-            if (_open && _mouseOver) InputLockManager.SetControlLock(ControlTypes.KSC_ALL, LockId);
+            if (!Listed) return;
+            if (AtKsc) WatchAdmin();
+            // Clicks on the window don't reach the buildings (or the tracking station's map) behind it.
+            if (_open && _mouseOver) InputLockManager.SetControlLock(AtKsc ? ControlTypes.KSC_ALL : ControlTypes.TRACKINGSTATION_ALL, LockId);
             else InputLockManager.RemoveControlLock(LockId);
         }
 
@@ -132,7 +145,7 @@ namespace KspFlightPlanner.Traffic
             if (Time.realtimeSinceStartup >= _nextLook) Look();
             GUI.skin = null;
             PanelWindow.FollowResize(ref _window, ref _resizing);
-            _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, AtKsc ? "Administration: Stations" : "Station", PanelWindow.Dark(),
+            _window = GUILayout.Window(GetInstanceID(), _window, DrawWindow, AtKsc ? "Administration: Stations" : AtTracking ? "Stations" : "Station", PanelWindow.Dark(),
                 GUILayout.Width(_window.width), GUILayout.Height(_window.height));
         }
 
@@ -145,6 +158,11 @@ namespace KspFlightPlanner.Traffic
                 if (HighLogic.LoadedSceneIsFlight) _view = FlightGlobals.ActiveVessel != null ? StationView.Of(FlightGlobals.ActiveVessel) : null;
                 else
                 {
+                    if (AtTracking && TrackingSelected() is uint selected && selected != 0 && selected != _trackingSelected)
+                    {
+                        _trackingSelected = selected;
+                        Pick(selected);
+                    }
                     if (_picked == 0) _picked = StationView.All().Select(p => p.Key).FirstOrDefault();
                     _view = _picked != 0 ? StationView.Find(_picked) : null;
                 }
@@ -204,9 +222,24 @@ namespace KspFlightPlanner.Traffic
             }
         }
 
+        /// <summary>The craft selected in the tracking station's list or map (0 if none).</summary>
+        private static uint TrackingSelected()
+        {
+            var v = SpaceTracking.Instance != null ? SpaceTracking.Instance.SelectedVessel : null;
+            return v != null && v.vesselType != VesselType.Flag && v.vesselType != VesselType.SpaceObject ? v.persistentId : 0;
+        }
+
+        private void Pick(uint id)
+        {
+            _picked = id;
+            _moving = null;
+            _note = "";
+            _nextLook = 0;
+        }
+
         private void DrawWindow(int id)
         {
-            if (AtKsc)
+            if (Listed)
             {
                 GUILayout.BeginHorizontal();
                 DrawList();
@@ -221,20 +254,14 @@ namespace KspFlightPlanner.Traffic
             GUI.DragWindow();
         }
 
-        /// <summary>At the space centre: every station, to pick one.</summary>
+        /// <summary>At the space centre and the tracking station: every station, to pick one.</summary>
         private void DrawList()
         {
             _listScroll = GUILayout.BeginScrollView(_listScroll, GUILayout.Width(190), GUILayout.ExpandHeight(true));
             var all = StationView.All();
             if (all.Count == 0) GUILayout.Label("No stations yet. A craft counts once its type is Station, routes fly to it, or someone's on duty aboard.", Wrap());
             foreach (var s in all)
-                if (GUILayout.Toggle(s.Key == _picked, " " + s.Value, GUI.skin.button) && s.Key != _picked)
-                {
-                    _picked = s.Key;
-                    _moving = null;
-                    _note = "";
-                    _nextLook = 0;
-                }
+                if (GUILayout.Toggle(s.Key == _picked, " " + s.Value, GUI.skin.button) && s.Key != _picked) Pick(s.Key);
             GUILayout.EndScrollView();
         }
 
@@ -259,6 +286,7 @@ namespace KspFlightPlanner.Traffic
             if (_budget != null && (v.Power.Cores.Count > 0 || v.Power.Radiators.Count > 0) && Section("Heat", v))
                 PowerView.DrawHeat(_budget, v.Power, null, r => r.On, null);
             if (v.Supplies.Count > 0 && Section("Supplies", v)) DrawSupplies(v);
+            if (v.Crafts.Count() > 1 && Section("Fuel (Refueler)", v)) _fuel.Draw(v.Id);
             GUILayout.EndScrollView();
             if (_note.Length > 0) GUILayout.Label(_note, Wrap());
         }
@@ -445,6 +473,19 @@ namespace KspFlightPlanner.Traffic
             return demand > supply ? demand + " burns as urgent or more at once, " + supply + " slots: one may be bumped" : "";
         }
 
+        /// <summary>"signing in", "running Gravity Scan", "sending (12 s left)"…</summary>
+        private static string Step(Roles.OfficerSession s)
+        {
+            var left = System.Math.Max(0, s.Until - Planetarium.GetUniversalTime());
+            switch (s.Stage)
+            {
+                case Roles.OfficerSession.Step.SignIn: return "signing in";
+                case Roles.OfficerSession.Step.Run: return "running an experiment";
+                case Roles.OfficerSession.Step.Send: return "sending " + (s.Captured.Definition?.experimentTitle ?? "data") + ", " + left.ToString("0") + " s left";
+                default: return "signing out";
+            }
+        }
+
         /// <summary>
         /// Who's aboard, part by part: trait, duty and job, a button to put them on or off duty, and one to move them to
         /// another part with a free seat (a pilot needs a part with controls to be the station's Traffic Controller).
@@ -462,7 +503,16 @@ namespace KspFlightPlanner.Traffic
                 GUILayout.BeginHorizontal();
                 var where = "in " + part.Title + (part.Craft != v.MainCraft ? " (docked " + part.Craft + ")" : "");
                 var dutyText = shift != null ? "<b>" + shift.JobTitle + "</b>" : "off duty";
-                var hint = trait == "Pilot" && part.Craft == v.MainCraft && !part.Command && v.IsStation ? "  <i>no controls here: move to a cupola or pod to control traffic</i>" : "";
+                var hint = trait == "Pilot" && part.Craft == v.MainCraft && !part.Command && v.IsStation ? "  <i>no controls here: move to a cupola or pod to control traffic</i>"
+                    : (trait == "Scientist" || trait == "Engineer") && shift != null && !part.Lab ? "  <i>not in a research lab: move to one to work as " + (trait == "Scientist" ? "Science Officer" : "Survey Engineer") + "</i>"
+                    : "";
+                if (shift != null && Roles.SurveyRoles.IsScienceOfficer(shift))
+                {
+                    var session = Roles.RolesScenario.Instance?.Officers.SessionOf(kerbal);
+                    dutyText += session != null
+                        ? " (working " + session.ProbeName + ": " + Step(session) + (shift.AtKsc ? "" : ", their share of the lab's research paused") + ")"
+                        : " (researching)";
+                }
                 GUILayout.Label("   <b>" + kerbal + "</b> (" + trait + "), " + where + ": " + dutyText + hint, RichWrap());
                 if (duty != null && trait.Length > 0 && trait != "Tourist")
                 {
@@ -562,6 +612,12 @@ namespace KspFlightPlanner.Traffic
     /// <summary>The same window at the space centre, opened by the Administration building, with every station listed.</summary>
     [KSPAddon(KSPAddon.Startup.SpaceCentre, false)]
     public sealed class StationWindowKsc : StationWindow
+    {
+    }
+
+    /// <summary>The same window in the tracking station, from its toolbar button: every station listed, the selected craft picked.</summary>
+    [KSPAddon(KSPAddon.Startup.TrackingStation, false)]
+    public sealed class StationWindowTracking : StationWindow
     {
     }
 }

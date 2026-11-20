@@ -61,7 +61,7 @@ namespace KspFlightPlanner.Traffic
         /// <summary>
         /// Would skipping this burn lose the ship, <paramref name="orbit"/> being the path it's on when the burn comes? It
         /// would when, coasting on without it, the ship escapes the body it would stay round after it (a capture), or dives
-        /// into the air or the ground where the burn would have kept it clear. docs/MATH.md §11.17.
+        /// into the air or the ground where the burn would have kept it clear. docs/TRAFFIC-CONTROLLER.md, "Controller rules: critical burns and controller time".
         /// </summary>
         internal static bool IsCritical(Orbit orbit, RouteBurn burn)
         {
@@ -247,7 +247,7 @@ namespace KspFlightPlanner.Traffic
             return n >= s.VeteranFrom ? s.CapacityVeteran : n >= s.MidFrom ? s.CapacityMid : s.CapacityNew;
         }
 
-        /// <summary>A burn's slot: from half its length before its time to half after, plus a minute to check it (docs/MATH.md §11.17).</summary>
+        /// <summary>A burn's slot: from half its length before its time to half after, plus a minute to check it (docs/TRAFFIC-CONTROLLER.md, "Controller rules: critical burns and controller time").</summary>
         internal static double SlotStart(RouteBurn b) => b.Ut - Math.Max(b.SlotSeconds, PhysicsFlyer.MinBurnS) / 2;
 
         internal static double SlotEnd(RouteBurn b) => b.Ut + Math.Max(b.SlotSeconds, PhysicsFlyer.MinBurnS) / 2 + Settings.SlotExtraSeconds;

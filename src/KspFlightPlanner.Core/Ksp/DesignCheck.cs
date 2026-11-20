@@ -60,7 +60,7 @@ public sealed record SurfaceTwr(SurfaceEvent Event, int? Stage, double MassT, do
 /// <param name="Spare">Δv left in the stage once every phase is covered.</param>
 public sealed record StageUse(int Stage, double DeltaV, IReadOnlyList<(int Phase, double DeltaV)> Phases, double Spare);
 
-/// <summary>A design checked against a mission (docs/MATH.md §7.3).</summary>
+/// <summary>A design checked against a mission (docs/ROCKETS-AND-MISSIONS.md, “Does a design have enough Δv for the mission?”).</summary>
 public sealed record DesignCheckResult(IReadOnlyList<PhaseCoverage> Phases, IReadOnlyList<StageUse> Stages, double RequiredDeltaV,
     double MarginDeltaV, double DesignDeltaV, double LaunchTwr)
 {

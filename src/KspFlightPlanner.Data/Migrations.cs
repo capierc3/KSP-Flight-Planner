@@ -387,6 +387,50 @@ internal static class Migrations
             PRIMARY KEY (ksp_save, vessel_id)
         );
 
+        -- Science gaps (docs/SCIENCE.md): the game's experiments, which parts run them, and the bodies' multipliers and
+        -- biomes, fetched from the game through the planner's add-on once per save.
+        CREATE TABLE science_catalogs (
+            ksp_save      TEXT PRIMARY KEY,
+            catalog_json  TEXT NOT NULL,     -- ScienceCatalog
+            fetched_utc   TEXT NOT NULL
+        );
+
+        -- A body's biomes on a grid (row-major from 90° S / 180° W), for the science map; from the add-on's BiomeGrid.
+        CREATE TABLE science_biome_maps (
+            ksp_save              TEXT NOT NULL,
+            body_name             TEXT NOT NULL,
+            step_deg              REAL NOT NULL,
+            radius_m              REAL NOT NULL,
+            rotation_period_s     REAL NOT NULL,
+            initial_rotation_deg  REAL NOT NULL,
+            biomes                BLOB NOT NULL,     -- int16 index into biome_names, -1 = none
+            biome_names           TEXT NOT NULL,     -- JSON array
+            fetched_utc           TEXT NOT NULL,
+            PRIMARY KEY (ksp_save, body_name)
+        );
+
+        -- Bodies whose survey is done (docs/SURVEY.md "When a body is done"): when, who surveyed it, and whether the game
+        -- has been told (its add-on writes the report).
+        CREATE TABLE survey_done (
+            ksp_save      TEXT NOT NULL,
+            body_name     TEXT NOT NULL,
+            done_ut       REAL NOT NULL,
+            writers       TEXT NOT NULL,     -- JSON array of kerbal names
+            told          INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (ksp_save, body_name)
+        );
+
+        -- The game's anomalies (every body's surface objects), fetched through the add-on once per save.
+        CREATE TABLE survey_anomalies (
+            ksp_save      TEXT NOT NULL,
+            body_name     TEXT NOT NULL,
+            name          TEXT NOT NULL,
+            display_name  TEXT NOT NULL,
+            latitude      REAL NOT NULL,
+            longitude     REAL NOT NULL,
+            PRIMARY KEY (ksp_save, body_name, name)
+        );
+
         CREATE TABLE survey_reports (
             id           INTEGER PRIMARY KEY,
             ksp_save     TEXT NOT NULL,

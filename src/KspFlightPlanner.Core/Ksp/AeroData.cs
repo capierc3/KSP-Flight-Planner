@@ -4,7 +4,7 @@ using System.Numerics;
 namespace KspFlightPlanner.Core.Ksp;
 
 /// <summary>
-/// KSP's drag rules from Physics.cfg (docs/MATH.md §9.2): two overall multipliers and the curves that turn a drag cube
+/// KSP's drag rules from Physics.cfg (docs/ROCKETS-AND-MISSIONS.md, “A craft's drag from its parts”): two overall multipliers and the curves that turn a drag cube
 /// face into drag, by Mach number and by which way the face points.
 /// </summary>
 public sealed record AeroPhysics(
@@ -105,7 +105,7 @@ public sealed record AeroData(AeroPhysics Physics, IReadOnlyDictionary<string, P
 }
 
 /// <summary>
-/// Reads drag data from a KSP install (docs/MATH.md §9.2): Physics.cfg for the rules, PartDatabase.cfg (written by KSP
+/// Reads drag data from a KSP install (docs/ROCKETS-AND-MISSIONS.md, “A craft's drag from its parts”): Physics.cfg for the rules, PartDatabase.cfg (written by KSP
 /// in the install folder each time it loads) for the drag cubes, and the part configs (ModuleManager's cache when there is
 /// one) for stack nodes and for cubes a config writes out itself.
 /// </summary>

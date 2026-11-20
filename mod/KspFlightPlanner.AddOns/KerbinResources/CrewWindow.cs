@@ -169,8 +169,7 @@ namespace KspFlightPlanner.KerbinResources
             var visited = Visited(pcm);
             Row("Been to", visited.Length > 0 ? visited : "Nowhere yet");
             DrawDuty(kerbal, pcm, now);
-            if (KerbinResourcesScenario.CardRows != null)
-                foreach (var extra in KerbinResourcesScenario.CardRows(kerbal)) Row(extra.Key, extra.Value);
+            foreach (var extra in KerbinResourcesScenario.CardRows(kerbal)) Row(extra.Key, extra.Value);
             Row("Flights", flights.Count + " logged" + (flights.Count > 0 ? "   ·   " + Span(flown) + " flying   ·   longest " + Span(flights.Max(f => f.ArrivedUt - f.DepartedUt)) : ""));
 
             // Open trip: left somewhere and not arrived yet.

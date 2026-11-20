@@ -113,7 +113,7 @@ namespace KspFlightPlanner.KerbinResources
     /// Every crewed flight in this save, each with who was aboard, in the order they arrived. Flights the player flies
     /// count as well as Traffic Controller's routes. Per-kerbal counts (how often Jeb has flown Mun Station → Kerb
     /// Station) are worked out from the list, so later rules (training: who rode with whom) can read it as it happened.
-    /// docs/MATH.md §11.12.
+    /// docs/TRAFFIC-CONTROLLER.md, "Crew rules and the flight log".
     /// </summary>
     internal sealed class FlightLog
     {

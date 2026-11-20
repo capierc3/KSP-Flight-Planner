@@ -39,7 +39,7 @@ public sealed record RouteReplanRequest(string Vessel, string Target, double Now
 }
 
 /// <summary>
-/// Plans background trips again when the game finds them off course (docs/MATH.md §11.3). The add-on checks each trip
+/// Plans background trips again when the game finds them off course (docs/MATH.md §10.3). The add-on checks each trip
 /// right after every burn and ten minutes before the next, pauses it if it would miss, and stops time warp; this asks it
 /// every few seconds for paused trips, plans each from where the ship really is, and sends the new plan. When it can't
 /// plan one yet (still leaving the Mun, say) the game is told why, and it tries again a little later.

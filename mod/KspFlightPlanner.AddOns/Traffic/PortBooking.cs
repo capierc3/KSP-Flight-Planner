@@ -5,7 +5,7 @@ using UnityEngine;
 namespace KspFlightPlanner.Traffic
 {
     /// <summary>
-    /// Booking a port at the station a route craft is going to (docs/MATH.md §11.14). A port is booked about an hour before the
+    /// Booking a port at the station a route craft is going to (docs/TRAFFIC-CONTROLLER.md, "Booking a port, and waiting for one"). A port is booked about an hour before the
     /// meeting: a short trip books before it undocks, and doesn't leave without one; a long trip leaves on time and books
     /// on the way in. With no free port when it arrives, it waits on the station's orbit 3 km behind it, on rails, and
     /// comes in once one frees up. A booked port counts as claimed (<see cref="TrafficScenario.ClaimedPorts"/>), so no other

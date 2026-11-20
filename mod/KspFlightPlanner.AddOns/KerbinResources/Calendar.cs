@@ -81,7 +81,7 @@ namespace KspFlightPlanner.KerbinResources
     /// <summary>
     /// The calendar dates are shown in. Game time 0 (KSP's Year 1, Day 1) is the company's founding, a date chosen in the
     /// save's settings (3 Diznam 2263 by default). Every year has the same 426 days, so a date is one count of days since
-    /// a year 0, split into years, months and days, and a weekday from the founding day's (docs/MATH.md §12.1). A save on
+    /// a year 0, split into years, months and days, and a weekday from the founding day's (docs/KERBIN-RESOURCES.md, "Dates"). A save on
     /// Earth time (24 h days, 365-day years) doesn't fit the months: its dates are years and days, counted from the same
     /// founding year.
     /// </summary>

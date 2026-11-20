@@ -33,7 +33,7 @@ public sealed record OptimalAscent(SimAscent Best, SimAscent? Replay, double Flo
 /// Re-flies a recorded climb in a model fitted to that flight, so other ways of steering can be tried. The rocket burns
 /// fuel at the rate it did (KSP engines burn at a fixed rate; thrust changes with Isp, which changes with air pressure),
 /// stages when it did (by burn time), and meets the drag the flight showed. 2D, over the equator, eastward, on a
-/// turning planet. docs/MATH.md §8.11.
+/// turning planet. docs/MATH.md §8.8.
 /// </summary>
 public sealed class AscentSimulator
 {
@@ -128,7 +128,7 @@ public sealed class AscentSimulator
         {
             var (a, x, b) = (s[i - 1], s[i], s[i + 1]);
             if (x.DynamicPressurePa < 1_000 || x.SurfaceSpeed < 30 || a.Stage != b.Stage || b.Ut <= a.Ut) continue;
-            // Worked in the non-turning frame, where only thrust, drag and gravity act (MATH §8.11): along the orbital
+            // Worked in the non-turning frame, where only thrust, drag and gravity act (MATH §8.8): along the orbital
             // velocity, dv/dt = (F·cos τ − D·cos β)/m − g·sin γ, with β between the airflow and the orbital velocity and τ
             // between the nose and it. The flight is taken as going east over the equator.
             var r = body.EquatorialRadiusM + x.AltitudeM;

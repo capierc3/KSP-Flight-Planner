@@ -11,7 +11,7 @@ namespace KspFlightPlanner.Traffic
     /// when time warp has already gone past it: the new orbit is pinned to the burn's time, so the ship ends up exactly
     /// where it would be had it burnt on time. Overdue events are applied in order, so nothing is missed after a long warp
     /// or a scene change. At the meeting it parks the ship beside the target; docking places it at a port (a stand-in
-    /// until the physics flyer flies the approach for real). docs/MATH.md §11.1–11.2.
+    /// until the physics flyer flies the approach for real). docs/MATH.md §10.1–2.
     /// </summary>
     internal static class RailsFlyer
     {
@@ -170,7 +170,7 @@ namespace KspFlightPlanner.Traffic
 
         /// <summary>
         /// A trip to an orbit, its last burn made: done. No meeting, no port, no docking. How its orbit came out against the
-        /// plan goes on the log (docs/MATH.md §11.16). Called by the physics flyer too, when it made the last burn itself.
+        /// plan goes on the log (docs/MATH.md §10.4). Called by the physics flyer too, when it made the last burn itself.
         /// </summary>
         internal static void ArriveInOrbit(Route route, Vessel ship)
         {
@@ -322,7 +322,7 @@ namespace KspFlightPlanner.Traffic
         /// Meeting a station the player is at (it's loaded) with the autopilot on: instead of parking, the ship is put
         /// on the axis of a free port that fits, 2.4 km straight out, coming in at 20 m/s. That's just outside the range
         /// at which KSP draws ships, so it's done out of sight; the ship then comes into view, and the physics flyer
-        /// brakes it to a stop 150 m off the port (docs/MATH.md §11.6). Placed relative to the target's own orbit, so
+        /// brakes it to a stop 150 m off the port (docs/TRAFFIC-CONTROLLER.md, "The physics flyer: coming in to the station"). Placed relative to the target's own orbit, so
         /// only the 2.4 km offset goes through the world/orbit swap. False (and nothing done) when it can't be.
         /// </summary>
         private static bool LineUp(Route route, Vessel ship, Vessel target, string head)

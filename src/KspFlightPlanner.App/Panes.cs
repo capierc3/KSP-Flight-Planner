@@ -57,6 +57,7 @@ public static class Panes
     public const string Aerobraking = "aerobraking";
     public const string Guide = "guide";
     public const string Survey = "survey";
+    public const string Science = "science";
 
     private static readonly WorkMode[] Plan = [WorkMode.Plan];
     private static readonly WorkMode[] Fly = [WorkMode.Fly];
@@ -95,6 +96,7 @@ public static class Panes
         new(FlightReport, "Flight report", true, [WorkMode.Fly, WorkMode.Plan], vm => new FlightReportView { DataContext = vm.FlightLog.Report }),
         new(FlightCompare, "Compare flights", true, [WorkMode.Plan, WorkMode.Fly], vm => new FlightCompareView { DataContext = vm.FlightLog.Compare }),
         new(Survey, "Ore survey", true, Both, vm => new SurveyView { DataContext = vm.Survey }),
+        new(Science, "Science", true, Both, vm => new ScienceView { DataContext = vm.Science }),
         new(Guide, "Math Guide", true, Both, _ => new GuideView()),
     ];
 

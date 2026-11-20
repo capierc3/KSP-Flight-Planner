@@ -107,7 +107,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0"
-                       Text="Grey bar: the body's farthest from home, on a log scale. Blue tick: how far the craft reaches the tracking station; orange: how far the relay does. Signal is what's left at that distance (100% close by, 50% at half the range). Planets and moons can also block the line of sight. How it's worked out: Math guide §7.7." />
+                       Text="Grey bar: the body's farthest from home, on a log scale. Blue tick: how far the craft reaches the tracking station; orange: how far the relay does. Signal is what's left at that distance (100% close by, 50% at half the range). Planets and moons can also block the line of sight. How it's worked out: ROCKETS-AND-MISSIONS.md (“Antenna range and signal (CommNet planner)”)." />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

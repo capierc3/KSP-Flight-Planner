@@ -87,7 +87,7 @@ Windows desktop tool (WPF, .NET 10) for Kerbal Space Program mission planning.
   against your KSP install, `-p:KspDir=…` for another folder). The add-on needs **kRPC** and **ModuleManager** (both on
   CKAN); ModuleManager adds Traffic Controller's right-click settings to docking ports and command parts. The same
   build installs all the in-game add-ons together: Surveys, Traffic Controller, Refueler and Kerbin Resources (crew records and flight log) (docs/TRAFFIC-CONTROLLER.md, docs/KERBIN-RESOURCES.md). Rules: docs/SURVEY.md;
-  maths: docs/MATH.md §10.
+  maths: docs/SURVEY.md ("How the numbers are worked out").
 - **Fly mode** — the flying side. *Fly this plan* in the Rendezvous pane (or *Fly this deployment* on Resonant
   Orbits) switches to Fly and opens the plan in the Flight document: its burns with live countdowns, whether each is on the craft yet, **Send to KSP** (one
   burn, the next, or all), and how far the craft has drifted from the plan, with **Re-plan from here** to fly the

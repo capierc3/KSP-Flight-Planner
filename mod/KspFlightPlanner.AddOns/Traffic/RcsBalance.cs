@@ -9,7 +9,7 @@ namespace KspFlightPlanner.Traffic
     /// Balancing a ship's RCS so a push sideways moves it without turning it: one thrust limiter per RCS block, chosen so
     /// that for each of the six pushes (left, right, up, down, forward, back) the torque of the thrusters that fire comes
     /// as near zero about the centre of mass as it can, while keeping as much thrust as it can. A block has one limiter
-    /// for every direction, so it's a best fit over the six. docs/MATH.md §11.9.
+    /// for every direction, so it's a best fit over the six. docs/TRAFFIC-CONTROLLER.md, "Fuel transfer and RCS balance".
     /// </summary>
     internal static class RcsBalance
     {

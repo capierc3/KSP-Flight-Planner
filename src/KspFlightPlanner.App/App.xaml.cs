@@ -90,12 +90,18 @@ public partial class App : Application
                     new FlightCompareViewModel(new FlightLogRepository(database), sync)),
                 Windows = new TransferWindowsViewModel(bodies, sync),
                 Survey = new SurveyViewModel(survey, sync, link),
+                Science = new ScienceViewModel(new ScienceRepository(database), sync, link),
                 Aerobraking = new AerobrakingViewModel(bodies, sync),
                 NewSurfaceBake = () => new SurfaceBakeViewModel(link, bakes, events, stockBodies),
             };
             // An analysed biome's best spots are spots to land at ("Ore survey").
             mission.SurveySpots = survey.Spots;
             viewModel.FromHere.SurveySpots = survey.Spots;
+            // Landmarks are found by the survey: hidden until a narrow-band covers them, anomalies unknown until visited.
+            Func<Core.Models.CelestialBody, IReadOnlyList<Core.Models.Landmark>> visible = b => survey.Landmarks(b).Where(l => l.Shown).Select(l => l.ToLandmark()).ToList();
+            mission.VisibleLandmarks = visible;
+            viewModel.FromHere.VisibleLandmarks = visible;
+            viewModel.Locations.VisibleLandmarks = visible;
             // The tech tree follows the picked part, so an open tree shows where it comes from. Only a different part
             // moves it: the Part pane also refreshes when the plan changes, and that mustn't undo a pick in the tree.
             string? shownPart = null;

@@ -18,6 +18,9 @@ public sealed class ConfigNode(string name)
         return null;
     }
 
+    /// <summary>Every value with this key, in order.</summary>
+    public IEnumerable<string> GetValues(string key) => Values.Where(kv => kv.Key == key).Select(kv => kv.Value);
+
     public ConfigNode? GetNode(string name) => Nodes.FirstOrDefault(n => n.Name == name);
 
     public IEnumerable<ConfigNode> GetNodes(string name) => Nodes.Where(n => n.Name == name);
